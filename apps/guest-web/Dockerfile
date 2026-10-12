@@ -17,8 +17,8 @@ RUN test -f apps/guest-web/node_modules/next/package.json \
 
 # Source (host node_modules excluded by .dockerignore)
 COPY . .
-ARG API_INTERNAL_URL=http://api:8000
-ENV API_INTERNAL_URL=$API_INTERNAL_URL
+ARG API_URL=http://api:8000
+ENV API_URL=$API_URL
 RUN pnpm --filter guest-web build
 
 FROM node:22-alpine AS runner
