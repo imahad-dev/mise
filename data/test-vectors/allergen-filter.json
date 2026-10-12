@@ -1,0 +1,6 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Shared allergen filter test vectors — used by both pytest and vitest",
+  "note": "Populated in M1.12. Status precedence: contains > unverified > no_declared_match",
+  "vectors": []
+}

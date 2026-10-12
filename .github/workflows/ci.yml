@@ -1,0 +1,97 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: mise
+          POSTGRES_USER: mise
+          POSTGRES_PASSWORD: change_me_in_production
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      APP_ENV: dev
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: mise
+      POSTGRES_USER: mise
+      POSTGRES_PASSWORD: change_me_in_production
+      REDIS_URL: redis://localhost:6379/0
+      API_SECRET_KEY: test_secret_key_for_ci
+      OWNER_API_KEY: test_owner_key_for_ci
+      STAFF_PIN: "0000"
+      PUBLIC_GUEST_URL: http://localhost:3000
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+          enable-cache: true
+
+      - name: Set up Python 3.11
+        run: uv python install 3.11
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+          run_install: false
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: "pnpm"
+
+      - name: Install JS dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Python dependencies
+        run: |
+          uv sync --project services/api --extra dev
+          uv sync --project services/inference/mock --extra dev
+
+      - name: Lint Python
+        run: |
+          uv run --project services/api ruff check services/ scripts/
+          uv run --project services/api ruff format --check services/ scripts/
+
+      - name: Lint Frontend
+        run: pnpm -r lint
+
+      - name: Run Python migrations & tests
+        run: |
+          uv run --project services/api alembic -c services/api/alembic.ini upgrade head
+          uv run --project services/api pytest -v services/api/tests
+
+      - name: Run Frontend tests
+        run: pnpm -r test

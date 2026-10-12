@@ -1,0 +1,46 @@
+# Caddy — SSE proxy fallback
+#
+# Enable this if Next.js rewrite proxy buffers SSE responses.
+# In docker-compose.yml, uncomment the caddy service and route
+# guest-web/owner-web through Caddy instead of directly exposing them.
+#
+# Usage:
+#   1. Uncomment caddy service in docker-compose.yml
+#   2. Point browser to localhost:8080 (guest) or localhost:8081 (owner)
+#
+# See docs/decisions.md for rationale.
+
+:8080 {
+	# Guest app — static + API SSE
+	handle /api/orders/*/stream {
+		reverse_proxy api:8000 {
+			flush_interval -1
+		}
+	}
+	handle /api/* {
+		reverse_proxy api:8000
+	}
+	handle {
+		reverse_proxy guest-web:3000
+	}
+}
+
+:8081 {
+	# Owner app — dashboard + kitchen SSE
+	handle /api/restaurants/*/kitchen/stream {
+		reverse_proxy api:8000 {
+			flush_interval -1
+		}
+	}
+	handle /api/restaurants/*/orders/stream {
+		reverse_proxy api:8000 {
+			flush_interval -1
+		}
+	}
+	handle /api/* {
+		reverse_proxy api:8000
+	}
+	handle {
+		reverse_proxy owner-web:3001
+	}
+}

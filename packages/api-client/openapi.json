@@ -1,0 +1,9 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Mise API",
+    "version": "0.1.0",
+    "description": "Stub — generated from FastAPI app object via scripts/export_openapi.py"
+  },
+  "paths": {}
+}
