@@ -3,20 +3,33 @@
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
+import httpx
 from fastapi import FastAPI
 
 from src.config import settings
-from src.inference.client import inference_client
+from src.inference.client import InferenceClient
 from src.routers.health import router as health_router
 from src.routers.metrics import router as metrics_router
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    # Startup
+    # Startup: instantiate clients attached to current event loop on app.state
+    llm_client = httpx.AsyncClient(
+        base_url=settings.llm_base_url,
+        timeout=settings.llm_timeout_seconds,
+    )
+    vlm_client = httpx.AsyncClient(
+        base_url=settings.vlm_base_url,
+        timeout=settings.llm_timeout_seconds,
+    )
+    app.state.inference_client = InferenceClient(
+        llm_client=llm_client,
+        vlm_client=vlm_client,
+    )
     yield
     # Shutdown
-    await inference_client.close()
+    await app.state.inference_client.close()
 
 
 app = FastAPI(

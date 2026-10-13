@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 FROM python:3.11-slim AS base
 
 ENV PYTHONUNBUFFERED=1 \
@@ -6,21 +7,34 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
-# Install uv
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+# Pin uv version (not latest)
+COPY --from=ghcr.io/astral-sh/uv:0.5.26 /uv /usr/local/bin/uv
 
-# Copy dependency files
+# --- Base Dependencies ---
+FROM base AS deps
 COPY services/api/pyproject.toml services/api/uv.lock ./
-
-# Install dependencies (frozen lockfile)
 RUN uv sync --frozen --no-dev --no-install-project
 
-# Copy application source
+# --- Test Stage (dev dependencies + test suite) ---
+FROM deps AS test
+RUN uv sync --frozen --extra dev --no-install-project
+COPY services/api/src/ src/
+COPY services/api/tests/ tests/
+COPY services/api/alembic.ini alembic.ini
+COPY services/api/alembic/ alembic/
+COPY scripts/ scripts/
+COPY data/ data/
+ENV PATH="/app/.venv/bin:$PATH"
+CMD ["pytest", "-v"]
+
+# --- Runtime Stage (production-ready, no sync at startup) ---
+FROM base AS runner
+COPY --from=deps /app/.venv /app/.venv
+ENV PATH="/app/.venv/bin:$PATH"
+
 COPY services/api/src/ src/
 COPY services/api/alembic.ini alembic.ini
 COPY services/api/alembic/ alembic/
-
-# Copy scripts and data (accessible from api container)
 COPY scripts/ scripts/
 COPY data/ data/
 
@@ -29,4 +43,4 @@ EXPOSE 8000
 HEALTHCHECK --interval=10s --timeout=5s --start-period=15s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"
 
-CMD ["uv", "run", "uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]

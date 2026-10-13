@@ -1,4 +1,4 @@
-"""Tests for inference client."""
+"""Tests for inference client — isolated per-test clients with no shared loops."""
 
 import httpx
 import pytest
@@ -24,9 +24,10 @@ async def test_inference_client_chat_success():
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(200, json=fake_response)
 
-    transport = httpx.MockTransport(handler)
-    client = InferenceClient()
-    client._llm_client = httpx.AsyncClient(transport=transport, base_url="http://mock-llm:8080/v1")
+    llm_mock = httpx.AsyncClient(
+        transport=httpx.MockTransport(handler), base_url="http://mock-llm:8080/v1"
+    )
+    client = InferenceClient(llm_client=llm_mock)
 
     try:
         body, metrics = await client.chat([{"role": "user", "content": "hi"}])
@@ -57,9 +58,10 @@ async def test_inference_client_vision_success():
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(200, json=fake_response)
 
-    transport = httpx.MockTransport(handler)
-    client = InferenceClient()
-    client._vlm_client = httpx.AsyncClient(transport=transport, base_url="http://mock-vlm:8080/v1")
+    vlm_mock = httpx.AsyncClient(
+        transport=httpx.MockTransport(handler), base_url="http://mock-vlm:8080/v1"
+    )
+    client = InferenceClient(vlm_client=vlm_mock)
 
     try:
         body, metrics = await client.vision([{"role": "user", "content": "describe"}])
@@ -76,9 +78,10 @@ async def test_inference_client_error_raises():
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(500, json={"error": "inference failure"})
 
-    transport = httpx.MockTransport(handler)
-    client = InferenceClient()
-    client._llm_client = httpx.AsyncClient(transport=transport, base_url="http://mock-llm:8080/v1")
+    llm_mock = httpx.AsyncClient(
+        transport=httpx.MockTransport(handler), base_url="http://mock-llm:8080/v1"
+    )
+    client = InferenceClient(llm_client=llm_mock)
 
     try:
         with pytest.raises(httpx.HTTPStatusError):

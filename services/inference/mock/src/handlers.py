@@ -24,17 +24,21 @@ class Message(BaseModel):
     content: str | list | None = None
 
 
+from fastapi.responses import StreamingResponse
+
+
 class ChatRequest(BaseModel):
     model: str
     messages: list[Message]
     max_tokens: int = 1024
     temperature: float = 0.7
     response_format: dict | None = None
+    stream: bool = False
 
 
 @router.post("/v1/chat/completions")
-async def chat_completions(request: ChatRequest) -> dict:
-    """Mock /v1/chat/completions — returns canned structured output."""
+async def chat_completions(request: ChatRequest):
+    """Mock /v1/chat/completions — returns canned structured output (or streams chunks)."""
     # Simulate error rate
     if random.random() < MOCK_ERROR_RATE:
         raise HTTPException(status_code=500, detail="Mock inference error (simulated)")
@@ -44,7 +48,7 @@ async def chat_completions(request: ChatRequest) -> dict:
         await asyncio.sleep(MOCK_TIMEOUT_MS / 1000)
         raise HTTPException(status_code=504, detail="Mock inference timeout (simulated)")
 
-    # Simulate latency
+    # Simulate TTFT / initial latency
     await asyncio.sleep(MOCK_LATENCY_MS / 1000)
 
     canned = get_canned_response(request.model)
@@ -56,6 +60,32 @@ async def chat_completions(request: ChatRequest) -> dict:
     )
     prompt_tokens = max(1, len(prompt_text.split()) * 2)
     completion_tokens = max(1, len(content.split()) * 2)
+    request_id = f"chatcmpl-mock-{uuid.uuid4().hex[:8]}"
+
+    if request.stream:
+
+        async def event_generator():
+            words = content.split(" ")
+            for i, word in enumerate(words):
+                chunk = word + (" " if i < len(words) - 1 else "")
+                data = {
+                    "id": request_id,
+                    "object": "chat.completion.chunk",
+                    "created": int(time.time()),
+                    "model": request.model,
+                    "choices": [
+                        {
+                            "index": 0,
+                            "delta": {"content": chunk},
+                            "finish_reason": None if i < len(words) - 1 else "stop",
+                        }
+                    ],
+                }
+                yield f"data: {json.dumps(data)}\n\n"
+                await asyncio.sleep(0.01)
+            yield "data: [DONE]\n\n"
+
+        return StreamingResponse(event_generator(), media_type="text/event-stream")
 
     return {
         "id": f"chatcmpl-mock-{uuid.uuid4().hex[:8]}",

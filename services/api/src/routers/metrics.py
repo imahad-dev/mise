@@ -8,13 +8,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.database import get_db
 from src.models.metrics import MetricsSample
+from src.schemas.metrics import InferenceMetricsResponse
 
 router = APIRouter(prefix="/api/metrics", tags=["metrics"])
 
 
-@router.get("/inference")
-async def inference_metrics(db: Annotated[AsyncSession, Depends(get_db)]) -> dict:
-    """Aggregated inference metrics. Owner auth enforced in M1."""
+@router.get("/inference", response_model=InferenceMetricsResponse)
+async def inference_metrics(
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> InferenceMetricsResponse:
+    """Aggregated inference metrics.
+
+    TODO: Require owner auth (mise_owner cookie) when M1.3 lands.
+    """
     result = await db.execute(
         select(
             func.count(MetricsSample.id).label("total_calls"),
@@ -27,11 +33,11 @@ async def inference_metrics(db: Annotated[AsyncSession, Depends(get_db)]) -> dic
     )
     row = result.one()
 
-    return {
-        "total_calls": row.total_calls or 0,
-        "total_tokens_in": row.total_tokens_in or 0,
-        "total_tokens_out": row.total_tokens_out or 0,
-        "avg_latency_ms": round(row.avg_latency_ms, 1) if row.avg_latency_ms else 0,
-        "min_latency_ms": row.min_latency_ms or 0,
-        "max_latency_ms": row.max_latency_ms or 0,
-    }
+    return InferenceMetricsResponse(
+        total_calls=row.total_calls or 0,
+        total_tokens_in=row.total_tokens_in or 0,
+        total_tokens_out=row.total_tokens_out or 0,
+        avg_latency_ms=round(row.avg_latency_ms, 1) if row.avg_latency_ms else None,
+        min_latency_ms=row.min_latency_ms,
+        max_latency_ms=row.max_latency_ms,
+    )

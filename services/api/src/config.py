@@ -74,6 +74,7 @@ class Settings(BaseSettings):
         defaults = {
             "api_secret_key": "change_me_in_production",
             "owner_api_key": "change_me_in_production",
+            "staff_pin": "0000",
             "postgres_password": "change_me_in_production",
         }
         for field, default_val in defaults.items():

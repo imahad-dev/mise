@@ -36,7 +36,7 @@ lint:
 	pnpm -r lint
 
 test-py:
-	docker compose run --rm api pytest -v
+	docker compose run --rm api-test
 
 test-ts:
 	pnpm -r test

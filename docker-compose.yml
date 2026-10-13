@@ -27,8 +27,7 @@ services:
     build:
       context: .
       dockerfile: services/api/Dockerfile
-    ports:
-      - "8000:8000"
+      target: runner
     environment:
       APP_ENV: ${APP_ENV:-dev}
       POSTGRES_HOST: postgres
@@ -62,11 +61,33 @@ services:
       start_period: 15s
       retries: 3
 
+  api-test:
+    build:
+      context: .
+      dockerfile: services/api/Dockerfile
+      target: test
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      APP_ENV: dev
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-mise}
+      POSTGRES_USER: ${POSTGRES_USER:-mise}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me_in_production}
+      REDIS_URL: redis://redis:6379/0
+      API_SECRET_KEY: ${API_SECRET_KEY:-change_me_in_production}
+      OWNER_API_KEY: ${OWNER_API_KEY:-change_me_in_production}
+      STAFF_PIN: ${STAFF_PIN:-0000}
+      PUBLIC_GUEST_URL: ${PUBLIC_GUEST_URL:-http://localhost:3000}
+      LLM_BASE_URL: http://inference:8080/v1
+
   inference:
     build:
       context: services/inference/mock
-    ports:
-      - "8080:8080"
     environment:
       MOCK_LATENCY_MS: ${MOCK_LATENCY_MS:-100}
       MOCK_ERROR_RATE: ${MOCK_ERROR_RATE:-0.0}
@@ -117,19 +138,6 @@ services:
       timeout: 5s
       start_period: 20s
       retries: 3
-
-  # Caddy — SSE proxy fallback (uncomment if Next.js proxy buffers SSE)
-  # caddy:
-  #   image: caddy:2-alpine
-  #   ports:
-  #     - "8888:8080"
-  #     - "8889:8081"
-  #   volumes:
-  #     - ./Caddyfile:/etc/caddy/Caddyfile:ro
-  #   depends_on:
-  #     - api
-  #     - guest-web
-  #     - owner-web
 
 volumes:
   pgdata:

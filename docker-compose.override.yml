@@ -1,4 +1,4 @@
-# Dev overrides — hot reload, published DB/Redis ports, .env passthrough
+# Dev overrides — hot reload, published dev ports (api, inference, postgres, redis), .env passthrough
 services:
   postgres:
     ports:
@@ -9,13 +9,17 @@ services:
       - "6379:6379"
 
   api:
+    ports:
+      - "8000:8000"
     volumes:
       - ./services/api/src:/app/src:ro
       - ./scripts:/app/scripts:ro
       - ./data:/app/data:ro
-    command: ["uv", "run", "uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    command: ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
 
   inference:
+    ports:
+      - "8080:8080"
     volumes:
       - ./services/inference/mock/src:/app/src:ro
     command: ["uv", "run", "uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8080", "--reload"]

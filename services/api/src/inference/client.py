@@ -3,22 +3,29 @@
 from __future__ import annotations
 
 import time
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import httpx
 
 from src.config import settings
 
+if TYPE_CHECKING:
+    from fastapi import Request
+
 
 class InferenceClient:
     """Async client for LLM/VLM inference via OpenAI-compatible API."""
 
-    def __init__(self) -> None:
-        self._llm_client = httpx.AsyncClient(
+    def __init__(
+        self,
+        llm_client: httpx.AsyncClient | None = None,
+        vlm_client: httpx.AsyncClient | None = None,
+    ) -> None:
+        self._llm_client = llm_client or httpx.AsyncClient(
             base_url=settings.llm_base_url,
             timeout=settings.llm_timeout_seconds,
         )
-        self._vlm_client = httpx.AsyncClient(
+        self._vlm_client = vlm_client or httpx.AsyncClient(
             base_url=settings.vlm_base_url,
             timeout=settings.llm_timeout_seconds,
         )
@@ -99,4 +106,6 @@ class InferenceClient:
         await self._vlm_client.aclose()
 
 
-inference_client = InferenceClient()
+def get_inference_client(request: Request) -> InferenceClient:
+    """Dependency to retrieve InferenceClient instance from app state."""
+    return request.app.state.inference_client
