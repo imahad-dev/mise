@@ -47,15 +47,30 @@ async def run_streaming_test(
                 break
             try:
                 data = json.loads(data_str)
-                delta = data.get("choices", [{}])[0].get("delta", {})
-                content = delta.get("content")
-                if content:
-                    if ttft is None:
-                        ttft = time.monotonic() - start
-                    chunks_received += 1
-                    collected_content.append(content)
             except json.JSONDecodeError:
                 continue
+
+            if not isinstance(data, dict):
+                continue
+
+            choices = data.get("choices")
+            if not isinstance(choices, list) or not choices:
+                continue
+
+            first_choice = choices[0]
+            if not isinstance(first_choice, dict):
+                continue
+
+            delta = first_choice.get("delta")
+            if not isinstance(delta, dict):
+                continue
+
+            content = delta.get("content")
+            if content and isinstance(content, str):
+                if ttft is None:
+                    ttft = time.monotonic() - start
+                chunks_received += 1
+                collected_content.append(content)
 
     total_latency = time.monotonic() - start
     full_text = "".join(collected_content)

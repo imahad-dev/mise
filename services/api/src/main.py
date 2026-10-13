@@ -27,9 +27,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         llm_client=llm_client,
         vlm_client=vlm_client,
     )
-    yield
-    # Shutdown
-    await app.state.inference_client.close()
+    try:
+        yield
+    finally:
+        # Shutdown
+        await app.state.inference_client.close()
 
 
 app = FastAPI(

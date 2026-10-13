@@ -37,7 +37,7 @@ async def inference_metrics(
         total_calls=row.total_calls or 0,
         total_tokens_in=row.total_tokens_in or 0,
         total_tokens_out=row.total_tokens_out or 0,
-        avg_latency_ms=round(row.avg_latency_ms, 1) if row.avg_latency_ms else None,
+        avg_latency_ms=round(row.avg_latency_ms, 1) if row.avg_latency_ms is not None else None,
         min_latency_ms=row.min_latency_ms,
         max_latency_ms=row.max_latency_ms,
     )
