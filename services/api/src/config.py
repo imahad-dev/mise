@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     postgres_db: str = "mise"
     postgres_user: str = "mise"
     postgres_password: str = "change_me_in_production"
+    sql_echo: bool = False
 
     # Redis
     redis_url: str = "redis://redis:6379/0"

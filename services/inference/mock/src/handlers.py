@@ -34,6 +34,7 @@ class ChatRequest(BaseModel):
     temperature: float = 0.7
     response_format: dict | None = None
     stream: bool = False
+    stream_options: dict | None = None
 
 
 @router.post("/v1/chat/completions")
@@ -83,6 +84,22 @@ async def chat_completions(request: ChatRequest):
                 }
                 yield f"data: {json.dumps(data)}\n\n"
                 await asyncio.sleep(0.01)
+
+            if request.stream_options and request.stream_options.get("include_usage"):
+                usage_data = {
+                    "id": request_id,
+                    "object": "chat.completion.chunk",
+                    "created": int(time.time()),
+                    "model": request.model,
+                    "choices": [],
+                    "usage": {
+                        "prompt_tokens": prompt_tokens,
+                        "completion_tokens": completion_tokens,
+                        "total_tokens": prompt_tokens + completion_tokens,
+                    },
+                }
+                yield f"data: {json.dumps(usage_data)}\n\n"
+
             yield "data: [DONE]\n\n"
 
         return StreamingResponse(event_generator(), media_type="text/event-stream")

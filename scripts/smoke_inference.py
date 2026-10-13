@@ -27,6 +27,8 @@ async def run_streaming_test(
     chunks_received = 0
     collected_content: list[str] = []
 
+    reported_completion_tokens: int | None = None
+
     async with client.stream(
         "POST",
         "/chat/completions",
@@ -35,6 +37,7 @@ async def run_streaming_test(
             "messages": [{"role": "user", "content": prompt}],
             "max_tokens": 512,
             "stream": True,
+            "stream_options": {"include_usage": True},
         },
     ) as response:
         response.raise_for_status()
@@ -52,6 +55,12 @@ async def run_streaming_test(
 
             if not isinstance(data, dict):
                 continue
+
+            usage = data.get("usage")
+            if isinstance(usage, dict) and "completion_tokens" in usage:
+                val = usage.get("completion_tokens")
+                if isinstance(val, int):
+                    reported_completion_tokens = val
 
             choices = data.get("choices")
             if not isinstance(choices, list) or not choices:
@@ -73,8 +82,13 @@ async def run_streaming_test(
                 collected_content.append(content)
 
     total_latency = time.monotonic() - start
-    full_text = "".join(collected_content)
-    decode_tokens = max(1, len(full_text.split()) * 2)
+
+    if reported_completion_tokens is not None:
+        decode_tokens = reported_completion_tokens
+        token_label = ""
+    else:
+        decode_tokens = max(1, chunks_received)
+        token_label = " (approximate)"
 
     ttft_ms = (ttft * 1000) if ttft is not None else 0.0
     decode_time = total_latency - (ttft if ttft is not None else 0.0)
@@ -82,9 +96,9 @@ async def run_streaming_test(
 
     print(f"  Model: {model}")
     print(f"  Time to first token (TTFT): {ttft_ms:.0f} ms")
-    print(f"  Decode tokens (approx): {decode_tokens}")
+    print(f"  Decode tokens{token_label}: {decode_tokens}")
     print(f"  Decode time: {decode_time * 1000:.0f} ms")
-    print(f"  Decode tokens/s: {decode_speed:.1f} tokens/s")
+    print(f"  Decode tokens/s{token_label}: {decode_speed:.1f} tokens/s")
     print(f"  Total latency: {total_latency * 1000:.0f} ms")
 
 

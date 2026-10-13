@@ -3,12 +3,13 @@ FROM python:3.11-slim AS base
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    HOSTNAME=0.0.0.0
+    HOSTNAME=0.0.0.0 \
+    PYTHONPATH=/app
 
 WORKDIR /app
 
-# Pin uv version (not latest)
-COPY --from=ghcr.io/astral-sh/uv:0.5.26 /uv /usr/local/bin/uv
+# Pin uv version (exact version matching uv.lock revision 3)
+COPY --from=ghcr.io/astral-sh/uv:0.10.7 /uv /usr/local/bin/uv
 
 # --- Base Dependencies ---
 FROM base AS deps
@@ -17,7 +18,7 @@ RUN uv sync --frozen --no-dev --no-install-project
 
 # --- Test Stage (dev dependencies + test suite) ---
 FROM deps AS test
-RUN uv sync --frozen --extra dev --no-install-project
+RUN uv sync --frozen --group dev --no-install-project
 COPY services/api/src/ src/
 COPY services/api/tests/ tests/
 COPY services/api/alembic.ini alembic.ini

@@ -34,9 +34,6 @@ __pycache__/
 .DS_Store
 Thumbs.db
 
-# Docker
-# docker-compose.override.yml is tracked for dev environment
-
 
 # Misc
 *.log

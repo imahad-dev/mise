@@ -11,7 +11,7 @@ reset:
 	docker compose down -v
 
 dev:
-	docker compose -f docker-compose.yml -f docker-compose.override.yml up
+	docker compose -f docker-compose.yml -f docker-compose.dev.yml up
 
 logs:
 	docker compose logs -f

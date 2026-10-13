@@ -35,6 +35,7 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-mise}
       POSTGRES_USER: ${POSTGRES_USER:-mise}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me_in_production}
+      SQL_ECHO: ${SQL_ECHO:-false}
       REDIS_URL: redis://redis:6379/0
       API_HOST: "0.0.0.0"
       API_PORT: "8000"

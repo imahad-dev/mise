@@ -145,11 +145,17 @@
 'tree_nuts','peanuts','soy','celery','mustard','sesame','sulphites','lupin'
 ```
 
+### Allowed dietary preferences set
+
+```sql
+'vegetarian','vegan','gluten_free'
+```
+
 ### restaurant
 
 | Column | Type | Notes |
 |--------|------|-------|
-| id | UUID | PK |
+| id | UUID | PK, default `gen_random_uuid()` |
 | name | TEXT | NOT NULL |
 | slug | TEXT | UNIQUE NOT NULL |
 | timezone | TEXT | `Europe/Rome` |
@@ -157,20 +163,28 @@
 | active | BOOLEAN | default true |
 | languages | TEXT[] | NOT NULL DEFAULT `'{en}'` |
 | default_language | TEXT | NOT NULL DEFAULT `'en'` |
+| menu_version | INTEGER | NOT NULL DEFAULT 0 (unused in M1) |
 | onboarding | JSONB | M2+ cold-start |
+| created_at | TIMESTAMPTZ | NOT NULL DEFAULT `now()` |
+| updated_at | TIMESTAMPTZ | NOT NULL DEFAULT `now()` |
+
+**CHECK constraints:**
+```sql
+CHECK ((default_language = ANY(languages)) IS TRUE)
+```
 
 ### menu_item
 
 | Column | Type | Notes |
 |--------|------|-------|
-| id | UUID | PK |
-| restaurant_id | UUID | FK |
+| id | UUID | PK, default `gen_random_uuid()` |
+| restaurant_id | UUID | FK → `restaurant(id)` ON DELETE CASCADE |
 | category | TEXT | NOT NULL |
-| price | DECIMAL(10,2) | NOT NULL |
-| unit_cost | DECIMAL(10,2) | NOT NULL. **Excluded from guest schemas.** |
+| price | DECIMAL(10,2) | NOT NULL (`CHECK (price >= 0)`) |
+| unit_cost | DECIMAL(10,2) | NOT NULL (`CHECK (unit_cost >= 0)`). **Excluded from guest schemas.** |
 | ingredients | TEXT[] | NOT NULL DEFAULT '{}' |
 | allergens | TEXT[] | NOT NULL DEFAULT '{}' |
-| allergen_verified | BOOLEAN | NOT NULL DEFAULT false. Auto-reset on allergen/ingredient/dietary change. |
+| allergen_verified | BOOLEAN | NOT NULL DEFAULT false. Auto-reset on allergen/ingredient change. |
 | is_vegetarian | BOOLEAN | NOT NULL DEFAULT false |
 | is_vegan | BOOLEAN | NOT NULL DEFAULT false |
 | is_gluten_free | BOOLEAN | NOT NULL DEFAULT false |
@@ -180,6 +194,10 @@
 | sort_order | INTEGER | NOT NULL DEFAULT 0 |
 | image_url | TEXT | Nullable |
 | deleted_at | TIMESTAMPTZ | Nullable. Soft-delete. |
+| created_at | TIMESTAMPTZ | NOT NULL DEFAULT `now()` |
+| updated_at | TIMESTAMPTZ | NOT NULL DEFAULT `now()` |
+
+*Note: Item creation transactionally requires creating a `menu_translation` matching `restaurant.default_language`.*
 
 **CHECK constraints:**
 
@@ -199,95 +217,118 @@ CHECK (NOT is_vegan OR NOT (allergens && ARRAY['milk','eggs','fish','crustaceans
 
 -- Vegetarian contradicts flesh-based allergens
 CHECK (NOT is_vegetarian OR NOT (allergens && ARRAY['fish','crustaceans','molluscs']::text[]))
+
+-- Price non-negative
+CHECK (price >= 0 AND unit_cost >= 0)
 ```
 
 ### menu_translation
 
 | Column | Type | Notes |
 |--------|------|-------|
-| id | UUID | PK |
-| menu_item_id | UUID | FK |
+| id | UUID | PK, default `gen_random_uuid()` |
+| menu_item_id | UUID | FK → `menu_item(id)` ON DELETE CASCADE |
 | language | TEXT | NOT NULL |
 | name | TEXT | NOT NULL |
-| description | TEXT | |
-| **UNIQUE** | `(menu_item_id, language)` | No menu_version in M1. |
+| description | TEXT | Nullable |
+| created_at | TIMESTAMPTZ | NOT NULL DEFAULT `now()` |
+| updated_at | TIMESTAMPTZ | NOT NULL DEFAULT `now()` |
+
+**Constraints:** `UNIQUE (menu_item_id, language)`
 
 ### dining_table
 
 | Column | Type | Notes |
 |--------|------|-------|
-| id | UUID | PK |
-| restaurant_id | UUID | FK |
+| id | UUID | PK, default `gen_random_uuid()` |
+| restaurant_id | UUID | FK → `restaurant(id)` ON DELETE CASCADE |
 | label | TEXT | NOT NULL |
 | qr_token | TEXT | UNIQUE NOT NULL |
+| created_at | TIMESTAMPTZ | NOT NULL DEFAULT `now()` |
+| updated_at | TIMESTAMPTZ | NOT NULL DEFAULT `now()` |
 
 ### guest_session
 
 | Column | Type | Notes |
 |--------|------|-------|
-| id | UUID | PK |
-| restaurant_id | UUID | FK |
-| table_id | UUID | FK → dining_table, nullable |
+| id | UUID | PK, default `gen_random_uuid()` |
+| restaurant_id | UUID | FK → `restaurant(id)` ON DELETE CASCADE |
+| table_id | UUID | FK → `dining_table(id)` ON DELETE SET NULL, nullable |
 | language | TEXT | NOT NULL |
 | dietary_preferences | TEXT[] | NOT NULL DEFAULT '{}' |
 | allergens_to_avoid | TEXT[] | NOT NULL DEFAULT '{}' |
-| expires_at | TIMESTAMPTZ | |
+| expires_at | TIMESTAMPTZ | NOT NULL |
+| created_at | TIMESTAMPTZ | NOT NULL DEFAULT `now()` |
+| updated_at | TIMESTAMPTZ | NOT NULL DEFAULT `now()` |
 
 ```sql
 CHECK (allergens_to_avoid <@ ARRAY['gluten','milk','eggs','fish','crustaceans','molluscs',
        'tree_nuts','peanuts','soy','celery','mustard','sesame','sulphites','lupin']::text[])
+CHECK (dietary_preferences <@ ARRAY['vegetarian','vegan','gluten_free']::text[])
 ```
 
 ### orders
 
 | Column | Type | Notes |
 |--------|------|-------|
-| id | UUID | PK |
-| guest_session_id | UUID | FK |
-| restaurant_id | UUID | FK |
-| table_id | UUID | FK, nullable |
+| id | UUID | PK, default `gen_random_uuid()` |
+| guest_session_id | UUID | FK → `guest_session(id)` **ON DELETE RESTRICT** |
+| restaurant_id | UUID | FK → `restaurant(id)` ON DELETE CASCADE |
+| table_id | UUID | FK → `dining_table(id)` ON DELETE SET NULL, nullable |
 | status | TEXT | NOT NULL DEFAULT 'placed' |
-| total | DECIMAL(10,2) | NOT NULL |
+| total | DECIMAL(10,2) | NOT NULL (`CHECK (total >= 0)`) |
 | idempotency_key | TEXT | NOT NULL |
 | payload_hash | TEXT | NOT NULL. **Server-computed.** |
+| allergen_conflict_acknowledged | BOOLEAN | NOT NULL DEFAULT false |
 | allergens_to_avoid | TEXT[] | NOT NULL DEFAULT '{}'. **Snapshot from session.** |
 | dietary_preferences | TEXT[] | NOT NULL DEFAULT '{}'. **Snapshot from session.** |
-| placed_at | TIMESTAMPTZ | NOT NULL |
+| placed_at | TIMESTAMPTZ | NOT NULL DEFAULT `now()` |
 | bumped_at | TIMESTAMPTZ | Nullable. Idempotent bump. |
+| created_at | TIMESTAMPTZ | NOT NULL DEFAULT `now()` |
+| updated_at | TIMESTAMPTZ | NOT NULL DEFAULT `now()` |
 
 ```sql
 CHECK (status IN ('placed', 'bumped', 'cancelled'))
+CHECK (total >= 0)
+CHECK (allergens_to_avoid <@ ARRAY['gluten','milk','eggs','fish','crustaceans','molluscs',
+       'tree_nuts','peanuts','soy','celery','mustard','sesame','sulphites','lupin']::text[])
+CHECK (dietary_preferences <@ ARRAY['vegetarian','vegan','gluten_free']::text[])
 UNIQUE (guest_session_id, idempotency_key)
 ```
 
-**Status transitions:**
+**Status transitions & Recall:**
 
 ```
-placed → bumped   (kitchen clears; guest sees "Ready")
+placed → bumped   (kitchen clears order; guest sees "Ready")
+bumped → placed   (recall allowed strictly within 60 s of bumped_at)
 placed → cancelled
-No other transitions. No recall.
 ```
 
 ### order_item
 
 | Column | Type | Notes |
 |--------|------|-------|
-| id | UUID | PK |
-| order_id | UUID | FK |
-| menu_item_id | UUID | FK |
-| quantity | INTEGER | NOT NULL |
-| unit_price | DECIMAL(10,2) | Snapshot |
-| unit_cost | DECIMAL(10,2) | Snapshot |
+| id | UUID | PK, default `gen_random_uuid()` |
+| order_id | UUID | FK → `orders(id)` ON DELETE CASCADE |
+| menu_item_id | UUID | FK → `menu_item(id)` ON DELETE RESTRICT |
+| quantity | INTEGER | NOT NULL (`CHECK (quantity >= 1 AND quantity <= 20)`) |
+| unit_price | DECIMAL(10,2) | Snapshot (`CHECK (unit_price >= 0)`) |
+| unit_cost | DECIMAL(10,2) | Snapshot (`CHECK (unit_cost >= 0)`) |
 | item_name | TEXT | NOT NULL. Snapshot in guest language. |
+| kitchen_name | TEXT | NOT NULL. Snapshot in restaurant default language. |
+| allergens | TEXT[] | NOT NULL DEFAULT '{}'. **Snapshot.** |
+| allergen_verified | BOOLEAN | NOT NULL. **Snapshot.** |
+| allergen_status | TEXT | NOT NULL. **Computed at order time.** |
 | notes | TEXT | Nullable |
-| item_allergens | TEXT[] | NOT NULL DEFAULT '{}'. **Snapshot.** |
-| item_allergen_verified | BOOLEAN | NOT NULL. **Snapshot.** |
-| item_allergen_status | TEXT | NOT NULL. **Computed at order time.** |
+| created_at | TIMESTAMPTZ | NOT NULL DEFAULT `now()` |
 
 ```sql
 CHECK (quantity >= 1 AND quantity <= 20)
+CHECK (unit_price >= 0 AND unit_cost >= 0)
 CHECK (notes IS NULL OR length(notes) <= 500)
-CHECK (item_allergen_status IN ('contains', 'unverified', 'no_declared_match'))
+CHECK (allergen_status IN ('contains', 'unverified', 'no_declared_match'))
+CHECK (allergens <@ ARRAY['gluten','milk','eggs','fish','crustaceans','molluscs',
+       'tree_nuts','peanuts','soy','celery','mustard','sesame','sulphites','lupin']::text[])
 ```
 
 Application-level: max 50 `order_item` rows per order.
@@ -296,20 +337,20 @@ Application-level: max 50 `order_item` rows per order.
 
 | Column | Type | Notes |
 |--------|------|-------|
-| id | UUID | PK |
-| restaurant_id | UUID | FK |
+| id | UUID | PK, default `gen_random_uuid()` |
+| restaurant_id | UUID | FK → `restaurant(id)` ON DELETE CASCADE |
 | event_type | TEXT | NOT NULL |
 | actor | TEXT | NOT NULL |
-| payload | JSONB | |
-| created_at | TIMESTAMPTZ | NOT NULL. No updated_at. |
+| payload | JSONB | NOT NULL DEFAULT `'{}'::jsonb` |
+| created_at | TIMESTAMPTZ | NOT NULL DEFAULT `now()`. No updated_at. |
 
-Event types: `allergen_acknowledgment`, `owner_allergen_edit`, `owner_dietary_edit`, `order_placed`, `order_bumped`, `menu_item_deleted`, ...
+Event types: `allergen_conflict_acknowledged`, `owner_allergen_edit`, `owner_dietary_edit`, `order_placed`, `order_bumped`, `order_recalled`, `menu_item_deleted`.
 
 ### metrics_sample (M0)
 
 | Column | Type | Notes |
 |--------|------|-------|
-| id | UUID | PK |
+| id | UUID | PK, default `gen_random_uuid()` (0002 migration) |
 | model | TEXT | NOT NULL |
 | endpoint | TEXT | NOT NULL |
 | tokens_in | INTEGER | NOT NULL |
@@ -317,27 +358,42 @@ Event types: `allergen_acknowledgment`, `owner_allergen_edit`, `owner_dietary_ed
 | latency_ms | INTEGER | NOT NULL |
 | gpu_seconds | FLOAT | Nullable |
 | cached_prefix_tokens | INTEGER | Nullable |
-| created_at | TIMESTAMPTZ | NOT NULL. No updated_at. |
+| created_at | TIMESTAMPTZ | NOT NULL DEFAULT `now()`. No updated_at. |
 
-### Indexes
+### Explicit Indexes & Foreign Key Indexes
 
-| Table | Columns | Notes |
-|-------|---------|-------|
-| menu_item | `(restaurant_id) WHERE deleted_at IS NULL` | Partial |
-| menu_item | `(restaurant_id, available, sort_order) WHERE deleted_at IS NULL` | Listing |
-| menu_translation | `(menu_item_id, language)` | UNIQUE |
-| dining_table | `(qr_token)` | UNIQUE |
-| dining_table | `(restaurant_id)` | FK |
-| guest_session | `(restaurant_id, expires_at)` | Cleanup |
-| guest_session | `(table_id)` | FK |
-| orders | `(guest_session_id, idempotency_key)` | UNIQUE |
-| orders | `(restaurant_id, status, placed_at)` | Kitchen/owner query |
-| orders | `(guest_session_id)` | FK |
-| orders | `(table_id)` | FK |
-| order_item | `(order_id)` | FK |
-| order_item | `(menu_item_id)` | FK |
-| audit_log | `(restaurant_id, event_type, created_at)` | Query |
-| metrics_sample | `(model, created_at)` | Aggregation |
+| Table | Index Name | Columns / Definition | Purpose |
+|-------|------------|----------------------|---------|
+| `restaurant` | `restaurant_pkey` | `(id)` PRIMARY KEY | PK lookup |
+| `restaurant` | `restaurant_slug_key` | `(slug)` UNIQUE | Slug routing |
+| `menu_item` | `menu_item_pkey` | `(id)` PRIMARY KEY | PK lookup |
+| `menu_item` | `idx_menu_item_restaurant_id` | `(restaurant_id)` | FK index |
+| `menu_item` | `idx_menu_item_active` | `(restaurant_id) WHERE deleted_at IS NULL` | Active menu items |
+| `menu_item` | `idx_menu_item_listing` | `(restaurant_id, available, sort_order) WHERE deleted_at IS NULL` | Public menu listing |
+| `menu_translation` | `menu_translation_pkey` | `(id)` PRIMARY KEY | PK lookup |
+| `menu_translation` | `idx_menu_translation_item_id`| `(menu_item_id)` | FK index |
+| `menu_translation` | `menu_translation_item_lang_key` | `(menu_item_id, language)` UNIQUE | Language resolution |
+| `dining_table` | `dining_table_pkey` | `(id)` PRIMARY KEY | PK lookup |
+| `dining_table` | `idx_dining_table_restaurant_id` | `(restaurant_id)` | FK index |
+| `dining_table` | `dining_table_qr_token_key` | `(qr_token)` UNIQUE | QR scan resolution |
+| `guest_session` | `guest_session_pkey` | `(id)` PRIMARY KEY | PK lookup |
+| `guest_session` | `idx_guest_session_restaurant_id` | `(restaurant_id)` | FK index |
+| `guest_session` | `idx_guest_session_table_id` | `(table_id)` | FK index |
+| `guest_session` | `idx_guest_session_cleanup` | `(restaurant_id, expires_at)` | Session expiry sweep |
+| `orders` | `orders_pkey` | `(id)` PRIMARY KEY | PK lookup |
+| `orders` | `idx_orders_restaurant_id` | `(restaurant_id)` | FK index |
+| `orders` | `idx_orders_guest_session_id` | `(guest_session_id)` | FK index |
+| `orders` | `idx_orders_table_id` | `(table_id)` | FK index |
+| `orders` | `orders_guest_idempotency_key` | `(guest_session_id, idempotency_key)` UNIQUE | Idempotency guard |
+| `orders` | `idx_orders_kitchen_query` | `(restaurant_id, status, placed_at)` | Kitchen active queue |
+| `order_item` | `order_item_pkey` | `(id)` PRIMARY KEY | PK lookup |
+| `order_item` | `idx_order_item_order_id` | `(order_id)` | FK index |
+| `order_item` | `idx_order_item_menu_item_id` | `(menu_item_id)` | FK index |
+| `audit_log` | `audit_log_pkey` | `(id)` PRIMARY KEY | PK lookup |
+| `audit_log` | `idx_audit_log_restaurant_id` | `(restaurant_id)` | FK index |
+| `audit_log` | `idx_audit_log_query` | `(restaurant_id, event_type, created_at)` | Audit queries |
+| `metrics_sample` | `metrics_sample_pkey` | `(id)` PRIMARY KEY | PK lookup |
+| `metrics_sample` | `idx_metrics_sample_model_created` | `(model, created_at)` | Inference metrics aggregation |
 
 ---
 
