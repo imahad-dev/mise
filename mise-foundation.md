@@ -20,7 +20,7 @@
 9. **Make targets** — `down` keeps volumes; `reset` drops them. Tests use `run --rm`. OpenAPI uses `exec -T`. CI starts only Postgres + Redis.
 10. **Health** — `127.0.0.1` in checks. `HOSTNAME=0.0.0.0`. `API_URL` build arg for rewrites.
 11. **Drop publish** — No `menu_version`, no publish endpoint in M1. Edits are live.
-12. **Status simplified** — `placed | bumped | cancelled` (TEXT + CHECK). No recall. `bumped` → "Ready" for guests.
+12. **Status simplified** — `placed | bumped | cancelled` (TEXT + CHECK). Recall allowed (`bumped` → `placed`) strictly within 60 s (< 60 s) of `bumped_at` (emits `order_recalled` audit event). `bumped` → "Ready" for guests.
 13. **Graph fixes** — M1.3→M1.10, M1.18→M1.19+M1.20, frontend routes→M1.13.
 14. **Order limits** — `quantity` 1–20, max 50 line items, `notes` max 500 chars.
 
@@ -57,7 +57,7 @@
 - [ ] Guest creates session (language + diets + allergens collected first). PATCH updates preferences.
 - [ ] Guest menu excludes `unit_cost`. Each item has `allergen_status` with precedence `contains > unverified > no_declared_match`.
 - [ ] Order placement: server computes payload hash; recomputes allergen status; requires `allergen_acknowledgment` for conflicts/unverified; writes audit_log; snapshots session prefs + item allergens on order_item.
-- [ ] Kitchen tickets show allergy flags **from order_item snapshot**. Bump idempotent (`bumped_at`). Guest sees "Ready". No recall.
+- [ ] Kitchen tickets show allergy flags **from order_item snapshot**. Bump idempotent (`bumped_at`). Recall allowed strictly within 60 s (< 60 s) of `bumped_at` (`order_recalled` audit event). Kitchen UI recall button for the last bumped order. Guest sees "Ready".
 - [ ] Order limits enforced: qty 1–20, max 50 lines, notes ≤ 500 chars.
 - [ ] Shared allergen test vectors run in pytest AND vitest. Negative tests pass.
 - [ ] Owner edits to allergen/dietary fields: verified flags auto-reset + audit_log row.
@@ -76,7 +76,7 @@
 | ORM | SQLAlchemy 2.0 + Alembic. asyncpg (runtime), psycopg (migrations). | |
 | SSE | 15 s heartbeat. Generators never hold DB session. Publish after commit. Raised proxy timeout. Debug endpoint in M0. **Caddy fallback** if proxy buffers. | |
 | Allergen model | Server-authoritative. `contains > unverified > no_declared_match`. Never "safe". Snapshots on order. Acknowledgment required. | |
-| Order status | `placed \| bumped \| cancelled` (TEXT + CHECK). No recall. `bumped` → "Ready" for guest. | Simplest correct model. |
+| Order status | `placed \| bumped \| cancelled` (TEXT + CHECK). Recall (`bumped` → `placed`) strictly within 60 s (< 60 s) of `bumped_at` (`order_recalled` audit event). Kitchen UI recall button for last bumped order. `bumped` → "Ready" for guest. | Simplest correct model with safety recall window. |
 | Payload hash | **Server-computed**. Client sends only `idempotency_key`. | Single source of truth for hash. |
 | Publish/version | **Deferred to M2**. Edits live in M1. | Simpler M1 scope. |
 | Secrets | `APP_ENV != dev` → refuse default values for `API_SECRET_KEY`, `OWNER_API_KEY`, `STAFF_PIN`. | |
@@ -300,7 +300,7 @@ UNIQUE (guest_session_id, idempotency_key)
 
 ```
 placed → bumped   (kitchen clears order; guest sees "Ready")
-bumped → placed   (recall allowed strictly within 60 s of bumped_at)
+bumped → placed   (recall allowed strictly within 60 s (< 60 s) of bumped_at; >= 60 s rejected, no audit event)
 placed → cancelled
 ```
 
@@ -463,8 +463,8 @@ mise/
 │           │   │   └── tables/page.tsx      # QR codes via PUBLIC_GUEST_URL
 │           │   └── (kitchen)/
 │           │       ├── layout.tsx           # Bare
-│           │       └── kitchen/page.tsx     # Allergy flags from snapshot, no recall
-│           ├── components/                  # (recall-button removed)
+│           │       └── kitchen/page.tsx     # Allergy flags from snapshot, recall button
+│           ├── components/                  # recall-button.tsx, ticket-card.tsx
 │           ├── hooks/
 │           └── lib/
 │
@@ -510,7 +510,7 @@ mise/
 │   │   │   │   ├── menu.py                  # Audit allergen/dietary edits
 │   │   │   │   ├── guest.py                 # POST + PATCH session
 │   │   │   │   ├── order.py                 # Cookie-verified, server hash, ack
-│   │   │   │   ├── kitchen.py               # No recall. Owner role allowed on list.
+│   │   │   │   ├── kitchen.py               # Bump + recall (<60s, order_recalled audit on success). Owner role allowed on list.
 │   │   │   │   └── metrics.py               # Owner auth required
 │   │   │   ├── services/
 │   │   │   │   ├── auth_service.py          # 3 cookie types
@@ -528,7 +528,7 @@ mise/
 │   │       ├── test_order_service.py        # Idempotency, 409, ack, limits, status
 │   │       ├── test_menu_router.py          # Verified flag reset, audit, constraints
 │   │       ├── test_guest_router.py         # No unit_cost, PATCH
-│   │       ├── test_kitchen_router.py       # Bump idempotent, owner on list, allergy flags
+│   │       ├── test_kitchen_router.py       # Bump idempotent, recall boundary (<60s allowed + audit, >=60s -> 409 and no audit), owner on list, allergy flags
 │   │       ├── test_auth.py                 # 401/403, cross-session, rate limit
 │   │       ├── test_health.py
 │   │       └── test_inference_client.py
@@ -676,6 +676,7 @@ DEMO_RESTAURANT_SLUG=trattoria-da-mario
 | GET | `/api/restaurants/{slug}/kitchen/orders` | Staff **or Owner** | Active orders with allergy flags **from order_item snapshot** |
 | GET | `/api/restaurants/{slug}/kitchen/stream` | Staff | SSE |
 | POST | `/api/restaurants/{slug}/kitchen/orders/{id}/bump` | Staff | Idempotent: sets `bumped_at`, status→bumped. Already bumped → 200 with existing `bumped_at`. |
+| POST | `/api/restaurants/{slug}/kitchen/orders/{id}/recall` | Staff | Recall strictly within 60 s (`now() - bumped_at < '60 seconds'::interval`): status `bumped` → `placed`, emits `order_recalled` audit event. Requests at >= 60 s rejected with 409 Conflict (no audit event emitted). |
 
 ### Menu (proxied by owner-web)
 
@@ -783,7 +784,7 @@ All containers set `HOSTNAME=0.0.0.0`. Next.js Dockerfiles take `ARG API_URL=htt
 | M1.7 | **Guest menu** — Menu in session language (fallback to default_language). `allergen_status` per item. `?dietary` filter. No `unit_cost`. | M1.4, M1.6 | correct language, statuses, filter |
 | M1.8 | **Order service** — Server-computed `payload_hash`. Snapshot session prefs on `orders` + allergens/verified/status on `order_item`. Recompute allergen status at placement. Require `allergen_acknowledgment` for contains/unverified → audit_log. Limits: qty 1–20, 50 lines, notes 500. Status transitions. Cookie-verified ownership. | M1.7 | idempotency, 409 hash mismatch, ack, limits, snapshots |
 | M1.9 | **SSE** — 15 s heartbeat. No DB session. Publish after commit. | M0.6, M1.8 | streams, no leak |
-| M1.10 | **Kitchen endpoints** — List (staff OR owner), stream, bump (idempotent `bumped_at`). Allergy flags from `order_item` snapshot. No recall. | M1.3, M1.8, M1.9 | bump idempotent, owner on list, flags from snapshot |
+| M1.10 | **Kitchen endpoints** — List (staff OR owner), stream, bump (idempotent `bumped_at`), recall (bumped → placed strictly within 60 s, `order_recalled` audit event on success; >= 60 s -> 409, no audit event). Allergy flags from `order_item` snapshot. | M1.3, M1.8, M1.9 | bump idempotent, recall <60s, boundary reject >=60s, owner on list, flags from snapshot |
 | M1.11 | **Tables API** — GET/POST. Owner auth. | M1.1, M1.3 | CRUD works |
 | M1.12 | **Shared test vectors** — `allergen-filter.json`: precedence pinned, edge cases. | M1.4 | both suites load same JSON |
 | M1.13 | **OpenAPI → TS** — `export_openapi.py` (app object, `exec -T`). openapi-fetch client. | M1.5–M1.11 | types in packages/ |
@@ -793,8 +794,8 @@ All containers set `HOSTNAME=0.0.0.0`. Next.js Dockerfiles take `ARG API_URL=htt
 | M1.17 | **Guest: order status** — SSE + poll. "Reconnecting" banner. `bumped` → "Ready". | M1.9, M1.13 | live updates |
 | M1.18 | **Owner: login + menu editor + tables QR** — Login form. Menu list/edit. Table list with QR from `PUBLIC_GUEST_URL`. `(dashboard)` layout. | M1.5, M1.11, M1.13 | login → edit → QR |
 | M1.19 | **Owner: live orders** — GET list for initial load + reconnect + poll. SSE for updates. | M1.10, M1.13, M1.18 | orders load, update live |
-| M1.20 | **Kitchen display** — `(kitchen)` bare layout. Allergy flags from snapshot. Bump. Age coloring. Audio. Wake lock. Connection banner. SSE + poll. | M1.10, M1.13, M1.18 | dings, flags, bump, colors |
-| M1.21 | **Tests** — pytest: allergen (vectors), order (idempotency, 409, ack, limits, status, snapshots), menu (reset, audit, constraints), auth (401/403, cross-session, rate limit), kitchen (bump, owner list). vitest: allergen (vectors), cart, use-sse (poll fallback, reconnect), negative (no unit_cost in guest schema). | M1.1–M1.20 | `make test` green |
+| M1.20 | **Kitchen display** — `(kitchen)` bare layout. Allergy flags from snapshot. Bump. Recall button for last bumped order (< 60 s). Age coloring. Audio. Wake lock. Connection banner. SSE + poll. | M1.10, M1.13, M1.18 | dings, flags, bump, recall button, colors |
+| M1.21 | **Tests** — pytest: allergen (vectors), order (idempotency, 409, ack, limits, status, snapshots), menu (reset, audit, constraints), auth (401/403, cross-session, rate limit), kitchen (bump, recall boundary <60s vs >=60s + audit event assertion, owner list). vitest: allergen (vectors), cart, use-sse (poll fallback, reconnect), negative (no unit_cost in guest schema). | M1.1–M1.20 | `make test` green |
 
 ---
 
@@ -903,7 +904,7 @@ M1 Day 2–4:
 
 ## 15. Deferred to M2+
 
-`menu_version` / publish, forecast / recommendation / action tables, AI agents, LLM translations, translation editing endpoints, forecasting, daily brief, simulator, AMD panel, vLLM ROCm, chat ordering, menu photo ingestion, action approval, recommendation engine, order history page, worker service, Tokyo menu, session cleanup, recall-last-bump.
+`menu_version` / publish, forecast / recommendation / action tables, AI agents, LLM translations, translation editing endpoints, forecasting, daily brief, simulator, AMD panel, vLLM ROCm, chat ordering, menu photo ingestion, action approval, recommendation engine, order history page, worker service, Tokyo menu, session cleanup.
 
 ---
 

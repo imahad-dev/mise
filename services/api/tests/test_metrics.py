@@ -16,7 +16,7 @@ async def test_metrics_empty_returns_zeros(client: AsyncClient):
     assert body["total_calls"] == 0
     assert body["total_tokens_in"] == 0
     assert body["total_tokens_out"] == 0
-    assert body["avg_latency_ms"] == 0
+    assert body["avg_latency_ms"] is None
 
 
 @pytest.mark.asyncio

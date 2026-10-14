@@ -20,6 +20,7 @@ dependencies = [
 dev = [
     "pytest>=8.0.0",
     "pytest-asyncio>=0.24.0",
+    "pytest-timeout>=2.3.1",
     "ruff>=0.8.0",
 ]
 
@@ -49,6 +50,9 @@ known-first-party = ["src"]
 testpaths = ["tests"]
 pythonpath = ["."]
 asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
+timeout = 30
 filterwarnings = [
     "ignore::DeprecationWarning",
 ]

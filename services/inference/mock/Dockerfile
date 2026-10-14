@@ -2,7 +2,10 @@ FROM python:3.11-slim
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    HOSTNAME=0.0.0.0
+    HOSTNAME=0.0.0.0 \
+    PATH="/app/.venv/bin:$PATH"
+
+WORKDIR /app
 
 COPY --from=ghcr.io/astral-sh/uv:0.10.7 /uv /usr/local/bin/uv
 
@@ -16,4 +19,4 @@ EXPOSE 8080
 HEALTHCHECK --interval=10s --timeout=5s --start-period=10s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/v1/models')"
 
-CMD ["uv", "run", "uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8080"]
+CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8080"]

@@ -1,7 +1,12 @@
 """Tests for health and debug SSE endpoints."""
 
+import asyncio
+from unittest.mock import patch
+
 import pytest
 from httpx import AsyncClient
+
+from src.routers.health import _debug_sse_generator
 
 
 @pytest.mark.asyncio
@@ -15,16 +20,30 @@ async def test_health_returns_ok(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_debug_sse_streams(client: AsyncClient):
-    """Debug SSE endpoint returns event-stream content type."""
-    async with client.stream("GET", "/debug/sse") as resp:
+async def test_debug_sse_generator_direct():
+    """Test the generator directly: anext once, then aclose, confirming CancelledError."""
+    gen = _debug_sse_generator()
+    first = await anext(gen)
+    assert first == 'data: {"count": 0, "msg": "debug heartbeat"}\n\n'
+
+    # Confirm cancelling/closing re-raises CancelledError
+    with pytest.raises(asyncio.CancelledError):
+        await gen.athrow(asyncio.CancelledError)
+    await gen.aclose()
+
+
+@pytest.mark.asyncio
+async def test_debug_sse_endpoint_headers(client: AsyncClient):
+    """Test the route headers using a patched generator that yields once and ends."""
+
+    async def _mock_sse_generator():
+        yield 'data: {"count": 0, "msg": "debug heartbeat"}\n\n'
+
+    with patch("src.routers.health._debug_sse_generator", _mock_sse_generator):
+        resp = await client.get("/debug/sse")
         assert resp.status_code == 200
         assert "text/event-stream" in resp.headers["content-type"]
-        # Read initial event (heartbeat is 15s)
-        count = 0
-        async for line in resp.aiter_lines():
-            if line.startswith("data:"):
-                count += 1
-                if count >= 1:
-                    break
-        assert count >= 1
+        assert resp.headers.get("cache-control") == "no-cache"
+        assert resp.headers.get("connection") == "keep-alive"
+        assert resp.headers.get("x-accel-buffering") == "no"
+        assert 'data: {"count": 0, "msg": "debug heartbeat"}' in resp.text

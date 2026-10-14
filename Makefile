@@ -1,4 +1,9 @@
-.PHONY: up down reset dev logs build migrate migration seed lint test test-py test-ts smoke gen-client ci
+.PHONY: up down reset dev logs build migrate migration seed lint test test-py test-ts smoke gen-client setup ci
+
+# --- Setup ---
+setup:
+	pnpm install --frozen-lockfile
+	uv sync --project services/api
 
 # --- Docker ---
 up:
@@ -56,5 +61,6 @@ gen-client:
 
 # --- CI ---
 ci:
+	$(MAKE) setup
 	$(MAKE) lint
 	$(MAKE) test

@@ -63,6 +63,7 @@ services:
       retries: 3
 
   api-test:
+    profiles: ["test"]
     build:
       context: .
       dockerfile: services/api/Dockerfile
