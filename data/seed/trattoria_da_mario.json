@@ -1,0 +1,521 @@
+{
+  "restaurant": {
+    "name": "Trattoria da Mario",
+    "slug": "trattoria-da-mario",
+    "timezone": "Europe/Rome",
+    "currency": "EUR",
+    "languages": ["en", "it"],
+    "default_language": "it",
+    "active": true
+  },
+  "tables": [
+    {"label": "Tavolo 1", "qr_token": "tbl-mario-01"},
+    {"label": "Tavolo 2", "qr_token": "tbl-mario-02"},
+    {"label": "Tavolo 3", "qr_token": "tbl-mario-03"},
+    {"label": "Tavolo 4", "qr_token": "tbl-mario-04"},
+    {"label": "Tavolo 5", "qr_token": "tbl-mario-05"},
+    {"label": "Tavolo 6", "qr_token": "tbl-mario-06"}
+  ],
+  "items": [
+    {
+      "key": "bruschetta_al_pomodoro",
+      "category": "Antipasti",
+      "price": 6.50,
+      "unit_cost": 1.20,
+      "ingredients": ["pane", "pomodori", "aglio", "basilico", "olio extravergine"],
+      "allergens": ["gluten"],
+      "allergen_verified": true,
+      "is_vegetarian": true,
+      "is_vegan": true,
+      "is_gluten_free": false,
+      "dietary_verified": true,
+      "available": true,
+      "featured": false,
+      "sort_order": 1,
+      "translations": {
+        "it": {"name": "Bruschetta al Pomodoro", "description": "Pane tostato con pomodori freschi, aglio, basilico e olio extravergine d'oliva"},
+        "en": {"name": "Tomato Bruschetta", "description": "Toasted bread topped with fresh diced tomatoes, garlic, basil, and extra virgin olive oil"}
+      }
+    },
+    {
+      "key": "caprese_di_bufala",
+      "category": "Antipasti",
+      "price": 9.00,
+      "unit_cost": 2.80,
+      "ingredients": ["mozzarella di bufala", "pomodori", "basilico", "olio"],
+      "allergens": ["milk"],
+      "allergen_verified": true,
+      "is_vegetarian": true,
+      "is_vegan": false,
+      "is_gluten_free": true,
+      "dietary_verified": true,
+      "available": true,
+      "featured": true,
+      "sort_order": 2,
+      "translations": {
+        "it": {"name": "Caprese di Bufala", "description": "Mozzarella di bufala campana DOP con pomodori maturi e basilico fresco"},
+        "en": {"name": "Buffalo Mozzarella Caprese", "description": "DOP buffalo mozzarella with ripe vine tomatoes and fresh basil"}
+      }
+    },
+    {
+      "key": "tagliere_di_salumi",
+      "category": "Antipasti",
+      "price": 13.50,
+      "unit_cost": 4.50,
+      "ingredients": ["prosciutto toscano", "salame toscano", "finocchiona", "crostini"],
+      "allergens": ["gluten", "sulphites"],
+      "allergen_verified": true,
+      "is_vegetarian": false,
+      "is_vegan": false,
+      "is_gluten_free": false,
+      "dietary_verified": true,
+      "available": true,
+      "featured": false,
+      "sort_order": 3,
+      "translations": {
+        "it": {"name": "Tagliere di Salumi Toscani", "description": "Selezione di salumi artigianali toscani con crostini caldi"},
+        "en": {"name": "Tuscan Cured Meat Board", "description": "Selection of artisanal Tuscan cured meats served with warm crostini"}
+      }
+    },
+    {
+      "key": "carpaccio_di_manzo",
+      "category": "Antipasti",
+      "price": 12.00,
+      "unit_cost": 3.90,
+      "ingredients": ["filetto di manzo", "rucola", "grana padano", "limone", "olio"],
+      "allergens": ["milk"],
+      "allergen_verified": true,
+      "is_vegetarian": false,
+      "is_vegan": false,
+      "is_gluten_free": true,
+      "dietary_verified": true,
+      "available": true,
+      "featured": false,
+      "sort_order": 4,
+      "translations": {
+        "it": {"name": "Carpaccio di Manzo", "description": "Sottili fette di manzo con rucola selvatica, scaglie di Grana Padano e limone"},
+        "en": {"name": "Beef Carpaccio", "description": "Thinly sliced raw beef tenderloin with wild arugula, shaved Grana Padano, and lemon"}
+      }
+    },
+    {
+      "key": "olive_marinate",
+      "category": "Antipasti",
+      "price": 4.50,
+      "unit_cost": 0.90,
+      "ingredients": ["olive taggiasche", "rosmarino", "timo", "scorza d'arancia"],
+      "allergens": [],
+      "allergen_verified": true,
+      "is_vegetarian": true,
+      "is_vegan": true,
+      "is_gluten_free": true,
+      "dietary_verified": true,
+      "available": true,
+      "featured": false,
+      "sort_order": 5,
+      "translations": {
+        "it": {"name": "Olive Marinate alle Erbe", "description": "Olive miste marinate con rosmarino fresco, timo e scorza d'arancia"},
+        "en": {"name": "Herb-Marinated Olives", "description": "Mixed olives marinated with fresh rosemary, thyme, and orange zest"}
+      }
+    },
+    {
+      "key": "spaghetti_alla_carbonara",
+      "category": "Primi",
+      "price": 13.00,
+      "unit_cost": 2.90,
+      "ingredients": ["spaghetti", "guanciale", "tuorli d'uovo", "pecorino romano", "pepe nero"],
+      "allergens": ["gluten", "eggs", "milk"],
+      "allergen_verified": true,
+      "is_vegetarian": false,
+      "is_vegan": false,
+      "is_gluten_free": false,
+      "dietary_verified": true,
+      "available": true,
+      "featured": true,
+      "sort_order": 6,
+      "translations": {
+        "it": {"name": "Spaghetti alla Carbonara", "description": "Autentica carbonara con guanciale croccante, tuorli d'uovo freschi e Pecorino Romano DOP"},
+        "en": {"name": "Spaghetti Carbonara", "description": "Authentic Roman carbonara with crispy cured pork jowl, fresh egg yolks, and Pecorino Romano"}
+      }
+    },
+    {
+      "key": "penne_all_arrabbiata",
+      "category": "Primi",
+      "price": 10.50,
+      "unit_cost": 1.80,
+      "ingredients": ["penne", "pomodoro", "peperoncino", "aglio", "prezzemolo"],
+      "allergens": ["gluten"],
+      "allergen_verified": true,
+      "is_vegetarian": true,
+      "is_vegan": true,
+      "is_gluten_free": false,
+      "dietary_verified": true,
+      "available": true,
+      "featured": false,
+      "sort_order": 7,
+      "translations": {
+        "it": {"name": "Penne all'Arrabbiata", "description": "Penne rigate in salsa piccante di pomodoro San Marzano, aglio e peperoncino"},
+        "en": {"name": "Penne Arrabbiata", "description": "Penne pasta in a spicy San Marzano tomato sauce with garlic and red chili"}
+      }
+    },
+    {
+      "key": "risotto_ai_funghi_porcini",
+      "category": "Primi",
+      "price": 14.50,
+      "unit_cost": 3.50,
+      "ingredients": ["riso carnaroli", "funghi porcini", "brodo vegetale", "vino bianco", "parmigiano", "sedano"],
+      "allergens": ["milk", "celery", "sulphites"],
+      "allergen_verified": true,
+      "is_vegetarian": true,
+      "is_vegan": false,
+      "is_gluten_free": true,
+      "dietary_verified": true,
+      "available": true,
+      "featured": true,
+      "sort_order": 8,
+      "translations": {
+        "it": {"name": "Risotto ai Funghi Porcini", "description": "Cremoso risotto mantecato con funghi porcini freschi e Parmigiano Reggiano"},
+        "en": {"name": "Wild Porcini Risotto", "description": "Creamy Carnaroli risotto with wild porcini mushrooms and aged Parmigiano Reggiano"}
+      }
+    },
+    {
+      "key": "tagliolini_ai_frutti_di_mare",
+      "category": "Primi",
+      "price": 16.50,
+      "unit_cost": 5.20,
+      "ingredients": ["tagliolini all'uovo", "cozze", "vongole", "gamberi", "calamari", "pomodorini", "vino bianco"],
+      "allergens": ["gluten", "eggs", "crustaceans", "molluscs", "sulphites"],
+      "allergen_verified": true,
+      "is_vegetarian": false,
+      "is_vegan": false,
+      "is_gluten_free": false,
+      "dietary_verified": true,
+      "available": true,
+      "featured": false,
+      "sort_order": 9,
+      "translations": {
+        "it": {"name": "Tagliolini ai Frutti di Mare", "description": "Pasta fresca all'uovo con cozze, vongole veraci, gamberi e calamari in bianco"},
+        "en": {"name": "Seafood Tagliolini", "description": "Fresh egg ribbon pasta with mussels, clams, shrimp, and calamari in white wine sauce"}
+      }
+    },
+    {
+      "key": "gnocchi_al_pesto_genovese",
+      "category": "Primi",
+      "price": 12.00,
+      "unit_cost": 2.60,
+      "ingredients": ["gnocchi di patate", "basilico genovese", "pinoli", "parmigiano", "pecorino", "aglio"],
+      "allergens": ["gluten", "milk", "tree_nuts"],
+      "allergen_verified": true,
+      "is_vegetarian": true,
+      "is_vegan": false,
+      "is_gluten_free": false,
+      "dietary_verified": true,
+      "available": true,
+      "featured": false,
+      "sort_order": 10,
+      "translations": {
+        "it": {"name": "Gnocchi al Pesto Genovese", "description": "Gnocchi di patate fatti a mano con pesto tradizionale al basilico e pinoli"},
+        "en": {"name": "Potato Gnocchi with Basil Pesto", "description": "Handmade potato gnocchi tossed in traditional Genovese basil and pine nut pesto"}
+      }
+    },
+    {
+      "key": "minestrone_tradizionale",
+      "category": "Primi",
+      "price": 9.50,
+      "unit_cost": 1.70,
+      "ingredients": ["zucchine", "carote", "patate", "fagioli borlotti", "sedano", "pomodoro"],
+      "allergens": ["celery"],
+      "allergen_verified": true,
+      "is_vegetarian": true,
+      "is_vegan": true,
+      "is_gluten_free": true,
+      "dietary_verified": true,
+      "available": true,
+      "featured": false,
+      "sort_order": 11,
+      "translations": {
+        "it": {"name": "Minestrone Tradizionale di Verdure", "description": "Zuppa ricca di verdure di stagione dell'orto con fagioli borlotti"},
+        "en": {"name": "Traditional Vegetable Minestrone", "description": "Hearty seasonal vegetable soup with garden herbs and borlotti beans"}
+      }
+    },
+    {
+      "key": "bistecca_alla_fiorentina",
+      "category": "Secondi",
+      "price": 28.00,
+      "unit_cost": 10.50,
+      "ingredients": ["costata di manzo chianina", "sale grosso", "rosmarino", "olio extravergine"],
+      "allergens": [],
+      "allergen_verified": true,
+      "is_vegetarian": false,
+      "is_vegan": false,
+      "is_gluten_free": true,
+      "dietary_verified": true,
+      "available": true,
+      "featured": true,
+      "sort_order": 12,
+      "translations": {
+        "it": {"name": "Bistecca alla Fiorentina", "description": "Pregiata costata di Chianina cotta alla brace secondo tradizione toscana"},
+        "en": {"name": "Florentine T-Bone Steak", "description": "Prime Chianina beef cut grilled over embers, finished with sea salt and olive oil"}
+      }
+    },
+    {
+      "key": "filetto_di_branzino",
+      "category": "Secondi",
+      "price": 19.50,
+      "unit_cost": 6.20,
+      "ingredients": ["filetto di branzino", "pomodorini", "olive", "capperi", "vino bianco"],
+      "allergens": ["fish", "sulphites"],
+      "allergen_verified": true,
+      "is_vegetarian": false,
+      "is_vegan": false,
+      "is_gluten_free": true,
+      "dietary_verified": true,
+      "available": true,
+      "featured": false,
+      "sort_order": 13,
+      "translations": {
+        "it": {"name": "Filetto di Branzino al Forno", "description": "Filetto di branzino selvaggio cotto al forno con pomodorini pachino e capperi"},
+        "en": {"name": "Pan-Roasted Sea Bass Fillet", "description": "Wild sea bass fillet roasted with cherry tomatoes, Taggiasca olives, and Sicilian capers"}
+      }
+    },
+    {
+      "key": "pollo_alla_cacciatora",
+      "category": "Secondi",
+      "price": 15.00,
+      "unit_cost": 3.80,
+      "ingredients": ["pollo", "pomodoro", "cipolla", "sedano", "carota", "vino rosso", "rosmarino"],
+      "allergens": ["celery", "sulphites"],
+      "allergen_verified": true,
+      "is_vegetarian": false,
+      "is_vegan": false,
+      "is_gluten_free": true,
+      "dietary_verified": true,
+      "available": true,
+      "featured": false,
+      "sort_order": 14,
+      "translations": {
+        "it": {"name": "Pollo alla Cacciatora", "description": "Cosce di pollo brasate lentamente con pomodoro, aromi di bosco e vino rosso"},
+        "en": {"name": "Hunter's Chicken (Cacciatora)", "description": "Braised chicken pieces with tomatoes, woodland herbs, celery, and red wine"}
+      }
+    },
+    {
+      "key": "melanzane_alla_parmigiana",
+      "category": "Secondi",
+      "price": 13.00,
+      "unit_cost": 3.10,
+      "ingredients": ["melanzane", "salsa di pomodoro", "mozzarella", "parmigiano reggiano", "basilico"],
+      "allergens": ["milk"],
+      "allergen_verified": true,
+      "is_vegetarian": true,
+      "is_vegan": false,
+      "is_gluten_free": true,
+      "dietary_verified": true,
+      "available": true,
+      "featured": false,
+      "sort_order": 15,
+      "translations": {
+        "it": {"name": "Melanzane alla Parmigiana", "description": "Strati di melanzane fritte, salsa al pomodoro, fior di latte e parmigiano fuso"},
+        "en": {"name": "Eggplant Parmigiana", "description": "Baked layers of eggplant, rich tomato sauce, melted mozzarella, and Parmigiano"}
+      }
+    },
+    {
+      "key": "polpette_della_nonna",
+      "category": "Secondi",
+      "price": 14.00,
+      "unit_cost": 3.40,
+      "ingredients": ["carne di manzo", "carne di maiale", "pane grattugiato", "uova", "parmigiano", "pomodoro"],
+      "allergens": ["gluten", "eggs", "milk"],
+      "allergen_verified": true,
+      "is_vegetarian": false,
+      "is_vegan": false,
+      "is_gluten_free": false,
+      "dietary_verified": true,
+      "available": true,
+      "featured": false,
+      "sort_order": 16,
+      "translations": {
+        "it": {"name": "Polpette della Nonna al Sugo", "description": "Polpette artigianali di carne cotte nel sugo di pomodoro secondo la ricetta di famiglia"},
+        "en": {"name": "Nonna's Meatballs in Tomato Gravy", "description": "Tender beef and pork meatballs simmered gently in rich tomato sauce"}
+      }
+    },
+    {
+      "key": "patate_al_forno",
+      "category": "Contorni",
+      "price": 5.00,
+      "unit_cost": 0.80,
+      "ingredients": ["patate", "rosmarino", "aglio", "olio extravergine"],
+      "allergens": [],
+      "allergen_verified": true,
+      "is_vegetarian": true,
+      "is_vegan": true,
+      "is_gluten_free": true,
+      "dietary_verified": true,
+      "available": true,
+      "featured": false,
+      "sort_order": 17,
+      "translations": {
+        "it": {"name": "Patate al Forno al Rosmarino", "description": "Patate dorate al forno croccanti con rosmarino fresco e aglio"},
+        "en": {"name": "Rosemary Roasted Potatoes", "description": "Golden crisp oven-roasted potatoes with fresh rosemary and garlic"}
+      }
+    },
+    {
+      "key": "insalata_mista",
+      "category": "Contorni",
+      "price": 4.50,
+      "unit_cost": 0.70,
+      "ingredients": ["lattuga", "radicchio", "pomodorini", "carote", "olio"],
+      "allergens": [],
+      "allergen_verified": true,
+      "is_vegetarian": true,
+      "is_vegan": true,
+      "is_gluten_free": true,
+      "dietary_verified": true,
+      "available": true,
+      "featured": false,
+      "sort_order": 18,
+      "translations": {
+        "it": {"name": "Insalata Mista di Campo", "description": "Fresca insalata mista con radicchio trevigiano, carote e pomodori"},
+        "en": {"name": "Garden Mixed Salad", "description": "Crisp mixed greens with Treviso radicchio, ribbon carrots, and cherry tomatoes"}
+      }
+    },
+    {
+      "key": "verdure_grigliate",
+      "category": "Contorni",
+      "price": 6.00,
+      "unit_cost": 1.10,
+      "ingredients": ["zucchine", "melanzane", "peperoni", "olio", "menta"],
+      "allergens": [],
+      "allergen_verified": true,
+      "is_vegetarian": true,
+      "is_vegan": true,
+      "is_gluten_free": true,
+      "dietary_verified": true,
+      "available": true,
+      "featured": false,
+      "sort_order": 19,
+      "translations": {
+        "it": {"name": "Verdure Grigliate di Stagione", "description": "Zucchine, melanzane e peperoni alla griglia conditi con emulsione alla menta"},
+        "en": {"name": "Grilled Seasonal Vegetables", "description": "Char-grilled zucchini, eggplant, and sweet bell peppers dressed with mint olive oil"}
+      }
+    },
+    {
+      "key": "spinaci_saltati",
+      "category": "Contorni",
+      "price": 5.50,
+      "unit_cost": 0.95,
+      "ingredients": ["spinaci freschi", "aglio", "peperoncino", "olio extravergine"],
+      "allergens": [],
+      "allergen_verified": true,
+      "is_vegetarian": true,
+      "is_vegan": true,
+      "is_gluten_free": true,
+      "dietary_verified": true,
+      "available": true,
+      "featured": false,
+      "sort_order": 20,
+      "translations": {
+        "it": {"name": "Spinaci Saltati", "description": "Spinaci freschi in padella con aglio dorato e un tocco di peperoncino"},
+        "en": {"name": "Sautéed Fresh Spinach", "description": "Tender baby spinach sautéed in extra virgin olive oil with golden garlic"}
+      }
+    },
+    {
+      "key": "tiramisu_tradizionale",
+      "category": "Dolci",
+      "price": 7.00,
+      "unit_cost": 1.50,
+      "ingredients": ["savoiardi", "mascarpone", "caffè espresso", "uova", "cacao amaro"],
+      "allergens": ["gluten", "eggs", "milk"],
+      "allergen_verified": true,
+      "is_vegetarian": true,
+      "is_vegan": false,
+      "is_gluten_free": false,
+      "dietary_verified": true,
+      "available": true,
+      "featured": true,
+      "sort_order": 21,
+      "translations": {
+        "it": {"name": "Tiramisù Tradizionale", "description": "Il classico dessert trevigiano con crema al mascarpone, savoiardi imbevuti al caffè e cacao"},
+        "en": {"name": "Traditional Tiramisù", "description": "Classic Venetian dessert with mascarpone cream, espresso-dipped ladyfingers, and cocoa"}
+      }
+    },
+    {
+      "key": "panna_cotta",
+      "category": "Dolci",
+      "price": 6.50,
+      "unit_cost": 1.30,
+      "ingredients": ["panna fresca", "latte", "zucchero", "gelatina", "frutti di bosco"],
+      "allergens": ["milk"],
+      "allergen_verified": true,
+      "is_vegetarian": false,
+      "is_vegan": false,
+      "is_gluten_free": true,
+      "dietary_verified": true,
+      "available": true,
+      "featured": false,
+      "sort_order": 22,
+      "translations": {
+        "it": {"name": "Panna Cotta ai Frutti di Bosco", "description": "Panna cotta vellutata servita con coulis tiepida ai frutti di bosco"},
+        "en": {"name": "Berry Coulis Panna Cotta", "description": "Silky vanilla panna cotta served with a tart warm wild berry coulis"}
+      }
+    },
+    {
+      "key": "sorbetto_al_limone",
+      "category": "Dolci",
+      "price": 5.50,
+      "unit_cost": 0.85,
+      "ingredients": ["succo di limone di sorrento", "acqua", "zucchero"],
+      "allergens": [],
+      "allergen_verified": true,
+      "is_vegetarian": true,
+      "is_vegan": true,
+      "is_gluten_free": true,
+      "dietary_verified": true,
+      "available": true,
+      "featured": false,
+      "sort_order": 23,
+      "translations": {
+        "it": {"name": "Sorbetto al Limone di Sorrento", "description": "Rinfrescante sorbetto preparato artigianalmente con limoni IGP di Sorrento"},
+        "en": {"name": "Sorrento Lemon Sorbet", "description": "Refreshing artisan sorbet crafted with IGP Sorrento lemons"}
+      }
+    },
+    {
+      "key": "cantucci_con_vin_santo",
+      "category": "Dolci",
+      "price": 8.00,
+      "unit_cost": 2.20,
+      "ingredients": ["farina", "mandorle", "uova", "zucchero", "vin santo"],
+      "allergens": ["gluten", "eggs", "tree_nuts", "sulphites"],
+      "allergen_verified": true,
+      "is_vegetarian": true,
+      "is_vegan": false,
+      "is_gluten_free": false,
+      "dietary_verified": true,
+      "available": true,
+      "featured": false,
+      "sort_order": 24,
+      "translations": {
+        "it": {"name": "Cantucci con Vin Santo", "description": "Biscotti secchi alle mandorle serviti con bicchierino di Vin Santo toscano DOC"},
+        "en": {"name": "Tuscan Almond Biscotti with Vin Santo", "description": "Traditional almond cantucci served with a glass of Tuscan sweet dessert wine"}
+      }
+    },
+    {
+      "key": "speciale_dello_chef",
+      "category": "Dolci",
+      "price": 15.00,
+      "unit_cost": 3.50,
+      "ingredients": ["pasta frolla", "crema pasticcera", "fichi", "semi di sesamo"],
+      "allergens": ["gluten", "eggs", "milk", "sesame"],
+      "allergen_verified": false,
+      "is_vegetarian": true,
+      "is_vegan": false,
+      "is_gluten_free": false,
+      "dietary_verified": false,
+      "available": true,
+      "featured": false,
+      "sort_order": 25,
+      "translations": {
+        "it": {"name": "Speciale dello Chef del Giorno", "description": "Crostatina artigianale con fichi freschi e sesamo tostato (in fase di verifica allergeni)"},
+        "en": {"name": "Chef's Daily Special Tart", "description": "Artisan fresh fig tart with toasted sesame (pending allergen verification)"}
+      }
+    }
+  ]
+}

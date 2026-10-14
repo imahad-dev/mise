@@ -1,6 +1,127 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "description": "Shared allergen filter test vectors — used by both pytest and vitest",
-  "note": "Populated in M1.12. Status precedence: contains > unverified > no_declared_match",
-  "vectors": []
+  "note": "Status precedence: contains > unverified > no_declared_match",
+  "vectors": [
+    {
+      "id": "single_match_verified",
+      "description": "Direct match on single allergen when verified",
+      "item_allergens": ["gluten"],
+      "allergen_verified": true,
+      "guest_allergens_to_avoid": ["gluten"],
+      "expected_status": "contains"
+    },
+    {
+      "id": "match_takes_precedence_over_unverified",
+      "description": "Item contains avoided allergen; status is contains even if allergen_verified is false",
+      "item_allergens": ["milk"],
+      "allergen_verified": false,
+      "guest_allergens_to_avoid": ["milk"],
+      "expected_status": "contains"
+    },
+    {
+      "id": "multi_item_allergens_match_unverified",
+      "description": "Item has multiple allergens including avoided one; verified is false -> contains",
+      "item_allergens": ["gluten", "milk"],
+      "allergen_verified": false,
+      "guest_allergens_to_avoid": ["milk"],
+      "expected_status": "contains"
+    },
+    {
+      "id": "multi_guest_allergens_partial_match",
+      "description": "Guest avoids multiple allergens and one matches item -> contains",
+      "item_allergens": ["eggs"],
+      "allergen_verified": true,
+      "guest_allergens_to_avoid": ["gluten", "eggs", "peanuts"],
+      "expected_status": "contains"
+    },
+    {
+      "id": "no_match_but_unverified",
+      "description": "Item does not declare avoided allergen, but item is unverified -> unverified",
+      "item_allergens": ["gluten"],
+      "allergen_verified": false,
+      "guest_allergens_to_avoid": ["peanuts"],
+      "expected_status": "unverified"
+    },
+    {
+      "id": "empty_item_allergens_unverified",
+      "description": "Item has no allergens declared, but allergen_verified is false -> unverified",
+      "item_allergens": [],
+      "allergen_verified": false,
+      "guest_allergens_to_avoid": ["celery"],
+      "expected_status": "unverified"
+    },
+    {
+      "id": "empty_guest_allergens_unverified",
+      "description": "Guest has no allergens to avoid, but item is unverified -> unverified",
+      "item_allergens": ["crustaceans"],
+      "allergen_verified": false,
+      "guest_allergens_to_avoid": [],
+      "expected_status": "unverified"
+    },
+    {
+      "id": "both_empty_unverified",
+      "description": "Guest has no preferences and item has no allergens, but item is unverified -> unverified",
+      "item_allergens": [],
+      "allergen_verified": false,
+      "guest_allergens_to_avoid": [],
+      "expected_status": "unverified"
+    },
+    {
+      "id": "empty_guest_allergens_verified",
+      "description": "Guest has no allergens to avoid and item is verified -> no_declared_match",
+      "item_allergens": ["gluten", "milk"],
+      "allergen_verified": true,
+      "guest_allergens_to_avoid": [],
+      "expected_status": "no_declared_match"
+    },
+    {
+      "id": "both_empty_verified",
+      "description": "Guest avoids nothing, item has no allergens, item is verified -> no_declared_match",
+      "item_allergens": [],
+      "allergen_verified": true,
+      "guest_allergens_to_avoid": [],
+      "expected_status": "no_declared_match"
+    },
+    {
+      "id": "disjoint_allergens_verified",
+      "description": "Guest avoids fish/molluscs, item has gluten, item is verified -> no_declared_match",
+      "item_allergens": ["gluten"],
+      "allergen_verified": true,
+      "guest_allergens_to_avoid": ["fish", "molluscs"],
+      "expected_status": "no_declared_match"
+    },
+    {
+      "id": "eu14_split_verified",
+      "description": "Split EU-14 allergens with no intersection, item verified -> no_declared_match",
+      "item_allergens": ["celery", "mustard", "sesame", "sulphites", "lupin"],
+      "allergen_verified": true,
+      "guest_allergens_to_avoid": ["gluten", "milk", "eggs", "fish", "crustaceans", "molluscs", "tree_nuts", "peanuts", "soy"],
+      "expected_status": "no_declared_match"
+    },
+    {
+      "id": "tree_nuts_match_verified",
+      "description": "Tree nuts exact match verified -> contains",
+      "item_allergens": ["tree_nuts"],
+      "allergen_verified": true,
+      "guest_allergens_to_avoid": ["tree_nuts"],
+      "expected_status": "contains"
+    },
+    {
+      "id": "sulphites_match_unverified",
+      "description": "Sulphites match unverified -> contains",
+      "item_allergens": ["sulphites"],
+      "allergen_verified": false,
+      "guest_allergens_to_avoid": ["sulphites"],
+      "expected_status": "contains"
+    },
+    {
+      "id": "lupin_match_verified",
+      "description": "Lupin match verified -> contains",
+      "item_allergens": ["lupin"],
+      "allergen_verified": true,
+      "guest_allergens_to_avoid": ["lupin"],
+      "expected_status": "contains"
+    }
+  ]
 }

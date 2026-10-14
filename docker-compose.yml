@@ -77,7 +77,7 @@ services:
       APP_ENV: dev
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
-      POSTGRES_DB: ${POSTGRES_DB:-mise}
+      POSTGRES_DB: ${POSTGRES_DB:-mise}_test
       POSTGRES_USER: ${POSTGRES_USER:-mise}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me_in_production}
       REDIS_URL: redis://redis:6379/0
