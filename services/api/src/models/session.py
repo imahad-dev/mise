@@ -68,6 +68,8 @@ class GuestSession(Base):
 
     # Relationships
     restaurant: Mapped["Restaurant"] = relationship(  # noqa: F821
-        "Restaurant", back_populates="guest_sessions"
+        "Restaurant", back_populates="guest_sessions", lazy="raise"
     )
-    table: Mapped["DiningTable | None"] = relationship("DiningTable")  # noqa: F821
+    table: Mapped["DiningTable | None"] = relationship(  # noqa: F821
+        "DiningTable", lazy="raise"
+    )

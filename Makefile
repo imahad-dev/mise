@@ -1,4 +1,4 @@
-.PHONY: up down reset dev logs build migrate migration seed lint test test-py test-ts smoke gen-client setup ci
+.PHONY: up down reset dev logs build migrate migration seed lint test test-py test-ts smoke gen-client setup ci verify-a
 
 # --- Setup ---
 setup:
@@ -41,7 +41,7 @@ lint:
 	pnpm -r lint
 
 test-py:
-	docker compose run --rm api-test
+	docker compose build api-test && docker compose run --rm api-test
 
 test-ts:
 	pnpm -r test
@@ -49,6 +49,9 @@ test-ts:
 test:
 	$(MAKE) test-py
 	$(MAKE) test-ts
+
+verify-a:
+	@bash scripts/verify_a.sh
 
 # --- Inference ---
 smoke:

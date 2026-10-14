@@ -1,6 +1,7 @@
 """Test allergen service against shared test vectors."""
 
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -8,18 +9,48 @@ import pytest
 from src.services.allergen_service import compute_allergen_status
 
 
+def find_test_vectors_path() -> Path:
+    """Find data/test-vectors/allergen-filter.json with TEST_VECTORS_PATH override."""
+    env_override = os.environ.get("TEST_VECTORS_PATH")
+    if env_override:
+        p = Path(env_override).resolve()
+        if p.is_file():
+            return p
+        raise FileNotFoundError(
+            f"TEST_VECTORS_PATH={env_override!r} does not exist or is not a file."
+        )
+
+    target_rel = Path("data") / "test-vectors" / "allergen-filter.json"
+    searched: list[Path] = []
+
+    # 1. Walk up from test file directory
+    current = Path(__file__).resolve().parent
+    for parent in [current, *current.parents]:
+        candidate = parent / target_rel
+        searched.append(candidate)
+        if candidate.is_file():
+            return candidate
+
+    # 2. Walk up from current working directory
+    cwd = Path.cwd().resolve()
+    for parent in [cwd, *cwd.parents]:
+        candidate = parent / target_rel
+        if candidate not in searched:
+            searched.append(candidate)
+        if candidate.is_file():
+            return candidate
+
+    msg = "Could not find 'data/test-vectors/allergen-filter.json'.\nSearched paths:\n" + "\n".join(
+        f" - {p}" for p in searched
+    )
+    raise FileNotFoundError(msg)
+
+
 def load_test_vectors() -> list[dict]:
-    candidates = [
-        Path(__file__).resolve().parents[3] / "data" / "test-vectors" / "allergen-filter.json",
-        Path.cwd() / "data" / "test-vectors" / "allergen-filter.json",
-        Path("/app/data/test-vectors/allergen-filter.json"),
-    ]
-    for p in candidates:
-        if p.exists():
-            with open(p, encoding="utf-8") as f:
-                data = json.load(f)
-            return data["vectors"]
-    raise FileNotFoundError(f"allergen-filter.json not found in {candidates}")
+    vectors_file = find_test_vectors_path()
+    with open(vectors_file, encoding="utf-8") as f:
+        data = json.load(f)
+    return data["vectors"]
 
 
 VECTORS = load_test_vectors()

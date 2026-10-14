@@ -38,7 +38,11 @@ class Restaurant(Base):
     )
     default_language: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'en'"))
     menu_version: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
-    onboarding: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    onboarding: Mapped[dict[str, Any]] = mapped_column(
+        JSONB,
+        nullable=False,
+        server_default=text("'{}'::jsonb"),
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -57,28 +61,33 @@ class Restaurant(Base):
         back_populates="restaurant",
         cascade="all, delete-orphan",
         passive_deletes=True,
+        lazy="raise",
     )
     menu_items: Mapped[list["MenuItem"]] = relationship(  # noqa: F821
         "MenuItem",
         back_populates="restaurant",
         cascade="all, delete-orphan",
         passive_deletes=True,
+        lazy="raise",
     )
     guest_sessions: Mapped[list["GuestSession"]] = relationship(  # noqa: F821
         "GuestSession",
         back_populates="restaurant",
         cascade="all, delete-orphan",
         passive_deletes=True,
+        lazy="raise",
     )
     orders: Mapped[list["Order"]] = relationship(  # noqa: F821
         "Order",
         back_populates="restaurant",
         cascade="all, delete-orphan",
         passive_deletes=True,
+        lazy="raise",
     )
     audit_logs: Mapped[list["AuditLog"]] = relationship(  # noqa: F821
         "AuditLog",
         back_populates="restaurant",
         cascade="all, delete-orphan",
         passive_deletes=True,
+        lazy="raise",
     )

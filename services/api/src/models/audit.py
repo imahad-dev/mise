@@ -42,4 +42,6 @@ class AuditLog(Base):
     )
 
     # Relationships
-    restaurant: Mapped["Restaurant"] = relationship("Restaurant", back_populates="audit_logs")  # noqa: F821
+    restaurant: Mapped["Restaurant"] = relationship(  # noqa: F821
+        "Restaurant", back_populates="audit_logs", lazy="raise"
+    )

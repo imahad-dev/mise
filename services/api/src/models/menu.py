@@ -122,11 +122,14 @@ class MenuItem(Base):
     )
 
     # Relationships
-    restaurant: Mapped["Restaurant"] = relationship("Restaurant", back_populates="menu_items")  # noqa: F821
+    restaurant: Mapped["Restaurant"] = relationship(  # noqa: F821
+        "Restaurant", back_populates="menu_items", lazy="raise"
+    )
     translations: Mapped[list["MenuTranslation"]] = relationship(
         "MenuTranslation",
         back_populates="menu_item",
         cascade="all, delete-orphan",
+        lazy="raise",
     )
 
 
@@ -163,4 +166,6 @@ class MenuTranslation(Base):
     )
 
     # Relationships
-    menu_item: Mapped["MenuItem"] = relationship("MenuItem", back_populates="translations")
+    menu_item: Mapped["MenuItem"] = relationship(
+        "MenuItem", back_populates="translations", lazy="raise"
+    )

@@ -9,12 +9,12 @@
     "active": true
   },
   "tables": [
-    {"label": "Tavolo 1", "qr_token": "tbl-mario-01"},
-    {"label": "Tavolo 2", "qr_token": "tbl-mario-02"},
-    {"label": "Tavolo 3", "qr_token": "tbl-mario-03"},
-    {"label": "Tavolo 4", "qr_token": "tbl-mario-04"},
-    {"label": "Tavolo 5", "qr_token": "tbl-mario-05"},
-    {"label": "Tavolo 6", "qr_token": "tbl-mario-06"}
+    {"label": "Tavolo 1"},
+    {"label": "Tavolo 2"},
+    {"label": "Tavolo 3"},
+    {"label": "Tavolo 4"},
+    {"label": "Tavolo 5"},
+    {"label": "Tavolo 6"}
   ],
   "items": [
     {

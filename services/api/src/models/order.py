@@ -37,6 +37,10 @@ class Order(Base):
             "dietary_preferences <@ ARRAY['vegetarian','vegan','gluten_free']::text[]",
             name="chk_orders_dietary",
         ),
+        CheckConstraint(
+            "(status <> 'bumped') OR (bumped_at IS NOT NULL)",
+            name="chk_orders_bumped_at_required",
+        ),
         UniqueConstraint(
             "guest_session_id", "idempotency_key", name="orders_guest_idempotency_key"
         ),
@@ -104,13 +108,16 @@ class Order(Base):
     )
 
     # Relationships
-    restaurant: Mapped["Restaurant"] = relationship("Restaurant", back_populates="orders")  # noqa: F821
-    guest_session: Mapped["GuestSession"] = relationship("GuestSession")  # noqa: F821
-    table: Mapped["DiningTable | None"] = relationship("DiningTable")  # noqa: F821
+    restaurant: Mapped["Restaurant"] = relationship(  # noqa: F821
+        "Restaurant", back_populates="orders", lazy="raise"
+    )
+    guest_session: Mapped["GuestSession"] = relationship("GuestSession", lazy="raise")  # noqa: F821
+    table: Mapped["DiningTable | None"] = relationship("DiningTable", lazy="raise")  # noqa: F821
     items: Mapped[list["OrderItem"]] = relationship(
         "OrderItem",
         back_populates="order",
         cascade="all, delete-orphan",
+        lazy="raise",
     )
 
 
@@ -170,5 +177,5 @@ class OrderItem(Base):
     )
 
     # Relationships
-    order: Mapped["Order"] = relationship("Order", back_populates="items")
-    menu_item: Mapped["MenuItem"] = relationship("MenuItem")  # noqa: F821
+    order: Mapped["Order"] = relationship("Order", back_populates="items", lazy="raise")
+    menu_item: Mapped["MenuItem"] = relationship("MenuItem", lazy="raise")  # noqa: F821

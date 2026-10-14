@@ -39,4 +39,6 @@ class DiningTable(Base):
     )
 
     # Relationships
-    restaurant: Mapped["Restaurant"] = relationship("Restaurant", back_populates="tables")  # noqa: F821
+    restaurant: Mapped["Restaurant"] = relationship(  # noqa: F821
+        "Restaurant", back_populates="tables", lazy="raise"
+    )
