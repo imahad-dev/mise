@@ -50,6 +50,8 @@ services:
       VLM_BASE_URL: http://inference:8080/v1
       VLM_MODEL: ${VLM_MODEL:-mock-vlm}
       DEMO_RESTAURANT_SLUG: ${DEMO_RESTAURANT_SLUG:-trattoria-da-mario}
+    ports:
+      - "127.0.0.1:8000:8000"
     depends_on:
       postgres:
         condition: service_healthy

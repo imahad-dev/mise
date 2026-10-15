@@ -1,4 +1,4 @@
-.PHONY: up down reset dev logs build migrate migration seed lint test test-py test-ts smoke gen-client setup ci verify-a
+.PHONY: up down reset dev logs build migrate migration seed lint test test-py test-ts smoke gen-client setup ci verify-a verify-b
 
 # --- Setup ---
 setup:
@@ -7,7 +7,7 @@ setup:
 
 # --- Docker ---
 up:
-	docker compose up -d
+	docker compose up -d --build --wait
 
 down:
 	docker compose down
@@ -52,6 +52,9 @@ test:
 
 verify-a:
 	@bash scripts/verify_a.sh
+
+verify-b:
+	@bash scripts/verify_b.sh
 
 # --- Inference ---
 smoke:
