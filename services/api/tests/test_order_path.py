@@ -2,6 +2,7 @@
 Authentication, Guest Sessions, Orders Path, Kitchen, and Owner Management.
 """
 
+import asyncio
 import time
 import uuid
 from datetime import UTC, datetime, timedelta
@@ -10,16 +11,19 @@ from typing import Any
 from unittest.mock import patch
 
 import pytest
-from httpx import AsyncClient
+import pytest_asyncio
+from httpx import ASGITransport, AsyncClient
 from scripts.seed import load_seed_data, seed_data
-from sqlalchemy import select, text
+from sqlalchemy import delete, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.auth import AUTH_COOKIE_NAME, GUEST_COOKIE_NAME, sign_value
 from src.config import settings
+from src.database import async_session_factory, get_db
+from src.main import app
 from src.models.audit import AuditLog
 from src.models.dining_table import DiningTable
-from src.models.menu import MenuItem
+from src.models.menu import MenuItem, MenuTranslation
 from src.models.order import Order
 from src.models.restaurant import Restaurant
 from src.models.session import GuestSession
@@ -292,31 +296,128 @@ async def test_order_idempotency_201_200_409(
     assert r3.status_code == 409
 
 
+@pytest_asyncio.fixture
+async def concurrent_order_env():
+    """Self-contained fixture creating committed test entities via real session factory.
+
+    Teardown deletes all created records in strict FK dependency order:
+    audit_log, orders, guest_session, menu_translation, menu_item, dining_table, restaurant.
+    """
+    restaurant_id = uuid.uuid4()
+    slug = f"concurrent-{uuid.uuid4().hex[:8]}"
+    table_id = uuid.uuid4()
+    item_id = uuid.uuid4()
+    trans_id = uuid.uuid4()
+    guest_session_id = uuid.uuid4()
+
+    async with async_session_factory() as session_db:
+        restaurant = Restaurant(
+            id=restaurant_id,
+            name="Concurrent Trattoria",
+            slug=slug,
+            languages=["en", "it"],
+            default_language="en",
+            currency="EUR",
+        )
+        session_db.add(restaurant)
+        await session_db.flush()
+
+        table = DiningTable(
+            id=table_id,
+            restaurant_id=restaurant_id,
+            label="T-Conc",
+            qr_token=f"qr-{uuid.uuid4().hex[:12]}",
+        )
+        session_db.add(table)
+        await session_db.flush()
+
+        item = MenuItem(
+            id=item_id,
+            restaurant_id=restaurant_id,
+            category="mains",
+            price=Decimal("15.00"),
+            unit_cost=Decimal("4.00"),
+            ingredients=["flour", "water", "salt"],
+            allergens=[],
+            allergen_verified=True,
+            dietary_verified=True,
+            is_vegetarian=True,
+            is_vegan=True,
+            is_gluten_free=False,
+            available=True,
+        )
+        session_db.add(item)
+        await session_db.flush()
+
+        translation = MenuTranslation(
+            id=trans_id,
+            menu_item_id=item_id,
+            language="en",
+            name="Concurrent Pasta",
+            description="Fresh pasta",
+        )
+        session_db.add(translation)
+        await session_db.flush()
+
+        guest_session = GuestSession(
+            id=guest_session_id,
+            restaurant_id=restaurant_id,
+            table_id=table_id,
+            language="en",
+            dietary_preferences=[],
+            allergens_to_avoid=[],
+            expires_at=datetime.now(UTC) + timedelta(hours=2),
+        )
+        session_db.add(guest_session)
+        await session_db.commit()
+
+    env_data = {
+        "restaurant_id": restaurant_id,
+        "table_id": table_id,
+        "item_id": item_id,
+        "guest_session_id": guest_session_id,
+    }
+
+    try:
+        yield env_data
+    finally:
+        async with async_session_factory() as session_db:
+            # 1. audit_log
+            await session_db.execute(
+                delete(AuditLog).where(AuditLog.restaurant_id == restaurant_id)
+            )
+            # 2. orders (cascades to order_item)
+            await session_db.execute(delete(Order).where(Order.restaurant_id == restaurant_id))
+            # 3. guest_session
+            await session_db.execute(
+                delete(GuestSession).where(GuestSession.restaurant_id == restaurant_id)
+            )
+            # 4. menu_translation
+            await session_db.execute(
+                delete(MenuTranslation).where(MenuTranslation.menu_item_id == item_id)
+            )
+            # 5. menu_item
+            await session_db.execute(
+                delete(MenuItem).where(MenuItem.restaurant_id == restaurant_id)
+            )
+            # 6. dining_table
+            await session_db.execute(
+                delete(DiningTable).where(DiningTable.restaurant_id == restaurant_id)
+            )
+            # 7. restaurant
+            await session_db.execute(delete(Restaurant).where(Restaurant.id == restaurant_id))
+            await session_db.commit()
+
+
 @pytest.mark.asyncio
 async def test_concurrent_duplicate_posts_create_one_order(
-    seeded_restaurant: Restaurant,
+    concurrent_order_env: dict[str, uuid.UUID],
 ):
     """Concurrent duplicate POST requests with the same idempotency key result in one order."""
-    from src.database import async_session_factory, get_db
-    from src.main import app
-
     saved_override = app.dependency_overrides.pop(get_db, None)
     try:
-        async with async_session_factory() as session_db:
-            guest_sess = GuestSession(
-                restaurant_id=seeded_restaurant.id,
-                language="en",
-                expires_at=datetime.now(UTC) + timedelta(hours=1),
-            )
-            session_db.add(guest_sess)
-            await session_db.commit()
-            guest_sess_id = guest_sess.id
-
-            res = await session_db.execute(
-                select(MenuItem).where(MenuItem.restaurant_id == seeded_restaurant.id).limit(1)
-            )
-            item = res.scalars().first()
-            item_id = item.id
+        guest_sess_id = concurrent_order_env["guest_session_id"]
+        item_id = concurrent_order_env["item_id"]
 
         cookie_val = sign_value(str(guest_sess_id))
         cookies = {GUEST_COOKIE_NAME: cookie_val}
@@ -327,8 +428,6 @@ async def test_concurrent_duplicate_posts_create_one_order(
             "acknowledge_allergen_risk": True,
         }
 
-        from httpx import ASGITransport
-
         async with (
             AsyncClient(
                 transport=ASGITransport(app=app), base_url="http://test", cookies=cookies
@@ -337,8 +436,6 @@ async def test_concurrent_duplicate_posts_create_one_order(
                 transport=ASGITransport(app=app), base_url="http://test", cookies=cookies
             ) as ac2,
         ):
-            import asyncio
-
             r1, r2 = await asyncio.gather(
                 ac1.post("/api/orders", json=payload),
                 ac2.post("/api/orders", json=payload),
@@ -355,7 +452,7 @@ async def test_concurrent_duplicate_posts_create_one_order(
             orders = list(res_orders.scalars().all())
             assert len(orders) == 1
     finally:
-        if saved_override:
+        if saved_override is not None:
             app.dependency_overrides[get_db] = saved_override
 
 

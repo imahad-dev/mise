@@ -210,7 +210,10 @@ async def patch_menu_item(
         db.add(audit_diet)
 
     await db.commit()
-    await db.refresh(item)
+    res_item = await db.execute(
+        select(MenuItem).options(selectinload(MenuItem.translations)).where(MenuItem.id == item.id)
+    )
+    item = res_item.scalar_one()
     return _build_owner_item_response(item)
 
 
@@ -258,7 +261,10 @@ async def verify_menu_item(
     )
     db.add(audit)
     await db.commit()
-    await db.refresh(item)
+    res_item = await db.execute(
+        select(MenuItem).options(selectinload(MenuItem.translations)).where(MenuItem.id == item.id)
+    )
+    item = res_item.scalar_one()
     return _build_owner_item_response(item)
 
 

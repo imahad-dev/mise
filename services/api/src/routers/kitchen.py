@@ -246,7 +246,10 @@ async def bump_order(
     )
     db.add(audit)
     await db.commit()
-    await db.refresh(order)
+    res_order = await db.execute(
+        select(Order).options(selectinload(Order.items)).where(Order.id == order.id)
+    )
+    order = res_order.scalar_one()
 
     # Publish events
     event_payload = json.dumps({"event": "order_bumped", "order_id": str(order.id)})
@@ -316,7 +319,10 @@ async def recall_order(
     )
     db.add(audit)
     await db.commit()
-    await db.refresh(order)
+    res_order = await db.execute(
+        select(Order).options(selectinload(Order.items)).where(Order.id == order.id)
+    )
+    order = res_order.scalar_one()
 
     # Fetch table labels
     stmt_tables = select(DiningTable).where(DiningTable.restaurant_id == restaurant.id)
