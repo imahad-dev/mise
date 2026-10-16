@@ -154,12 +154,16 @@ async def get_guest_menu(
         description = selected_trans.description if selected_trans else None
 
         # Compute allergen status
-        status_val, matched = compute_allergen_status(
+        status_val = compute_allergen_status(
             item_allergens=item.allergens,
             allergen_verified=item.allergen_verified,
-            allergens_to_avoid=session.allergens_to_avoid,
+            guest_allergens_to_avoid=session.allergens_to_avoid,
         )
-        matched_allergens = matched if status_val == "contains" else []
+        matched_allergens = (
+            [a for a in item.allergens if a in session.allergens_to_avoid]
+            if status_val == "contains"
+            else []
+        )
 
         menu_responses.append(
             GuestMenuItemResponse(

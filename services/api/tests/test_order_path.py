@@ -166,6 +166,39 @@ async def test_guest_session_flow_and_no_unit_cost(
 
 
 @pytest.mark.asyncio
+async def test_guest_menu_with_allergens_to_avoid(
+    client: AsyncClient,
+    seeded_restaurant: Restaurant,
+    db_session: AsyncSession,
+):
+    """Loading guest menu with non-empty allergens_to_avoid.
+
+    Computes allergen status and matched_allergens.
+    """
+    session = GuestSession(
+        restaurant_id=seeded_restaurant.id,
+        table_id=None,
+        language="it",
+        allergens_to_avoid=["gluten", "milk"],
+        expires_at=datetime.now(UTC) + timedelta(hours=2),
+    )
+    db_session.add(session)
+    await db_session.flush()
+
+    client.cookies.set(GUEST_COOKIE_NAME, sign_value(str(session.id)))
+    resp = await client.get("/api/guest/menu")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "items" in data
+
+    contains_items = [item for item in data["items"] if item["allergen_status"] == "contains"]
+    assert len(contains_items) > 0
+    for item in contains_items:
+        assert len(item["matched_allergens"]) > 0
+        assert any(a in ("gluten", "milk") for a in item["matched_allergens"])
+
+
+@pytest.mark.asyncio
 async def test_session_expiry_returns_401(
     client: AsyncClient,
     seeded_restaurant: Restaurant,
@@ -384,6 +417,28 @@ async def test_allergen_acknowledgment_required_and_recorded(
     )
     audit_ack = res_audit.scalars().first()
     assert audit_ack is not None
+
+    # 4. Safe item with no conflicts: acknowledge_allergen_risk=True leaves it False
+    res_safe = await db_session.execute(
+        select(MenuItem).where(
+            MenuItem.restaurant_id == seeded_restaurant.id,
+            ~MenuItem.allergens.contains(["milk"]),
+            MenuItem.allergen_verified.is_(True),
+        )
+    )
+    safe_item = res_safe.scalars().first()
+    assert safe_item is not None
+
+    r_safe = await client.post(
+        "/api/orders",
+        json={
+            "idempotency_key": "safe-ack-flag-test-key",
+            "items": [{"menu_item_id": str(safe_item.id), "quantity": 1}],
+            "acknowledge_allergen_risk": True,
+        },
+    )
+    assert r_safe.status_code == 201
+    assert r_safe.json()["allergen_conflict_acknowledged"] is False
 
 
 @pytest.mark.asyncio
@@ -656,3 +711,47 @@ async def test_failing_redis_publish_does_not_fail_order(
         )
         assert r.status_code == 201
         assert r.json()["idempotency_key"] == "redis-fail-test"
+
+
+@pytest.mark.asyncio
+async def test_order_integrity_error_non_idempotency_reraised(
+    client: AsyncClient,
+    seeded_restaurant: Restaurant,
+    db_session: AsyncSession,
+):
+    """IntegrityError not on orders_guest_idempotency_key must be re-raised."""
+    session = GuestSession(
+        restaurant_id=seeded_restaurant.id,
+        language="en",
+        expires_at=datetime.now(UTC) + timedelta(hours=1),
+    )
+    db_session.add(session)
+    await db_session.flush()
+    client.cookies.set(GUEST_COOKIE_NAME, sign_value(str(session.id)))
+
+    res = await db_session.execute(
+        select(MenuItem).where(MenuItem.restaurant_id == seeded_restaurant.id).limit(1)
+    )
+    item = res.scalars().first()
+
+    from sqlalchemy.exc import IntegrityError
+
+    # Non-idempotency IntegrityError (e.g. check constraint, not SQLSTATE 23505)
+    non_idempotency_err = IntegrityError(
+        "check constraint failed",
+        orig=Exception("chk_orders_total"),
+        params=None,
+    )
+
+    with (
+        patch.object(AsyncSession, "commit", side_effect=non_idempotency_err),
+        pytest.raises(IntegrityError),
+    ):
+        await client.post(
+            "/api/orders",
+            json={
+                "idempotency_key": "non-idem-err-key",
+                "items": [{"menu_item_id": str(item.id), "quantity": 1}],
+                "acknowledge_allergen_risk": True,
+            },
+        )

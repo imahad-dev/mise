@@ -49,6 +49,26 @@ def compute_payload_hash(items: list[OrderItemRequest]) -> str:
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
+def is_idempotency_unique_violation(err: IntegrityError) -> bool:
+    """Check if IntegrityError is specifically SQLSTATE 23505 on the idempotency constraint."""
+    orig = getattr(err, "orig", None)
+    sqlstate = getattr(orig, "sqlstate", None) or getattr(orig, "pgcode", None)
+    err_str = str(err).lower()
+
+    is_23505 = (sqlstate == "23505") or ("23505" in err_str)
+    if not is_23505:
+        return False
+
+    constraint_name = getattr(orig, "constraint_name", None)
+    if constraint_name is None and hasattr(orig, "diag"):
+        constraint_name = getattr(orig.diag, "constraint_name", None)
+
+    if constraint_name:
+        return constraint_name == "orders_guest_idempotency_key"
+
+    return "orders_guest_idempotency_key" in err_str or "idempotency_key" in err_str
+
+
 @router.post(
     "",
     response_model=OrderResponse,
@@ -133,10 +153,15 @@ async def create_order(
     conflict_items: list[dict] = []
     for req in payload.items:
         item = found_items[req.menu_item_id]
-        s_val, matched = compute_allergen_status(
+        s_val = compute_allergen_status(
             item_allergens=item.allergens,
             allergen_verified=item.allergen_verified,
-            allergens_to_avoid=session.allergens_to_avoid,
+            guest_allergens_to_avoid=session.allergens_to_avoid,
+        )
+        matched = (
+            [a for a in item.allergens if a in session.allergens_to_avoid]
+            if s_val == "contains"
+            else []
         )
         if s_val in ("contains", "unverified"):
             conflict_items.append(
@@ -170,10 +195,10 @@ async def create_order(
         item_name = guest_trans.name if guest_trans else ""
         kitchen_name = default_trans.name if default_trans else ""
 
-        s_val, _ = compute_allergen_status(
-            item.allergens,
-            item.allergen_verified,
-            session.allergens_to_avoid,
+        s_val = compute_allergen_status(
+            item_allergens=item.allergens,
+            allergen_verified=item.allergen_verified,
+            guest_allergens_to_avoid=session.allergens_to_avoid,
         )
 
         order_items.append(
@@ -191,6 +216,9 @@ async def create_order(
             )
         )
 
+    has_conflict = bool(conflict_items)
+    ack_recorded = has_conflict and bool(payload.acknowledge_allergen_risk)
+
     order = Order(
         guest_session_id=session.id,
         restaurant_id=session.restaurant_id,
@@ -199,7 +227,7 @@ async def create_order(
         total=total,
         idempotency_key=payload.idempotency_key,
         payload_hash=payload_hash,
-        allergen_conflict_acknowledged=bool(payload.acknowledge_allergen_risk),
+        allergen_conflict_acknowledged=ack_recorded,
         allergens_to_avoid=list(session.allergens_to_avoid),
         dietary_preferences=list(session.dietary_preferences),
         items=order_items,
@@ -211,7 +239,7 @@ async def create_order(
         await db.flush()
 
         # Write audit log for conflict acknowledgment if applicable
-        if conflict_items and payload.acknowledge_allergen_risk:
+        if ack_recorded:
             audit_ack = AuditLog(
                 restaurant_id=session.restaurant_id,
                 event_type="allergen_conflict_acknowledged",
@@ -232,6 +260,9 @@ async def create_order(
         await db.commit()
     except IntegrityError as err:
         await db.rollback()
+        if not is_idempotency_unique_violation(err):
+            raise err
+
         # Query existing order created by concurrent thread
         res_conc = await db.execute(stmt_existing)
         conc_order = res_conc.scalar_one_or_none()
