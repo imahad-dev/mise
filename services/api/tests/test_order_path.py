@@ -683,36 +683,39 @@ async def test_kitchen_bump_idempotent_and_recall_timing(
     )
     db_session.add(order)
     await db_session.flush()
+    order_id = order.id
 
     # 1. First bump -> status becomes bumped
-    r_bump = await client.post(f"/api/restaurants/{slug}/kitchen/orders/{order.id}/bump")
+    r_bump = await client.post(f"/api/restaurants/{slug}/kitchen/orders/{order_id}/bump")
     assert r_bump.status_code == 200
     bump_data = r_bump.json()
     assert bump_data["status"] == "bumped"
     first_bumped_at = bump_data["bumped_at"]
 
     # 2. Re-bump (idempotency check) -> returns same bumped_at
-    r_rebump = await client.post(f"/api/restaurants/{slug}/kitchen/orders/{order.id}/bump")
+    r_rebump = await client.post(f"/api/restaurants/{slug}/kitchen/orders/{order_id}/bump")
     assert r_rebump.status_code == 200
     assert r_rebump.json()["bumped_at"] == first_bumped_at
 
     # 3. Simulate order bumped 59s ago -> recall allowed
     await db_session.execute(
         text("UPDATE orders SET bumped_at = :ts WHERE id = :id"),
-        {"ts": datetime.now(UTC) - timedelta(seconds=59), "id": order.id},
+        {"ts": datetime.now(UTC) - timedelta(seconds=59), "id": order_id},
     )
-    r_recall_59 = await client.post(f"/api/restaurants/{slug}/kitchen/orders/{order.id}/recall")
+    db_session.expire_all()
+    r_recall_59 = await client.post(f"/api/restaurants/{slug}/kitchen/orders/{order_id}/recall")
     assert r_recall_59.status_code == 200
     assert r_recall_59.json()["status"] == "placed"
     assert r_recall_59.json()["bumped_at"] is None
 
     # Re-bump and simulate 61s ago -> recall rejected with 409
-    await client.post(f"/api/restaurants/{slug}/kitchen/orders/{order.id}/bump")
+    await client.post(f"/api/restaurants/{slug}/kitchen/orders/{order_id}/bump")
     await db_session.execute(
         text("UPDATE orders SET bumped_at = :ts WHERE id = :id"),
-        {"ts": datetime.now(UTC) - timedelta(seconds=61), "id": order.id},
+        {"ts": datetime.now(UTC) - timedelta(seconds=61), "id": order_id},
     )
-    r_recall_61 = await client.post(f"/api/restaurants/{slug}/kitchen/orders/{order.id}/recall")
+    db_session.expire_all()
+    r_recall_61 = await client.post(f"/api/restaurants/{slug}/kitchen/orders/{order_id}/recall")
     assert r_recall_61.status_code == 409
 
 

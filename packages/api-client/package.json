@@ -4,6 +4,16 @@
   "private": true,
   "type": "module",
   "main": "./src/client.ts",
+  "types": "./src/client.ts",
+  "exports": {
+    ".": {
+      "types": "./src/client.ts",
+      "default": "./src/client.ts"
+    },
+    "./schema": {
+      "types": "./src/generated/schema.d.ts"
+    }
+  },
   "scripts": {
     "generate": "openapi-typescript openapi.json -o src/generated/schema.d.ts",
     "lint": "echo 'no lint for generated types'",

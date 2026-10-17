@@ -2,8 +2,2285 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Mise API",
-    "version": "0.1.0",
-    "description": "Stub — generated from FastAPI app object via scripts/export_openapi.py"
+    "description": "Revenue copilot for independent restaurants",
+    "version": "0.1.0"
   },
-  "paths": {}
+  "paths": {
+    "/health": {
+      "get": {
+        "summary": "Health Check",
+        "description": "Check database and Redis connectivity.",
+        "operationId": "health_check_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/debug/sse": {
+      "get": {
+        "summary": "Debug Sse",
+        "description": "Debug SSE endpoint \u2014 streams counter to test proxy streaming (dev only).",
+        "operationId": "debug_sse_debug_sse_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/metrics/inference": {
+      "get": {
+        "tags": [
+          "metrics"
+        ],
+        "summary": "Inference Metrics",
+        "description": "Aggregated inference metrics.\n\nTODO: Require owner auth (mise_owner cookie) when M1.3 lands.",
+        "operationId": "inference_metrics_api_metrics_inference_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceMetricsResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/login": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Login",
+        "description": "Authenticate staff or owner and set httpOnly signed cookie.\n\nRate limited via Redis to 5 failures per 5 minutes per client IP.",
+        "operationId": "login_api_auth_login_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid credentials"
+          },
+          "429": {
+            "description": "Too many failed login attempts"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/logout": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Logout",
+        "description": "Clear authentication cookie.",
+        "operationId": "logout_api_auth_logout_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LogoutResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/me": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Get Me",
+        "description": "Return current authenticated role.",
+        "operationId": "get_me_api_auth_me_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated"
+          }
+        }
+      }
+    },
+    "/api/guest/sessions": {
+      "post": {
+        "tags": [
+          "guest"
+        ],
+        "summary": "Create Guest Session",
+        "description": "Create a guest session by scanning a dining table QR code.\n\nSets a 4-hour signed httpOnly mise_guest cookie.",
+        "operationId": "create_guest_session_api_guest_sessions_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateGuestSessionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GuestSessionResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown QR token"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/guest/session": {
+      "get": {
+        "tags": [
+          "guest"
+        ],
+        "summary": "Get Guest Session",
+        "description": "Retrieve details for the active guest session.",
+        "operationId": "get_guest_session_api_guest_session_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GuestSessionResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated or expired session"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "guest"
+        ],
+        "summary": "Patch Guest Session",
+        "description": "Update language, dietary preferences, or allergens to avoid for the session.",
+        "operationId": "patch_guest_session_api_guest_session_patch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchGuestSessionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GuestSessionResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated or expired session"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/guest/menu": {
+      "get": {
+        "tags": [
+          "guest"
+        ],
+        "summary": "Get Guest Menu",
+        "description": "Return the restaurant menu customized for the guest session.\n\n- Translation matches session language with fallback to restaurant default language.\n- Excludes deleted items.\n- Available items shown; unavailable included with available=False.\n- Computes allergen_status and matched_allergens.\n- NEVER includes unit_cost.",
+        "operationId": "get_guest_menu_api_guest_menu_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GuestMenuResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated or expired session"
+          }
+        }
+      }
+    },
+    "/api/orders": {
+      "post": {
+        "tags": [
+          "orders"
+        ],
+        "summary": "Create Order",
+        "description": "Place an order with canonical hash idempotency, allergen check, and audit logging.",
+        "operationId": "create_order_api_orders_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateOrderRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderResponse"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Order already placed (idempotent replay)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid order items"
+          },
+          "409": {
+            "description": "Idempotency conflict, unavailable items, or allergen ack required"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/orders/{id}": {
+      "get": {
+        "tags": [
+          "orders"
+        ],
+        "summary": "Get Order",
+        "description": "Retrieve an order. Returns 404 unless order belongs to the session cookie's session.",
+        "operationId": "get_order_api_orders__id__get",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Order not found"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/orders/{id}/stream": {
+      "get": {
+        "tags": [
+          "orders"
+        ],
+        "summary": "Stream Order",
+        "description": "Stream order status updates via Server-Sent Events with 15s heartbeats.\n\nGenerators hold no database session.",
+        "operationId": "stream_order_api_orders__id__stream_get",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "404": {
+            "description": "Order not found"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/restaurants/{slug}/kitchen/orders": {
+      "get": {
+        "tags": [
+          "kitchen"
+        ],
+        "summary": "Get Kitchen Orders",
+        "description": "Return placed orders plus the most recent order bumped within the last 60 seconds.",
+        "operationId": "get_kitchen_orders_api_restaurants__slug__kitchen_orders_get",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Slug"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KitchenOrdersListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Restaurant not found"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/restaurants/{slug}/kitchen/stream": {
+      "get": {
+        "tags": [
+          "kitchen"
+        ],
+        "summary": "Stream Kitchen Orders",
+        "description": "Stream kitchen change notifications via Server-Sent Events.\n\nGenerators hold no database session.",
+        "operationId": "stream_kitchen_orders_api_restaurants__slug__kitchen_stream_get",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Slug"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Restaurant not found"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/restaurants/{slug}/kitchen/orders/{id}/bump": {
+      "post": {
+        "tags": [
+          "kitchen"
+        ],
+        "summary": "Bump Order",
+        "description": "Mark an order as bumped. Idempotent: already bumped order returns existing bumped_at.",
+        "operationId": "bump_order_api_restaurants__slug__kitchen_orders__id__bump_post",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Slug"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KitchenOrderResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Order not found"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/restaurants/{slug}/kitchen/orders/{id}/recall": {
+      "post": {
+        "tags": [
+          "kitchen"
+        ],
+        "summary": "Recall Order",
+        "description": "Recall an order if within 60s of bump. Sets status back to placed.",
+        "operationId": "recall_order_api_restaurants__slug__kitchen_orders__id__recall_post",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Slug"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KitchenOrderResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Order not found"
+          },
+          "409": {
+            "description": "Recall window expired or order not bumped"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/restaurants/{slug}/menu-items": {
+      "get": {
+        "tags": [
+          "owner"
+        ],
+        "summary": "List Owner Menu Items",
+        "description": "List all non-deleted menu items for the restaurant, including unit_cost.",
+        "operationId": "list_owner_menu_items_api_restaurants__slug__menu_items_get",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Slug"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/OwnerMenuItemResponse"
+                  },
+                  "title": "Response List Owner Menu Items Api Restaurants  Slug  Menu Items Get"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "description": "Unauthorized (Owner only)"
+          },
+          "404": {
+            "description": "Restaurant not found"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/restaurants/{slug}/menu-items/{id}": {
+      "patch": {
+        "tags": [
+          "owner"
+        ],
+        "summary": "Patch Menu Item",
+        "description": "Update menu item fields.\n\nChanging allergens or ingredients sets allergen_verified=False with audit log.\nChanging dietary flags sets dietary_verified=False with audit log.",
+        "operationId": "patch_menu_item_api_restaurants__slug__menu_items__id__patch",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Slug"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchMenuItemRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OwnerMenuItemResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "description": "Unauthorized (Owner only)"
+          },
+          "404": {
+            "description": "Menu item not found"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "owner"
+        ],
+        "summary": "Delete Menu Item",
+        "description": "Soft delete a menu item with audit log.",
+        "operationId": "delete_menu_item_api_restaurants__slug__menu_items__id__delete",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Slug"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusOkResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "description": "Unauthorized (Owner only)"
+          },
+          "404": {
+            "description": "Menu item not found"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/restaurants/{slug}/menu-items/{id}/verify": {
+      "post": {
+        "tags": [
+          "owner"
+        ],
+        "summary": "Verify Menu Item",
+        "description": "Mark menu item as verified for both allergens and dietary preferences with audit log.",
+        "operationId": "verify_menu_item_api_restaurants__slug__menu_items__id__verify_post",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Slug"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OwnerMenuItemResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "description": "Unauthorized (Owner only)"
+          },
+          "404": {
+            "description": "Menu item not found"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/restaurants/{slug}/tables": {
+      "get": {
+        "tags": [
+          "owner"
+        ],
+        "summary": "List Tables",
+        "description": "List tables with label, qr_token, and full guest URL built from PUBLIC_GUEST_URL.",
+        "operationId": "list_tables_api_restaurants__slug__tables_get",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Slug"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/OwnerTableResponse"
+                  },
+                  "title": "Response List Tables Api Restaurants  Slug  Tables Get"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "description": "Unauthorized (Owner only)"
+          },
+          "404": {
+            "description": "Restaurant not found"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "CreateGuestSessionRequest": {
+        "properties": {
+          "qr_token": {
+            "type": "string",
+            "title": "Qr Token"
+          },
+          "language": {
+            "type": "string",
+            "enum": [
+              "en",
+              "it"
+            ],
+            "title": "Language",
+            "default": "it"
+          },
+          "dietary_preferences": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "vegetarian",
+                "vegan",
+                "gluten_free"
+              ]
+            },
+            "type": "array",
+            "title": "Dietary Preferences",
+            "default": []
+          },
+          "allergens_to_avoid": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "gluten",
+                "milk",
+                "eggs",
+                "fish",
+                "crustaceans",
+                "molluscs",
+                "tree_nuts",
+                "peanuts",
+                "soy",
+                "celery",
+                "mustard",
+                "sesame",
+                "sulphites",
+                "lupin"
+              ]
+            },
+            "type": "array",
+            "title": "Allergens To Avoid",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "qr_token"
+        ],
+        "title": "CreateGuestSessionRequest"
+      },
+      "CreateOrderRequest": {
+        "properties": {
+          "idempotency_key": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Idempotency Key"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/OrderItemRequest"
+            },
+            "type": "array",
+            "maxItems": 50,
+            "minItems": 1,
+            "title": "Items"
+          },
+          "acknowledge_allergen_risk": {
+            "type": "boolean",
+            "title": "Acknowledge Allergen Risk",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "idempotency_key",
+          "items"
+        ],
+        "title": "CreateOrderRequest"
+      },
+      "GuestMenuItemResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "category": {
+            "type": "string",
+            "title": "Category"
+          },
+          "price": {
+            "type": "string",
+            "title": "Price"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "ingredients": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Ingredients"
+          },
+          "allergens": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Allergens"
+          },
+          "allergen_verified": {
+            "type": "boolean",
+            "title": "Allergen Verified"
+          },
+          "dietary_verified": {
+            "type": "boolean",
+            "title": "Dietary Verified"
+          },
+          "is_vegetarian": {
+            "type": "boolean",
+            "title": "Is Vegetarian"
+          },
+          "is_vegan": {
+            "type": "boolean",
+            "title": "Is Vegan"
+          },
+          "is_gluten_free": {
+            "type": "boolean",
+            "title": "Is Gluten Free"
+          },
+          "available": {
+            "type": "boolean",
+            "title": "Available"
+          },
+          "featured": {
+            "type": "boolean",
+            "title": "Featured"
+          },
+          "sort_order": {
+            "type": "integer",
+            "title": "Sort Order"
+          },
+          "image_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Url"
+          },
+          "allergen_status": {
+            "type": "string",
+            "title": "Allergen Status"
+          },
+          "matched_allergens": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Matched Allergens"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "category",
+          "price",
+          "name",
+          "ingredients",
+          "allergens",
+          "allergen_verified",
+          "dietary_verified",
+          "is_vegetarian",
+          "is_vegan",
+          "is_gluten_free",
+          "available",
+          "featured",
+          "sort_order",
+          "allergen_status",
+          "matched_allergens"
+        ],
+        "title": "GuestMenuItemResponse"
+      },
+      "GuestMenuResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/GuestMenuItemResponse"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "GuestMenuResponse"
+      },
+      "GuestSessionResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "restaurant_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Restaurant Id"
+          },
+          "table_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Table Id"
+          },
+          "language": {
+            "type": "string",
+            "title": "Language"
+          },
+          "dietary_preferences": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Dietary Preferences"
+          },
+          "allergens_to_avoid": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Allergens To Avoid"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Expires At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "restaurant_id",
+          "table_id",
+          "language",
+          "dietary_preferences",
+          "allergens_to_avoid",
+          "expires_at"
+        ],
+        "title": "GuestSessionResponse"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "HealthResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "db": {
+            "type": "string",
+            "title": "Db"
+          },
+          "redis": {
+            "type": "string",
+            "title": "Redis"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "db",
+          "redis"
+        ],
+        "title": "HealthResponse"
+      },
+      "InferenceMetricsResponse": {
+        "properties": {
+          "total_calls": {
+            "type": "integer",
+            "title": "Total Calls"
+          },
+          "total_tokens_in": {
+            "type": "integer",
+            "title": "Total Tokens In"
+          },
+          "total_tokens_out": {
+            "type": "integer",
+            "title": "Total Tokens Out"
+          },
+          "avg_latency_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Latency Ms"
+          },
+          "min_latency_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Latency Ms"
+          },
+          "max_latency_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Latency Ms"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total_calls",
+          "total_tokens_in",
+          "total_tokens_out"
+        ],
+        "title": "InferenceMetricsResponse"
+      },
+      "KitchenOrderItemResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "menu_item_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Menu Item Id"
+          },
+          "kitchen_name": {
+            "type": "string",
+            "title": "Kitchen Name"
+          },
+          "quantity": {
+            "type": "integer",
+            "title": "Quantity"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "allergens": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Allergens"
+          },
+          "allergen_status": {
+            "type": "string",
+            "title": "Allergen Status"
+          },
+          "allergen_verified": {
+            "type": "boolean",
+            "title": "Allergen Verified"
+          },
+          "conflict_with_order_allergens": {
+            "type": "boolean",
+            "title": "Conflict With Order Allergens"
+          },
+          "matched_allergens": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Matched Allergens"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "menu_item_id",
+          "kitchen_name",
+          "quantity",
+          "notes",
+          "allergens",
+          "allergen_status",
+          "allergen_verified",
+          "conflict_with_order_allergens",
+          "matched_allergens"
+        ],
+        "title": "KitchenOrderItemResponse"
+      },
+      "KitchenOrderResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "restaurant_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Restaurant Id"
+          },
+          "table_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Table Id"
+          },
+          "table_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Table Label"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "allergens_to_avoid": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Allergens To Avoid"
+          },
+          "dietary_preferences": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Dietary Preferences"
+          },
+          "allergen_conflict_acknowledged": {
+            "type": "boolean",
+            "title": "Allergen Conflict Acknowledged"
+          },
+          "placed_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Placed At"
+          },
+          "bumped_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bumped At"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/KitchenOrderItemResponse"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "restaurant_id",
+          "table_id",
+          "status",
+          "allergens_to_avoid",
+          "dietary_preferences",
+          "allergen_conflict_acknowledged",
+          "placed_at",
+          "bumped_at",
+          "items"
+        ],
+        "title": "KitchenOrderResponse"
+      },
+      "KitchenOrdersListResponse": {
+        "properties": {
+          "orders": {
+            "items": {
+              "$ref": "#/components/schemas/KitchenOrderResponse"
+            },
+            "type": "array",
+            "title": "Orders"
+          }
+        },
+        "type": "object",
+        "required": [
+          "orders"
+        ],
+        "title": "KitchenOrdersListResponse"
+      },
+      "LoginRequest": {
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": [
+              "owner",
+              "staff"
+            ],
+            "title": "Role"
+          },
+          "secret": {
+            "type": "string",
+            "title": "Secret"
+          }
+        },
+        "type": "object",
+        "required": [
+          "role",
+          "secret"
+        ],
+        "title": "LoginRequest"
+      },
+      "LoginResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "const": "ok",
+            "title": "Status"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "owner",
+              "staff"
+            ],
+            "title": "Role"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "role"
+        ],
+        "title": "LoginResponse"
+      },
+      "LogoutResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "const": "ok",
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "LogoutResponse"
+      },
+      "MeResponse": {
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": [
+              "owner",
+              "staff"
+            ],
+            "title": "Role"
+          }
+        },
+        "type": "object",
+        "required": [
+          "role"
+        ],
+        "title": "MeResponse"
+      },
+      "OrderItemRequest": {
+        "properties": {
+          "menu_item_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Menu Item Id"
+          },
+          "quantity": {
+            "type": "integer",
+            "maximum": 20.0,
+            "minimum": 1.0,
+            "title": "Quantity"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "menu_item_id",
+          "quantity"
+        ],
+        "title": "OrderItemRequest"
+      },
+      "OrderItemResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "menu_item_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Menu Item Id"
+          },
+          "quantity": {
+            "type": "integer",
+            "title": "Quantity"
+          },
+          "unit_price": {
+            "type": "string",
+            "title": "Unit Price"
+          },
+          "item_name": {
+            "type": "string",
+            "title": "Item Name"
+          },
+          "kitchen_name": {
+            "type": "string",
+            "title": "Kitchen Name"
+          },
+          "allergens": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Allergens"
+          },
+          "allergen_verified": {
+            "type": "boolean",
+            "title": "Allergen Verified"
+          },
+          "allergen_status": {
+            "type": "string",
+            "title": "Allergen Status"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "menu_item_id",
+          "quantity",
+          "unit_price",
+          "item_name",
+          "kitchen_name",
+          "allergens",
+          "allergen_verified",
+          "allergen_status",
+          "notes"
+        ],
+        "title": "OrderItemResponse"
+      },
+      "OrderResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "guest_session_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Guest Session Id"
+          },
+          "restaurant_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Restaurant Id"
+          },
+          "table_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Table Id"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "total": {
+            "type": "string",
+            "title": "Total"
+          },
+          "idempotency_key": {
+            "type": "string",
+            "title": "Idempotency Key"
+          },
+          "allergen_conflict_acknowledged": {
+            "type": "boolean",
+            "title": "Allergen Conflict Acknowledged"
+          },
+          "allergens_to_avoid": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Allergens To Avoid"
+          },
+          "dietary_preferences": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Dietary Preferences"
+          },
+          "placed_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Placed At"
+          },
+          "bumped_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bumped At"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/OrderItemResponse"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "guest_session_id",
+          "restaurant_id",
+          "table_id",
+          "status",
+          "total",
+          "idempotency_key",
+          "allergen_conflict_acknowledged",
+          "allergens_to_avoid",
+          "dietary_preferences",
+          "placed_at",
+          "bumped_at",
+          "items"
+        ],
+        "title": "OrderResponse"
+      },
+      "OwnerMenuItemResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "restaurant_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Restaurant Id"
+          },
+          "category": {
+            "type": "string",
+            "title": "Category"
+          },
+          "price": {
+            "type": "string",
+            "title": "Price"
+          },
+          "unit_cost": {
+            "type": "string",
+            "title": "Unit Cost"
+          },
+          "ingredients": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Ingredients"
+          },
+          "allergens": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Allergens"
+          },
+          "allergen_verified": {
+            "type": "boolean",
+            "title": "Allergen Verified"
+          },
+          "dietary_verified": {
+            "type": "boolean",
+            "title": "Dietary Verified"
+          },
+          "is_vegetarian": {
+            "type": "boolean",
+            "title": "Is Vegetarian"
+          },
+          "is_vegan": {
+            "type": "boolean",
+            "title": "Is Vegan"
+          },
+          "is_gluten_free": {
+            "type": "boolean",
+            "title": "Is Gluten Free"
+          },
+          "available": {
+            "type": "boolean",
+            "title": "Available"
+          },
+          "featured": {
+            "type": "boolean",
+            "title": "Featured"
+          },
+          "sort_order": {
+            "type": "integer",
+            "title": "Sort Order"
+          },
+          "image_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Url"
+          },
+          "translations": {
+            "items": {
+              "$ref": "#/components/schemas/OwnerMenuTranslation"
+            },
+            "type": "array",
+            "title": "Translations"
+          },
+          "deleted_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deleted At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "restaurant_id",
+          "category",
+          "price",
+          "unit_cost",
+          "ingredients",
+          "allergens",
+          "allergen_verified",
+          "dietary_verified",
+          "is_vegetarian",
+          "is_vegan",
+          "is_gluten_free",
+          "available",
+          "featured",
+          "sort_order",
+          "translations"
+        ],
+        "title": "OwnerMenuItemResponse"
+      },
+      "OwnerMenuTranslation": {
+        "properties": {
+          "language": {
+            "type": "string",
+            "title": "Language"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          }
+        },
+        "type": "object",
+        "required": [
+          "language",
+          "name"
+        ],
+        "title": "OwnerMenuTranslation"
+      },
+      "OwnerTableResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "restaurant_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Restaurant Id"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "qr_token": {
+            "type": "string",
+            "title": "Qr Token"
+          },
+          "guest_url": {
+            "type": "string",
+            "title": "Guest Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "restaurant_id",
+          "label",
+          "qr_token",
+          "guest_url"
+        ],
+        "title": "OwnerTableResponse"
+      },
+      "PatchGuestSessionRequest": {
+        "properties": {
+          "language": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "en",
+                  "it"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language"
+          },
+          "dietary_preferences": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "vegetarian",
+                    "vegan",
+                    "gluten_free"
+                  ]
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dietary Preferences"
+          },
+          "allergens_to_avoid": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "gluten",
+                    "milk",
+                    "eggs",
+                    "fish",
+                    "crustaceans",
+                    "molluscs",
+                    "tree_nuts",
+                    "peanuts",
+                    "soy",
+                    "celery",
+                    "mustard",
+                    "sesame",
+                    "sulphites",
+                    "lupin"
+                  ]
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Allergens To Avoid"
+          }
+        },
+        "type": "object",
+        "title": "PatchGuestSessionRequest"
+      },
+      "PatchMenuItemRequest": {
+        "properties": {
+          "price": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price"
+          },
+          "unit_cost": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit Cost"
+          },
+          "available": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Available"
+          },
+          "featured": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Featured"
+          },
+          "sort_order": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sort Order"
+          },
+          "ingredients": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ingredients"
+          },
+          "allergens": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Allergens"
+          },
+          "is_vegetarian": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Vegetarian"
+          },
+          "is_vegan": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Vegan"
+          },
+          "is_gluten_free": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Gluten Free"
+          }
+        },
+        "type": "object",
+        "title": "PatchMenuItemRequest"
+      },
+      "StatusOkResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "const": "ok",
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "StatusOkResponse"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
 }

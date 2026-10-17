@@ -1,10 +1,15 @@
-import createClient from "openapi-fetch";
-// import type { paths } from "./generated/schema";
+import createClient, { type Client } from "openapi-fetch";
+import type { components, paths } from "./generated/schema";
 
-// Stub client — populated after M1.13 generates types from OpenAPI
-// Usage:
-//   import { client } from "api-client";
-//   const { data, error } = await client.GET("/health");
+export type { components, paths };
+export type Schemas = components["schemas"];
 
-// export const client = createClient<paths>({ baseUrl: "/api" });
-export {};
+export type ApiPaths = paths;
+export type ApiClient = Client<paths>;
+
+export function createApiClient(baseUrl = ""): ApiClient {
+  return createClient<paths>({ baseUrl });
+}
+
+export const client: ApiClient = createClient<paths>({ baseUrl: "" });
+export default client;

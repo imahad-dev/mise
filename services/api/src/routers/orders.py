@@ -74,7 +74,10 @@ def is_idempotency_unique_violation(err: IntegrityError) -> bool:
     response_model=OrderResponse,
     status_code=status.HTTP_201_CREATED,
     responses={
-        200: {"description": "Order already placed (idempotent replay)"},
+        200: {
+            "model": OrderResponse,
+            "description": "Order already placed (idempotent replay)",
+        },
         400: {"description": "Invalid order items"},
         409: {"description": "Idempotency conflict, unavailable items, or allergen ack required"},
     },
