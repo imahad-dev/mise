@@ -1,4 +1,4 @@
-"""Guest session management and guest menu endpoints."""
+"""Guest session management, guest menu, and AI chat endpoints."""
 
 from datetime import UTC, datetime, timedelta
 
@@ -9,11 +9,14 @@ from sqlalchemy.orm import selectinload
 
 from src.auth import get_current_guest_session, set_guest_cookie
 from src.database import get_db
+from src.inference.client import InferenceClient, get_inference_client
 from src.models.dining_table import DiningTable
 from src.models.menu import MenuItem
 from src.models.restaurant import Restaurant
 from src.models.session import GuestSession
 from src.schemas.guest import (
+    ChatMessageRequest,
+    ChatMessageResponse,
     CreateGuestSessionRequest,
     GuestMenuItemResponse,
     GuestMenuResponse,
@@ -21,6 +24,7 @@ from src.schemas.guest import (
     PatchGuestSessionRequest,
 )
 from src.services.allergen_service import compute_allergen_status
+from src.services.guest_chat import handle_guest_chat
 
 router = APIRouter(prefix="/api/guest", tags=["guest"])
 
@@ -189,3 +193,43 @@ async def get_guest_menu(
         )
 
     return GuestMenuResponse(items=menu_responses)
+
+
+# --- Checkpoint D: Guest Chat ---
+
+
+@router.post(
+    "/chat",
+    response_model=ChatMessageResponse,
+    status_code=status.HTTP_200_OK,
+    responses={
+        401: {"description": "Unauthenticated or expired session"},
+        429: {"description": "Chat message limit reached"},
+    },
+)
+async def guest_chat(
+    payload: ChatMessageRequest,
+    session: GuestSession = Depends(get_current_guest_session),
+    db: AsyncSession = Depends(get_db),
+    inference: InferenceClient = Depends(get_inference_client),
+) -> ChatMessageResponse:
+    """Send a chat message to the AI menu assistant.
+
+    Rate limited to GUEST_CHAT_LIMIT messages per session.
+    The server builds the menu context — client only displays the response.
+    """
+    result = await handle_guest_chat(
+        inference=inference,
+        db=db,
+        restaurant_id=session.restaurant_id,
+        session_id=session.id,
+        guest_language=session.language,
+        guest_allergens=list(session.allergens_to_avoid),
+        guest_dietary=list(session.dietary_preferences),
+        message=payload.message,
+    )
+
+    return ChatMessageResponse(
+        reply=result.get("reply", ""),
+        suggested_items=result.get("suggested_items", []),
+    )

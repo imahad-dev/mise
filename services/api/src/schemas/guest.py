@@ -79,3 +79,28 @@ class GuestMenuItemResponse(BaseModel):
 
 class GuestMenuResponse(BaseModel):
     items: list[GuestMenuItemResponse]
+
+
+# --- Checkpoint D: Guest Chat schemas ---
+
+
+class ChatMessageRequest(BaseModel):
+    message: str
+
+
+class ChatSuggestedItem(BaseModel):
+    name: str
+    reason: str = ""
+
+
+class ChatMessageResponse(BaseModel):
+    reply: str
+    suggested_items: list[ChatSuggestedItem] = []
+
+
+class AIChatResult(BaseModel):
+    """Pydantic schema for validating LLM chat output."""
+
+    reply: str
+    suggested_items: list[ChatSuggestedItem] = []
+

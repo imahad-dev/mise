@@ -23,15 +23,19 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     llm_client = httpx.AsyncClient(
         base_url=settings.llm_base_url,
         timeout=settings.llm_timeout_seconds,
+        headers={"Authorization": f"Bearer {settings.llm_api_key}"} if settings.llm_api_key else {},
     )
     vlm_client = httpx.AsyncClient(
         base_url=settings.vlm_base_url,
         timeout=settings.llm_timeout_seconds,
+        headers={"Authorization": f"Bearer {settings.llm_api_key}"} if settings.llm_api_key else {},
     )
     app.state.inference_client = InferenceClient(
         llm_client=llm_client,
         vlm_client=vlm_client,
     )
+    # Probe available models and configure fallbacks
+    await app.state.inference_client.probe_models()
     try:
         yield
     finally:

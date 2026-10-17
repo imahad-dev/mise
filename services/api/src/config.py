@@ -1,6 +1,6 @@
 """Mise API configuration — pydantic-settings reads from env."""
 
-from pydantic import model_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings
 
 
@@ -33,13 +33,21 @@ class Settings(BaseSettings):
     # URLs
     public_guest_url: str = "http://localhost:3000"
 
-    # Inference
+    # Inference — provider routing
+    llm_provider: str = "mock"  # "mock" | "amd"
+    llm_api_key: str = ""  # stripped on load; NEVER log or return
     llm_base_url: str = "http://inference:8080/v1"
     llm_model: str = "mock-llm"
+    llm_model_fallbacks: list[str] = []  # ordered fallback list
     llm_max_tokens: int = 1024
     llm_timeout_seconds: int = 30
     vlm_base_url: str = "http://inference:8080/v1"
     vlm_model: str = "mock-vlm"
+    vlm_model_fallbacks: list[str] = []
+
+    # Rate limiting
+    llm_global_rpm: int = 60  # global requests-per-minute
+    guest_chat_limit: int = 10  # per-session message cap
 
     # Mock control
     mock_latency_ms: int = 100
@@ -66,6 +74,12 @@ class Settings(BaseSettings):
             f"postgresql+psycopg://{self.postgres_user}:{self.postgres_password}"
             f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
         )
+
+    @field_validator("llm_api_key", mode="before")
+    @classmethod
+    def _strip_api_key(cls, v: str) -> str:
+        """Strip ALL whitespace from the API key (copy-paste safety)."""
+        return "".join(v.split()) if isinstance(v, str) else v
 
     @model_validator(mode="after")
     def reject_default_secrets_in_non_dev(self) -> "Settings":

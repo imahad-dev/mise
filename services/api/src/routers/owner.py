@@ -1,4 +1,4 @@
-"""Owner router for menu items and table management."""
+"""Owner router for menu items, table management, and AI endpoints."""
 
 import uuid
 from datetime import UTC, datetime
@@ -11,17 +11,24 @@ from sqlalchemy.orm import selectinload
 from src.auth import Role, require_owner
 from src.config import settings
 from src.database import get_db
+from src.inference.client import InferenceClient, get_inference_client
 from src.models.audit import AuditLog
 from src.models.dining_table import DiningTable
 from src.models.menu import MenuItem
 from src.models.restaurant import Restaurant
 from src.schemas.owner import (
+    DailyBriefResponse,
+    MenuIngestRequest,
+    MenuIngestResponse,
     OwnerMenuItemResponse,
     OwnerMenuTranslation,
     OwnerTableResponse,
     PatchMenuItemRequest,
+    SimulateRequest,
+    SimulateResponse,
     StatusOkResponse,
 )
+from src.services.menu_ingest import ingest_menu_from_image
 
 router = APIRouter(prefix="/api/restaurants/{slug}", tags=["owner"])
 
@@ -348,3 +355,160 @@ async def list_tables(
         )
         for t in tables
     ]
+
+
+# --- Checkpoint D: AI endpoints ---
+
+
+@router.post(
+    "/menu-items/ingest",
+    response_model=MenuIngestResponse,
+    status_code=status.HTTP_201_CREATED,
+    responses={
+        401: {"description": "Unauthenticated"},
+        403: {"description": "Unauthorized (Owner only)"},
+        404: {"description": "Restaurant not found"},
+    },
+)
+async def ingest_menu(
+    slug: str,
+    payload: MenuIngestRequest,
+    role: Role = Depends(require_owner),
+    db: AsyncSession = Depends(get_db),
+    inference: InferenceClient = Depends(get_inference_client),
+) -> MenuIngestResponse:
+    """Analyze a menu photo via VLM and create menu items automatically."""
+    restaurant = await _get_restaurant(slug, db)
+
+    created_items = await ingest_menu_from_image(
+        inference=inference,
+        db=db,
+        restaurant_id=restaurant.id,
+        image_url=payload.image_url,
+        language=payload.language,
+    )
+
+    return MenuIngestResponse(
+        created_count=len(created_items),
+        items=[_build_owner_item_response(item) for item in created_items],
+    )
+
+
+@router.get(
+    "/ai/brief",
+    response_model=DailyBriefResponse,
+    status_code=status.HTTP_200_OK,
+    responses={
+        401: {"description": "Unauthenticated"},
+        403: {"description": "Unauthorized (Owner only)"},
+        404: {"description": "Restaurant not found"},
+    },
+)
+async def daily_brief(
+    slug: str,
+    role: Role = Depends(require_owner),
+    db: AsyncSession = Depends(get_db),
+    inference: InferenceClient = Depends(get_inference_client),
+) -> DailyBriefResponse:
+    """Generate an AI daily brief for the restaurant."""
+    restaurant = await _get_restaurant(slug, db)
+
+    from src.inference.metrics import record_metrics
+
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "You are a restaurant operations advisor. "
+                "Generate a daily brief with actionable insights. "
+                "Return JSON with 'date' (YYYY-MM-DD), 'summary' (string), "
+                "and 'actions' (array of {type, item, reason})."
+            ),
+        },
+        {
+            "role": "user",
+            "content": f"Generate a daily brief for restaurant '{restaurant.name}'.",
+        },
+    ]
+
+    result, metrics = await inference.chat(
+        messages,
+        response_format={"type": "json_object"},
+    )
+
+    await record_metrics(db, metrics)
+
+    # Extract from response body
+    from src.inference.validation import extract_content, parse_json_content
+
+    content = extract_content(result)
+    parsed = parse_json_content(content)
+
+    return DailyBriefResponse(
+        date=parsed.get("date", ""),
+        summary=parsed.get("summary", ""),
+        actions=parsed.get("actions", []),
+    )
+
+
+@router.post(
+    "/ai/simulate",
+    response_model=SimulateResponse,
+    status_code=status.HTTP_200_OK,
+    responses={
+        401: {"description": "Unauthenticated"},
+        403: {"description": "Unauthorized (Owner only)"},
+        404: {"description": "Restaurant not found"},
+    },
+)
+async def simulate(
+    slug: str,
+    payload: SimulateRequest,
+    role: Role = Depends(require_owner),
+    db: AsyncSession = Depends(get_db),
+    inference: InferenceClient = Depends(get_inference_client),
+) -> SimulateResponse:
+    """Run an AI scenario simulation for the restaurant."""
+    restaurant = await _get_restaurant(slug, db)
+
+    from src.inference.metrics import record_metrics
+
+    params_str = str(payload.parameters) if payload.parameters else "default"
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "You are a restaurant business simulator. "
+                "Forecast outcomes for the given scenario. "
+                "Return JSON with 'scenario' (string), 'predicted_covers' (int), "
+                "'predicted_revenue_eur' (float), and 'recommendations' "
+                "(array of {action, item?, shift?, quantity?, extra_staff?})."
+            ),
+        },
+        {
+            "role": "user",
+            "content": (
+                f"Simulate scenario '{payload.scenario}' for restaurant "
+                f"'{restaurant.name}' with parameters: {params_str}."
+            ),
+        },
+    ]
+
+    result, metrics = await inference.chat(
+        messages,
+        response_format={"type": "json_object"},
+    )
+
+    await record_metrics(db, metrics)
+
+    from src.inference.validation import extract_content, parse_json_content
+
+    content = extract_content(result)
+    parsed = parse_json_content(content)
+
+    return SimulateResponse(
+        scenario=parsed.get("scenario", payload.scenario),
+        predicted_covers=parsed.get("predicted_covers", 0),
+        predicted_revenue_eur=parsed.get("predicted_revenue_eur", 0.0),
+        recommendations=parsed.get("recommendations", []),
+    )

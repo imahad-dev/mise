@@ -64,3 +64,74 @@ class OwnerTableResponse(BaseModel):
 
 class StatusOkResponse(BaseModel):
     status: Literal["ok"]
+
+
+# --- Checkpoint D: AI schemas ---
+
+
+class MenuIngestRequest(BaseModel):
+    """Request to analyze a menu photo or text via AI."""
+
+    image_url: str
+    language: str = "it"
+
+
+class AIMenuItemParsed(BaseModel):
+    """Structured output expected from VLM menu analysis."""
+
+    name: str
+    description: str | None = None
+    category: str = "other"
+    price: float = 0.0
+    unit_cost: float = 0.0
+    ingredients: list[str] = []
+    allergens: list[str] = []
+    is_vegetarian: bool = False
+    is_vegan: bool = False
+    is_gluten_free: bool = False
+
+
+class AIMenuIngestResult(BaseModel):
+    """Top-level wrapper for VLM ingest response."""
+
+    items: list[AIMenuItemParsed]
+
+
+class MenuIngestResponse(BaseModel):
+    """Response after AI menu ingest — created item IDs."""
+
+    created_count: int
+    items: list[OwnerMenuItemResponse]
+
+
+class DailyBriefAction(BaseModel):
+    type: str
+    item: str
+    reason: str
+
+
+class DailyBriefResponse(BaseModel):
+    date: str
+    summary: str
+    actions: list[DailyBriefAction]
+
+
+class SimulateRequest(BaseModel):
+    scenario: str = "weekend_rush"
+    parameters: dict | None = None
+
+
+class SimulateRecommendation(BaseModel):
+    action: str
+    item: str | None = None
+    shift: str | None = None
+    quantity: int | None = None
+    extra_staff: int | None = None
+
+
+class SimulateResponse(BaseModel):
+    scenario: str
+    predicted_covers: int
+    predicted_revenue_eur: float
+    recommendations: list[SimulateRecommendation]
+

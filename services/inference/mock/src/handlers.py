@@ -52,7 +52,10 @@ async def chat_completions(request: ChatRequest):
     # Simulate TTFT / initial latency
     await asyncio.sleep(MOCK_LATENCY_MS / 1000)
 
-    canned = get_canned_response(request.model)
+    canned = get_canned_response(
+        request.model,
+        [{"content": m.content if isinstance(m.content, str) else str(m.content)} for m in request.messages],
+    )
     content = json.dumps(canned)
 
     # Approximate token counts
