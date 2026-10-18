@@ -1,4 +1,4 @@
-.PHONY: up down reset dev logs build migrate migration seed lint test test-py test-ts smoke gen-client setup ci verify-a verify-b verify-c verify-d
+.PHONY: up down reset dev logs build migrate migration seed lint test test-py test-ts smoke smoke-amd gen-client setup ci verify-a verify-b verify-c verify-d
 
 # --- Setup ---
 setup:
@@ -65,6 +65,9 @@ verify-d:
 # --- Inference ---
 smoke:
 	docker compose exec -T api python scripts/smoke_inference.py
+
+smoke-amd:
+	docker compose exec -T api python scripts/smoke_amd.py
 
 # --- Client generation ---
 gen-client:

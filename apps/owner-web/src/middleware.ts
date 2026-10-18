@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
+/** Must match AUTH_COOKIE_NAME in services/api/src/auth.py */
+const AUTH_COOKIE_NAME = "mise_auth";
+
 const PUBLIC_PATHS = ["/login", "/health", "/debug/sse"];
 
 export function middleware(request: NextRequest) {
@@ -16,11 +19,10 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Check for owner or staff cookie
-  const ownerCookie = request.cookies.get("mise_owner");
-  const staffCookie = request.cookies.get("mise_staff");
+  // Check for auth cookie (set by API on login as owner or staff)
+  const authCookie = request.cookies.get(AUTH_COOKIE_NAME);
 
-  if (!ownerCookie && !staffCookie) {
+  if (!authCookie) {
     const loginUrl = new URL("/login", request.url);
     return NextResponse.redirect(loginUrl);
   }

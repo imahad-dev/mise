@@ -70,8 +70,7 @@ def get_canned_response(model: str, messages: list | None = None) -> dict:
     # Check message content for more specific routing
     if messages:
         all_text = " ".join(
-            m.get("content", "") if isinstance(m.get("content"), str) else ""
-            for m in messages
+            m.get("content", "") if isinstance(m.get("content"), str) else "" for m in messages
         ).lower()
 
         if "chat" in all_text or "recommend" in all_text or "suggest" in all_text:

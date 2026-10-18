@@ -98,4 +98,41 @@ else
     exit 1
 fi
 
+# Step 7: Owner login through owner-web → GET / must NOT redirect back to /login
+API_URL="http://127.0.0.1:8000"
+OWNER_JAR=$(mktemp)
+curl -sf --max-time 5 -X POST "$API_URL/api/auth/login" \
+  -H "Content-Type: application/json" \
+  -d '{"api_key":"change_me_in_production"}' \
+  -c "$OWNER_JAR" > /dev/null || { echo "FAIL: owner API login" >&2; exit 1; }
+
+OWNER_ROOT_STATUS=$(curl -s --max-time 10 -o /dev/null -w "%{http_code}" \
+  -b "$OWNER_JAR" "http://127.0.0.1:3001/" || true)
+if [ "$OWNER_ROOT_STATUS" = "200" ]; then
+    echo "PASS: owner-web / returns 200 with auth cookie (no redirect loop)"
+else
+    echo "FAIL: owner-web / returned HTTP $OWNER_ROOT_STATUS (expected 200, login redirect loop?)" >&2
+    rm -f "$OWNER_JAR"
+    exit 1
+fi
+
+# Step 8: Staff login → GET /kitchen returns 200
+STAFF_JAR=$(mktemp)
+curl -sf --max-time 5 -X POST "$API_URL/api/auth/staff-login" \
+  -H "Content-Type: application/json" \
+  -d '{"pin":"0000"}' \
+  -c "$STAFF_JAR" > /dev/null || { echo "FAIL: staff API login" >&2; exit 1; }
+
+KITCHEN_STATUS=$(curl -s --max-time 10 -o /dev/null -w "%{http_code}" \
+  -b "$STAFF_JAR" "http://127.0.0.1:3001/kitchen" || true)
+if [ "$KITCHEN_STATUS" = "200" ]; then
+    echo "PASS: owner-web /kitchen returns 200 with staff cookie"
+else
+    echo "FAIL: owner-web /kitchen returned HTTP $KITCHEN_STATUS (expected 200)" >&2
+    rm -f "$OWNER_JAR" "$STAFF_JAR"
+    exit 1
+fi
+
+rm -f "$OWNER_JAR" "$STAFF_JAR" 2>/dev/null || true
+
 echo "=== CHECKPOINT C VERIFIED ==="

@@ -15,6 +15,7 @@ info() { echo -e "${YELLOW}→ $1${NC}"; }
 
 SLUG="trattoria-da-mario"
 API="http://127.0.0.1:8000"
+OWNER_WEB="http://127.0.0.1:3001"
 
 # ─── Setup ───────────────────────────────────────────────────────────
 info "Step 1: make ci"
@@ -50,10 +51,6 @@ pass "API healthy"
 
 # ─── Owner login ────────────────────────────────────────────────────
 info "Step 7: owner login"
-LOGIN_RESP=$(curl -sf --max-time 5 -X POST "$API/api/auth/login" \
-  -H "Content-Type: application/json" \
-  -d '{"api_key":"change_me_in_production"}' \
-  -c - 2>/dev/null)
 COOKIE_JAR=$(mktemp)
 curl -sf --max-time 5 -X POST "$API/api/auth/login" \
   -H "Content-Type: application/json" \
@@ -61,9 +58,33 @@ curl -sf --max-time 5 -X POST "$API/api/auth/login" \
   -c "$COOKIE_JAR" > /dev/null || fail "owner login"
 pass "owner login"
 
+# ─── Owner login through owner-web: GET / returns 200 ───────────────
+info "Step 7b: owner-web / returns 200 with auth cookie"
+OWNER_ROOT=""
+for i in $(seq 1 15); do
+  OWNER_ROOT=$(curl -s --max-time 10 -o /dev/null -w "%{http_code}" \
+    -b "$COOKIE_JAR" "$OWNER_WEB/" || true)
+  if [ "$OWNER_ROOT" = "200" ]; then break; fi
+  sleep 1
+done
+[ "$OWNER_ROOT" = "200" ] || fail "owner-web / returned $OWNER_ROOT (expected 200, redirect loop?)"
+pass "owner-web / returns 200 (no redirect loop)"
+
+# ─── Staff login through owner-web: GET /kitchen returns 200 ────────
+info "Step 7c: staff login → /kitchen returns 200"
+STAFF_JAR=$(mktemp)
+curl -sf --max-time 5 -X POST "$API/api/auth/staff-login" \
+  -H "Content-Type: application/json" \
+  -d '{"pin":"0000"}' \
+  -c "$STAFF_JAR" > /dev/null || fail "staff login"
+KITCHEN_STATUS=$(curl -s --max-time 10 -o /dev/null -w "%{http_code}" \
+  -b "$STAFF_JAR" "$OWNER_WEB/kitchen" || true)
+[ "$KITCHEN_STATUS" = "200" ] || fail "owner-web /kitchen returned $KITCHEN_STATUS (expected 200)"
+pass "owner-web /kitchen returns 200 with staff cookie"
+
 # ─── Adapter: smoke inference ────────────────────────────────────────
 info "Step 8: smoke inference (mock models check)"
-MODELS_RESP=$(curl -sf --max-time 5 "http://127.0.0.1:8000/health" 2>/dev/null)
+MODELS_RESP=$(curl -sf --max-time 5 "$API/health" 2>/dev/null)
 pass "inference mock reachable via API health"
 
 # ─── AI Endpoint: menu ingest ───────────────────────────────────────
@@ -137,7 +158,7 @@ make test-py || fail "make test-py"
 pass "test-py (all passed)"
 
 # ─── Cleanup ─────────────────────────────────────────────────────────
-rm -f "$COOKIE_JAR" "$GUEST_JAR" 2>/dev/null || true
+rm -f "$COOKIE_JAR" "$STAFF_JAR" "$GUEST_JAR" 2>/dev/null || true
 
 echo ""
 echo -e "${GREEN}═══════════════════════════════════════════════${NC}"

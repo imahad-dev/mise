@@ -54,7 +54,10 @@ async def chat_completions(request: ChatRequest):
 
     canned = get_canned_response(
         request.model,
-        [{"content": m.content if isinstance(m.content, str) else str(m.content)} for m in request.messages],
+        [
+            {"content": m.content if isinstance(m.content, str) else str(m.content)}
+            for m in request.messages
+        ],
     )
     content = json.dumps(canned)
 
