@@ -1,26 +1,196 @@
 @import "tailwindcss";
+@import "@fontsource-variable/inter";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #070B10;
+  --surface: #0D141B;
+  --surface-raised: #121A23;
+  --glass: rgba(13, 20, 27, 0.72);
+  --glass-border: rgba(56, 189, 248, 0.18);
+  --glass-glow: 0 0 24px -4px rgba(34, 211, 238, 0.18);
+
+  --primary-start: #2F7BFF;
+  --primary-end: #22D3EE;
+
+  --warm: #FF9F2E;
+  --success: #34D399;
+  --warning: #F59E0B;
+  --danger: #EF4444;
+
+  --text: #F3F8FC;
+  --muted: #8FA3B3;
+  --radius-card: 18px;
+  --radius-btn: 14px;
 }
 
-@theme inline {
+@theme {
   --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-warm: var(--warm);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+  --color-text: var(--text);
+  --color-muted: var(--muted);
+  --font-sans: "Inter Variable", Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@layer base {
+  * {
+    border-color: rgba(56, 189, 248, 0.12);
+  }
+  body {
+    background-color: #070B10;
+    color: #F3F8FC;
+    font-family: var(--font-sans);
+    min-height: 100vh;
+  }
+  h1, h2, h3, h4 {
+    font-weight: 800;
+    letter-spacing: -0.025em;
+  }
+  :focus-visible {
+    outline: 2px solid #22D3EE;
+    outline-offset: 2px;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* Glass panel */
+.glass-panel {
+  background: rgba(13, 20, 27, 0.72);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(56, 189, 248, 0.18);
+  box-shadow: 0 0 24px -4px rgba(34, 211, 238, 0.18);
+  border-radius: 18px;
+}
+
+/* Gradient text */
+.gradient-text {
+  background: linear-gradient(135deg, #2F7BFF 0%, #22D3EE 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Button styles */
+.btn-primary {
+  min-height: 44px;
+  padding: 0.625rem 1.25rem;
+  border-radius: 14px;
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: #070B10;
+  background: linear-gradient(135deg, #2F7BFF 0%, #22D3EE 100%);
+  transition: opacity 0.2s, transform 0.15s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  cursor: pointer;
+}
+.btn-primary:hover {
+  opacity: 0.92;
+  transform: translateY(-1px);
+}
+.btn-primary:active {
+  transform: translateY(0);
+}
+
+.btn-ghost {
+  min-height: 44px;
+  padding: 0.625rem 1.25rem;
+  border-radius: 14px;
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: #F3F8FC;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(56, 189, 248, 0.18);
+  transition: background 0.2s, border-color 0.2s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  cursor: pointer;
+}
+.btn-ghost:hover {
+  background: rgba(56, 189, 248, 0.12);
+  border-color: rgba(56, 189, 248, 0.35);
+}
+
+.btn-danger {
+  min-height: 44px;
+  padding: 0.625rem 1.25rem;
+  border-radius: 14px;
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: #FFFFFF;
+  background: #EF4444;
+  transition: opacity 0.2s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  cursor: pointer;
+}
+.btn-danger:hover {
+  opacity: 0.9;
+}
+
+/* Card */
+.mise-card {
+  background: #0D141B;
+  border: 1px solid rgba(56, 189, 248, 0.14);
+  border-radius: 18px;
+  padding: 1.25rem;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.mise-card:hover {
+  border-color: rgba(56, 189, 248, 0.28);
+  box-shadow: 0 0 20px -4px rgba(34, 211, 238, 0.12);
+}
+
+/* Chip styles */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.625rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  min-height: 28px;
+}
+.chip-contains {
+  background: rgba(239, 68, 68, 0.18);
+  color: #F87171;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+}
+.chip-unverified {
+  background: rgba(245, 158, 11, 0.18);
+  color: #FBBF24;
+  border: 1px solid rgba(245, 158, 11, 0.4);
+}
+.chip-safe {
+  background: rgba(52, 211, 153, 0.15);
+  color: #34D399;
+  border: 1px solid rgba(52, 211, 153, 0.35);
+}
+
+/* Stat Tile */
+.stat-tile {
+  background: #0D141B;
+  border: 1px solid rgba(56, 189, 248, 0.15);
+  border-radius: 16px;
+  padding: 1rem 1.25rem;
+}
+
+/* Accessibility & Reduced Motion */
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

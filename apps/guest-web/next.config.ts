@@ -9,7 +9,7 @@ const nextConfig: NextConfig = {
 
   async rewrites() {
     return [
-      // Guest-specific API paths only
+      // Guest-specific API paths
       {
         source: "/api/guest/:path*",
         destination: `${API_URL}/api/guest/:path*`,
@@ -17,6 +17,15 @@ const nextConfig: NextConfig = {
       {
         source: "/api/orders/:path*",
         destination: `${API_URL}/api/orders/:path*`,
+      },
+      // Auth and Demo paths for judge launcher
+      {
+        source: "/api/auth/:path*",
+        destination: `${API_URL}/api/auth/:path*`,
+      },
+      {
+        source: "/api/demo/:path*",
+        destination: `${API_URL}/api/demo/:path*`,
       },
       // Health and debug
       {

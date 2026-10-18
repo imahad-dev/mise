@@ -1,9 +1,8 @@
-"""Owner router for menu items, table management, and AI endpoints."""
-
+import logging
 import uuid
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -16,6 +15,7 @@ from src.models.audit import AuditLog
 from src.models.dining_table import DiningTable
 from src.models.menu import MenuItem
 from src.models.restaurant import Restaurant
+from src.redis_client import redis_client
 from src.schemas.owner import (
     DailyBriefResponse,
     MenuIngestRequest,
@@ -31,6 +31,7 @@ from src.schemas.owner import (
 from src.services.menu_ingest import ingest_menu_from_image
 
 router = APIRouter(prefix="/api/restaurants/{slug}", tags=["owner"])
+logger = logging.getLogger(__name__)
 
 
 async def _get_restaurant(slug: str, db: AsyncSession) -> Restaurant:
@@ -368,17 +369,36 @@ async def list_tables(
         401: {"description": "Unauthenticated"},
         403: {"description": "Unauthorized (Owner only)"},
         404: {"description": "Restaurant not found"},
+        429: {"description": "Demo mode limit reached (max 3 per hour per IP)"},
     },
 )
 async def ingest_menu(
     slug: str,
     payload: MenuIngestRequest,
+    request: Request,
     role: Role = Depends(require_owner),
     db: AsyncSession = Depends(get_db),
     inference: InferenceClient = Depends(get_inference_client),
 ) -> MenuIngestResponse:
     """Analyze a menu photo via VLM and create menu items automatically."""
     restaurant = await _get_restaurant(slug, db)
+
+    if settings.demo_mode:
+        client_ip = request.client.host if request.client else "127.0.0.1"
+        rl_key = f"rate_limit:demo:ingest:{client_ip}"
+        try:
+            count = await redis_client.incr(rl_key)
+            if count == 1:
+                await redis_client.expire(rl_key, 3600)
+            if count > 3:
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail="Demo limit reached: maximum 3 menu ingestions per hour per IP",
+                )
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.warning("Redis error checking ingest rate limit: %s", e)
 
     created_items = await ingest_menu_from_image(
         inference=inference,
@@ -410,8 +430,20 @@ async def daily_brief(
     db: AsyncSession = Depends(get_db),
     inference: InferenceClient = Depends(get_inference_client),
 ) -> DailyBriefResponse:
-    """Generate an AI daily brief for the restaurant."""
+    """Generate an AI daily brief for the restaurant. Cached for 10m in DEMO_MODE."""
     restaurant = await _get_restaurant(slug, db)
+
+    if settings.demo_mode:
+        cache_key = f"cache:demo:brief:{slug}"
+        try:
+            cached = await redis_client.get(cache_key)
+            if cached:
+                import json
+
+                data = json.loads(cached)
+                return DailyBriefResponse(**data)
+        except Exception as e:
+            logger.warning("Redis error reading brief cache: %s", e)
 
     from src.inference.metrics import record_metrics
 
@@ -444,11 +476,20 @@ async def daily_brief(
     content = extract_content(result)
     parsed = parse_json_content(content)
 
-    return DailyBriefResponse(
+    brief_resp = DailyBriefResponse(
         date=parsed.get("date", ""),
         summary=parsed.get("summary", ""),
         actions=parsed.get("actions", []),
     )
+
+    if settings.demo_mode:
+        cache_key = f"cache:demo:brief:{slug}"
+        try:
+            await redis_client.set(cache_key, brief_resp.model_dump_json(), ex=600)
+        except Exception as e:
+            logger.warning("Redis error writing brief cache: %s", e)
+
+    return brief_resp
 
 
 @router.post(
@@ -512,3 +553,43 @@ async def simulate(
         predicted_revenue_eur=parsed.get("predicted_revenue_eur", 0.0),
         recommendations=parsed.get("recommendations", []),
     )
+
+
+@router.post(
+    "/demo/reset",
+    response_model=StatusOkResponse,
+    status_code=status.HTTP_200_OK,
+    responses={
+        401: {"description": "Unauthenticated"},
+        403: {"description": "Unauthorized (Owner only)"},
+        404: {"description": "Demo mode disabled or restaurant not found"},
+    },
+)
+async def reset_demo_data(
+    slug: str,
+    role: Role = Depends(require_owner),
+    db: AsyncSession = Depends(get_db),
+) -> StatusOkResponse:
+    """Re-seed restaurant data and regenerate simulated state. DEMO_MODE only."""
+    if not settings.demo_mode:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Demo mode is disabled",
+        )
+
+    await _get_restaurant(slug, db)
+
+    try:
+        from scripts.seed import load_seed_data, seed_data
+
+        data = load_seed_data("data/seed/trattoria_da_mario.json")
+        await seed_data(data, db, rotate_qr=False)
+        await db.commit()
+    except Exception as e:
+        logger.error("Failed to reset demo data: %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to reset demo data: {e}",
+        ) from e
+
+    return StatusOkResponse(status="ok")

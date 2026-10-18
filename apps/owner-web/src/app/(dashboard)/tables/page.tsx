@@ -82,16 +82,18 @@ export default function TablesPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-zinc-800 pb-4 print:hidden">
+      <div className="flex items-center justify-between border-b border-[#38BDF8]/15 pb-4 print:hidden">
         <div>
-          <h1 className="text-xl font-bold text-zinc-100 tracking-tight">Dining Tables & QR Codes</h1>
-          <p className="text-xs text-zinc-400 mt-1">
+          <h1 className="text-2xl font-extrabold tracking-tight">
+            Dining Tables & <span className="gradient-text">QR Cards</span>
+          </h1>
+          <p className="text-xs text-[#8FA3B3] mt-1">
             Printable guest QR codes with direct onboarding URLs.
           </p>
         </div>
         <button
           onClick={handlePrint}
-          className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-semibold text-xs shadow-md flex items-center gap-2"
+          className="btn-primary"
         >
           <span>🖨️</span>
           <span>Print All QR Cards</span>
@@ -103,14 +105,14 @@ export default function TablesPage() {
         {tables.map((table) => (
           <div
             key={table.id}
-            className="p-6 rounded-3xl bg-zinc-900 border border-zinc-800 flex flex-col items-center text-center space-y-4 print:bg-white print:text-black print:border-black print:shadow-none break-inside-avoid"
+            className="mise-card flex flex-col items-center text-center space-y-4 print:bg-white print:text-black print:border-black print:shadow-none break-inside-avoid"
           >
             {/* Table Label */}
             <div>
-              <span className="text-xs font-bold uppercase tracking-wider text-emerald-400 print:text-zinc-600">
+              <span className="text-xs font-bold uppercase tracking-wider text-[#22D3EE] print:text-zinc-600">
                 Dining Table
               </span>
-              <h2 className="text-2xl font-black text-zinc-100 print:text-black mt-0.5">
+              <h2 className="text-2xl font-black text-[#F3F8FC] print:text-black mt-0.5">
                 {table.label}
               </h2>
             </div>
@@ -133,10 +135,10 @@ export default function TablesPage() {
 
             {/* URL info */}
             <div className="w-full space-y-1">
-              <p className="text-[11px] font-mono text-zinc-400 print:text-zinc-700 break-all select-all">
+              <p className="text-[11px] font-mono text-[#8FA3B3] print:text-zinc-700 break-all select-all">
                 {table.guest_url}
               </p>
-              <p className="text-[10px] text-zinc-500 print:text-zinc-500">
+              <p className="text-[10px] text-[#8FA3B3]/70 print:text-zinc-500">
                 Scan with any smartphone camera to browse menu & order.
               </p>
             </div>

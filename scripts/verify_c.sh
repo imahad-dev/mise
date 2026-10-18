@@ -2,7 +2,9 @@
 set -eo pipefail
 
 LOG_DIR=$(mktemp -d /tmp/verify_c_XXXXXX 2>/dev/null || mktemp -d)
-trap 'rm -rf "$LOG_DIR"' EXIT
+OWNER_JAR=""
+STAFF_JAR=""
+trap 'rm -rf "$LOG_DIR"; rm -f "$OWNER_JAR" "$STAFF_JAR"' EXIT
 
 fail_step() {
     local step_name="$1"

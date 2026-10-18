@@ -1,4 +1,4 @@
-.PHONY: up down reset dev logs build migrate migration seed lint test test-py test-ts smoke smoke-amd gen-client setup ci verify-a verify-b verify-c verify-d
+.PHONY: up down reset dev logs build migrate migration seed lint test test-py test-ts smoke smoke-amd gen-client setup ci verify-a verify-b verify-c verify-d verify-e
 
 # --- Setup ---
 setup:
@@ -61,6 +61,9 @@ verify-c:
 
 verify-d:
 	@bash scripts/verify_d.sh
+
+verify-e:
+	@bash scripts/verify_e.sh
 
 # --- Inference ---
 smoke:

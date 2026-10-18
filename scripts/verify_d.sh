@@ -17,6 +17,12 @@ SLUG="trattoria-da-mario"
 API="http://127.0.0.1:8000"
 OWNER_WEB="http://127.0.0.1:3001"
 
+COOKIE_JAR=""
+OWNER_JAR=""
+STAFF_JAR=""
+GUEST_JAR=""
+trap 'rm -f "$COOKIE_JAR" "$OWNER_JAR" "$STAFF_JAR" "$GUEST_JAR"' EXIT
+
 # ─── Setup ───────────────────────────────────────────────────────────
 info "Step 1: make ci"
 make ci || fail "make ci failed"

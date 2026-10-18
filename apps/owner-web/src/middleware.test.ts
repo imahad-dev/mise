@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { middleware } from "./middleware";
-import { NextResponse } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 
 vi.mock("next/server", () => ({
   NextResponse: {
@@ -16,7 +16,7 @@ vi.mock("next/server", () => ({
 function fakeRequest(
   pathname: string,
   cookies: Record<string, string> = {},
-): any {
+): NextRequest {
   return {
     nextUrl: { pathname },
     url: `http://localhost:3001${pathname}`,
@@ -24,7 +24,7 @@ function fakeRequest(
       get: (name: string) =>
         cookies[name] ? { name, value: cookies[name] } : undefined,
     },
-  };
+  } as unknown as NextRequest;
 }
 
 describe("owner-web middleware", () => {

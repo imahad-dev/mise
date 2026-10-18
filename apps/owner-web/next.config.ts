@@ -22,6 +22,10 @@ const nextConfig: NextConfig = {
         source: "/api/metrics/:path*",
         destination: `${API_URL}/api/metrics/:path*`,
       },
+      {
+        source: "/api/demo/:path*",
+        destination: `${API_URL}/api/demo/:path*`,
+      },
       // Health and debug
       {
         source: "/health",

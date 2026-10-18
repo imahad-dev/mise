@@ -13,11 +13,72 @@ from src.auth import (
 )
 from src.config import settings
 from src.redis_client import redis_client
-from src.schemas.auth import LoginRequest, LoginResponse, LogoutResponse, MeResponse
+from src.schemas.auth import (
+    AuthConfigResponse,
+    DemoLoginRequest,
+    LoginRequest,
+    LoginResponse,
+    LogoutResponse,
+    MeResponse,
+)
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
+
+
+@router.get(
+    "/config",
+    response_model=AuthConfigResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def get_auth_config() -> AuthConfigResponse:
+    """Return public authentication and environment config (e.g. demo_mode)."""
+    return AuthConfigResponse(demo_mode=settings.demo_mode)
+
+
+@router.post(
+    "/demo-login",
+    response_model=LoginResponse,
+    status_code=status.HTTP_200_OK,
+    responses={
+        404: {"description": "Demo mode disabled"},
+        429: {"description": "Rate limit exceeded (max 20 per minute per IP)"},
+    },
+)
+async def demo_login(
+    payload: DemoLoginRequest,
+    request: Request,
+    response: Response,
+) -> LoginResponse:
+    """Issue signed auth cookie for owner or staff in DEMO_MODE without credentials.
+
+    Rate limited to 20 per minute per client IP. Returns 404 if DEMO_MODE is false.
+    """
+    if not settings.demo_mode:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Demo mode is disabled",
+        )
+
+    client_ip = get_client_ip(request)
+    rl_key = f"rate_limit:demo_login:{client_ip}"
+    try:
+        count = await redis_client.incr(rl_key)
+        if count == 1:
+            await redis_client.expire(rl_key, 60)
+        if count > 20:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Too many demo login requests: rate limit is 20 per minute",
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.warning("Redis error checking demo login rate limit: %s", e)
+
+    set_auth_cookie(response, payload.role)
+    return LoginResponse(status="ok", role=payload.role)
 
 
 def get_client_ip(request: Request) -> str:

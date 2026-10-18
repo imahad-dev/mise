@@ -360,44 +360,45 @@ export default function KitchenDisplayPage() {
             const elapsedMinutes = Math.max(0, Math.floor((nowServer - placedTime) / 60000));
 
             // Age colors:
-            // - amber after 10 minutes
-            // - red after 20 minutes
-            let ageCardClasses = "bg-zinc-900 border-zinc-700 text-white";
-            let ageBadgeClasses = "bg-zinc-800 text-zinc-300";
+            // - fresh (<10 min): thick green border
+            // - warning (>=10 min): thick amber border
+            // - critical (>=20 min): thick red border
+            let ageBorder = "border-l-8 border-l-[#34D399]";
+            let ageBadge = "bg-[#34D399]/20 text-[#34D399] border border-[#34D399]/40";
             if (elapsedMinutes >= 20) {
-              ageCardClasses = "bg-red-950/90 border-red-600 text-white ring-2 ring-red-500";
-              ageBadgeClasses = "bg-red-600 text-white font-black animate-pulse";
+              ageBorder = "border-l-8 border-l-[#EF4444] ring-1 ring-[#EF4444]/40";
+              ageBadge = "bg-[#EF4444] text-white font-black animate-pulse";
             } else if (elapsedMinutes >= 10) {
-              ageCardClasses = "bg-amber-950/80 border-amber-500 text-white ring-1 ring-amber-400";
-              ageBadgeClasses = "bg-amber-500 text-black font-black";
+              ageBorder = "border-l-8 border-l-[#F59E0B]";
+              ageBadge = "bg-[#F59E0B] text-black font-black";
             }
 
             return (
               <div
                 key={order.id}
-                className={`rounded-3xl border-2 p-5 flex flex-col justify-between space-y-4 shadow-2xl transition-all ${ageCardClasses}`}
+                className={`rounded-2xl bg-[#070B10] border border-[#38BDF8]/20 p-5 flex flex-col justify-between space-y-4 shadow-2xl transition-all ${ageBorder}`}
               >
                 {/* Ticket Header */}
-                <div className="space-y-2 border-b border-white/20 pb-3">
+                <div className="space-y-2 border-b border-[#38BDF8]/15 pb-3">
                   <div className="flex items-start justify-between">
                     <div>
-                      <h2 className="text-2xl font-black tracking-tight text-white">
+                      <h2 className="text-2xl font-black tracking-tight text-[#F3F8FC]">
                         {order.table_label ? `TABLE ${order.table_label}` : "TAKEOUT"}
                       </h2>
-                      <p className="text-xs font-mono text-zinc-300">
+                      <p className="text-xs font-mono text-[#8FA3B3]">
                         {new Date(order.placed_at).toLocaleTimeString()}
                       </p>
                     </div>
 
                     {/* Age Minutes as Text */}
-                    <span className={`px-2.5 py-1 rounded-lg text-xs font-bold uppercase ${ageBadgeClasses}`}>
+                    <span className={`px-2.5 py-1 rounded-lg text-xs font-bold uppercase ${ageBadge}`}>
                       {elapsedMinutes} min ago
                     </span>
                   </div>
 
-                  {/* Guest allergens to avoid summary banner */}
+                  {/* Guest allergens to avoid summary banner - SOLID RED */}
                   {order.allergens_to_avoid && order.allergens_to_avoid.length > 0 && (
-                    <div className="p-2 rounded-xl bg-red-950 text-red-200 border-2 border-red-600 text-xs font-black uppercase tracking-wide">
+                    <div className="p-2.5 rounded-xl bg-[#EF4444] text-white text-xs font-black uppercase tracking-wide shadow-md">
                       🚨 GUEST ALLERGIES: {order.allergens_to_avoid.join(", ")}
                     </div>
                   )}
@@ -408,26 +409,26 @@ export default function KitchenDisplayPage() {
                   {order.items.map((item) => (
                     <div
                       key={item.id}
-                      className={`p-3 rounded-2xl border ${
+                      className={`p-3 rounded-xl border ${
                         item.conflict_with_order_allergens
-                          ? "bg-red-900/90 border-red-400 text-white ring-2 ring-red-400"
-                          : "bg-black/40 border-white/10 text-zinc-100"
+                          ? "bg-[#EF4444]/20 border-[#EF4444] text-white ring-1 ring-[#EF4444]"
+                          : "bg-[#0D141B] border-[#38BDF8]/10 text-[#F3F8FC]"
                       }`}
                     >
                       <div className="flex items-baseline justify-between text-base font-black">
-                        <span className="text-xl text-emerald-400">{item.quantity}x</span>
-                        <span className="flex-1 text-right text-lg">{item.kitchen_name}</span>
+                        <span className="text-xl text-[#22D3EE] font-mono">{item.quantity}x</span>
+                        <span className="flex-1 text-right text-lg text-[#F3F8FC]">{item.kitchen_name}</span>
                       </div>
 
-                      {/* Prominent Red Allergy Banner on Affected Items */}
+                      {/* Prominent Solid Red Allergy Banner on Affected Items */}
                       {item.conflict_with_order_allergens && (
-                        <div className="mt-2 py-1 px-2 rounded-lg bg-red-700 text-white text-xs font-black uppercase text-center tracking-wider">
+                        <div className="mt-2 py-1.5 px-2.5 rounded-lg bg-[#EF4444] text-white text-xs font-black uppercase text-center tracking-wider shadow-sm">
                           ⚠️ ALLERGY WARNING: {item.matched_allergens.join(", ")}
                         </div>
                       )}
 
                       {item.notes && (
-                        <p className="mt-1.5 text-xs text-amber-300 font-bold italic bg-black/50 p-1.5 rounded-lg">
+                        <p className="mt-1.5 text-xs text-[#FF9F2E] font-bold italic bg-[#070B10] p-2 rounded-lg border border-[#FF9F2E]/20">
                           NOTE: {item.notes}
                         </p>
                       )}
@@ -439,7 +440,7 @@ export default function KitchenDisplayPage() {
                 <div className="pt-2">
                   <button
                     onClick={() => handleBump(order.id)}
-                    className="w-full py-4 rounded-2xl bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-black text-xl shadow-xl uppercase tracking-wider transition-all"
+                    className="w-full min-h-[48px] py-3.5 rounded-xl bg-gradient-to-r from-[#2F7BFF] to-[#22D3EE] hover:opacity-90 active:scale-95 text-[#070B10] font-black text-lg shadow-xl uppercase tracking-wider transition-all"
                   >
                     BUMP
                   </button>

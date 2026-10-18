@@ -10,6 +10,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@fontsource-variable/inter": "^5.1.1",
     "api-client": "workspace:*",
     "next": "~15.3.3",
     "qrcode": "^1.5.4",

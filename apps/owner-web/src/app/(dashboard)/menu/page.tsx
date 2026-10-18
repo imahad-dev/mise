@@ -110,17 +110,19 @@ export default function MenuManagementPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between border-b border-zinc-800 pb-4">
+      <div className="flex items-center justify-between border-b border-[#38BDF8]/15 pb-4">
         <div>
-          <h1 className="text-xl font-bold text-zinc-100 tracking-tight">Menu Items & Verification</h1>
-          <p className="text-xs text-zinc-400 mt-1">
+          <h1 className="text-2xl font-extrabold tracking-tight">
+            Menu Items & <span className="gradient-text">Verification</span>
+          </h1>
+          <p className="text-xs text-[#8FA3B3] mt-1">
             Manage dish availability, unit costs, and verify allergen & dietary declarations.
           </p>
         </div>
-        <span className="text-xs font-mono text-zinc-500">{items.length} items total</span>
+        <span className="text-xs font-mono text-[#8FA3B3]">{items.length} items total</span>
       </div>
 
-      <div className="divide-y divide-zinc-800/80 rounded-3xl bg-zinc-900 border border-zinc-800 overflow-hidden shadow-xl">
+      <div className="mise-card p-0 divide-y divide-[#38BDF8]/10 overflow-hidden">
         {items.map((item) => {
           const primaryName = item.translations[0]?.name || "Unnamed Item";
           const isVerified = item.allergen_verified && item.dietary_verified;
@@ -130,43 +132,41 @@ export default function MenuManagementPage() {
             <div
               key={item.id}
               className={`p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-colors ${
-                !item.available ? "bg-zinc-950/40 opacity-70" : "hover:bg-zinc-800/30"
+                !item.available ? "bg-[#070B10]/60 opacity-70" : "hover:bg-white/[0.02]"
               }`}
             >
               {/* Item Info */}
               <div className="space-y-1.5 flex-1">
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold uppercase tracking-wider text-emerald-400">
+                  <span className="text-xs font-bold uppercase tracking-wider text-[#22D3EE]">
                     {item.category}
                   </span>
-                  <span className="text-zinc-600">•</span>
-                  <h2 className="text-sm font-bold text-zinc-100">{primaryName}</h2>
+                  <span className="text-[#8FA3B3]/40">•</span>
+                  <h2 className="text-sm font-bold text-[#F3F8FC]">{primaryName}</h2>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-3 text-xs text-zinc-400 font-mono">
+                <div className="flex flex-wrap items-center gap-3 text-xs text-[#8FA3B3] font-mono">
                   <span>Price: €{Number(item.price).toFixed(2)}</span>
-                  <span>Unit Cost: <strong className="text-zinc-200">€{Number(item.unit_cost).toFixed(2)}</strong></span>
+                  <span>Unit Cost: <strong className="text-[#F3F8FC]">€{Number(item.unit_cost).toFixed(2)}</strong></span>
                   {item.allergens.length > 0 && (
-                    <span className="text-rose-400">Allergens: {item.allergens.join(", ")}</span>
+                    <span className="chip chip-contains text-[10px]">
+                      Contains: {item.allergens.join(", ")}
+                    </span>
                   )}
                 </div>
 
                 {/* Verification Flags */}
                 <div className="flex items-center gap-2 pt-1">
                   <span
-                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold ${
-                      item.allergen_verified
-                        ? "bg-emerald-950 text-emerald-300 border border-emerald-800"
-                        : "bg-amber-950 text-amber-300 border border-amber-800"
+                    className={`chip text-[10px] ${
+                      item.allergen_verified ? "chip-safe" : "chip-unverified"
                     }`}
                   >
                     {item.allergen_verified ? "✓ Allergens Verified" : "⚠️ Allergens Unverified"}
                   </span>
                   <span
-                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold ${
-                      item.dietary_verified
-                        ? "bg-emerald-950 text-emerald-300 border border-emerald-800"
-                        : "bg-amber-950 text-amber-300 border border-amber-800"
+                    className={`chip text-[10px] ${
+                      item.dietary_verified ? "chip-safe" : "chip-unverified"
                     }`}
                   >
                     {item.dietary_verified ? "✓ Dietary Verified" : "⚠️ Dietary Unverified"}
@@ -180,10 +180,10 @@ export default function MenuManagementPage() {
                 <button
                   onClick={() => handleToggleAvailable(item)}
                   disabled={isBusy}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all ${
+                  className={`min-h-[44px] px-3.5 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
                     item.available
-                      ? "bg-zinc-800 text-zinc-200 border-zinc-700 hover:bg-zinc-700"
-                      : "bg-rose-950/60 text-rose-300 border-rose-800 hover:bg-rose-900/60"
+                      ? "bg-[#0D141B] text-[#F3F8FC] border-[#38BDF8]/20 hover:border-[#38BDF8]/50"
+                      : "bg-[#EF4444]/15 text-[#EF4444] border-[#EF4444]/40 hover:bg-[#EF4444]/25"
                   }`}
                 >
                   {item.available ? "Active (Available)" : "Sold Out (Disabled)"}
@@ -194,7 +194,7 @@ export default function MenuManagementPage() {
                   <button
                     onClick={() => handleVerify(item)}
                     disabled={isBusy}
-                    className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-semibold text-xs shadow-md transition-all"
+                    className="btn-primary !min-h-[44px] !py-1.5 !px-3.5 text-xs"
                   >
                     Verify Item
                   </button>
@@ -203,7 +203,7 @@ export default function MenuManagementPage() {
                     onClick={() => handleVerify(item)}
                     disabled={isBusy}
                     title="Re-verify item"
-                    className="px-2.5 py-1.5 rounded-xl bg-zinc-800 text-zinc-400 hover:text-zinc-200 text-xs font-medium"
+                    className="btn-ghost !min-h-[44px] !py-1.5 !px-3 text-xs"
                   >
                     Re-verify
                   </button>

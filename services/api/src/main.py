@@ -9,6 +9,7 @@ from fastapi import FastAPI
 from src.config import settings
 from src.inference.client import InferenceClient
 from src.routers.auth import router as auth_router
+from src.routers.demo import router as demo_router
 from src.routers.guest import router as guest_router
 from src.routers.health import router as health_router
 from src.routers.kitchen import router as kitchen_router
@@ -54,6 +55,7 @@ app = FastAPI(
 app.include_router(health_router)
 app.include_router(metrics_router)
 app.include_router(auth_router)
+app.include_router(demo_router)
 app.include_router(guest_router)
 app.include_router(orders_router)
 app.include_router(kitchen_router)
