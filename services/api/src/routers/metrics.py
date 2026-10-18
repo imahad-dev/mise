@@ -1,12 +1,12 @@
-"""Inference metrics endpoint."""
+"""Inference metrics endpoint — cost tracking and daily budget."""
 
+import contextlib
 from typing import Annotated
 
 from fastapi import APIRouter, Depends
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.config import settings
 from src.database import get_db
 from src.models.metrics import MetricsSample
 from src.schemas.metrics import InferenceMetricsResponse
@@ -18,9 +18,10 @@ router = APIRouter(prefix="/api/metrics", tags=["metrics"])
 async def inference_metrics(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> InferenceMetricsResponse:
-    """Aggregated inference metrics with GPU cost estimation.
+    """Aggregated inference metrics with AMD-metered cost tracking.
 
-    TODO: Require owner auth (mise_owner cookie) when M1.3 lands.
+    - cost_usd comes from usage.cost in the AMD response
+    - daily_budget_remaining_usd from the most recent rate-limit header
     """
     result = await db.execute(
         select(
@@ -30,17 +31,25 @@ async def inference_metrics(
             func.avg(MetricsSample.latency_ms).label("avg_latency_ms"),
             func.min(MetricsSample.latency_ms).label("min_latency_ms"),
             func.max(MetricsSample.latency_ms).label("max_latency_ms"),
-            func.sum(MetricsSample.gpu_seconds).label("total_gpu_seconds"),
+            func.sum(MetricsSample.cost_usd).label("total_cost_usd"),
         )
     )
     row = result.one()
 
-    total_gpu = row.total_gpu_seconds or 0.0
-    estimated_cost = (
-        round(total_gpu * settings.gpu_hourly_rate_usd / 3600, 4)
-        if settings.gpu_hourly_rate_usd > 0
-        else None
+    # Get the most recent daily budget remaining from rate_limit_info JSONB
+    latest_budget_row = await db.execute(
+        select(MetricsSample.rate_limit_info)
+        .where(MetricsSample.rate_limit_info.isnot(None))
+        .order_by(MetricsSample.created_at.desc())
+        .limit(1)
     )
+    latest_budget = latest_budget_row.scalar_one_or_none()
+    daily_budget_remaining: float | None = None
+    if latest_budget and isinstance(latest_budget, dict):
+        raw = latest_budget.get("remaining_daily_usd")
+        if raw is not None:
+            with contextlib.suppress(ValueError, TypeError):
+                daily_budget_remaining = float(raw)
 
     return InferenceMetricsResponse(
         total_calls=row.total_calls or 0,
@@ -49,6 +58,6 @@ async def inference_metrics(
         avg_latency_ms=round(row.avg_latency_ms, 1) if row.avg_latency_ms is not None else None,
         min_latency_ms=row.min_latency_ms,
         max_latency_ms=row.max_latency_ms,
-        total_gpu_seconds=round(total_gpu, 2) if total_gpu else None,
-        estimated_cost_usd=estimated_cost,
+        total_cost_usd=round(row.total_cost_usd, 6) if row.total_cost_usd else None,
+        daily_budget_remaining_usd=daily_budget_remaining,
     )

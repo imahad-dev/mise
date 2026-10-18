@@ -32,6 +32,7 @@ class Settings(BaseSettings):
 
     # URLs
     public_guest_url: str = "http://localhost:3000"
+    public_owner_url: str = "http://localhost:3001"
 
     # Inference — provider routing
     llm_provider: str = "mock"  # "mock" | "amd"
@@ -46,7 +47,7 @@ class Settings(BaseSettings):
     vlm_model_fallbacks: list[str] = []
 
     # Rate limiting
-    llm_global_rpm: int = 60  # global requests-per-minute
+    llm_global_rpm: int = 15  # safe below AMD's 20 RPM limit
     guest_chat_limit: int = 10  # per-session message cap
 
     # Mock control
@@ -54,10 +55,8 @@ class Settings(BaseSettings):
     mock_error_rate: float = 0.0
     mock_timeout_ms: int = 0
 
-    # GPU cost
-    gpu_hourly_rate_usd: float = 0.0
-
     # Demo
+    demo_mode: bool = False
     demo_restaurant_slug: str = "trattoria-da-mario"
 
     @property

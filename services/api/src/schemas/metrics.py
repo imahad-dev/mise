@@ -10,5 +10,5 @@ class InferenceMetricsResponse(BaseModel):
     avg_latency_ms: float | None = None
     min_latency_ms: int | None = None
     max_latency_ms: int | None = None
-    total_gpu_seconds: float | None = None
-    estimated_cost_usd: float | None = None
+    total_cost_usd: float | None = None
+    daily_budget_remaining_usd: float | None = None

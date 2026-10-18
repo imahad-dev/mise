@@ -9,12 +9,15 @@ async def record_metrics(db: AsyncSession, metrics: dict) -> None:
     """Insert a metrics_sample row. Must be called after the main transaction commits."""
     sample = MetricsSample(
         model=metrics["model"],
+        provider=metrics.get("provider", "mock"),
         endpoint=metrics["endpoint"],
         tokens_in=metrics["tokens_in"],
         tokens_out=metrics["tokens_out"],
         latency_ms=metrics["latency_ms"],
+        cost_usd=metrics.get("cost_usd"),
         gpu_seconds=metrics.get("gpu_seconds"),
         cached_prefix_tokens=metrics.get("cached_prefix_tokens"),
+        rate_limit_info=metrics.get("rate_limit_info"),
     )
     db.add(sample)
     await db.commit()

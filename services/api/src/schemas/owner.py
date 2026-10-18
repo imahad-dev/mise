@@ -134,4 +134,3 @@ class SimulateResponse(BaseModel):
     predicted_covers: int
     predicted_revenue_eur: float
     recommendations: list[SimulateRecommendation]
-

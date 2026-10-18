@@ -43,16 +43,18 @@ services:
       OWNER_API_KEY: ${OWNER_API_KEY:-change_me_in_production}
       STAFF_PIN: ${STAFF_PIN:-0000}
       PUBLIC_GUEST_URL: ${PUBLIC_GUEST_URL:-http://localhost:3000}
+      PUBLIC_OWNER_URL: ${PUBLIC_OWNER_URL:-http://localhost:3001}
       LLM_PROVIDER: ${LLM_PROVIDER:-mock}
       LLM_API_KEY: ${LLM_API_KEY:-}
-      LLM_BASE_URL: http://inference:8080/v1
+      LLM_BASE_URL: ${LLM_BASE_URL:-http://inference:8080/v1}
       LLM_MODEL: ${LLM_MODEL:-mock-llm}
       LLM_MAX_TOKENS: ${LLM_MAX_TOKENS:-1024}
       LLM_TIMEOUT_SECONDS: ${LLM_TIMEOUT_SECONDS:-30}
-      VLM_BASE_URL: http://inference:8080/v1
+      VLM_BASE_URL: ${VLM_BASE_URL:-http://inference:8080/v1}
       VLM_MODEL: ${VLM_MODEL:-mock-vlm}
-      LLM_GLOBAL_RPM: ${LLM_GLOBAL_RPM:-60}
+      LLM_GLOBAL_RPM: ${LLM_GLOBAL_RPM:-15}
       GUEST_CHAT_LIMIT: ${GUEST_CHAT_LIMIT:-10}
+      DEMO_MODE: ${DEMO_MODE:-false}
       DEMO_RESTAURANT_SLUG: ${DEMO_RESTAURANT_SLUG:-trattoria-da-mario}
     ports:
       - "127.0.0.1:8000:8000"

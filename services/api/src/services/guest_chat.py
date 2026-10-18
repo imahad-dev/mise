@@ -84,11 +84,7 @@ async def handle_guest_chat(
         if guest_allergens
         else "No allergen restrictions."
     )
-    dietary_note = (
-        f"Dietary preferences: {', '.join(guest_dietary)}."
-        if guest_dietary
-        else ""
-    )
+    dietary_note = f"Dietary preferences: {', '.join(guest_dietary)}." if guest_dietary else ""
 
     system_prompt = (
         f"You are a friendly restaurant menu assistant. "

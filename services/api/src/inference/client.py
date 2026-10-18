@@ -9,16 +9,20 @@ Hardened for AMD Token Factory:
 - Response validation with Pydantic + regex fallback
 - Retry on validation failure (once)
 - Rate limiting (global RPM + per-guest session)
+- Concurrency semaphore (6 concurrent provider calls)
+- 429 Retry-After honour (max 5 s), then 503
 - Privacy: API key never logged, never in error payloads
 """
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 from typing import TYPE_CHECKING, Any
 
 import httpx
+from fastapi import HTTPException, Request, status
 
 from src.config import settings
 from src.inference.rate_limit import check_global_rate_limit
@@ -30,11 +34,27 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 # Parameters the AMD Token Factory API actually accepts
-_SUPPORTED_PARAMS = frozenset({
-    "model", "messages", "max_tokens", "temperature", "top_p",
-    "stream", "tools", "tool_choice", "response_format",
-    "reasoning_effort", "stream_options",
-})
+_SUPPORTED_PARAMS = frozenset(
+    {
+        "model",
+        "messages",
+        "max_tokens",
+        "temperature",
+        "top_p",
+        "stream",
+        "tools",
+        "tool_choice",
+        "response_format",
+        "reasoning_effort",
+        "stream_options",
+    }
+)
+
+# Concurrency guard: AMD allows 8 concurrent per key; we use 6 for safety
+_PROVIDER_SEMAPHORE = asyncio.Semaphore(6)
+
+# Maximum Retry-After we honour on a 429 from the provider
+_MAX_RETRY_AFTER_S = 5.0
 
 
 def _build_headers() -> dict[str, str]:
@@ -138,7 +158,8 @@ class InferenceClient:
                     if fb in available:
                         logger.warning(
                             "Configured model %r not found; falling back to %r",
-                            model_name, fb,
+                            model_name,
+                            fb,
                         )
                         break
                 else:
@@ -203,11 +224,15 @@ class InferenceClient:
             if isinstance(result, dict) and "_validation_error" in result:
                 logger.info("Retrying chat call after validation failure")
                 body, retry_metrics = await self._post_chat(
-                    self._llm_client, payload, resolved_model,
+                    self._llm_client,
+                    payload,
+                    resolved_model,
                 )
                 metrics["tokens_in"] += retry_metrics["tokens_in"]
                 metrics["tokens_out"] += retry_metrics["tokens_out"]
                 metrics["latency_ms"] += retry_metrics["latency_ms"]
+                prev_cost = metrics.get("cost_usd") or 0
+                metrics["cost_usd"] = prev_cost + (retry_metrics.get("cost_usd") or 0)
                 result = validate_response(body, schema)
             return (
                 result.model_dump() if hasattr(result, "model_dump") else result,
@@ -235,11 +260,13 @@ class InferenceClient:
 
         safe_messages = _enforce_system_message(messages)
 
-        payload = _filter_payload({
-            "model": resolved_model,
-            "messages": safe_messages,
-            "max_tokens": max_tokens,
-        })
+        payload = _filter_payload(
+            {
+                "model": resolved_model,
+                "messages": safe_messages,
+                "max_tokens": max_tokens,
+            }
+        )
 
         body, metrics = await self._post_chat(self._vlm_client, payload, resolved_model)
         metrics["endpoint"] = "vision"
@@ -248,11 +275,15 @@ class InferenceClient:
             result = validate_response(body, schema)
             if isinstance(result, dict) and "_validation_error" in result:
                 body, retry_metrics = await self._post_chat(
-                    self._vlm_client, payload, resolved_model,
+                    self._vlm_client,
+                    payload,
+                    resolved_model,
                 )
                 metrics["tokens_in"] += retry_metrics["tokens_in"]
                 metrics["tokens_out"] += retry_metrics["tokens_out"]
                 metrics["latency_ms"] += retry_metrics["latency_ms"]
+                prev_cost = metrics.get("cost_usd") or 0
+                metrics["cost_usd"] = prev_cost + (retry_metrics.get("cost_usd") or 0)
                 result = validate_response(body, schema)
             return (
                 result.model_dump() if hasattr(result, "model_dump") else result,
@@ -267,26 +298,58 @@ class InferenceClient:
         payload: dict[str, Any],
         model: str,
     ) -> tuple[dict[str, Any], dict[str, Any]]:
-        """Low-level POST to /chat/completions with timing + usage extraction."""
-        start = time.monotonic()
-        try:
-            resp = await client.post("/chat/completions", json=payload)
-            latency_ms = int((time.monotonic() - start) * 1000)
-            resp.raise_for_status()
-        except httpx.HTTPStatusError as exc:
-            raise _sanitize_error(exc) from None
+        """Low-level POST to /chat/completions with semaphore, 429 retry, and timing."""
+        async with _PROVIDER_SEMAPHORE:
+            start = time.monotonic()
+            try:
+                resp = await client.post("/chat/completions", json=payload)
+                latency_ms = int((time.monotonic() - start) * 1000)
+                resp.raise_for_status()
+            except httpx.HTTPStatusError as exc:
+                if exc.response.status_code == 429:
+                    retry_after = min(
+                        float(exc.response.headers.get("Retry-After", "1")),
+                        _MAX_RETRY_AFTER_S,
+                    )
+                    logger.warning("Provider 429; retrying after %.1fs", retry_after)
+                    await asyncio.sleep(retry_after)
+                    try:
+                        resp = await client.post("/chat/completions", json=payload)
+                        latency_ms = int((time.monotonic() - start) * 1000)
+                        resp.raise_for_status()
+                    except httpx.HTTPStatusError:
+                        raise HTTPException(
+                            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                            detail="ai_unavailable",
+                        ) from None
+                else:
+                    raise _sanitize_error(exc) from None
 
         body = resp.json()
         usage = body.get("usage", {})
+
+        # Extract rate-limit headers into a dict for JSONB storage
+        rate_limit_info: dict[str, Any] = {}
+        remaining_daily = resp.headers.get("x-ratelimit-remaining-user-daily-usd")
+        if remaining_daily is not None:
+            rate_limit_info["remaining_daily_usd"] = remaining_daily
+        remaining_rpm = resp.headers.get("x-ratelimit-remaining-user-rpm")
+        if remaining_rpm is not None:
+            rate_limit_info["remaining_rpm"] = remaining_rpm
+
         metrics = {
             "model": model,
+            "provider": settings.llm_provider,
             "endpoint": "chat",
             "tokens_in": usage.get("prompt_tokens", 0),
             "tokens_out": usage.get("completion_tokens", 0),
             "latency_ms": latency_ms,
+            "cost_usd": usage.get("cost"),
             "cached_prefix_tokens": usage.get("prompt_tokens_details", {}).get(
-                "cached_tokens", None
+                "cached_tokens",
+                None,
             ),
+            "rate_limit_info": rate_limit_info if rate_limit_info else None,
         }
 
         return body, metrics
@@ -296,6 +359,6 @@ class InferenceClient:
         await self._vlm_client.aclose()
 
 
-def get_inference_client(request: "Request") -> InferenceClient:
+def get_inference_client(request: Request) -> InferenceClient:
     """Dependency to retrieve InferenceClient instance from app state."""
     return request.app.state.inference_client

@@ -115,7 +115,7 @@ async def test_inference_client_with_pydantic_validation():
     client = InferenceClient(llm_client=llm_mock)
 
     try:
-        result, metrics = await client.chat(
+        result, _metrics = await client.chat(
             [{"role": "user", "content": "recommend"}],
             schema=MockChatResponse,
         )
@@ -140,7 +140,7 @@ async def test_inference_client_validation_fallback():
     client = InferenceClient(llm_client=llm_mock)
 
     try:
-        result, metrics = await client.chat(
+        result, _metrics = await client.chat(
             [{"role": "user", "content": "chat recommend"}],
             schema=MockChatResponse,
         )

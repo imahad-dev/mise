@@ -103,4 +103,3 @@ class AIChatResult(BaseModel):
 
     reply: str
     suggested_items: list[ChatSuggestedItem] = []
-
