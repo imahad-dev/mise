@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.config import settings
 from src.database import get_db
 from src.models.metrics import MetricsSample
 from src.schemas.metrics import InferenceMetricsResponse
@@ -18,9 +19,9 @@ router = APIRouter(prefix="/api/metrics", tags=["metrics"])
 async def inference_metrics(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> InferenceMetricsResponse:
-    """Aggregated inference metrics with AMD-metered cost tracking.
+    """Aggregated inference metrics with cost tracking.
 
-    - cost_usd comes from usage.cost in the AMD response
+    - cost_usd comes from usage.cost in the inference provider response
     - daily_budget_remaining_usd from the most recent rate-limit header
     """
     result = await db.execute(
@@ -60,4 +61,5 @@ async def inference_metrics(
         max_latency_ms=row.max_latency_ms,
         total_cost_usd=round(row.total_cost_usd, 6) if row.total_cost_usd else None,
         daily_budget_remaining_usd=daily_budget_remaining,
+        provider_label=settings.llm_provider_label,
     )

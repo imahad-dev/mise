@@ -152,7 +152,7 @@ export default function HomePage() {
                   priority
                 />
                 <span className="text-xs font-bold uppercase tracking-wider text-[#22D3EE]">
-                  Judge & Evaluator Launcher
+                  Live demo
                 </span>
               </div>
 
@@ -161,7 +161,7 @@ export default function HomePage() {
               </h1>
 
               <p className="text-base sm:text-lg text-[#8FA3B3] leading-relaxed">
-                Autonomous restaurant operations and revenue optimization platform, powered by AMD inference.
+                Autonomous restaurant operations and revenue optimization platform, powered by AI inference.
               </p>
 
               <div className="pt-2 flex flex-wrap gap-3">
@@ -342,11 +342,11 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* 3-MINUTE JUDGE TOUR */}
+        {/* GUIDED TOUR */}
         <section className="glass-panel p-6 sm:p-8 space-y-6">
           <div className="border-b border-[#38BDF8]/15 pb-4">
             <h2 className="text-xl sm:text-2xl font-extrabold tracking-tight text-[#F3F8FC]">
-              3-Minute Judge Evaluation Tour
+              Guided tour (3 minutes)
             </h2>
             <p className="text-xs sm:text-sm text-[#8FA3B3] mt-1">
               Follow this step-by-step walkthrough to experience end-to-end autonomous restaurant intelligence:
@@ -404,14 +404,9 @@ export default function HomePage() {
             />
             <span>Mise Restaurant Platform © 2026</span>
           </div>
-
-          {/* AMD Token Factory footer text badge (no AMD logo images) */}
-          <div className="px-3 py-1.5 rounded-full bg-[#0D141B] border border-[#38BDF8]/20 text-[11px] font-semibold text-[#F3F8FC] flex items-center gap-1.5 shadow-sm">
-            <span className="w-2 h-2 rounded-full bg-[#22D3EE] animate-pulse" />
-            <span>Powered by AMD Token Factory</span>
-          </div>
         </footer>
       </main>
     </div>
   );
 }
+

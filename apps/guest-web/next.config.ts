@@ -18,7 +18,7 @@ const nextConfig: NextConfig = {
         source: "/api/orders/:path*",
         destination: `${API_URL}/api/orders/:path*`,
       },
-      // Auth and Demo paths for judge launcher
+      // Auth and Demo paths for demo launcher
       {
         source: "/api/auth/:path*",
         destination: `${API_URL}/api/auth/:path*`,

@@ -68,7 +68,7 @@ export default function MenuIngestPage() {
           Visual Menu <span className="gradient-text">Ingestion (VLM)</span>
         </h1>
         <p className="text-xs text-[#8FA3B3] mt-1">
-          Extract printed restaurant menus, dish names, prices, and allergen disclosures automatically using AMD Token Factory VLM
+          Extract printed restaurant menus, dish names, prices, and allergen disclosures automatically using AI assistant VLM
         </p>
       </div>
 

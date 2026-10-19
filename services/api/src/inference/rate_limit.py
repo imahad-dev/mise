@@ -8,6 +8,7 @@ Two limiters:
 from __future__ import annotations
 
 import time
+from datetime import UTC, datetime
 
 from fastapi import HTTPException, status
 
@@ -54,3 +55,62 @@ async def check_guest_chat_limit(session_id: str) -> None:
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="Chat message limit reached for this session.",
         )
+
+
+async def check_daily_request_cap() -> None:
+    """Enforce daily request cap for non-local providers via Redis day counter.
+
+    Raises 503 (ai_unavailable) if the daily cap is exceeded.
+    """
+    if settings.llm_provider == "mock":
+        return
+
+    from src.inference.providers import get_preset
+
+    preset = get_preset(settings.llm_preset)
+    if (
+        preset.is_local
+        or "localhost" in settings.llm_base_url
+        or "127.0.0.1" in settings.llm_base_url
+    ):
+        return
+
+    if settings.llm_daily_request_cap <= 0:
+        return
+
+    today_str = datetime.now(UTC).strftime("%Y-%m-%d")
+    day_key = f"mise:llm:daily_cap:{today_str}"
+    count = await redis_client.incr(day_key)
+    if count == 1:
+        await redis_client.expire(day_key, 172800)  # 48 hours for rollover safety
+
+    if count > settings.llm_daily_request_cap:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="ai_unavailable",
+        )
+
+
+async def get_daily_cap_remaining() -> int | None:
+    """Return remaining daily inference requests or None if unlimited/local."""
+    if settings.llm_provider == "mock":
+        return None
+
+    from src.inference.providers import get_preset
+
+    preset = get_preset(settings.llm_preset)
+    if (
+        preset.is_local
+        or "localhost" in settings.llm_base_url
+        or "127.0.0.1" in settings.llm_base_url
+    ):
+        return None
+
+    if settings.llm_daily_request_cap <= 0:
+        return None
+
+    today_str = datetime.now(UTC).strftime("%Y-%m-%d")
+    day_key = f"mise:llm:daily_cap:{today_str}"
+    val = await redis_client.get(day_key)
+    count = int(val) if val else 0
+    return max(0, settings.llm_daily_request_cap - count)

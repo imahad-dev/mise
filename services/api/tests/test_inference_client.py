@@ -20,6 +20,25 @@ class MockChatResponse(BaseModel):
     confidence: float = 1.0
 
 
+@pytest.fixture(autouse=True)
+def mock_redis_for_client(monkeypatch):
+    """Mock Redis client calls during unit tests of InferenceClient."""
+    from src.redis_client import redis_client
+
+    async def fake_incr(key):
+        return 1
+
+    async def fake_expire(key, ttl):
+        return True
+
+    async def fake_get(key):
+        return None
+
+    monkeypatch.setattr(redis_client, "incr", fake_incr)
+    monkeypatch.setattr(redis_client, "expire", fake_expire)
+    monkeypatch.setattr(redis_client, "get", fake_get)
+
+
 def _make_fake_response(content: str | dict, model: str = "mock-llm") -> dict:
     """Build a fake OpenAI-style chat completion response."""
     if isinstance(content, dict):
@@ -219,3 +238,78 @@ def test_filter_payload_converts_json_schema_to_json_object():
     }
     result = _filter_payload(payload)
     assert result["response_format"] == {"type": "json_object"}
+
+
+def test_openrouter_free_model_guard():
+    """Settings validation fails if OpenRouter model lacks :free when llm_free_only=True."""
+    from pydantic import ValidationError
+
+    from src.config import Settings
+
+    with pytest.raises(ValidationError, match="LLM_FREE_ONLY guard"):
+        Settings(
+            llm_provider="openai_compatible",
+            llm_preset="openrouter",
+            llm_model="meta-llama/llama-3-8b",
+            llm_free_only=True,
+        )
+
+    # Passes if ends with :free
+    s = Settings(
+        llm_provider="openai_compatible",
+        llm_preset="openrouter",
+        llm_model="meta-llama/llama-3-8b:free",
+        llm_free_only=True,
+    )
+    assert s.llm_model.endswith(":free")
+
+
+@pytest.mark.asyncio
+async def test_daily_request_cap_guard(monkeypatch):
+    """When daily request cap is exceeded, check_daily_request_cap raises 503 ai_unavailable."""
+    from fastapi import HTTPException
+
+    from src.config import settings
+    from src.inference.rate_limit import check_daily_request_cap
+    from src.redis_client import redis_client
+
+    monkeypatch.setattr(settings, "llm_provider", "openai_compatible")
+    monkeypatch.setattr(settings, "llm_preset", "groq")
+    monkeypatch.setattr(settings, "llm_base_url", "https://api.groq.com/openai/v1")
+    monkeypatch.setattr(settings, "llm_daily_request_cap", 2)
+
+    async def fake_incr(key):
+        return 3
+
+    async def fake_expire(key, ttl):
+        return True
+
+    monkeypatch.setattr(redis_client, "incr", fake_incr)
+    monkeypatch.setattr(redis_client, "expire", fake_expire)
+
+    with pytest.raises(HTTPException) as exc_info:
+        await check_daily_request_cap()
+    assert exc_info.value.status_code == 503
+    assert exc_info.value.detail == "ai_unavailable"
+
+
+@pytest.mark.asyncio
+async def test_provider_429_returns_503_ai_unavailable():
+    """When provider persistently returns 429, inference client raises 503 ai_unavailable."""
+    from fastapi import HTTPException
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(429, headers={"Retry-After": "0"})
+
+    llm_mock = httpx.AsyncClient(
+        transport=httpx.MockTransport(handler), base_url="http://mock-llm:8080/v1"
+    )
+    client = InferenceClient(llm_client=llm_mock)
+
+    try:
+        with pytest.raises(HTTPException) as exc_info:
+            await client.chat([{"role": "user", "content": "hello"}])
+        assert exc_info.value.status_code == 503
+        assert exc_info.value.detail == "ai_unavailable"
+    finally:
+        await client.close()

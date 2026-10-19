@@ -35,19 +35,31 @@ class Settings(BaseSettings):
     public_owner_url: str = "http://localhost:3001"
 
     # Inference — provider routing
-    llm_provider: str = "mock"  # "mock" | "amd"
+    llm_provider: str = "mock"  # "mock" | "openai_compatible"
+    llm_preset: str = "custom"  # "gemini" | "groq" | "openrouter" | "ollama" | "custom"
+    llm_provider_label: str = "OpenAI-compatible endpoint"
     llm_api_key: str = ""  # stripped on load; NEVER log or return
     llm_base_url: str = "http://inference:8080/v1"
     llm_model: str = "mock-llm"
     llm_model_fallbacks: list[str] = []  # ordered fallback list
     llm_max_tokens: int = 1024
     llm_timeout_seconds: int = 30
+    llm_allowed_params: list[str] = [
+        "model",
+        "messages",
+        "max_tokens",
+        "temperature",
+        "response_format",
+    ]
     vlm_base_url: str = "http://inference:8080/v1"
     vlm_model: str = "mock-vlm"
     vlm_model_fallbacks: list[str] = []
 
-    # Rate limiting
-    llm_global_rpm: int = 15  # safe below AMD's 20 RPM limit
+    # Free-only policy & Rate limiting
+    llm_free_only: bool = True
+    llm_daily_request_cap: int = 200  # daily request ceiling for non-local providers
+    llm_global_rpm: int = 15  # global requests per minute limit
+    llm_concurrency_limit: int = 6  # max concurrent calls
     guest_chat_limit: int = 10  # per-session message cap
 
     # Mock control
@@ -79,6 +91,29 @@ class Settings(BaseSettings):
     def _strip_api_key(cls, v: str) -> str:
         """Strip ALL whitespace from the API key (copy-paste safety)."""
         return "".join(v.split()) if isinstance(v, str) else v
+
+    @field_validator("llm_provider")
+    @classmethod
+    def _validate_llm_provider(cls, v: str) -> str:
+        valid = {"mock", "openai_compatible"}
+        if v not in valid:
+            raise ValueError(f"LLM_PROVIDER must be one of {valid}, got {v!r}")
+        return v
+
+    @model_validator(mode="after")
+    def validate_free_only_guard(self) -> "Settings":
+        is_openrouter = self.llm_preset == "openrouter" or "openrouter.ai" in self.llm_base_url
+        if (
+            self.llm_free_only
+            and self.llm_provider != "mock"
+            and is_openrouter
+            and not self.llm_model.endswith(":free")
+        ):
+            raise ValueError(
+                f"LLM_FREE_ONLY guard: OpenRouter model must end with ':free' "
+                f"(got: {self.llm_model!r})"
+            )
+        return self
 
     @model_validator(mode="after")
     def reject_default_secrets_in_non_dev(self) -> "Settings":

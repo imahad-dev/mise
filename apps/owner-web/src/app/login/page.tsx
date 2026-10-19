@@ -130,7 +130,7 @@ export default function LoginPage() {
           <div className="glass-panel p-6 space-y-4">
             <div className="text-center space-y-1">
               <h2 className="text-sm font-bold text-[#F3F8FC]">
-                Judge & Evaluator Quick Access
+                Try the demo
               </h2>
               <p className="text-xs text-[#8FA3B3]">
                 Instant demo sign-in with preloaded restaurant operations

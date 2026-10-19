@@ -1,4 +1,4 @@
-.PHONY: up down reset dev logs build migrate migration seed lint test test-py test-ts smoke smoke-amd gen-client setup ci verify-a verify-b verify-c verify-d verify-e
+.PHONY: up down reset dev logs build migrate migration seed lint test test-py test-ts smoke smoke-llm gen-client setup ci verify-a verify-b verify-c verify-d verify-e
 
 # --- Setup ---
 setup:
@@ -69,8 +69,8 @@ verify-e:
 smoke:
 	docker compose exec -T api python scripts/smoke_inference.py
 
-smoke-amd:
-	docker compose exec -T api python scripts/smoke_amd.py
+smoke-llm:
+	docker compose exec -T api python scripts/smoke_llm.py
 
 # --- Client generation ---
 gen-client:
@@ -82,3 +82,4 @@ ci:
 	$(MAKE) setup
 	$(MAKE) lint
 	$(MAKE) test
+	@bash scripts/check_branding.sh

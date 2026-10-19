@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 #
-# Checkpoint D verification — AI via AMD Token Factory (mock mode)
+# Checkpoint D verification — AI via generic LLM client (mock mode)
 #
 set -euo pipefail
+
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'

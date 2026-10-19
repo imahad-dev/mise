@@ -43,8 +43,8 @@ done
 curl -sf --max-time 5 "$API/health" > /dev/null || fail "API health check"
 pass "API healthy"
 
-# Step 5: curl / (guest-web judge launcher)
-info "Step 5: curl / (guest-web judge launcher)"
+# Step 5: curl / (guest-web demo launcher)
+info "Step 5: curl / (guest-web demo launcher)"
 GUEST_STATUS=""
 for i in $(seq 1 30); do
   GUEST_STATUS=$(curl -s --max-time 10 -o /dev/null -w "%{http_code}" "$GUEST_WEB/" || true)

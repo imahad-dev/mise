@@ -25,6 +25,24 @@ export default function AiSimulatorPage() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<SimulationResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [providerLabel, setProviderLabel] = useState("OpenAI-compatible endpoint");
+
+  React.useEffect(() => {
+    async function loadProviderInfo() {
+      try {
+        const res = await fetch("/api/metrics/inference");
+        if (res.ok) {
+          const data = await res.json();
+          if (data.provider_label) {
+            setProviderLabel(data.provider_label);
+          }
+        }
+      } catch {
+        // Fallback default remains
+      }
+    }
+    loadProviderInfo();
+  }, []);
 
   const runSimulation = async (selectedScenario: string) => {
     setLoading(true);
@@ -56,13 +74,18 @@ export default function AiSimulatorPage() {
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-3xl font-extrabold tracking-tight">
-          AI Scenario <span className="gradient-text">Simulator</span>
-        </h1>
-        <p className="text-xs text-[#8FA3B3] mt-1">
-          Predict table turnover, gross margins, and prep bottlenecks before service begins
-        </p>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-extrabold tracking-tight">
+            AI Scenario <span className="gradient-text">Simulator</span>
+          </h1>
+          <p className="text-xs text-[#8FA3B3] mt-1">
+            Predict table turnover, gross margins, and prep bottlenecks before service begins
+          </p>
+        </div>
+        <div className="chip chip-safe text-xs">
+          ⚡ Provider: {providerLabel}
+        </div>
       </div>
 
       {error && (
@@ -103,9 +126,10 @@ export default function AiSimulatorPage() {
 
       {loading && (
         <div className="glass-panel p-12 text-center text-[#8FA3B3] animate-pulse">
-          Simulating diner traffic, kitchen line throughput, and order mixes with AMD Token Factory...
+          Simulating diner traffic, kitchen line throughput, and order mixes with AI assistant...
         </div>
       )}
+
 
       {/* Results View */}
       {result && !loading && (

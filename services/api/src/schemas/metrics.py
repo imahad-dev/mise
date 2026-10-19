@@ -12,3 +12,4 @@ class InferenceMetricsResponse(BaseModel):
     max_latency_ms: int | None = None
     total_cost_usd: float | None = None
     daily_budget_remaining_usd: float | None = None
+    provider_label: str = "OpenAI-compatible endpoint"

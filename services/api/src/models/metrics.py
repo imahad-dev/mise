@@ -20,7 +20,7 @@ class MetricsSample(Base):
         server_default=text("gen_random_uuid()"),
     )
     model: Mapped[str] = mapped_column(Text, nullable=False)
-    provider: Mapped[str] = mapped_column(String(20), nullable=False, server_default="mock")
+    provider: Mapped[str] = mapped_column(String(50), nullable=False, server_default="mock")
     endpoint: Mapped[str] = mapped_column(String(50), nullable=False)
     tokens_in: Mapped[int] = mapped_column(Integer, nullable=False)
     tokens_out: Mapped[int] = mapped_column(Integer, nullable=False)

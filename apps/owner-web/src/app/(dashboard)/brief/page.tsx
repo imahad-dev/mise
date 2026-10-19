@@ -61,7 +61,7 @@ export default function DailyBriefPage() {
           AI <span className="gradient-text">Daily Operations Brief</span>
         </h1>
         <p className="text-xs text-[#8FA3B3] mt-1">
-          Automated executive summary, demand forecasting, and yield actions powered by AMD Token Factory
+          Automated executive summary, demand forecasting, and yield actions powered by AI assistant
         </p>
       </div>
 

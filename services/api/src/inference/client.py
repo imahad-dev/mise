@@ -1,16 +1,16 @@
 """Inference client — wraps httpx calls to any OpenAI-compatible endpoint.
 
-Hardened for AMD Token Factory:
+Features:
 - Auth header injection (Bearer token from LLM_API_KEY)
 - Startup model probe (GET /models)
 - Model fallback chain
-- Supported-params-only filtering
+- Supported-params-only filtering (configured via LLM_ALLOWED_PARAMS)
 - System message enforcement (exactly one, first position, role='system')
 - Response validation with Pydantic + regex fallback
 - Retry on validation failure (once)
-- Rate limiting (global RPM + per-guest session)
-- Concurrency semaphore (6 concurrent provider calls)
-- 429 Retry-After honour (max 5 s), then 503
+- Rate limiting (global RPM + per-guest session + daily request cap)
+- Concurrency semaphore (configurable per provider preset)
+- 429 Retry-After honour (max 5 s), then 503 ai_unavailable
 - Privacy: API key never logged, never in error payloads
 """
 
@@ -25,33 +25,13 @@ import httpx
 from fastapi import HTTPException, Request, status
 
 from src.config import settings
-from src.inference.rate_limit import check_global_rate_limit
+from src.inference.rate_limit import check_daily_request_cap, check_global_rate_limit
 from src.inference.validation import validate_response
 
 if TYPE_CHECKING:
     from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
-
-# Parameters the AMD Token Factory API actually accepts
-_SUPPORTED_PARAMS = frozenset(
-    {
-        "model",
-        "messages",
-        "max_tokens",
-        "temperature",
-        "top_p",
-        "stream",
-        "tools",
-        "tool_choice",
-        "response_format",
-        "reasoning_effort",
-        "stream_options",
-    }
-)
-
-# Concurrency guard: AMD allows 8 concurrent per key; we use 6 for safety
-_PROVIDER_SEMAPHORE = asyncio.Semaphore(6)
 
 # Maximum Retry-After we honour on a 429 from the provider
 _MAX_RETRY_AFTER_S = 5.0
@@ -100,8 +80,9 @@ def _enforce_system_message(messages: list[dict[str, Any]]) -> list[dict[str, An
 
 
 def _filter_payload(payload: dict[str, Any]) -> dict[str, Any]:
-    """Keep only AMD-supported parameters."""
-    filtered = {k: v for k, v in payload.items() if k in _SUPPORTED_PARAMS}
+    """Keep only configured allowed parameters."""
+    allowed = set(settings.llm_allowed_params)
+    filtered = {k: v for k, v in payload.items() if k in allowed}
 
     # response_format: only json_object is supported (never json_schema)
     rf = filtered.get("response_format")
@@ -131,6 +112,7 @@ class InferenceClient:
             headers=headers,
         )
         self._available_models: set[str] = set()
+        self._semaphore = asyncio.Semaphore(settings.llm_concurrency_limit)
 
     async def probe_models(self) -> set[str]:
         """GET /models at startup; log availability; populate fallback info."""
@@ -143,8 +125,12 @@ class InferenceClient:
                 ids = {m["id"] for m in data if "id" in m}
                 available.update(ids)
                 logger.info("[%s] Available models: %s", label, sorted(ids))
-            except Exception:
-                logger.warning("[%s] Model probe failed — will use mock defaults", label)
+            except Exception as exc:
+                logger.warning(
+                    "[%s] Model probe failed or not supported by provider: %s",
+                    label,
+                    exc,
+                )
 
         self._available_models = available
 
@@ -195,6 +181,7 @@ class InferenceClient:
         Retries once on validation failure.
         """
         await check_global_rate_limit()
+        await check_daily_request_cap()
 
         resolved_model = self._resolve_model(
             model or settings.llm_model,
@@ -251,6 +238,7 @@ class InferenceClient:
     ) -> tuple[dict[str, Any], dict[str, Any]]:
         """Send a vision request with image parts. Returns (parsed_or_body, metrics)."""
         await check_global_rate_limit()
+        await check_daily_request_cap()
 
         resolved_model = self._resolve_model(
             model or settings.vlm_model,
@@ -299,7 +287,7 @@ class InferenceClient:
         model: str,
     ) -> tuple[dict[str, Any], dict[str, Any]]:
         """Low-level POST to /chat/completions with semaphore, 429 retry, and timing."""
-        async with _PROVIDER_SEMAPHORE:
+        async with self._semaphore:
             start = time.monotonic()
             try:
                 resp = await client.post("/chat/completions", json=payload)
