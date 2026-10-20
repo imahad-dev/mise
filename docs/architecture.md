@@ -260,7 +260,9 @@ The client address comes from the TCP peer. Only when the peer is inside `TRUSTE
 trusted proxy, because hops further left were written by the client. Next.js rewrites only set
 `X-Forwarded-For` when the browser did not send one, so behind the Next.js proxy alone a client
 can still choose its own address; put a proxy that appends the real peer (Caddy, a tunnel) in
-front for public deployments. If Redis is unreachable the limits fail open and log a warning.
+front for public deployments. Locally, traffic through published Docker ports arrives from
+the bridge gateway (e.g. `172.18.0.1`), so all local visitors share one bucket. If Redis is
+unreachable the limits fail open and log a warning.
 
 ### Free-Only Policy & Rate Limits
 - Non-local inference calls enforce a Redis-backed daily ceiling (`LLM_DAILY_REQUEST_CAP`, default 200) keyed by UTC day (`mise:llm:daily_cap:YYYY-MM-DD`).
