@@ -69,7 +69,7 @@ verify-e:
 	@bash scripts/verify_e.sh
 
 verify-f:
-	@bash scripts/verify_f.sh
+	@bash scripts/verify_phase1.sh
 
 # --- Inference ---
 smoke:
