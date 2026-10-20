@@ -292,4 +292,4 @@ LLM_PROVIDER=mock DEMO_MODE=true make verify-f
 
 ## License
 
-MIT © 2026 <YOUR NAME>
+MIT © 2026 imahad-dev
