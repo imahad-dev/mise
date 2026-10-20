@@ -24,6 +24,21 @@ STAFF_JAR=""
 GUEST_JAR=""
 trap 'rm -f "$COOKIE_JAR" "$OWNER_JAR" "$STAFF_JAR" "$GUEST_JAR"' EXIT
 
+# Log in as owner or staff into a cookie jar. DEMO_MODE=true uses demo-login (no secrets);
+# otherwise the real login with OWNER_API_KEY / STAFF_PIN from the shell (compose defaults).
+auth_login() { # auth_login <owner|staff> <cookie jar>
+  if [ "${DEMO_MODE:-false}" = "true" ]; then
+    curl -sf --max-time 5 -X POST "$API/api/auth/demo-login" \
+      -H "Content-Type: application/json" -d "{\"role\":\"$1\"}" -c "$2" > /dev/null
+  else
+    local secret="${STAFF_PIN:-0000}"
+    [ "$1" = "owner" ] && secret="${OWNER_API_KEY:-change_me_in_production}"
+    curl -sf --max-time 5 -X POST "$API/api/auth/login" \
+      -H "Content-Type: application/json" \
+      -d "{\"role\":\"$1\",\"secret\":\"$secret\"}" -c "$2" > /dev/null
+  fi
+}
+
 # ─── Setup ───────────────────────────────────────────────────────────
 info "Step 1: make ci"
 make ci || fail "make ci failed"
@@ -59,10 +74,7 @@ pass "API healthy"
 # ─── Owner login ────────────────────────────────────────────────────
 info "Step 7: owner login"
 COOKIE_JAR=$(mktemp)
-curl -sf --max-time 5 -X POST "$API/api/auth/login" \
-  -H "Content-Type: application/json" \
-  -d '{"api_key":"change_me_in_production"}' \
-  -c "$COOKIE_JAR" > /dev/null || fail "owner login"
+auth_login owner "$COOKIE_JAR" || fail "owner login"
 pass "owner login"
 
 # ─── Owner login through owner-web: GET / returns 200 ───────────────
@@ -80,10 +92,7 @@ pass "owner-web / returns 200 (no redirect loop)"
 # ─── Staff login through owner-web: GET /kitchen returns 200 ────────
 info "Step 7c: staff login → /kitchen returns 200"
 STAFF_JAR=$(mktemp)
-curl -sf --max-time 5 -X POST "$API/api/auth/staff-login" \
-  -H "Content-Type: application/json" \
-  -d '{"pin":"0000"}' \
-  -c "$STAFF_JAR" > /dev/null || fail "staff login"
+auth_login staff "$STAFF_JAR" || fail "staff login"
 KITCHEN_STATUS=$(curl -s --max-time 10 -o /dev/null -w "%{http_code}" \
   -b "$STAFF_JAR" "$OWNER_WEB/kitchen" || true)
 [ "$KITCHEN_STATUS" = "200" ] || fail "owner-web /kitchen returned $KITCHEN_STATUS (expected 200)"
@@ -122,11 +131,11 @@ SIM_RESP=$(curl -sf --max-time 15 -X POST \
   "$API/api/restaurants/$SLUG/ai/simulate" \
   -b "$COOKIE_JAR" \
   -H "Content-Type: application/json" \
-  -d '{"scenario":"weekend_rush"}' \
-  2>/dev/null) || fail "simulate endpoint"
-echo "$SIM_RESP" | python3 -c "import sys,json; d=json.load(sys.stdin); assert 'scenario' in d" \
-  || fail "simulate response validation"
-pass "simulate"
+  -d '{"scenario":"demand_surge","multiplier":1.2}' \
+  2>/dev/null) || fail "simulate (what-if) endpoint"
+echo "$SIM_RESP" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['scenario'] == 'demand_surge' and 'delta' in d and d['assumptions']" \
+  || fail "simulate (what-if) response validation"
+pass "simulate (what-if)"
 
 # ─── Guest Chat ─────────────────────────────────────────────────────
 info "Step 12: create guest session + POST /chat"
