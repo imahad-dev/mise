@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo
 
 import numpy as np
-from sqlalchemy import delete, select
+from sqlalchemy import delete, exists, select
 from sqlalchemy.orm import selectinload
 
 from src.models.audit import AuditLog
@@ -142,7 +142,13 @@ async def clear_simulated(db: AsyncSession, restaurant_id: uuid.UUID) -> None:
         delete(Order).where(Order.restaurant_id == restaurant_id, Order.source == "simulated")
     )
     if sess_ids:
-        await db.execute(delete(GuestSession).where(GuestSession.id.in_(sess_ids)))
+        # Only sessions left without any order: a session that also holds a live order stays.
+        await db.execute(
+            delete(GuestSession).where(
+                GuestSession.id.in_(sess_ids),
+                ~exists().where(Order.guest_session_id == GuestSession.id),
+            )
+        )
     await db.execute(
         delete(AuditLog).where(
             AuditLog.restaurant_id == restaurant_id,

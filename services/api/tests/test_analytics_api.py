@@ -254,3 +254,95 @@ async def test_health_stays_responsive_while_forecast_recomputes(
     assert health.status_code == 200
     assert brief_resp.status_code == 200, brief_resp.text
     assert health_latency < 0.75, f"/health finished {health_latency:.2f}s after forecast start"
+
+
+@pytest.mark.asyncio
+@pytest.mark.timeout(120)
+async def test_generate_demo_data_keeps_live_orders(
+    client: AsyncClient, db_session: AsyncSession, seeded_restaurant: Restaurant
+):
+    """Live orders, their items and their guest session survive; simulated rows are replaced."""
+    import uuid
+    from datetime import UTC, datetime, timedelta
+
+    from src.auth import GUEST_COOKIE_NAME
+    from src.models.menu import MenuItem
+    from src.models.order import OrderItem
+    from src.models.session import GuestSession
+
+    slug = seeded_restaurant.slug
+    guest = GuestSession(
+        restaurant_id=seeded_restaurant.id,
+        language="en",
+        expires_at=datetime.now(UTC) + timedelta(hours=2),
+    )
+    db_session.add(guest)
+    await db_session.flush()
+    item_ids = list(
+        (
+            await db_session.execute(
+                select(MenuItem.id).where(MenuItem.restaurant_id == seeded_restaurant.id).limit(2)
+            )
+        ).scalars()
+    )
+    client.cookies.set(GUEST_COOKIE_NAME, sign_value(str(guest.id)))
+    placed = await client.post(
+        "/api/orders",
+        json={
+            "idempotency_key": str(uuid.uuid4()),
+            "items": [{"menu_item_id": str(i), "quantity": 2} for i in item_ids],
+            "acknowledge_allergen_risk": True,
+        },
+    )
+    assert placed.status_code == 201, placed.text
+    live_id = uuid.UUID(placed.json()["id"])
+
+    async def snapshot():
+        live = (
+            await db_session.execute(select(Order.source).where(Order.id == live_id))
+        ).scalar_one_or_none()
+        live_items = (
+            await db_session.execute(
+                select(func.count()).select_from(OrderItem).where(OrderItem.order_id == live_id)
+            )
+        ).scalar_one()
+        session_alive = (
+            await db_session.execute(select(GuestSession.id).where(GuestSession.id == guest.id))
+        ).scalar_one_or_none() is not None
+        simulated = set(
+            (
+                await db_session.execute(
+                    select(Order.id).where(
+                        Order.restaurant_id == seeded_restaurant.id, Order.source == "simulated"
+                    )
+                )
+            ).scalars()
+        )
+        return live, live_items, session_alive, simulated
+
+    # A simulated-source order sharing the live session must not take the session with it.
+    db_session.add(
+        Order(
+            guest_session_id=guest.id,
+            restaurant_id=seeded_restaurant.id,
+            status="bumped",
+            source="simulated",
+            total=0,
+            idempotency_key="sim-shared-session",
+            payload_hash="x",
+            bumped_at=datetime.now(UTC),
+        )
+    )
+    await db_session.flush()
+
+    _as_owner(client)
+    n1 = (await _simulate(client, slug, days=14, seed=1))["orders_created"]
+    live, live_items, session_alive, sim_first = await snapshot()
+    assert (live, live_items, session_alive) == ("live", 2, True)
+    assert len(sim_first) == n1
+
+    n2 = (await _simulate(client, slug, days=14, seed=2))["orders_created"]
+    live, live_items, session_alive, sim_second = await snapshot()
+    assert (live, live_items, session_alive) == ("live", 2, True)
+    assert len(sim_second) == n2
+    assert not sim_first & sim_second  # every simulated order was replaced
