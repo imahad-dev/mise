@@ -77,7 +77,16 @@ class GuestMenuItemResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True, extra="forbid")
 
 
+class GuestMenuRestaurant(BaseModel):
+    id: uuid.UUID
+    name: str
+    currency: str
+
+
 class GuestMenuResponse(BaseModel):
+    restaurant: GuestMenuRestaurant
+    table_id: uuid.UUID | None = None
+    table_label: str | None = None
     items: list[GuestMenuItemResponse]
 
 

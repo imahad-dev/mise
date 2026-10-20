@@ -1356,6 +1356,9 @@
           "404": {
             "description": "Demo mode disabled or restaurant not found"
           },
+          "429": {
+            "description": "Demo limit reached (max 3 per hour per IP)"
+          },
           "422": {
             "description": "Validation Error",
             "content": {
@@ -2099,6 +2102,32 @@
       },
       "GuestMenuResponse": {
         "properties": {
+          "restaurant": {
+            "$ref": "#/components/schemas/GuestMenuRestaurant"
+          },
+          "table_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Table Id"
+          },
+          "table_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Table Label"
+          },
           "items": {
             "items": {
               "$ref": "#/components/schemas/GuestMenuItemResponse"
@@ -2109,9 +2138,34 @@
         },
         "type": "object",
         "required": [
+          "restaurant",
           "items"
         ],
         "title": "GuestMenuResponse"
+      },
+      "GuestMenuRestaurant": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "currency": {
+            "type": "string",
+            "title": "Currency"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "currency"
+        ],
+        "title": "GuestMenuRestaurant"
       },
       "GuestSessionResponse": {
         "properties": {
