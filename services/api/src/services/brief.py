@@ -10,6 +10,7 @@ Action formulas (all weekly, documented in docs/analytics.md):
 
 from __future__ import annotations
 
+import asyncio
 import math
 import uuid
 from datetime import date, datetime, timedelta
@@ -89,7 +90,8 @@ async def get_or_run_forecast(
             rows, await analytics.promotions(db, restaurant.id), first, w.end - timedelta(days=1)
         )
         params["history_start"] = first.isoformat()
-        result = forecast(fi)
+        # Model fitting is CPU-bound; run it off the event loop so other requests keep flowing.
+        result = await asyncio.to_thread(forecast, fi)
     else:
         result = forecast(build_input([], [], w.start, w.start))
 

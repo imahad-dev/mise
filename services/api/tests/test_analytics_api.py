@@ -215,3 +215,42 @@ async def test_regenerating_demo_data_drops_stale_forecast(
     with patch.object(settings, "demo_mode", False):
         second = (await client.get(f"/api/restaurants/{slug}/ai/brief")).json()
     assert second["forecast"]["run_id"] != first["forecast"]["run_id"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.timeout(120)
+async def test_health_stays_responsive_while_forecast_recomputes(
+    client: AsyncClient, seeded_restaurant: Restaurant
+):
+    """A slow forecast (CPU-bound in production) must not block other requests."""
+    import asyncio
+    import time as clock
+
+    from src.services import brief as brief_module
+
+    slug = seeded_restaurant.slug
+    _as_owner(client)
+    await _simulate(client, slug, days=28)
+
+    real_forecast = brief_module.forecast
+    started: list[float] = []
+
+    def slow_forecast(fi):
+        started.append(clock.monotonic())
+        clock.sleep(1.5)  # blocks whatever thread runs it, like model fitting does
+        return real_forecast(fi)
+
+    with (
+        patch.object(brief_module, "forecast", slow_forecast),
+        patch.object(settings, "demo_mode", False),
+    ):
+        brief_task = asyncio.create_task(client.get(f"/api/restaurants/{slug}/ai/brief"))
+        while not started:  # if the forecast blocked the loop, this resumes only after it
+            await asyncio.sleep(0.01)
+        health = await client.get("/health")
+        health_latency = clock.monotonic() - started[0]
+        brief_resp = await brief_task
+
+    assert health.status_code == 200
+    assert brief_resp.status_code == 200, brief_resp.text
+    assert health_latency < 0.75, f"/health finished {health_latency:.2f}s after forecast start"
