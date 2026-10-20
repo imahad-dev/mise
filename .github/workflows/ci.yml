@@ -61,9 +61,8 @@ jobs:
         run: uv python install 3.11
 
       - name: Install pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v4  # version comes from packageManager in package.json
         with:
-          version: 9
           run_install: false
 
       - name: Set up Node 22
@@ -77,7 +76,7 @@ jobs:
 
       - name: Install Python dependencies
         run: |
-          uv sync --project services/api --extra dev
+          uv sync --project services/api --group dev
           uv sync --project services/inference/mock --extra dev
 
       - name: Lint Python
@@ -88,10 +87,19 @@ jobs:
       - name: Lint Frontend
         run: pnpm -r lint
 
-      - name: Run Python migrations & tests
+      - name: Run Python migrations & drift check
+        # alembic.ini paths (script_location, prepend_sys_path) are relative to services/api
+        working-directory: services/api
         run: |
-          uv run --project services/api alembic -c services/api/alembic.ini upgrade head
-          uv run --project services/api pytest -v services/api/tests
+          uv run alembic upgrade head
+          # Fail on drift between SQLAlchemy models and migrations
+          uv run alembic check
+
+      - name: Run Python tests
+        env:
+          POSTGRES_DB: mise_test  # conftest refuses databases not ending in _test
+          PYTHONPATH: ${{ github.workspace }}  # tests import scripts.seed from the repo root
+        run: uv run --project services/api pytest -v services/api/tests
 
       - name: Run Frontend tests
         run: pnpm -r test

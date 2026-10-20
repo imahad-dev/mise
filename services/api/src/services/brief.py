@@ -10,6 +10,7 @@ Action formulas (all weekly, documented in docs/analytics.md):
 
 from __future__ import annotations
 
+import asyncio
 import math
 import uuid
 from datetime import date, datetime, timedelta
@@ -56,6 +57,26 @@ def local_today(restaurant: Restaurant) -> date:
     return datetime.now(ZoneInfo(restaurant.timezone)).date()
 
 
+async def current_prices(
+    db: AsyncSession, restaurant: Restaurant
+) -> dict[str, tuple[float, float]]:
+    """Current menu (price, unit_cost) per item id."""
+    rows = await db.execute(
+        select(MenuItem.id, MenuItem.price, MenuItem.unit_cost).where(
+            MenuItem.restaurant_id == restaurant.id
+        )
+    )
+    return {str(i): (float(p), float(c)) for i, p, c in rows.all()}
+
+
+def baseline_for(item_id: str, name: str, totals: dict, price: float, cost: float) -> ItemBaseline:
+    """What-if baseline: recent weekly units at the current menu price and cost.
+
+    Shared by the brief's reprice action and the what-if endpoint so both agree.
+    """
+    return ItemBaseline(item_id, name, totals["weekly_units"], price, cost)
+
+
 async def get_or_run_forecast(
     db: AsyncSession, restaurant: Restaurant, today: date
 ) -> tuple[dict, uuid.UUID]:
@@ -89,7 +110,8 @@ async def get_or_run_forecast(
             rows, await analytics.promotions(db, restaurant.id), first, w.end - timedelta(days=1)
         )
         params["history_start"] = first.isoformat()
-        result = forecast(fi)
+        # Model fitting is CPU-bound; run it off the event loop so other requests keep flowing.
+        result = await asyncio.to_thread(forecast, fi)
     else:
         result = forecast(build_input([], [], w.start, w.start))
 
@@ -112,6 +134,7 @@ def build_actions(
     thresholds: dict,
     fc: dict,
     names: dict[str, str],
+    prices: dict[str, tuple[float, float]],
 ) -> list[dict]:
     """3-5 ranked actions with evidence and an estimated weekly impact (see module docstring)."""
 
@@ -143,10 +166,11 @@ def build_actions(
             }
         )
 
-    for i in sorted(by_class["plowhorse"], key=lambda i: -totals[i]["units"])[:2]:
+    plowhorses = [i for i in by_class["plowhorse"] if i in prices]  # deleted items: skip
+    for i in sorted(plowhorses, key=lambda i: -totals[i]["units"])[:2]:
         t = totals[i]
-        price = t["revenue"] / t["units"]
-        base = ItemBaseline(i, name(i), t["weekly_units"], price, price - t["unit_margin"])
+        price, cost = prices[i]
+        base = baseline_for(i, name(i), t, price, cost)
         wi = run_whatif("price_change", [base], {"item_id": i, "change_pct": REPRICE_PCT})
         money.append(
             {
@@ -156,8 +180,8 @@ def build_actions(
                 "title": f"Raise the price of {name(i)} by {REPRICE_PCT}%",
                 "evidence": {
                     "weekly_units": t["weekly_units"],
-                    "avg_price_eur": round(price, 2),
-                    "unit_margin_eur": t["unit_margin"],
+                    "price_eur": round(price, 2),
+                    "unit_cost_eur": round(cost, 2),
                     "median_unit_margin_eur": thresholds["median_unit_margin_eur"],
                 },
                 "estimated_impact_eur_per_week": wi["delta"]["margin_eur"],
@@ -265,7 +289,9 @@ async def compute_brief(
     fc, run_id = await get_or_run_forecast(db, restaurant, today)
     await db.commit()
 
-    actions = build_actions(totals, classes, thresholds, fc, names)
+    actions = build_actions(
+        totals, classes, thresholds, fc, names, await current_prices(db, restaurant)
+    )
     backtest = (fc.get("backtest") or {}).get("methods", {})
     facts = {
         "restaurant": restaurant.name,
@@ -347,18 +373,9 @@ async def compute_whatif(
     names = await item_names(db, restaurant)
     sources = await analytics.order_counts_by_source(db, w)
     totals = analytics.item_totals(await analytics.daily_item_sales(db, w), w.days / 7)
-    menu = {
-        str(m.id): m
-        for m in (
-            await db.execute(select(MenuItem).where(MenuItem.restaurant_id == restaurant.id))
-        ).scalars()
-    }
+    prices = await current_prices(db, restaurant)
     baselines = [
-        ItemBaseline(
-            i, names.get(i, ""), t["weekly_units"], float(menu[i].price), float(menu[i].unit_cost)
-        )
-        for i, t in totals.items()
-        if i in menu
+        baseline_for(i, names.get(i, ""), t, *prices[i]) for i, t in totals.items() if i in prices
     ]
     result = run_whatif(scenario, baselines, params)
     d = result["delta"]

@@ -14,6 +14,7 @@ from src.config import settings
 from src.models.forecast import ForecastRun
 from src.models.order import Order
 from src.models.restaurant import Restaurant
+from src.redis_client import redis_client
 
 
 @pytest.fixture
@@ -24,6 +25,15 @@ async def seeded_restaurant(db_session: AsyncSession) -> Restaurant:
         select(Restaurant).where(Restaurant.slug == "trattoria-da-mario")
     )
     return res.scalar_one()
+
+
+@pytest.fixture(autouse=True)
+async def _reset_simulate_rate_limit():
+    """Each test starts with a fresh demo:simulate bucket for the test client's IP."""
+    key = "rate_limit:demo:simulate:127.0.0.1"
+    await redis_client.delete(key)
+    yield
+    await redis_client.delete(key)
 
 
 def _as_owner(client: AsyncClient) -> None:
@@ -178,3 +188,161 @@ async def test_whatif_unknown_item_returns_422(client: AsyncClient, seeded_resta
         },
     )
     assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
+@pytest.mark.timeout(120)
+async def test_regenerating_demo_data_drops_stale_forecast(
+    client: AsyncClient, db_session: AsyncSession, seeded_restaurant: Restaurant
+):
+    slug = seeded_restaurant.slug
+    _as_owner(client)
+
+    await _simulate(client, slug, days=28, seed=1)
+    with patch.object(settings, "demo_mode", False):
+        first = (await client.get(f"/api/restaurants/{slug}/ai/brief")).json()
+
+    await _simulate(client, slug, days=28, seed=2)
+    runs = (
+        await db_session.execute(
+            select(func.count())
+            .select_from(ForecastRun)
+            .where(ForecastRun.restaurant_id == seeded_restaurant.id)
+        )
+    ).scalar_one()
+    assert runs == 0
+
+    with patch.object(settings, "demo_mode", False):
+        second = (await client.get(f"/api/restaurants/{slug}/ai/brief")).json()
+    assert second["forecast"]["run_id"] != first["forecast"]["run_id"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.timeout(120)
+async def test_health_stays_responsive_while_forecast_recomputes(
+    client: AsyncClient, seeded_restaurant: Restaurant
+):
+    """A slow forecast (CPU-bound in production) must not block other requests."""
+    import asyncio
+    import time as clock
+
+    from src.services import brief as brief_module
+
+    slug = seeded_restaurant.slug
+    _as_owner(client)
+    await _simulate(client, slug, days=28)
+
+    real_forecast = brief_module.forecast
+    started: list[float] = []
+
+    def slow_forecast(fi):
+        started.append(clock.monotonic())
+        clock.sleep(1.5)  # blocks whatever thread runs it, like model fitting does
+        return real_forecast(fi)
+
+    with (
+        patch.object(brief_module, "forecast", slow_forecast),
+        patch.object(settings, "demo_mode", False),
+    ):
+        brief_task = asyncio.create_task(client.get(f"/api/restaurants/{slug}/ai/brief"))
+        while not started:  # if the forecast blocked the loop, this resumes only after it
+            await asyncio.sleep(0.01)
+        health = await client.get("/health")
+        health_latency = clock.monotonic() - started[0]
+        brief_resp = await brief_task
+
+    assert health.status_code == 200
+    assert brief_resp.status_code == 200, brief_resp.text
+    assert health_latency < 0.75, f"/health finished {health_latency:.2f}s after forecast start"
+
+
+@pytest.mark.asyncio
+@pytest.mark.timeout(120)
+async def test_generate_demo_data_keeps_live_orders(
+    client: AsyncClient, db_session: AsyncSession, seeded_restaurant: Restaurant
+):
+    """Live orders, their items and their guest session survive; simulated rows are replaced."""
+    import uuid
+    from datetime import UTC, datetime, timedelta
+
+    from src.auth import GUEST_COOKIE_NAME
+    from src.models.menu import MenuItem
+    from src.models.order import OrderItem
+    from src.models.session import GuestSession
+
+    slug = seeded_restaurant.slug
+    guest = GuestSession(
+        restaurant_id=seeded_restaurant.id,
+        language="en",
+        expires_at=datetime.now(UTC) + timedelta(hours=2),
+    )
+    db_session.add(guest)
+    await db_session.flush()
+    item_ids = list(
+        (
+            await db_session.execute(
+                select(MenuItem.id).where(MenuItem.restaurant_id == seeded_restaurant.id).limit(2)
+            )
+        ).scalars()
+    )
+    client.cookies.set(GUEST_COOKIE_NAME, sign_value(str(guest.id)))
+    placed = await client.post(
+        "/api/orders",
+        json={
+            "idempotency_key": str(uuid.uuid4()),
+            "items": [{"menu_item_id": str(i), "quantity": 2} for i in item_ids],
+            "acknowledge_allergen_risk": True,
+        },
+    )
+    assert placed.status_code == 201, placed.text
+    live_id = uuid.UUID(placed.json()["id"])
+
+    async def snapshot():
+        live = (
+            await db_session.execute(select(Order.source).where(Order.id == live_id))
+        ).scalar_one_or_none()
+        live_items = (
+            await db_session.execute(
+                select(func.count()).select_from(OrderItem).where(OrderItem.order_id == live_id)
+            )
+        ).scalar_one()
+        session_alive = (
+            await db_session.execute(select(GuestSession.id).where(GuestSession.id == guest.id))
+        ).scalar_one_or_none() is not None
+        simulated = set(
+            (
+                await db_session.execute(
+                    select(Order.id).where(
+                        Order.restaurant_id == seeded_restaurant.id, Order.source == "simulated"
+                    )
+                )
+            ).scalars()
+        )
+        return live, live_items, session_alive, simulated
+
+    # A simulated-source order sharing the live session must not take the session with it.
+    db_session.add(
+        Order(
+            guest_session_id=guest.id,
+            restaurant_id=seeded_restaurant.id,
+            status="bumped",
+            source="simulated",
+            total=0,
+            idempotency_key="sim-shared-session",
+            payload_hash="x",
+            bumped_at=datetime.now(UTC),
+        )
+    )
+    await db_session.flush()
+
+    _as_owner(client)
+    n1 = (await _simulate(client, slug, days=14, seed=1))["orders_created"]
+    live, live_items, session_alive, sim_first = await snapshot()
+    assert (live, live_items, session_alive) == ("live", 2, True)
+    assert len(sim_first) == n1
+
+    n2 = (await _simulate(client, slug, days=14, seed=2))["orders_created"]
+    live, live_items, session_alive, sim_second = await snapshot()
+    assert (live, live_items, session_alive) == ("live", 2, True)
+    assert len(sim_second) == n2
+    assert not sim_first & sim_second  # every simulated order was replaced

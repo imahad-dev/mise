@@ -187,15 +187,16 @@ export default function HomePage() {
             </div>
 
             <div className="lg:col-span-5 relative aspect-[16/10] sm:aspect-[4/3] rounded-2xl overflow-hidden border border-[#38BDF8]/20 shadow-2xl">
-              <Image
-                src="/brand/cover.jpg"
-                alt="Mise Restaurant Atmosphere"
-                fill
-                priority
-                className="object-cover"
-                sizes="(max-width: 1024px) 100vw, 40vw"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-[#070B10]/80 via-transparent to-transparent" />
+              <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-[#0D141B] via-[#070B10] to-[#0D141B]">
+                <Image
+                  src="/brand/logo-mark.svg"
+                  alt="Mise logo"
+                  width={160}
+                  height={160}
+                  priority
+                  className="opacity-90"
+                />
+              </div>
             </div>
           </div>
         </section>

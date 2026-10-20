@@ -744,6 +744,7 @@ async def test_owner_patch_resets_verified_flags_and_audit(
     )
     item = res.scalars().first()
     assert item is not None
+    was_gluten_free = item.is_gluten_free
 
     # 1. Edit allergens -> resets allergen_verified
     r_patch_all = await client.patch(
@@ -763,10 +764,11 @@ async def test_owner_patch_resets_verified_flags_and_audit(
     )
     assert res_aud1.scalars().first() is not None
 
-    # 2. Edit dietary -> resets dietary_verified
+    # 2. Edit dietary -> resets dietary_verified. Toggle a flag so it is a real change for
+    # whichever item was picked (allergens are now ["sesame"], so gluten-free is valid either way).
     r_patch_diet = await client.patch(
         f"/api/restaurants/{slug}/menu-items/{item.id}",
-        json={"is_vegan": False},
+        json={"is_gluten_free": not was_gluten_free},
     )
     assert r_patch_diet.status_code == 200
     assert r_patch_diet.json()["dietary_verified"] is False

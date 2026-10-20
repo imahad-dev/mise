@@ -94,11 +94,14 @@ guaranteed coverage.
 | Action | Picked | Estimated impact per week |
 |---|---|---|
 | Promote puzzle | top 2 puzzles by unit margin | 0.20 × weekly units × unit margin (assumes featuring lifts units 20%) |
-| Reprice plowhorse | top 2 plowhorses by units | what-if price change +5% at elasticity −0.8 (margin delta) |
+| Reprice plowhorse | top 2 plowhorses by units | what-if price change +5% at elasticity −0.8 on the current menu price and cost (margin delta; same baseline as the What-if page) |
 | Review dog | dog with the lowest contribution | weekly units × (median unit margin − unit margin) |
 | Prep targets | top 3 items by forecast for the next day | none; prep = ceil(Σ dayparts upper interval bound) |
 
 Weekly units = units in the window / 4. Each action lists its evidence numbers and formula.
+
+In DEMO_MODE the brief response is cached in Redis for 10 minutes; generating demo data clears
+that cache. Recomputing a forecast runs in a worker thread so other requests are not blocked.
 
 ## Summary text and the numbers guard
 
@@ -131,7 +134,10 @@ The model may write an explanation under the same numbers guard; otherwise a tem
 
 `make simulate` (or `POST /api/restaurants/{slug}/demo/simulate-orders`, owner only, DEMO_MODE
 only, or the **Generate demo data** button) replaces the restaurant's simulated orders with a
-seeded synthetic history ending yesterday. Live orders are never touched. Orders go through the
+seeded synthetic history ending yesterday. Live orders are never touched. It is limited to 3
+runs per hour per client IP, and concurrent runs for one restaurant are serialized by a row
+lock (`FOR NO KEY UPDATE` on the restaurant), so two simultaneous requests end with the data of
+one run. Orders go through the
 same snapshot code as live orders, are stored as `status='bumped'` (so they never appear on the
 kitchen display) and `source='simulated'`, under one synthetic expired guest session with no
 allergen or dietary data.

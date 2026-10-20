@@ -1,12 +1,14 @@
-# Caddy — SSE proxy fallback
+# Caddy — edge proxy (client address) and SSE proxy fallback
 #
-# Enable this if Next.js rewrite proxy buffers SSE responses.
-# In docker-compose.yml, uncomment the caddy service and route
-# guest-web/owner-web through Caddy instead of directly exposing them.
+# 1. Client address: Caddy ignores X-Forwarded-For sent by clients (no trusted_proxies set)
+#    and sets it to the real peer address. The API trusts X-Forwarded-For only from
+#    TRUSTED_PROXY_CIDRS, so per-IP rate limits cannot be spoofed behind Caddy.
+# 2. SSE: streams are proxied with flush_interval -1 so events are not buffered.
 #
 # Usage:
-#   1. Uncomment caddy service in docker-compose.yml
-#   2. Point browser to localhost:8080 (guest) or localhost:8081 (owner)
+#   docker compose --profile edge up -d
+#   Guest app: localhost:8080, owner app: localhost:8081
+#   For public deployments expose only 8080/8081.
 #
 # See docs/decisions.md for rationale.
 

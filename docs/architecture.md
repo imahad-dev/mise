@@ -244,6 +244,28 @@ To guarantee zero hallucinations in dietary safety, allergen checks are complete
 2. **`mise_auth`**: Signed httpOnly cookie carrying the `owner` or `staff` role and expiry (8 hours). `SameSite=Lax`.
 Both cookies are signed server-side using HMAC-SHA256 with `API_SECRET_KEY`, and `Secure` outside `APP_ENV=dev`.
 
+### Per-IP Rate Limits and Client Address
+Per-IP limits (Redis fixed windows, `services/api/src/request_limits.py`):
+
+| Endpoint | Limit |
+|---|---|
+| `POST /api/auth/login` | 5 failed attempts per 5 minutes |
+| `POST /api/auth/demo-login` | 20 per minute |
+| `POST /api/restaurants/{slug}/menu-items/ingest` (DEMO_MODE) | 3 per hour |
+| `POST /api/restaurants/{slug}/demo/simulate-orders` | 3 per hour |
+
+The client address comes from the TCP peer. Only when the peer is inside `TRUSTED_PROXY_CIDRS`
+(JSON list, default `["172.16.0.0/12"]`, the Docker bridge networks the Next.js apps run on) is
+`X-Forwarded-For` used: the API walks it from the right and takes the first hop that is not a
+trusted proxy, because hops further left were written by the client. Next.js rewrites only set
+`X-Forwarded-For` when the browser did not send one, so behind the Next.js apps alone (ports
+3000/3001) a client can choose its own address. For public deployments run the edge proxy,
+`docker compose --profile edge up -d`, and expose only its ports (8080 guest, 8081 owner):
+Caddy discards client-sent `X-Forwarded-For` and sets the real peer address, which
+`make verify-f` checks. Locally, traffic through published Docker ports arrives from the bridge
+gateway (e.g. `172.18.0.1`), so all local visitors share one bucket. If Redis is
+unreachable the limits fail open and log a warning.
+
 ### Free-Only Policy & Rate Limits
 - Non-local inference calls enforce a Redis-backed daily ceiling (`LLM_DAILY_REQUEST_CAP`, default 200) keyed by UTC day (`mise:llm:daily_cap:YYYY-MM-DD`).
 - When the daily cap or a provider 429 rate limit is reached, the backend cleanly returns HTTP `503` with `detail: "ai_unavailable"`. The revenue brief and what-if never fail on this: they fall back to a template summary.

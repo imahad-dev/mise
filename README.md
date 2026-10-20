@@ -26,7 +26,7 @@ Mise is an ordering, kitchen and revenue analytics platform for independent rest
   - 7-day forecast per item and daypart (lunch/dinner): seasonal-naive and 4-week-mean baselines plus a gradient-boosting model, compared in a 14-day rolling-origin backtest; the lowest-WAPE method is used and its WAPE is shown next to the naive baseline. Under 14 days of history it uses the baseline and is flagged low confidence. No weather, holidays or reservations are modeled.
   - 3 to 5 ranked actions (promote puzzles, reprice plowhorses, review dogs, prep targets) with evidence numbers and estimated weekly impact from documented formulas.
   - What-if calculator (`/ai`): price change, promotion or demand surge on recent sales with stated elasticity assumptions; returns weekly revenue and margin deltas. Cannibalization, capacity and staffing are not modeled.
-  - Simulated demo data (`make simulate` or the **Generate demo data** button in DEMO_MODE), always stored as `source='simulated'` and labeled in the UI.
+  - Simulated demo data (`make simulate` or the **Generate demo data** button in DEMO_MODE, limited to 3 runs per hour per client IP), always stored as `source='simulated'` and labeled in the UI. Regenerating replaces the previous simulated orders and stored forecasts; live orders are never touched.
   - Visual Menu Ingestion (VLM) for digitizing paper menus from photo URLs into structured catalog items.
   - Table management and QR code generator.
   - Methods, assumptions and limits: [docs/analytics.md](docs/analytics.md).
@@ -147,7 +147,9 @@ make simulate
 | `STAFF_PIN` | `0000` | 4-digit PIN for kitchen staff terminal authentication. |
 | `POSTGRES_HOST` / `POSTGRES_DB` | `postgres` / `mise` | PostgreSQL connection coordinates. |
 | `REDIS_URL` | `redis://redis:6379/0` | Redis connection URL for pub/sub and rate limiting. |
-| `LLM_PROVIDER` | `mock` | `mock` (internal fast mock server) or `openai_compatible`. |
+| `LLM_PROVIDER` | `mock` | `mock` (internal fast mock server) or `openai_compatible`. `mock` is a hard switch: both base URLs are replaced by `MOCK_BASE_URL`, so a real URL left in `.env` is never called. |
+| `MOCK_BASE_URL` | `http://inference:8080/v1` | Mock server URL used when `LLM_PROVIDER=mock`. |
+| `TRUSTED_PROXY_CIDRS` | `["172.16.0.0/12"]` | Proxies whose `X-Forwarded-For` is used for per-IP limits (see docs/architecture.md). |
 | `LLM_PRESET` | `custom` | Provider preset (`gemini`, `groq`, `openrouter`, `ollama`, `custom`). |
 | `LLM_PROVIDER_LABEL` | `OpenAI-compatible endpoint` | Friendly display name shown in metrics and UI. |
 | `LLM_FREE_ONLY` | `true` | Policy guard: enforces free-tier restrictions and model naming. |
@@ -260,6 +262,11 @@ bash scripts/check_branding.sh
 
 # Complete CI pipeline
 make ci
+
+# End-to-end Phase 1 check on a fresh stack (wipes dev volumes; mock LLM only):
+# migrations up/down/check, seed twice, demo data (sequential + parallel), brief, what-if,
+# live order survival, then make ci
+LLM_PROVIDER=mock DEMO_MODE=true make verify-f
 ```
 
 ---
@@ -269,7 +276,8 @@ make ci
 1. **Deterministic Allergen Safety**: Food allergies can be life-threatening. Mise never relies on generative models or fuzzy embeddings to evaluate dietary risks. Menu items are checked with exact set theory against the EU-14 regulatory allergen catalog.
 2. **Server-Side Idempotency**: Flaky mobile restaurant Wi-Fi can trigger duplicate network requests. Mise computes a deterministic SHA-256 payload hash on the server. If an identical `idempotency_key` is re-sent, the existing order is returned without duplicating tickets.
 3. **Signed Cookies**: Two HMAC-signed, httpOnly, `SameSite=Lax` cookies: `mise_auth` (owner or staff role, 8 hours) and `mise_guest` (guest session, 4 hours), keeping guest sessions separate from restaurant management.
-4. **Daily Request Safeguards**: Non-local AI provider usage is capped via Redis UTC day keys (`LLM_DAILY_REQUEST_CAP`). When the cap or provider 429 limits are reached, AI endpoints return HTTP 503 `ai_unavailable`; the revenue brief and what-if fall back to template text, and dining and kitchen operations are unaffected.
+4. **Per-IP Limits Behind a Proxy**: Login, demo login, demo ingest and demo data generation are limited per client IP. For public deployments run `docker compose --profile edge up -d` and expose only Caddy's ports (8080 guest, 8081 owner); Caddy replaces client-sent `X-Forwarded-For`, so the limits cannot be bypassed. Details in [docs/architecture.md](docs/architecture.md).
+5. **Daily Request Safeguards**: Non-local AI provider usage is capped via Redis UTC day keys (`LLM_DAILY_REQUEST_CAP`). When the cap or provider 429 limits are reached, AI endpoints return HTTP 503 `ai_unavailable`; the revenue brief and what-if fall back to template text, and dining and kitchen operations are unaffected.
 
 ---
 
@@ -284,4 +292,4 @@ make ci
 
 ## License
 
-MIT © 2026 <YOUR NAME>
+MIT © 2026 imahad-dev

@@ -13,6 +13,7 @@ from src.auth import (
 )
 from src.config import settings
 from src.redis_client import redis_client
+from src.request_limits import client_ip, enforce_ip_limit
 from src.schemas.auth import (
     AuthConfigResponse,
     DemoLoginRequest,
@@ -61,29 +62,16 @@ async def demo_login(
             detail="Demo mode is disabled",
         )
 
-    client_ip = get_client_ip(request)
-    rl_key = f"rate_limit:demo_login:{client_ip}"
-    try:
-        count = await redis_client.incr(rl_key)
-        if count == 1:
-            await redis_client.expire(rl_key, 60)
-        if count > 20:
-            raise HTTPException(
-                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail="Too many demo login requests: rate limit is 20 per minute",
-            )
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.warning("Redis error checking demo login rate limit: %s", e)
+    await enforce_ip_limit(
+        request,
+        "demo_login",
+        limit=20,
+        window_s=60,
+        detail="Too many demo login requests: rate limit is 20 per minute",
+    )
 
     set_auth_cookie(response, payload.role)
     return LoginResponse(status="ok", role=payload.role)
-
-
-def get_client_ip(request: Request) -> str:
-    """Retrieve client IP address from client connection."""
-    return request.client.host if request.client else "127.0.0.1"
 
 
 @router.post(
@@ -104,8 +92,7 @@ async def login(
 
     Rate limited via Redis to 5 failures per 5 minutes per client IP.
     """
-    client_ip = get_client_ip(request)
-    rl_key = f"rate_limit:login:{client_ip}"
+    rl_key = f"rate_limit:login:{client_ip(request)}"
 
     # 1. Check rate limit in Redis
     try:

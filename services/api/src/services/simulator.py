@@ -17,19 +17,19 @@ from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo
 
 import numpy as np
-from sqlalchemy import delete, select
+from sqlalchemy import delete, exists, select
 from sqlalchemy.orm import selectinload
 
 from src.models.audit import AuditLog
+from src.models.forecast import ForecastRun
 from src.models.menu import MenuItem
 from src.models.order import Order
+from src.models.restaurant import Restaurant
 from src.models.session import GuestSession
 from src.services.order_snapshot import line_total, snapshot_order_item
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
-
-    from src.models.restaurant import Restaurant
 
 DAYPARTS = ("lunch", "dinner")
 PROMOTION_EVENT = "promotion"
@@ -127,7 +127,8 @@ def generate_orders(
 
 
 async def clear_simulated(db: AsyncSession, restaurant_id: uuid.UUID) -> None:
-    """Delete previously simulated orders (items cascade), their sessions and promo events."""
+    """Delete previously simulated orders (items cascade), their sessions, promo events and the
+    restaurant's stored forecasts (they were fitted on the data being replaced)."""
     sess_ids = list(
         (
             await db.execute(
@@ -141,7 +142,13 @@ async def clear_simulated(db: AsyncSession, restaurant_id: uuid.UUID) -> None:
         delete(Order).where(Order.restaurant_id == restaurant_id, Order.source == "simulated")
     )
     if sess_ids:
-        await db.execute(delete(GuestSession).where(GuestSession.id.in_(sess_ids)))
+        # Only sessions left without any order: a session that also holds a live order stays.
+        await db.execute(
+            delete(GuestSession).where(
+                GuestSession.id.in_(sess_ids),
+                ~exists().where(Order.guest_session_id == GuestSession.id),
+            )
+        )
     await db.execute(
         delete(AuditLog).where(
             AuditLog.restaurant_id == restaurant_id,
@@ -149,6 +156,7 @@ async def clear_simulated(db: AsyncSession, restaurant_id: uuid.UUID) -> None:
             AuditLog.payload["source"].astext == "simulated",
         )
     )
+    await db.execute(delete(ForecastRun).where(ForecastRun.restaurant_id == restaurant_id))
 
 
 async def persist_simulation(
@@ -159,8 +167,13 @@ async def persist_simulation(
 ) -> dict:
     """Replace this restaurant's simulated orders with a fresh seeded run ending yesterday.
 
-    Does not commit; the caller owns the transaction.
+    Does not commit; the caller owns the transaction. Concurrent runs for the same restaurant
+    are serialized by a row lock held until that transaction ends, so the second run replaces
+    the first instead of adding to it. FOR NO KEY UPDATE does not block live order inserts.
     """
+    await db.execute(
+        select(Restaurant.id).where(Restaurant.id == restaurant.id).with_for_update(key_share=True)
+    )
     tz = ZoneInfo(restaurant.timezone)
     today = today or datetime.now(tz).date()
     start = today - timedelta(days=a.days)

@@ -18,13 +18,11 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Mise: Restaurant Revenue Copilot",
     description: "Restaurant revenue copilot and real-time operations platform",
-    images: [{ url: "/brand/og-cover.jpg", width: 1200, height: 630 }],
   },
   twitter: {
-    card: "summary_large_image",
+    card: "summary",
     title: "Mise: Restaurant Revenue Copilot",
     description: "Restaurant revenue copilot and real-time operations platform",
-    images: ["/brand/og-cover.jpg"],
   },
   appleWebApp: {
     capable: true,
