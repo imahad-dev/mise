@@ -1,6 +1,6 @@
 """Guest chat service — LLM-powered menu assistant.
 
-Builds context from the restaurant menu + guest allergens, calls LLM,
+Builds context from the restaurant menu (never the guest's allergen profile), calls LLM,
 validates structured response, records metrics.
 """
 
@@ -53,11 +53,12 @@ async def handle_guest_chat(
     restaurant_id: uuid.UUID,
     session_id: uuid.UUID,
     guest_language: str,
-    guest_allergens: list[str],
-    guest_dietary: list[str],
     message: str,
 ) -> dict:
     """Process a guest chat message and return AI response.
+
+    Privacy: the guest's allergen and dietary profile is never sent to the model. Allergen
+    safety is shown by the deterministic allergen filter, not by the chat.
 
     Returns dict with 'reply' and 'suggested_items'.
     """
@@ -79,17 +80,11 @@ async def handle_guest_chat(
 
     menu_context = _build_menu_context(items, guest_language)
 
-    allergen_note = (
-        f"The guest avoids: {', '.join(guest_allergens)}."
-        if guest_allergens
-        else "No allergen restrictions."
-    )
-    dietary_note = f"Dietary preferences: {', '.join(guest_dietary)}." if guest_dietary else ""
-
     system_prompt = (
         f"You are a friendly restaurant menu assistant. "
         f"Respond in {guest_language}. "
-        f"{allergen_note} {dietary_note}\n\n"
+        "Never claim a dish is safe for an allergy; tell the guest to use the menu's "
+        "allergen filter and to confirm with staff.\n\n"
         f"Current menu:\n{menu_context}\n\n"
         f"Return a JSON object with 'reply' (string) and "
         f"'suggested_items' (array of objects with 'name' and 'reason')."

@@ -224,8 +224,6 @@ async def guest_chat(
         restaurant_id=session.restaurant_id,
         session_id=session.id,
         guest_language=session.language,
-        guest_allergens=list(session.allergens_to_avoid),
-        guest_dietary=list(session.dietary_preferences),
         message=payload.message,
     )
 

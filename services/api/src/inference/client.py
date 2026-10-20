@@ -347,6 +347,17 @@ class InferenceClient:
         await self._vlm_client.aclose()
 
 
+def get_optional_inference_client(request: Request) -> InferenceClient | None:
+    """Like get_inference_client, but None instead of 503 for features with a template path."""
+    return getattr(request.app.state, "inference_client", None)
+
+
 def get_inference_client(request: Request) -> InferenceClient:
-    """Dependency to retrieve InferenceClient instance from app state."""
-    return request.app.state.inference_client
+    """Dependency to retrieve InferenceClient instance from app state (503 if not attached)."""
+    client = getattr(request.app.state, "inference_client", None)
+    if client is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={"error": "ai_unavailable"},
+        )
+    return client

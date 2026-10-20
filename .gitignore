@@ -1,4 +1,5 @@
 .agent/
+graphify-out/
 # Dependencies
 node_modules/
 .pnpm-store/

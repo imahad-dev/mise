@@ -1,6 +1,6 @@
 # Mise System Architecture
 
-Mise is a revenue copilot and operational platform for independent restaurants. Guests scan table QR codes to access an interactive, multi-lingual web ordering experience with deterministic allergen safety filters. Kitchen staff process orders in real time via an unbuffered Server-Sent Events (SSE) kitchen display system (KDS). Restaurant owners access operational intelligence, sales forecasts, scenario simulations, and automated menu digitization.
+Mise is a revenue copilot and operational platform for independent restaurants. Guests scan table QR codes to order from an English/Italian web menu with deterministic allergen safety filters. Kitchen staff process orders in real time via a Server-Sent Events (SSE) kitchen display system (KDS). Owners get a revenue brief computed from order history (KPIs, menu engineering, a backtested 7-day demand forecast, ranked actions), a deterministic what-if calculator, and VLM menu digitization. Methods and limits: [analytics.md](analytics.md).
 
 ---
 
@@ -35,7 +35,8 @@ Mise is a revenue copilot and operational platform for independent restaurants. 
 |----------|--------|-----------|
 | Frontend | Two Next.js ~15 applications: `guest-web` + `owner-web` | Isolated bundles: guest ordering footprint remains minimal (< 80 kB initial JS), while owner dashboard and kitchen displays run in separate route groups. |
 | API Proxy | Each frontend application rewrites only allowed `/api/*` paths to `http://api:8000` | Eliminates Cross-Origin Resource Sharing (CORS) complexity. Cookies are same-origin. Zero build-time API URLs required. |
-| Auth Cookies | Three distinct signed httpOnly cookies: `mise_owner`, `mise_staff`, `mise_guest` | Role-isolated sessions. Guest cookie uses `SameSite=Lax` for table QR code scan transitions. |
+| Auth Cookies | Two signed httpOnly cookies: `mise_auth` (owner or staff role) and `mise_guest` (guest session) | Guest sessions are separate from restaurant management. Both use `SameSite=Lax` for QR code scan transitions. |
+| Analytics | SQL aggregates over order_item snapshots; forecast chosen by backtest; LLM only narrates | Numbers are reproducible and auditable; the model cannot invent figures. |
 | Real-Time Streaming | Redis Pub/Sub + SSE with 15-second heartbeats | Clean push delivery to KDS and guest order tracking without persistent websocket connection overhead or database polling. |
 | Allergen Model | Deterministic, server-authoritative evaluation with precedence `contains > unverified > no_declared_match` | Guaranteed safety: avoids generative AI hallucinations in food allergy cross-checks. |
 | Order Idempotency | Server-side computed payload SHA-256 hash paired with client `idempotency_key` | Guaranteed exactly-once order creation under mobile network retries. |
@@ -157,6 +158,7 @@ Immutable guest order header record.
 - `restaurant_id` (UUID, FK → restaurant.id ON DELETE CASCADE)
 - `table_id` (UUID, FK → dining_table.id ON DELETE SET NULL, Nullable)
 - `status` (TEXT, NOT NULL DEFAULT 'placed', `CHECK (status IN ('placed', 'bumped', 'cancelled'))`)
+- `source` (TEXT, NOT NULL DEFAULT 'live', `CHECK (source IN ('live', 'simulated'))`) — simulated demo orders are always marked
 - `total` (DECIMAL(10,2), NOT NULL, `CHECK (total >= 0)`)
 - `idempotency_key` (TEXT, NOT NULL)
 - `payload_hash` (TEXT, NOT NULL)
@@ -193,6 +195,16 @@ Append-only log for critical compliance and operational events.
 - `payload` (JSONB, NOT NULL DEFAULT '{}')
 - `created_at` (TIMESTAMPTZ, NOT NULL DEFAULT now())
 
+#### `forecast_run`
+One stored demand forecast (see [analytics.md](analytics.md)).
+- `id` (UUID, PK)
+- `restaurant_id` (UUID, FK → restaurant.id ON DELETE CASCADE)
+- `created_at` (TIMESTAMPTZ, NOT NULL DEFAULT now())
+- `horizon_days` (INTEGER, NOT NULL, `CHECK (horizon_days >= 1)`)
+- `model_name` (TEXT, NOT NULL)
+- `metrics` (JSONB, NOT NULL DEFAULT '{}') — backtest WAPE/MAE per method, chosen method, confidence flag, forecast points
+- `params` (JSONB, NOT NULL DEFAULT '{}') — history range and order counts used
+
 #### `metrics_sample`
 Per-call inference metrics recording latency, token volume, provider label, and cost.
 - `id` (UUID, PK)
@@ -228,14 +240,13 @@ To guarantee zero hallucinations in dietary safety, allergen checks are complete
 - If the key is reused with a altered payload, the server rejects with HTTP `409 Conflict`.
 
 ### Authentication & Cookies
-1. **`mise_guest`**: Signed httpOnly cookie identifying the active guest session. `SameSite=Lax`.
-2. **`mise_owner`**: Signed httpOnly cookie for restaurant management access. `SameSite=Strict`.
-3. **`mise_staff`**: Signed httpOnly cookie for kitchen display terminal operation. `SameSite=Strict`.
-All cookies are signed server-side using HMAC-SHA256 with `API_SECRET_KEY`.
+1. **`mise_guest`**: Signed httpOnly cookie identifying the active guest session (4 hours). `SameSite=Lax`.
+2. **`mise_auth`**: Signed httpOnly cookie carrying the `owner` or `staff` role and expiry (8 hours). `SameSite=Lax`.
+Both cookies are signed server-side using HMAC-SHA256 with `API_SECRET_KEY`, and `Secure` outside `APP_ENV=dev`.
 
 ### Free-Only Policy & Rate Limits
 - Non-local inference calls enforce a Redis-backed daily ceiling (`LLM_DAILY_REQUEST_CAP`, default 200) keyed by UTC day (`mise:llm:daily_cap:YYYY-MM-DD`).
-- When the daily cap or a provider 429 rate limit is reached, the backend cleanly returns HTTP `503` with `detail: "ai_unavailable"`.
+- When the daily cap or a provider 429 rate limit is reached, the backend cleanly returns HTTP `503` with `detail: "ai_unavailable"`. The revenue brief and what-if never fail on this: they fall back to a template summary.
 - The frontend gracefully hides real-time chat widgets and displays fallback status badges without disrupting core ordering and kitchen operations.
 
 ---
@@ -250,17 +261,19 @@ All cookies are signed server-side using HMAC-SHA256 with `API_SECRET_KEY`.
 - `POST /api/auth/login` — Authenticates owner (API key) or staff (PIN). Sets signed cookie. Rate-limited.
 - `POST /api/auth/demo-login` — Fast-path login available when `DEMO_MODE=true`.
 - `POST /api/auth/logout` — Clears authentication cookies.
-- `GET /api/auth/me` — Returns current role and restaurant slug.
+- `GET /api/auth/me` — Returns the current role.
 - `GET /api/auth/config` — Returns public environment flags (e.g. `demo_mode`).
+- `GET /api/demo/info` — Demo guest, owner and kitchen links (`DEMO_MODE` only).
 
 ### Guest Ordering (`guest-web`)
-- `POST /api/guest/session` — Initializes guest session from table QR token and dietary preferences.
+- `POST /api/guest/sessions` — Initializes guest session from table QR token and dietary preferences.
+- `GET /api/guest/session` — Returns the active session.
 - `PATCH /api/guest/session` — Updates active session preferences and language.
 - `GET /api/guest/menu` — Localized menu with dynamic allergen status flags. Excludes `unit_cost`.
 - `POST /api/orders` — Idempotent order placement with mandatory allergen acknowledgment checks.
 - `GET /api/orders/{id}` — Order status retrieval.
 - `GET /api/orders/{id}/stream` — Real-time order progress via SSE.
-- `POST /api/guest/chat` — Contextual concierge chat assistant.
+- `POST /api/guest/chat` — Menu chat assistant (menu context only; the guest's allergen and dietary profile is never sent to the model).
 
 ### Kitchen Display (`owner-web`)
 - `GET /api/restaurants/{slug}/kitchen/orders` — Retrieves active placed orders with allergen snapshot banners.
@@ -269,13 +282,14 @@ All cookies are signed server-side using HMAC-SHA256 with `API_SECRET_KEY`.
 - `POST /api/restaurants/{slug}/kitchen/orders/{id}/recall` — Reopens ticket if executed strictly within 60 seconds of bumping.
 
 ### Owner Dashboard (`owner-web`)
-- `GET /api/restaurants/{slug}/menu` — Comprehensive menu catalog including dish unit margins and verification status.
-- `POST /api/restaurants/{slug}/menu` — Creates new menu item with default translations.
-- `PUT /api/restaurants/{slug}/menu/{id}` — Updates menu item details. Resets verification flags on ingredient edits.
-- `DELETE /api/restaurants/{slug}/menu/{id}` — Soft-deletes a menu item.
-- `GET /api/restaurants/{slug}/tables` — Lists dining tables with QR tokens and table labels.
-- `POST /api/restaurants/{slug}/tables` — Creates dining table and QR token.
-- `GET /api/restaurants/{slug}/ai/brief` — Generates daily operational brief and sales curve projections.
-- `POST /api/restaurants/{slug}/ai/simulate` — Simulates rush-hour scenarios and throughput bottlenecks.
+- `GET /api/restaurants/{slug}/menu-items` — Menu catalog including `unit_cost` and verification status.
+- `PATCH /api/restaurants/{slug}/menu-items/{id}` — Updates menu item fields. Resets verification flags (with audit log) on allergen, ingredient or dietary edits.
+- `POST /api/restaurants/{slug}/menu-items/{id}/verify` — Marks allergens and dietary flags verified.
+- `DELETE /api/restaurants/{slug}/menu-items/{id}` — Soft-deletes a menu item.
+- `GET /api/restaurants/{slug}/tables` — Lists dining tables with QR tokens and guest URLs.
 - `POST /api/restaurants/{slug}/menu-items/ingest` — VLM extraction of menu dish data from photograph URLs.
+- `GET /api/restaurants/{slug}/ai/brief` — Deterministic revenue brief: KPIs, menu engineering, pairings, peak hours, backtested 7-day forecast, ranked actions; LLM-written or template summary.
+- `POST /api/restaurants/{slug}/ai/simulate` — Deterministic what-if (price change, promotion, demand surge) with listed assumptions.
+- `POST /api/restaurants/{slug}/demo/simulate-orders` — Replaces simulated demo orders with a seeded synthetic history (`DEMO_MODE` only).
+- `POST /api/restaurants/{slug}/demo/reset` — Re-seeds the demo menu and tables (`DEMO_MODE` only).
 - `GET /api/metrics/inference` — Aggregated inference metrics, token counts, average latency, and active provider label.

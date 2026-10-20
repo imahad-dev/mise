@@ -1,69 +1,196 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
-
-interface ActionItem {
-  type: string;
-  item: string;
-  reason: string;
-}
-
-interface DailyBrief {
-  date: string;
-  summary: string;
-  actions: ActionItem[];
-}
+import React, { useCallback, useEffect, useState } from "react";
+import {
+  CLASS_COLORS,
+  METHOD_LABELS,
+  eur,
+  forecastTable,
+  quadrantLayout,
+  wapePct,
+  type DailyBrief,
+  type MenuClass,
+} from "@/lib/analytics";
 
 const DEFAULT_SLUG = process.env.NEXT_PUBLIC_RESTAURANT_SLUG || "trattoria-da-mario";
+const W = 560;
+const H = 320;
+const PAD = 36;
+
+function KpiTile({ label, value, sub }: { label: string; value: string; sub?: string }) {
+  return (
+    <div className="stat-tile space-y-1">
+      <span className="text-xs text-[#8FA3B3] uppercase font-semibold">{label}</span>
+      <div className="text-3xl font-extrabold text-[#F3F8FC]">{value}</div>
+      {sub && <div className="text-xs text-[#8FA3B3]">{sub}</div>}
+    </div>
+  );
+}
+
+function Quadrant({ brief }: { brief: DailyBrief }) {
+  const { points, medianX, medianY } = quadrantLayout(
+    brief.menu_engineering,
+    brief.thresholds,
+    W,
+    H,
+    PAD,
+  );
+  const labels: [MenuClass, string, number, number][] = [
+    ["puzzle", "Puzzles", PAD + 4, PAD - 8],
+    ["star", "Stars", W - PAD - 4, PAD - 8],
+    ["dog", "Dogs", PAD + 4, H - 8],
+    ["plowhorse", "Plowhorses", W - PAD - 4, H - 8],
+  ];
+  return (
+    <svg
+      viewBox={`0 0 ${W} ${H}`}
+      className="w-full h-auto"
+      role="img"
+      aria-label="Menu engineering quadrant: units sold versus unit margin"
+    >
+      <rect x={PAD} y={PAD} width={W - 2 * PAD} height={H - 2 * PAD} fill="#070B10" />
+      <line x1={medianX} x2={medianX} y1={PAD} y2={H - PAD} stroke="#8FA3B3" strokeDasharray="4 4" />
+      <line x1={PAD} x2={W - PAD} y1={medianY} y2={medianY} stroke="#8FA3B3" strokeDasharray="4 4" />
+      {labels.map(([cls, text, x, y]) => (
+        <text
+          key={cls}
+          x={x}
+          y={y}
+          fontSize="11"
+          fill={CLASS_COLORS[cls]}
+          textAnchor={x > W / 2 ? "end" : "start"}
+        >
+          {text}
+        </text>
+      ))}
+      {points.map((p) => (
+        <circle key={p.item.item_id} cx={p.x} cy={p.y} r={6} fill={CLASS_COLORS[p.item.menu_class]}>
+          <title>
+            {`${p.item.name}: ${p.item.units} sold, ${eur(p.item.unit_margin_eur)} margin per unit (${p.item.menu_class})`}
+          </title>
+        </circle>
+      ))}
+      <text x={W / 2} y={H - PAD + 18} fontSize="11" fill="#8FA3B3" textAnchor="middle">
+        Units sold →
+      </text>
+      <text
+        x={12}
+        y={H / 2}
+        fontSize="11"
+        fill="#8FA3B3"
+        textAnchor="middle"
+        transform={`rotate(-90 12 ${H / 2})`}
+      >
+        Unit margin →
+      </text>
+    </svg>
+  );
+}
+
+function BacktestBadge({ forecast }: { forecast: DailyBrief["forecast"] }) {
+  if (forecast.low_confidence || !forecast.backtest.length) {
+    return (
+      <span className="chip chip-unverified">
+        Low confidence: {forecast.history_days} days of history, not backtested
+      </span>
+    );
+  }
+  const chosen = forecast.backtest.find((b) => b.method === forecast.method);
+  const naive = forecast.backtest.find((b) => b.method === "seasonal_naive");
+  return (
+    <span className="chip chip-safe">
+      Backtest WAPE {wapePct(chosen?.wape)} ({METHOD_LABELS[forecast.method ?? ""] ?? forecast.method})
+      vs seasonal naive {wapePct(naive?.wape)}
+    </span>
+  );
+}
 
 export default function DailyBriefPage() {
   const [slug] = useState(DEFAULT_SLUG);
   const [brief, setBrief] = useState<DailyBrief | null>(null);
   const [loading, setLoading] = useState(true);
+  const [generating, setGenerating] = useState(false);
+  const [demoMode, setDemoMode] = useState(false);
+  const [daypart, setDaypart] = useState<"lunch" | "dinner">("dinner");
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    async function loadBrief() {
-      try {
-        const res = await fetch(`/api/restaurants/${slug}/ai/brief`);
-        if (!res.ok) {
-          throw new Error(`Failed to load AI brief (${res.status})`);
-        }
-        const data = await res.json();
-        setBrief(data);
-      } catch (err: unknown) {
-        setError(err instanceof Error ? err.message : String(err));
-      } finally {
-        setLoading(false);
-      }
+  const loadBrief = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/restaurants/${slug}/ai/brief`);
+      if (!res.ok) throw new Error(`Failed to load brief (${res.status})`);
+      setBrief(await res.json());
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLoading(false);
     }
-    loadBrief();
   }, [slug]);
 
-  // Hourly cover & revenue distribution data for chart
-  const hours = [
-    { hour: "12:00", actual: 38, forecast: 42, revenue: 1140 },
-    { hour: "13:00", actual: 64, forecast: 60, revenue: 1920 },
-    { hour: "14:00", actual: 45, forecast: 40, revenue: 1350 },
-    { hour: "18:00", actual: 52, forecast: 50, revenue: 1820 },
-    { hour: "19:00", actual: 88, forecast: 82, revenue: 3080 },
-    { hour: "20:00", actual: 96, forecast: 90, revenue: 3360 },
-    { hour: "21:00", actual: 70, forecast: 75, revenue: 2450 },
-  ];
+  useEffect(() => {
+    loadBrief();
+    fetch("/api/auth/config")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => setDemoMode(Boolean(d?.demo_mode)))
+      .catch(() => setDemoMode(false));
+  }, [loadBrief]);
 
-  const maxVal = Math.max(...hours.map((h) => Math.max(h.actual, h.forecast)));
+  const generateDemoData = async () => {
+    setGenerating(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/restaurants/${slug}/demo/simulate-orders`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ days: 56 }),
+      });
+      if (!res.ok) throw new Error(`Failed to generate demo data (${res.status})`);
+      await loadBrief();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const simulated = brief?.data_sources.simulated ?? 0;
+  const table = brief ? forecastTable(brief.forecast.points, daypart) : null;
 
   return (
     <div className="space-y-8">
-      {/* Header */}
-      <div>
-        <h1 className="text-3xl font-extrabold tracking-tight">
-          AI <span className="gradient-text">Daily Operations Brief</span>
-        </h1>
-        <p className="text-xs text-[#8FA3B3] mt-1">
-          Automated executive summary, demand forecasting, and yield actions powered by AI assistant
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-extrabold tracking-tight">
+            Daily <span className="gradient-text">Revenue Brief</span>
+          </h1>
+          <p className="text-xs text-[#8FA3B3] mt-1">
+            Computed from order history
+            {brief ? ` (${brief.window_start} to ${brief.window_end})` : ""}. Numbers come from
+            analytics, never from the AI model.
+          </p>
+        </div>
+        {demoMode && (
+          <button
+            type="button"
+            onClick={generateDemoData}
+            disabled={generating}
+            className="btn-primary min-h-[44px]"
+          >
+            {generating ? "Generating…" : "Generate demo data"}
+          </button>
+        )}
       </div>
+
+      {simulated > 0 && (
+        <div
+          role="status"
+          className="p-4 rounded-xl bg-[#FF9F2E]/15 border border-[#FF9F2E]/40 text-xs text-[#FF9F2E] font-semibold"
+        >
+          Simulated data: {simulated} of {simulated + (brief?.data_sources.live ?? 0)} orders in
+          this window are synthetic demo orders, not real sales.
+        </div>
+      )}
 
       {error && (
         <div className="p-4 rounded-xl bg-[#EF4444]/15 border border-[#EF4444]/40 text-xs text-[#EF4444]">
@@ -71,134 +198,157 @@ export default function DailyBriefPage() {
         </div>
       )}
 
-      {loading ? (
+      {loading && !brief ? (
         <div className="mise-card p-12 text-center text-[#8FA3B3] animate-pulse">
-          Analyzing service history, reservations, and inventory signals...
+          Crunching order history…
         </div>
       ) : (
-        <>
-          {/* Executive Summary Card */}
-          <div className="glass-panel p-6 sm:p-8 space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#38BDF8]/15 pb-4">
-              <div>
-                <span className="text-xs font-mono uppercase tracking-widest text-[#22D3EE]">
-                  Intelligence Report
+        brief && (
+          <>
+            <div className="grid gap-4 sm:grid-cols-3">
+              <KpiTile
+                label="Revenue"
+                value={eur(brief.kpis.revenue_eur)}
+                sub={`${brief.kpis.orders} orders`}
+              />
+              <KpiTile label="Average order value" value={eur(brief.kpis.aov_eur)} />
+              <KpiTile
+                label="Contribution margin"
+                value={eur(brief.kpis.contribution_margin_eur)}
+                sub={`${brief.kpis.margin_pct}% of revenue`}
+              />
+            </div>
+
+            <div className="glass-panel p-6 space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h2 className="text-lg font-bold text-[#F3F8FC]">Summary — {brief.date}</h2>
+                <span className={`chip ${brief.summary_source === "llm" ? "chip-safe" : "chip-unverified"}`}>
+                  {brief.summary_source === "llm"
+                    ? "AI-written, numbers checked against facts"
+                    : "Template summary"}
                 </span>
-                <h2 className="text-xl font-bold text-[#F3F8FC]">
-                  Service Summary — {brief?.date || "Today"}
-                </h2>
               </div>
-              <div className="chip chip-safe">
-                ● 10-min Cache Active
+              <p className="text-sm leading-relaxed text-[#F3F8FC]">{brief.summary}</p>
+            </div>
+
+            <div className="space-y-4">
+              <h3 className="text-base font-bold text-[#F3F8FC]">Ranked actions</h3>
+              {brief.actions.length === 0 && (
+                <p className="text-xs text-[#8FA3B3]">No actions until there is order history.</p>
+              )}
+              <div className="grid gap-4 md:grid-cols-2">
+                {brief.actions.map((a) => (
+                  <div key={a.rank} className="mise-card p-5 space-y-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="chip chip-unverified uppercase">
+                        #{a.rank} {a.type.replace("_", " ")}
+                      </span>
+                      {a.estimated_impact_eur_per_week != null && (
+                        <span className="text-xs font-bold text-[#34D399]">
+                          est. {a.estimated_impact_eur_per_week >= 0 ? "+" : ""}
+                          {eur(a.estimated_impact_eur_per_week)}/week
+                        </span>
+                      )}
+                    </div>
+                    <h4 className="text-base font-extrabold text-[#F3F8FC]">{a.title}</h4>
+                    <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                      {Object.entries(a.evidence).map(([k, v]) => (
+                        <React.Fragment key={k}>
+                          <dt className="text-[#8FA3B3]">{k.replaceAll("_", " ")}</dt>
+                          <dd className="text-[#F3F8FC] font-mono">{String(v)}</dd>
+                        </React.Fragment>
+                      ))}
+                    </dl>
+                    <p className="text-[11px] text-[#8FA3B3] font-mono">Formula: {a.formula}</p>
+                  </div>
+                ))}
               </div>
             </div>
 
-            <p className="text-sm leading-relaxed text-[#F3F8FC]">
-              {brief?.summary || "Operations tracking smoothly across all service stations."}
-            </p>
-          </div>
-
-          {/* Revenue & Cover Chart (Blue & Cyan bars, Orange forecast line, Green positive change) */}
-          <div className="mise-card p-6 space-y-6">
-            <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="mise-card p-6 space-y-4">
               <div>
-                <h3 className="text-base font-bold text-[#F3F8FC]">
-                  Covers & Demand Forecast
-                </h3>
+                <h3 className="text-base font-bold text-[#F3F8FC]">Menu engineering</h3>
                 <p className="text-xs text-[#8FA3B3]">
-                  Hourly distribution comparison: Actual (blue/cyan) vs. Projected demand (orange line)
+                  Dashed lines are the medians: {brief.thresholds.median_units} units and{" "}
+                  {eur(brief.thresholds.median_unit_margin_eur)} margin per unit. Hover a dot for
+                  details.
                 </p>
               </div>
-              <div className="flex items-center gap-4 text-xs font-semibold">
-                <span className="flex items-center gap-1.5 text-[#22D3EE]">
-                  <span className="w-3 h-3 rounded-sm bg-gradient-to-t from-[#2F7BFF] to-[#22D3EE]" /> Actual Covers
-                </span>
-                <span className="flex items-center gap-1.5 text-[#FF9F2E]">
-                  <span className="w-3 h-0.5 bg-[#FF9F2E]" /> Forecast Line
-                </span>
-                <span className="flex items-center gap-1.5 text-[#34D399]">
-                  ▲ +8.4% WoW
-                </span>
-              </div>
+              {brief.menu_engineering.length ? (
+                <Quadrant brief={brief} />
+              ) : (
+                <p className="text-xs text-[#8FA3B3]">No sales in this window.</p>
+              )}
             </div>
 
-            {/* Custom SVG / Bar Chart */}
-            <div className="relative pt-6 pb-2">
-              <div className="grid grid-cols-7 gap-3 sm:gap-6 items-end h-56 border-b border-[#38BDF8]/15 pb-2">
-                {hours.map((h) => {
-                  const barHeight = Math.round((h.actual / maxVal) * 180);
-                  const forecastTop = Math.round((h.forecast / maxVal) * 180);
-                  return (
-                    <div key={h.hour} className="flex flex-col items-center gap-2 group relative">
-                      {/* Tooltip */}
-                      <div className="opacity-0 group-hover:opacity-100 transition-opacity absolute -top-12 z-10 bg-[#070B10] border border-[#22D3EE]/40 px-2 py-1 rounded text-[11px] whitespace-nowrap shadow-xl">
-                        {h.actual} covers / €{h.revenue}
-                      </div>
-
-                      {/* Forecast marker dot */}
-                      <div
-                        className="w-2.5 h-2.5 rounded-full bg-[#FF9F2E] border-2 border-[#070B10] absolute z-10"
-                        style={{ bottom: `${forecastTop + 32}px` }}
-                        title={`Forecast: ${h.forecast}`}
-                      />
-
-                      {/* Bar */}
-                      <div
-                        style={{ height: `${barHeight}px` }}
-                        className="w-full max-w-[42px] rounded-t-xl bg-gradient-to-t from-[#2F7BFF] to-[#22D3EE] opacity-90 group-hover:opacity-100 transition-all shadow-lg shadow-cyan-950/20"
-                      />
-
-                      <span className="text-[11px] font-mono text-[#8FA3B3]">
-                        {h.hour}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-
-          {/* Actionable Recommendations */}
-          <div className="space-y-4">
-            <h3 className="text-base font-bold text-[#F3F8FC]">
-              Prescribed Operational Actions
-            </h3>
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {(brief?.actions || [
-                {
-                  type: "prep",
-                  item: "Truffle Tagliolini",
-                  reason: "Anticipate +30% dinner rush demand; increase pasta prep by 15 portions.",
-                },
-                {
-                  type: "staffing",
-                  item: "Sauté Station",
-                  reason: "Bottleneck expected between 19:30-21:00; dedicate second commis chef.",
-                },
-                {
-                  type: "upsell",
-                  item: "Chianti Classico Riserva",
-                  reason: "Pairing recommendation with Bistecca elevated wine revenue by €420 yesterday.",
-                },
-              ]).map((action, idx) => (
-                <div key={idx} className="mise-card p-5 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="chip chip-unverified uppercase">
-                      {action.type}
-                    </span>
-                    <span className="text-xs text-[#34D399] font-bold">High Impact</span>
-                  </div>
-                  <h4 className="text-base font-extrabold text-[#F3F8FC]">
-                    {action.item}
-                  </h4>
-                  <p className="text-xs leading-relaxed text-[#8FA3B3]">
-                    {action.reason}
+            <div className="mise-card p-6 space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-base font-bold text-[#F3F8FC]">7-day demand forecast</h3>
+                  <p className="text-xs text-[#8FA3B3]">
+                    Units per item; range is the 80% interval from backtest errors. Promotions
+                    are assumed off.
                   </p>
                 </div>
-              ))}
+                <BacktestBadge forecast={brief.forecast} />
+              </div>
+              <div className="flex gap-2" role="group" aria-label="Daypart">
+                {(["lunch", "dinner"] as const).map((d) => (
+                  <button
+                    key={d}
+                    type="button"
+                    aria-pressed={daypart === d}
+                    onClick={() => setDaypart(d)}
+                    className={`${daypart === d ? "btn-primary" : "btn-ghost"} min-h-[44px] capitalize`}
+                  >
+                    {d}
+                  </button>
+                ))}
+              </div>
+              {table && table.rows.length ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="text-[#8FA3B3] text-left">
+                        <th scope="col" className="py-2 pr-3">Item</th>
+                        {table.dates.map((d) => (
+                          <th scope="col" key={d} className="py-2 px-2 font-mono">
+                            {d.slice(5)}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {table.rows.map((r) => (
+                        <tr key={r.itemId} className="border-t border-[#38BDF8]/10">
+                          <th scope="row" className="py-2 pr-3 text-left text-[#F3F8FC] font-semibold">
+                            {r.name}
+                          </th>
+                          {r.cells.map((c, i) => (
+                            <td key={i} className="py-2 px-2 font-mono text-[#F3F8FC]">
+                              {c ? (
+                                <>
+                                  {c.forecast.toFixed(1)}
+                                  <span className="block text-[10px] text-[#8FA3B3]">
+                                    {c.lo.toFixed(0)}–{c.hi.toFixed(0)}
+                                  </span>
+                                </>
+                              ) : (
+                                "–"
+                              )}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <p className="text-xs text-[#8FA3B3]">No forecast yet.</p>
+              )}
             </div>
-          </div>
-        </>
+          </>
+        )
       )}
     </div>
   );

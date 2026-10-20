@@ -26,6 +26,7 @@ from src.models.session import GuestSession
 from src.redis_client import publish_event, redis_client
 from src.schemas.orders import CreateOrderRequest, OrderItemRequest, OrderResponse
 from src.services.allergen_service import compute_allergen_status
+from src.services.order_snapshot import line_total, snapshot_order_item
 
 logger = logging.getLogger(__name__)
 
@@ -182,42 +183,18 @@ async def create_order(
         )
 
     # 6. Build snapshot OrderItems and calculate total
-    total = Decimal("0.00")
-    order_items: list[OrderItem] = []
-    for req in payload.items:
-        item = found_items[req.menu_item_id]
-        line_total = item.price * Decimal(req.quantity)
-        total += line_total
-
-        trans_map = {t.language: t for t in item.translations}
-        guest_trans = trans_map.get(session.language) or trans_map.get(restaurant.default_language)
-        default_trans = trans_map.get(restaurant.default_language) or next(
-            iter(trans_map.values()), None
-        )
-
-        item_name = guest_trans.name if guest_trans else ""
-        kitchen_name = default_trans.name if default_trans else ""
-
-        s_val = compute_allergen_status(
-            item_allergens=item.allergens,
-            allergen_verified=item.allergen_verified,
+    order_items: list[OrderItem] = [
+        snapshot_order_item(
+            found_items[req.menu_item_id],
+            quantity=req.quantity,
+            notes=req.notes,
+            guest_language=session.language,
+            default_language=restaurant.default_language,
             guest_allergens_to_avoid=session.allergens_to_avoid,
         )
-
-        order_items.append(
-            OrderItem(
-                menu_item_id=item.id,
-                quantity=req.quantity,
-                unit_price=item.price,
-                unit_cost=item.unit_cost,
-                item_name=item_name,
-                kitchen_name=kitchen_name,
-                allergens=list(item.allergens),
-                allergen_verified=item.allergen_verified,
-                allergen_status=s_val,
-                notes=req.notes,
-            )
-        )
+        for req in payload.items
+    ]
+    total = sum((line_total(oi) for oi in order_items), Decimal("0.00"))
 
     has_conflict = bool(conflict_items)
     ack_recorded = has_conflict and bool(payload.acknowledge_allergen_risk)

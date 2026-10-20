@@ -42,8 +42,8 @@ export default function DashboardLayout({
     { href: "/tables", label: "Tables & QR" },
     { href: "/menu", label: "Menu & Safety" },
     { href: "/menu/ingest", label: "Menu Ingest (VLM)" },
-    { href: "/brief", label: "AI Brief" },
-    { href: "/ai", label: "AI Simulator" },
+    { href: "/brief", label: "Revenue Brief" },
+    { href: "/ai", label: "What-if" },
     { href: "/kitchen", label: "Kitchen Display ↗" },
   ];
 

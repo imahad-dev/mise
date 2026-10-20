@@ -1,64 +1,96 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
+import { eur, type DataSources } from "@/lib/analytics";
 
-interface SimulationRecommendation {
-  action: string;
-  item?: string;
-  shift?: string;
-  quantity?: number;
-  extra_staff?: number;
+type Scenario = "price_change" | "promotion" | "demand_surge";
+
+interface Totals {
+  revenue_eur: number;
+  margin_eur: number;
 }
 
-interface SimulationResult {
-  scenario: string;
-  predicted_covers: number;
-  predicted_revenue_eur: number;
-  recommendations: SimulationRecommendation[];
+interface WhatIfResult {
+  scenario: Scenario;
+  item: string | null;
+  window_start: string;
+  window_end: string;
+  data_sources: DataSources;
+  baseline: Totals;
+  result: Totals;
+  delta: Totals;
+  assumptions: string[];
+  explanation: string;
+  explanation_source: "llm" | "template";
+}
+
+interface MenuOption {
+  id: string;
+  name: string;
 }
 
 const DEFAULT_SLUG = process.env.NEXT_PUBLIC_RESTAURANT_SLUG || "trattoria-da-mario";
 
-export default function AiSimulatorPage() {
+const SCENARIOS: { id: Scenario; label: string; desc: string }[] = [
+  { id: "price_change", label: "Price change", desc: "Change one item's price; demand reacts via elasticity." },
+  { id: "promotion", label: "Promotion", desc: "Discount one item; demand reacts via promotion elasticity." },
+  { id: "demand_surge", label: "Demand surge", desc: "Multiply every item's weekly demand." },
+];
+
+const signed = (v: number) => `${v >= 0 ? "+" : "−"}${eur(Math.abs(v))}`;
+
+export default function WhatIfPage() {
   const [slug] = useState(DEFAULT_SLUG);
-  const [scenario, setScenario] = useState("weekend_rush");
+  const [items, setItems] = useState<MenuOption[]>([]);
+  const [scenario, setScenario] = useState<Scenario>("price_change");
+  const [itemId, setItemId] = useState("");
+  const [changePct, setChangePct] = useState("5");
+  const [discountPct, setDiscountPct] = useState("20");
+  const [multiplier, setMultiplier] = useState("1.3");
+  const [elasticity, setElasticity] = useState("");
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<SimulationResult | null>(null);
+  const [result, setResult] = useState<WhatIfResult | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [providerLabel, setProviderLabel] = useState("OpenAI-compatible endpoint");
 
-  React.useEffect(() => {
-    async function loadProviderInfo() {
-      try {
-        const res = await fetch("/api/metrics/inference");
-        if (res.ok) {
-          const data = await res.json();
-          if (data.provider_label) {
-            setProviderLabel(data.provider_label);
-          }
-        }
-      } catch {
-        // Fallback default remains
-      }
-    }
-    loadProviderInfo();
-  }, []);
+  useEffect(() => {
+    fetch(`/api/restaurants/${slug}/menu-items`)
+      .then((r) => (r.ok ? r.json() : []))
+      .then(
+        (data: { id: string; translations: { language: string; name: string }[] }[]) => {
+          const opts = data.map((m) => ({
+            id: m.id,
+            name: (m.translations.find((t) => t.language === "en") ?? m.translations[0])?.name ?? m.id,
+          }));
+          setItems(opts);
+          if (opts.length) setItemId(opts[0].id);
+        },
+      )
+      .catch(() => setItems([]));
+  }, [slug]);
 
-  const runSimulation = async (selectedScenario: string) => {
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
     setLoading(true);
     setError(null);
-    setScenario(selectedScenario);
+    const body: Record<string, unknown> = { scenario };
+    if (scenario !== "demand_surge") body.item_id = itemId;
+    if (scenario === "price_change") body.change_pct = Number(changePct);
+    if (scenario === "promotion") body.discount_pct = Number(discountPct);
+    if (scenario === "demand_surge") body.multiplier = Number(multiplier);
+    if (scenario !== "demand_surge" && elasticity.trim()) body.elasticity = Number(elasticity);
     try {
       const res = await fetch(`/api/restaurants/${slug}/ai/simulate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ scenario: selectedScenario }),
+        body: JSON.stringify(body),
       });
       if (!res.ok) {
-        throw new Error(`Simulation failed (${res.status})`);
+        const detail = await res.json().catch(() => null);
+        throw new Error(
+          typeof detail?.detail === "string" ? detail.detail : `What-if failed (${res.status})`,
+        );
       }
-      const data: SimulationResult = await res.json();
-      setResult(data);
+      setResult(await res.json());
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -66,186 +98,145 @@ export default function AiSimulatorPage() {
     }
   };
 
-  const scenarios = [
-    { id: "weekend_rush", label: "Weekend Dinner Rush", desc: "Simulate +45% seating surge with high wine & dessert attachment" },
-    { id: "rain_storm", label: "Sudden Rain Storm", desc: "Patio closed, delivery/takeout spike, comfort food demand" },
-    { id: "private_party", label: "30-Guest Private Event", desc: "Simulate dedicated banquet table impact on main dining turn time" },
-  ];
+  const field = "w-full rounded-lg bg-[#070B10] border border-[#38BDF8]/20 px-3 py-2 min-h-[44px] text-sm";
 
   return (
     <div className="space-y-8">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-extrabold tracking-tight">
-            AI Scenario <span className="gradient-text">Simulator</span>
-          </h1>
-          <p className="text-xs text-[#8FA3B3] mt-1">
-            Predict table turnover, gross margins, and prep bottlenecks before service begins
-          </p>
-        </div>
-        <div className="chip chip-safe text-xs">
-          ⚡ Provider: {providerLabel}
-        </div>
+      <div>
+        <h1 className="text-3xl font-extrabold tracking-tight">
+          What-if <span className="gradient-text">Calculator</span>
+        </h1>
+        <p className="text-xs text-[#8FA3B3] mt-1">
+          Deterministic weekly estimate from the last 28 days of sales at current menu prices.
+          The AI model may only explain the result; it never produces the numbers.
+        </p>
       </div>
 
+      <form onSubmit={submit} className="mise-card p-6 space-y-5">
+        <fieldset className="grid gap-3 md:grid-cols-3">
+          <legend className="text-xs font-bold text-[#22D3EE] uppercase tracking-wider mb-2">
+            Scenario
+          </legend>
+          {SCENARIOS.map((s) => (
+            <label
+              key={s.id}
+              className={`mise-card p-4 cursor-pointer space-y-1 ${
+                scenario === s.id ? "border-[#22D3EE] ring-1 ring-[#22D3EE]/50" : ""
+              }`}
+            >
+              <input
+                type="radio"
+                name="scenario"
+                value={s.id}
+                checked={scenario === s.id}
+                onChange={() => setScenario(s.id)}
+                className="mr-2"
+              />
+              <span className="font-bold text-[#F3F8FC]">{s.label}</span>
+              <p className="text-xs text-[#8FA3B3]">{s.desc}</p>
+            </label>
+          ))}
+        </fieldset>
+
+        <div className="grid gap-4 md:grid-cols-3">
+          {scenario !== "demand_surge" && (
+            <label className="space-y-1 text-xs text-[#8FA3B3]">
+              Menu item
+              <select className={field} value={itemId} onChange={(e) => setItemId(e.target.value)} required>
+                {items.map((i) => (
+                  <option key={i.id} value={i.id}>
+                    {i.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          {scenario === "price_change" && (
+            <label className="space-y-1 text-xs text-[#8FA3B3]">
+              Price change (%)
+              <input className={field} type="number" step="0.5" min={-90} max={100} value={changePct}
+                onChange={(e) => setChangePct(e.target.value)} required />
+            </label>
+          )}
+          {scenario === "promotion" && (
+            <label className="space-y-1 text-xs text-[#8FA3B3]">
+              Discount (%)
+              <input className={field} type="number" step="1" min={1} max={90} value={discountPct}
+                onChange={(e) => setDiscountPct(e.target.value)} required />
+            </label>
+          )}
+          {scenario === "demand_surge" && (
+            <label className="space-y-1 text-xs text-[#8FA3B3]">
+              Demand multiplier
+              <input className={field} type="number" step="0.05" min={0.1} max={5} value={multiplier}
+                onChange={(e) => setMultiplier(e.target.value)} required />
+            </label>
+          )}
+          {scenario !== "demand_surge" && (
+            <label className="space-y-1 text-xs text-[#8FA3B3]">
+              Elasticity (optional)
+              <input className={field} type="number" step="0.1" min={-10} max={0} value={elasticity}
+                placeholder={scenario === "price_change" ? "-0.8 (default)" : "-2.0 (default)"}
+                onChange={(e) => setElasticity(e.target.value)} />
+            </label>
+          )}
+        </div>
+
+        <button type="submit" disabled={loading} className="btn-primary min-h-[44px]">
+          {loading ? "Calculating…" : "Calculate"}
+        </button>
+      </form>
+
       {error && (
-        <div className="p-4 rounded-xl bg-[#EF4444]/15 border border-[#EF4444]/40 text-xs text-[#EF4444]">
+        <div role="alert" className="p-4 rounded-xl bg-[#EF4444]/15 border border-[#EF4444]/40 text-xs text-[#EF4444]">
           {error}
         </div>
       )}
 
-      {/* Scenario Picker */}
-      <div className="grid gap-4 md:grid-cols-3">
-        {scenarios.map((sc) => {
-          const isSelected = scenario === sc.id;
-          return (
-            <button
-              key={sc.id}
-              onClick={() => runSimulation(sc.id)}
-              disabled={loading}
-              className={`mise-card text-left p-5 space-y-2 transition-all cursor-pointer min-h-[44px] ${
-                isSelected
-                  ? "border-[#22D3EE] ring-1 ring-[#22D3EE]/50 bg-[#0D141B]"
-                  : "hover:border-[#38BDF8]/40"
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-[#22D3EE] uppercase tracking-wider">
-                  Scenario
-                </span>
-                {isSelected && (
-                  <span className="w-2 h-2 rounded-full bg-[#22D3EE] animate-pulse" />
-                )}
-              </div>
-              <h3 className="text-base font-bold text-[#F3F8FC]">{sc.label}</h3>
-              <p className="text-xs text-[#8FA3B3] leading-relaxed">{sc.desc}</p>
-            </button>
-          );
-        })}
-      </div>
-
-      {loading && (
-        <div className="glass-panel p-12 text-center text-[#8FA3B3] animate-pulse">
-          Simulating diner traffic, kitchen line throughput, and order mixes with AI assistant...
-        </div>
-      )}
-
-
-      {/* Results View */}
       {result && !loading && (
         <div className="space-y-6">
-          {/* Key Metric Tiles */}
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <div className="stat-tile space-y-1">
-              <span className="text-xs text-[#8FA3B3] uppercase font-semibold">
-                Projected Covers
-              </span>
-              <div className="flex items-baseline gap-3">
-                <span className="text-3xl font-extrabold text-[#F3F8FC]">
-                  {result.predicted_covers || 142}
-                </span>
-                <span className="text-xs font-bold text-[#34D399]">
-                  ▲ +28% vs Normal
-                </span>
-              </div>
+          {result.data_sources.simulated > 0 && (
+            <div role="status" className="p-4 rounded-xl bg-[#FF9F2E]/15 border border-[#FF9F2E]/40 text-xs text-[#FF9F2E] font-semibold">
+              Baseline uses {result.data_sources.simulated} simulated demo orders
+              ({result.window_start} to {result.window_end}).
             </div>
-
-            <div className="stat-tile space-y-1">
-              <span className="text-xs text-[#8FA3B3] uppercase font-semibold">
-                Forecasted Gross Revenue
-              </span>
-              <div className="flex items-baseline gap-3">
-                <span className="text-3xl font-extrabold text-[#22D3EE]">
-                  €{(result.predicted_revenue_eur || 4850).toLocaleString()}
+          )}
+          <div className="grid gap-4 sm:grid-cols-3">
+            {(["baseline", "result", "delta"] as const).map((k) => (
+              <div key={k} className="stat-tile space-y-2">
+                <span className="text-xs text-[#8FA3B3] uppercase font-semibold">
+                  {k === "baseline" ? "Baseline / week" : k === "result" ? "Scenario / week" : "Change / week"}
                 </span>
-                <span className="text-xs font-bold text-[#34D399]">
-                  ▲ +19.4% Margin
-                </span>
-              </div>
-            </div>
-
-            <div className="stat-tile space-y-1">
-              <span className="text-xs text-[#8FA3B3] uppercase font-semibold">
-                Kitchen Strain Index
-              </span>
-              <div className="flex items-baseline gap-3">
-                <span className="text-3xl font-extrabold text-[#FF9F2E]">
-                  MODERATE
-                </span>
-                <span className="text-xs text-[#8FA3B3]">
-                  Peak at 20:15
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Simulation Chart */}
-          <div className="mise-card p-6 space-y-6">
-            <div className="flex flex-wrap items-center justify-between gap-4">
-              <div>
-                <h3 className="text-base font-bold text-[#F3F8FC]">
-                  Shift Revenue Projection
-                </h3>
-                <p className="text-xs text-[#8FA3B3]">
-                  Blue/cyan bars: Expected revenue by service slot. Orange: Peak throughput ceiling.
-                </p>
-              </div>
-              <div className="flex items-center gap-4 text-xs font-semibold">
-                <span className="text-[#22D3EE]">■ Shift Revenue</span>
-                <span className="text-[#FF9F2E]">─ Kitchen Cap</span>
-                <span className="text-[#34D399]">▲ Positive Delta</span>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-4 sm:grid-cols-6 gap-4 items-end h-48 border-b border-[#38BDF8]/15 pb-2 pt-4">
-              {[
-                { slot: "17:30", val: 320, cap: 600 },
-                { slot: "18:30", val: 780, cap: 850 },
-                { slot: "19:30", val: 1420, cap: 1300 },
-                { slot: "20:30", val: 1350, cap: 1300 },
-                { slot: "21:30", val: 680, cap: 900 },
-                { slot: "22:30", val: 300, cap: 600 },
-              ].map((slot) => {
-                const height = Math.round((slot.val / 1500) * 150);
-                return (
-                  <div key={slot.slot} className="flex flex-col items-center gap-2">
-                    <div
-                      style={{ height: `${height}px` }}
-                      className="w-full max-w-[48px] rounded-t-xl bg-gradient-to-t from-[#2F7BFF] to-[#22D3EE] opacity-90 shadow-md shadow-cyan-950/20"
-                    />
-                    <span className="text-[11px] font-mono text-[#8FA3B3]">
-                      {slot.slot}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Recommendations */}
-          <div className="space-y-4">
-            <h3 className="text-base font-bold text-[#F3F8FC]">
-              Recommended Adaptations
-            </h3>
-            <div className="grid gap-4 md:grid-cols-2">
-              {(result.recommendations || [
-                {
-                  action: "Advance batch preparation for risotto and braised ragù by 2 hours.",
-                },
-                {
-                  action: "Add 1 additional runner from 19:00 to 21:30 to eliminate food runner wait times.",
-                },
-              ]).map((rec, idx) => (
-                <div key={idx} className="mise-card p-5 space-y-2">
-                  <span className="chip chip-unverified text-[11px] uppercase">
-                    Operational Advisory #{idx + 1}
+                <div className="text-sm text-[#F3F8FC]">
+                  Revenue{" "}
+                  <span className="font-extrabold text-xl">
+                    {k === "delta" ? signed(result[k].revenue_eur) : eur(result[k].revenue_eur)}
                   </span>
-                  <p className="text-sm text-[#F3F8FC] leading-relaxed">
-                    {rec.action || JSON.stringify(rec)}
-                  </p>
                 </div>
+                <div className="text-sm text-[#F3F8FC]">
+                  Margin{" "}
+                  <span className={`font-extrabold text-xl ${k === "delta" ? (result.delta.margin_eur >= 0 ? "text-[#34D399]" : "text-[#EF4444]") : ""}`}>
+                    {k === "delta" ? signed(result[k].margin_eur) : eur(result[k].margin_eur)}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="mise-card p-5 space-y-2">
+            <h3 className="text-base font-bold text-[#F3F8FC]">Assumptions</h3>
+            <ul className="list-disc pl-5 text-xs text-[#8FA3B3] space-y-1">
+              {result.assumptions.map((a) => (
+                <li key={a}>{a}</li>
               ))}
-            </div>
+            </ul>
+          </div>
+
+          <div className="glass-panel p-5 space-y-2">
+            <span className={`chip ${result.explanation_source === "llm" ? "chip-safe" : "chip-unverified"}`}>
+              {result.explanation_source === "llm" ? "AI explanation, numbers checked" : "Template explanation"}
+            </span>
+            <p className="text-sm text-[#F3F8FC] leading-relaxed">{result.explanation}</p>
           </div>
         </div>
       )}

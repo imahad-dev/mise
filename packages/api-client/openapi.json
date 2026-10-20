@@ -58,7 +58,7 @@
           "metrics"
         ],
         "summary": "Inference Metrics",
-        "description": "Aggregated inference metrics.\n\nTODO: Require owner auth (mise_owner cookie) when M1.3 lands.",
+        "description": "Aggregated inference metrics with cost tracking.\n\n- cost_usd comes from usage.cost in the inference provider response\n- daily_budget_remaining_usd from the most recent rate-limit header",
         "operationId": "inference_metrics_api_metrics_inference_get",
         "responses": {
           "200": {
@@ -67,6 +67,76 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/InferenceMetricsResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/config": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Get Auth Config",
+        "description": "Return public authentication and environment config (e.g. demo_mode).",
+        "operationId": "get_auth_config_api_auth_config_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthConfigResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/demo-login": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Demo Login",
+        "description": "Issue signed auth cookie for owner or staff in DEMO_MODE without credentials.\n\nRate limited to 20 per minute per client IP. Returns 404 if DEMO_MODE is false.",
+        "operationId": "demo_login_api_auth_demo_login_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DemoLoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Demo mode disabled"
+          },
+          "429": {
+            "description": "Rate limit exceeded (max 20 per minute per IP)"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -165,6 +235,31 @@
           },
           "401": {
             "description": "Unauthenticated"
+          }
+        }
+      }
+    },
+    "/api/demo/info": {
+      "get": {
+        "tags": [
+          "demo"
+        ],
+        "summary": "Get Demo Info",
+        "description": "Return live links for demo guest table, owner dashboard, and kitchen display.\n\nReturns 404 if DEMO_MODE is false.",
+        "operationId": "get_demo_info_api_demo_info_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DemoInfoResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Demo mode disabled"
           }
         }
       }
@@ -303,6 +398,54 @@
           },
           "401": {
             "description": "Unauthenticated or expired session"
+          }
+        }
+      }
+    },
+    "/api/guest/chat": {
+      "post": {
+        "tags": [
+          "guest"
+        ],
+        "summary": "Guest Chat",
+        "description": "Send a chat message to the AI menu assistant.\n\nRate limited to GUEST_CHAT_LIMIT messages per session.\nThe server builds the menu context \u2014 client only displays the response.",
+        "operationId": "guest_chat_api_guest_chat_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatMessageRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatMessageResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated or expired session"
+          },
+          "429": {
+            "description": "Chat message limit reached"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
           }
         }
       }
@@ -991,10 +1134,484 @@
           }
         }
       }
+    },
+    "/api/restaurants/{slug}/menu-items/ingest": {
+      "post": {
+        "tags": [
+          "owner"
+        ],
+        "summary": "Ingest Menu",
+        "description": "Analyze a menu photo via VLM and create menu items automatically.",
+        "operationId": "ingest_menu_api_restaurants__slug__menu_items_ingest_post",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Slug"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MenuIngestRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MenuIngestResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "description": "Unauthorized (Owner only)"
+          },
+          "404": {
+            "description": "Restaurant not found"
+          },
+          "429": {
+            "description": "Demo mode limit reached (max 3 per hour per IP)"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/restaurants/{slug}/ai/brief": {
+      "get": {
+        "tags": [
+          "owner"
+        ],
+        "summary": "Daily Brief",
+        "description": "Deterministic analytics brief; the LLM only narrates. Cached for 10m in DEMO_MODE.",
+        "operationId": "daily_brief_api_restaurants__slug__ai_brief_get",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Slug"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DailyBriefResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "description": "Unauthorized (Owner only)"
+          },
+          "404": {
+            "description": "Restaurant not found"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/restaurants/{slug}/ai/simulate": {
+      "post": {
+        "tags": [
+          "owner"
+        ],
+        "summary": "Simulate",
+        "description": "Deterministic what-if calculator; the LLM may only explain the result.",
+        "operationId": "simulate_api_restaurants__slug__ai_simulate_post",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Slug"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WhatIfRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WhatIfResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "description": "Unauthorized (Owner only)"
+          },
+          "404": {
+            "description": "Restaurant not found"
+          },
+          "422": {
+            "description": "Invalid scenario parameters"
+          }
+        }
+      }
+    },
+    "/api/restaurants/{slug}/demo/simulate-orders": {
+      "post": {
+        "tags": [
+          "owner"
+        ],
+        "summary": "Simulate Demo Orders",
+        "description": "Replace source='simulated' orders with a seeded synthetic history. DEMO_MODE only.",
+        "operationId": "simulate_demo_orders_api_restaurants__slug__demo_simulate_orders_post",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Slug"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SimulateOrdersRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimulateOrdersResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "description": "Unauthorized (Owner only)"
+          },
+          "404": {
+            "description": "Demo mode disabled or restaurant not found"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/restaurants/{slug}/demo/reset": {
+      "post": {
+        "tags": [
+          "owner"
+        ],
+        "summary": "Reset Demo Data",
+        "description": "Re-seed restaurant data and regenerate simulated state. DEMO_MODE only.",
+        "operationId": "reset_demo_data_api_restaurants__slug__demo_reset_post",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Slug"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusOkResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "description": "Unauthorized (Owner only)"
+          },
+          "404": {
+            "description": "Demo mode disabled or restaurant not found"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
     "schemas": {
+      "AuthConfigResponse": {
+        "properties": {
+          "demo_mode": {
+            "type": "boolean",
+            "title": "Demo Mode"
+          }
+        },
+        "type": "object",
+        "required": [
+          "demo_mode"
+        ],
+        "title": "AuthConfigResponse"
+      },
+      "BacktestMetric": {
+        "properties": {
+          "method": {
+            "type": "string",
+            "title": "Method"
+          },
+          "wape": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wape"
+          },
+          "mae": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mae"
+          },
+          "n_points": {
+            "type": "integer",
+            "title": "N Points"
+          }
+        },
+        "type": "object",
+        "required": [
+          "method",
+          "wape",
+          "mae",
+          "n_points"
+        ],
+        "title": "BacktestMetric"
+      },
+      "BriefAction": {
+        "properties": {
+          "rank": {
+            "type": "integer",
+            "title": "Rank"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "promote_puzzle",
+              "reprice_plowhorse",
+              "review_dog",
+              "prep_target"
+            ],
+            "title": "Type"
+          },
+          "item_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Id"
+          },
+          "item": {
+            "type": "string",
+            "title": "Item"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "evidence": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "type": "object",
+            "title": "Evidence"
+          },
+          "estimated_impact_eur_per_week": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estimated Impact Eur Per Week"
+          },
+          "formula": {
+            "type": "string",
+            "title": "Formula"
+          }
+        },
+        "type": "object",
+        "required": [
+          "rank",
+          "type",
+          "item_id",
+          "item",
+          "title",
+          "evidence",
+          "estimated_impact_eur_per_week",
+          "formula"
+        ],
+        "title": "BriefAction"
+      },
+      "ChatMessageRequest": {
+        "properties": {
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "message"
+        ],
+        "title": "ChatMessageRequest"
+      },
+      "ChatMessageResponse": {
+        "properties": {
+          "reply": {
+            "type": "string",
+            "title": "Reply"
+          },
+          "suggested_items": {
+            "items": {
+              "$ref": "#/components/schemas/ChatSuggestedItem"
+            },
+            "type": "array",
+            "title": "Suggested Items",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "reply"
+        ],
+        "title": "ChatMessageResponse"
+      },
+      "ChatSuggestedItem": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "ChatSuggestedItem"
+      },
       "CreateGuestSessionRequest": {
         "properties": {
           "qr_token": {
@@ -1082,6 +1699,282 @@
           "items"
         ],
         "title": "CreateOrderRequest"
+      },
+      "DailyBriefResponse": {
+        "properties": {
+          "date": {
+            "type": "string",
+            "title": "Date"
+          },
+          "window_start": {
+            "type": "string",
+            "title": "Window Start"
+          },
+          "window_end": {
+            "type": "string",
+            "title": "Window End"
+          },
+          "data_sources": {
+            "$ref": "#/components/schemas/DataSources"
+          },
+          "kpis": {
+            "$ref": "#/components/schemas/Kpis"
+          },
+          "menu_engineering": {
+            "items": {
+              "$ref": "#/components/schemas/MenuEngineeringItem"
+            },
+            "type": "array",
+            "title": "Menu Engineering"
+          },
+          "thresholds": {
+            "$ref": "#/components/schemas/MenuThresholds"
+          },
+          "pairings": {
+            "items": {
+              "$ref": "#/components/schemas/Pairing"
+            },
+            "type": "array",
+            "title": "Pairings"
+          },
+          "peak_hours": {
+            "items": {
+              "$ref": "#/components/schemas/PeakHour"
+            },
+            "type": "array",
+            "title": "Peak Hours"
+          },
+          "forecast": {
+            "$ref": "#/components/schemas/ForecastSummary"
+          },
+          "actions": {
+            "items": {
+              "$ref": "#/components/schemas/BriefAction"
+            },
+            "type": "array",
+            "title": "Actions"
+          },
+          "summary": {
+            "type": "string",
+            "title": "Summary"
+          },
+          "summary_source": {
+            "type": "string",
+            "enum": [
+              "llm",
+              "template"
+            ],
+            "title": "Summary Source"
+          }
+        },
+        "type": "object",
+        "required": [
+          "date",
+          "window_start",
+          "window_end",
+          "data_sources",
+          "kpis",
+          "menu_engineering",
+          "thresholds",
+          "pairings",
+          "peak_hours",
+          "forecast",
+          "actions",
+          "summary",
+          "summary_source"
+        ],
+        "title": "DailyBriefResponse"
+      },
+      "DataSources": {
+        "properties": {
+          "live": {
+            "type": "integer",
+            "title": "Live"
+          },
+          "simulated": {
+            "type": "integer",
+            "title": "Simulated"
+          }
+        },
+        "type": "object",
+        "required": [
+          "live",
+          "simulated"
+        ],
+        "title": "DataSources"
+      },
+      "DemoInfoResponse": {
+        "properties": {
+          "guest_url": {
+            "type": "string",
+            "title": "Guest Url"
+          },
+          "owner_url": {
+            "type": "string",
+            "title": "Owner Url"
+          },
+          "kitchen_url": {
+            "type": "string",
+            "title": "Kitchen Url"
+          },
+          "qr_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Qr Token"
+          },
+          "table_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Table Label"
+          }
+        },
+        "type": "object",
+        "required": [
+          "guest_url",
+          "owner_url",
+          "kitchen_url"
+        ],
+        "title": "DemoInfoResponse"
+      },
+      "DemoLoginRequest": {
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": [
+              "owner",
+              "staff"
+            ],
+            "title": "Role"
+          }
+        },
+        "type": "object",
+        "required": [
+          "role"
+        ],
+        "title": "DemoLoginRequest"
+      },
+      "ForecastPoint": {
+        "properties": {
+          "date": {
+            "type": "string",
+            "title": "Date"
+          },
+          "item_id": {
+            "type": "string",
+            "title": "Item Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "daypart": {
+            "type": "string",
+            "enum": [
+              "lunch",
+              "dinner"
+            ],
+            "title": "Daypart"
+          },
+          "forecast": {
+            "type": "number",
+            "title": "Forecast"
+          },
+          "lo": {
+            "type": "number",
+            "title": "Lo"
+          },
+          "hi": {
+            "type": "number",
+            "title": "Hi"
+          }
+        },
+        "type": "object",
+        "required": [
+          "date",
+          "item_id",
+          "name",
+          "daypart",
+          "forecast",
+          "lo",
+          "hi"
+        ],
+        "title": "ForecastPoint"
+      },
+      "ForecastSummary": {
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Run Id"
+          },
+          "method": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Method"
+          },
+          "model_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Name"
+          },
+          "history_days": {
+            "type": "integer",
+            "title": "History Days"
+          },
+          "low_confidence": {
+            "type": "boolean",
+            "title": "Low Confidence"
+          },
+          "backtest": {
+            "items": {
+              "$ref": "#/components/schemas/BacktestMetric"
+            },
+            "type": "array",
+            "title": "Backtest"
+          },
+          "points": {
+            "items": {
+              "$ref": "#/components/schemas/ForecastPoint"
+            },
+            "type": "array",
+            "title": "Points"
+          }
+        },
+        "type": "object",
+        "required": [
+          "run_id",
+          "method",
+          "model_name",
+          "history_days",
+          "low_confidence",
+          "backtest",
+          "points"
+        ],
+        "title": "ForecastSummary"
       },
       "GuestMenuItemResponse": {
         "properties": {
@@ -1362,6 +2255,33 @@
               }
             ],
             "title": "Max Latency Ms"
+          },
+          "total_cost_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Cost Usd"
+          },
+          "daily_budget_remaining_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Daily Budget Remaining Usd"
+          },
+          "provider_label": {
+            "type": "string",
+            "title": "Provider Label",
+            "default": "OpenAI-compatible endpoint"
           }
         },
         "type": "object",
@@ -1558,6 +2478,39 @@
         ],
         "title": "KitchenOrdersListResponse"
       },
+      "Kpis": {
+        "properties": {
+          "orders": {
+            "type": "integer",
+            "title": "Orders"
+          },
+          "revenue_eur": {
+            "type": "number",
+            "title": "Revenue Eur"
+          },
+          "aov_eur": {
+            "type": "number",
+            "title": "Aov Eur"
+          },
+          "contribution_margin_eur": {
+            "type": "number",
+            "title": "Contribution Margin Eur"
+          },
+          "margin_pct": {
+            "type": "number",
+            "title": "Margin Pct"
+          }
+        },
+        "type": "object",
+        "required": [
+          "orders",
+          "revenue_eur",
+          "aov_eur",
+          "contribution_margin_eur",
+          "margin_pct"
+        ],
+        "title": "Kpis"
+      },
       "LoginRequest": {
         "properties": {
           "role": {
@@ -1633,6 +2586,119 @@
           "role"
         ],
         "title": "MeResponse"
+      },
+      "MenuEngineeringItem": {
+        "properties": {
+          "item_id": {
+            "type": "string",
+            "title": "Item Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "units": {
+            "type": "integer",
+            "title": "Units"
+          },
+          "weekly_units": {
+            "type": "number",
+            "title": "Weekly Units"
+          },
+          "revenue_eur": {
+            "type": "number",
+            "title": "Revenue Eur"
+          },
+          "unit_margin_eur": {
+            "type": "number",
+            "title": "Unit Margin Eur"
+          },
+          "contribution_eur": {
+            "type": "number",
+            "title": "Contribution Eur"
+          },
+          "menu_class": {
+            "type": "string",
+            "enum": [
+              "star",
+              "plowhorse",
+              "puzzle",
+              "dog"
+            ],
+            "title": "Menu Class"
+          }
+        },
+        "type": "object",
+        "required": [
+          "item_id",
+          "name",
+          "units",
+          "weekly_units",
+          "revenue_eur",
+          "unit_margin_eur",
+          "contribution_eur",
+          "menu_class"
+        ],
+        "title": "MenuEngineeringItem"
+      },
+      "MenuIngestRequest": {
+        "properties": {
+          "image_url": {
+            "type": "string",
+            "title": "Image Url"
+          },
+          "language": {
+            "type": "string",
+            "title": "Language",
+            "default": "it"
+          }
+        },
+        "type": "object",
+        "required": [
+          "image_url"
+        ],
+        "title": "MenuIngestRequest",
+        "description": "Request to analyze a menu photo or text via AI."
+      },
+      "MenuIngestResponse": {
+        "properties": {
+          "created_count": {
+            "type": "integer",
+            "title": "Created Count"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/OwnerMenuItemResponse"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "created_count",
+          "items"
+        ],
+        "title": "MenuIngestResponse",
+        "description": "Response after AI menu ingest \u2014 created item IDs."
+      },
+      "MenuThresholds": {
+        "properties": {
+          "median_units": {
+            "type": "number",
+            "title": "Median Units"
+          },
+          "median_unit_margin_eur": {
+            "type": "number",
+            "title": "Median Unit Margin Eur"
+          }
+        },
+        "type": "object",
+        "required": [
+          "median_units",
+          "median_unit_margin_eur"
+        ],
+        "title": "MenuThresholds"
       },
       "OrderItemRequest": {
         "properties": {
@@ -2027,6 +3093,44 @@
         ],
         "title": "OwnerTableResponse"
       },
+      "Pairing": {
+        "properties": {
+          "a": {
+            "type": "string",
+            "title": "A"
+          },
+          "b": {
+            "type": "string",
+            "title": "B"
+          },
+          "a_name": {
+            "type": "string",
+            "title": "A Name"
+          },
+          "b_name": {
+            "type": "string",
+            "title": "B Name"
+          },
+          "orders_together": {
+            "type": "integer",
+            "title": "Orders Together"
+          },
+          "lift": {
+            "type": "number",
+            "title": "Lift"
+          }
+        },
+        "type": "object",
+        "required": [
+          "a",
+          "b",
+          "a_name",
+          "b_name",
+          "orders_together",
+          "lift"
+        ],
+        "title": "Pairing"
+      },
       "PatchGuestSessionRequest": {
         "properties": {
           "language": {
@@ -2227,6 +3331,81 @@
         "type": "object",
         "title": "PatchMenuItemRequest"
       },
+      "PeakHour": {
+        "properties": {
+          "hour": {
+            "type": "integer",
+            "title": "Hour"
+          },
+          "avg_orders_per_day": {
+            "type": "number",
+            "title": "Avg Orders Per Day"
+          },
+          "avg_revenue_per_day_eur": {
+            "type": "number",
+            "title": "Avg Revenue Per Day Eur"
+          }
+        },
+        "type": "object",
+        "required": [
+          "hour",
+          "avg_orders_per_day",
+          "avg_revenue_per_day_eur"
+        ],
+        "title": "PeakHour"
+      },
+      "SimulateOrdersRequest": {
+        "properties": {
+          "days": {
+            "type": "integer",
+            "maximum": 120.0,
+            "minimum": 7.0,
+            "title": "Days",
+            "default": 56
+          },
+          "seed": {
+            "type": "integer",
+            "title": "Seed",
+            "default": 42
+          },
+          "promotion": {
+            "type": "boolean",
+            "title": "Promotion",
+            "default": true
+          }
+        },
+        "type": "object",
+        "title": "SimulateOrdersRequest"
+      },
+      "SimulateOrdersResponse": {
+        "properties": {
+          "orders_created": {
+            "type": "integer",
+            "title": "Orders Created"
+          },
+          "start_date": {
+            "type": "string",
+            "title": "Start Date"
+          },
+          "end_date": {
+            "type": "string",
+            "title": "End Date"
+          },
+          "assumptions": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Assumptions"
+          }
+        },
+        "type": "object",
+        "required": [
+          "orders_created",
+          "start_date",
+          "end_date",
+          "assumptions"
+        ],
+        "title": "SimulateOrdersResponse"
+      },
       "StatusOkResponse": {
         "properties": {
           "status": {
@@ -2280,6 +3459,179 @@
           "type"
         ],
         "title": "ValidationError"
+      },
+      "WhatIfRequest": {
+        "properties": {
+          "scenario": {
+            "type": "string",
+            "enum": [
+              "price_change",
+              "promotion",
+              "demand_surge"
+            ],
+            "title": "Scenario"
+          },
+          "item_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Id"
+          },
+          "change_pct": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 100.0,
+                "minimum": -90.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Change Pct"
+          },
+          "discount_pct": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 90.0,
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Discount Pct"
+          },
+          "multiplier": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 5.0,
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Multiplier"
+          },
+          "elasticity": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 0.0,
+                "minimum": -10.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Elasticity"
+          }
+        },
+        "type": "object",
+        "required": [
+          "scenario"
+        ],
+        "title": "WhatIfRequest"
+      },
+      "WhatIfResponse": {
+        "properties": {
+          "scenario": {
+            "type": "string",
+            "title": "Scenario"
+          },
+          "item": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item"
+          },
+          "window_start": {
+            "type": "string",
+            "title": "Window Start"
+          },
+          "window_end": {
+            "type": "string",
+            "title": "Window End"
+          },
+          "data_sources": {
+            "$ref": "#/components/schemas/DataSources"
+          },
+          "baseline": {
+            "$ref": "#/components/schemas/WhatIfTotals"
+          },
+          "result": {
+            "$ref": "#/components/schemas/WhatIfTotals"
+          },
+          "delta": {
+            "$ref": "#/components/schemas/WhatIfTotals"
+          },
+          "assumptions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Assumptions"
+          },
+          "explanation": {
+            "type": "string",
+            "title": "Explanation"
+          },
+          "explanation_source": {
+            "type": "string",
+            "enum": [
+              "llm",
+              "template"
+            ],
+            "title": "Explanation Source"
+          }
+        },
+        "type": "object",
+        "required": [
+          "scenario",
+          "item",
+          "window_start",
+          "window_end",
+          "data_sources",
+          "baseline",
+          "result",
+          "delta",
+          "assumptions",
+          "explanation",
+          "explanation_source"
+        ],
+        "title": "WhatIfResponse"
+      },
+      "WhatIfTotals": {
+        "properties": {
+          "revenue_eur": {
+            "type": "number",
+            "title": "Revenue Eur"
+          },
+          "margin_eur": {
+            "type": "number",
+            "title": "Margin Eur"
+          }
+        },
+        "type": "object",
+        "required": [
+          "revenue_eur",
+          "margin_eur"
+        ],
+        "title": "WhatIfTotals"
       }
     }
   }

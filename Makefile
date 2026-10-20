@@ -1,4 +1,4 @@
-.PHONY: up down reset dev logs build migrate migration seed lint test test-py test-ts smoke smoke-llm gen-client setup ci verify-a verify-b verify-c verify-d verify-e
+.PHONY: up down reset dev logs build migrate migration seed simulate lint test test-py test-ts smoke smoke-llm gen-client setup ci verify-a verify-b verify-c verify-d verify-e verify-f
 
 # --- Setup ---
 setup:
@@ -34,6 +34,9 @@ migration:
 seed:
 	docker compose exec -T api python scripts/seed.py
 
+simulate:
+	docker compose exec -T api python scripts/simulate.py
+
 # --- Quality ---
 lint:
 	uv run --project services/api ruff check services/ scripts/
@@ -64,6 +67,9 @@ verify-d:
 
 verify-e:
 	@bash scripts/verify_e.sh
+
+verify-f:
+	@bash scripts/verify_f.sh
 
 # --- Inference ---
 smoke:

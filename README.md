@@ -1,6 +1,6 @@
 # Mise — Restaurant Revenue Copilot & Kitchen Operations Platform
 
-Mise is an autonomous operational and revenue optimization platform engineered for independent restaurants. Guests scan table QR codes to access a high-performance web menu with deterministic allergen filtering, multi-language localization, and instant ordering. Orders flow in real time through an unbuffered Server-Sent Events (SSE) kitchen display system (KDS). Behind the scenes, restaurant owners receive AI-driven daily operational briefs, scenario margin simulations, and visual menu ingestion.
+Mise is an ordering, kitchen and revenue analytics platform for independent restaurants. Guests scan table QR codes to open a web menu with deterministic allergen filtering, English and Italian localization, and ordering. Orders flow in real time to a Server-Sent Events (SSE) kitchen display system (KDS). Owners get a daily revenue brief computed from order history (KPIs, menu engineering, a backtested 7-day demand forecast and ranked actions), a deterministic what-if calculator, and visual menu ingestion. The language model only writes plain-language summaries of numbers that were already computed.
 
 ---
 
@@ -8,25 +8,28 @@ Mise is an autonomous operational and revenue optimization platform engineered f
 
 - **Guest Mobile Web Ordering (`guest-web`)**
   - QR-driven table session initialization.
-  - Multi-language support (English, Italian, French, Spanish, German).
+  - English and Italian (only these two languages are supported).
   - Deterministic EU-14 allergen cross-referencing with explicit acknowledgment guards.
   - Cart persistence with server-verified idempotency tokens.
   - Live order status tracking powered by Server-Sent Events (SSE).
-  - Contextual AI concierge chat assistant.
+  - AI menu chat assistant (sees the menu only, never the guest's allergen or dietary profile).
 
 - **Kitchen Display System (`owner-web`)**
   - Low-latency, high-contrast KDS optimized for busy kitchen lines.
   - Real-time SSE order streaming with automatic reconnection and polling fallbacks.
   - High-visibility allergy alert banners extracted from immutable order item snapshots.
-  - Color-coded ticket aging indicators (green < 5m, yellow < 15m, red >= 15m).
+  - Color-coded ticket aging (green under 10 minutes, amber from 10 minutes, red from 20 minutes).
   - Idempotent ticket bump workflow with a 60-second undo recall safety window.
 
 - **Owner Revenue Copilot (`owner-web`)**
-  - Live revenue metrics, margin tracking, and shift volume tracking.
-  - AI daily operations briefing predicting peak demand curves and prep bottlenecks.
-  - Interactive scenario simulator (weekend dinner rush, weather shifts, banquets).
+  - Revenue brief (`/brief`) over the last 28 days: revenue, average order value and contribution margin from order snapshots; menu-engineering quadrant (star, plowhorse, puzzle, dog by median units and median unit margin); top item pairings by lift; peak hours.
+  - 7-day forecast per item and daypart (lunch/dinner): seasonal-naive and 4-week-mean baselines plus a gradient-boosting model, compared in a 14-day rolling-origin backtest; the lowest-WAPE method is used and its WAPE is shown next to the naive baseline. Under 14 days of history it uses the baseline and is flagged low confidence. No weather, holidays or reservations are modeled.
+  - 3 to 5 ranked actions (promote puzzles, reprice plowhorses, review dogs, prep targets) with evidence numbers and estimated weekly impact from documented formulas.
+  - What-if calculator (`/ai`): price change, promotion or demand surge on recent sales with stated elasticity assumptions; returns weekly revenue and margin deltas. Cannibalization, capacity and staffing are not modeled.
+  - Simulated demo data (`make simulate` or the **Generate demo data** button in DEMO_MODE), always stored as `source='simulated'` and labeled in the UI.
   - Visual Menu Ingestion (VLM) for digitizing paper menus from photo URLs into structured catalog items.
-  - Table management and high-resolution QR code generator.
+  - Table management and QR code generator.
+  - Methods, assumptions and limits: [docs/analytics.md](docs/analytics.md).
 
 ---
 
@@ -45,7 +48,8 @@ graph TD
 
     subgraph Backend["FastAPI Backend (services/api :8000)"]
         API["FastAPI Core Engine<br/>AsyncPG & Psycopg"]
-        AUTH["Role-Separated Auth<br/>(mise_guest / mise_owner / mise_staff)"]
+        AUTH["Signed Cookie Auth<br/>(mise_auth: owner/staff, mise_guest)"]
+        ANALYTICS["Analytics & Forecast<br/>(SQL aggregates, backtested model)"]
         ALLERGEN["Deterministic Allergen Engine<br/>(EU-14 Exact Match & Precedence)"]
         IDEMP["Idempotency Guard<br/>(Server SHA-256 Payload Hash)"]
         INF["Generic LLM Client<br/>(Presets, Semaphore, Daily Cap)"]
@@ -67,6 +71,7 @@ graph TD
     API --> AUTH
     API --> ALLERGEN
     API --> IDEMP
+    API --> ANALYTICS
     API --> INF
     API --> PG
     API --> REDIS
@@ -84,12 +89,12 @@ graph TD
 | Guest Menu & Allergen Filter | Kitchen Display System (KDS) |
 |:---:|:---:|
 | ![Guest Menu](docs/screenshots/guest-menu.png) | ![Kitchen Display](docs/screenshots/kitchen-display.png) |
-| *Interactive multi-lingual menu with EU-14 dietary filters* | *Real-time ticket stream with prominent allergy banners* |
+| *English/Italian menu with EU-14 allergen filters* | *Real-time ticket stream with prominent allergy banners* |
 
-| Daily Operations Brief | AI Scenario Simulator |
+| Revenue Brief | What-if Calculator |
 |:---:|:---:|
-| ![Daily Brief](docs/screenshots/daily-brief.png) | ![Scenario Simulator](docs/screenshots/scenario-simulator.png) |
-| *Hourly cover distribution and prep recommendations* | *Turnover, margin, and kitchen line throughput modeling* |
+| ![Revenue Brief](docs/screenshots/daily-brief.png) | ![What-if Calculator](docs/screenshots/scenario-simulator.png) |
+| *KPIs, menu-engineering quadrant, backtested forecast and ranked actions* | *Weekly revenue and margin deltas with listed assumptions* |
 
 ---
 
@@ -118,6 +123,9 @@ make migrate
 
 # Seed initial restaurant menu and tables
 make seed
+
+# Optional: 56 days of simulated demo orders for the brief and forecast
+make simulate
 ```
 
 ### 3. Access Services
@@ -159,8 +167,9 @@ Mise follows a strict **Free-Only Policy** (`LLM_FREE_ONLY=true`). The project n
 > [!WARNING]
 > **Privacy Note on Free LLM Tiers:**
 > Free API tiers provided by cloud AI vendors may use submitted prompts to train or improve their models. To protect diner privacy, Mise operates under an **air-gapped privacy design**:
-> - Only **synthetic business data** (e.g. hypothetical turnover simulations, public dish descriptions) is ever processed by LLMs.
-> - **Real guest personal data, diner contact information, and guest allergy profiles are NEVER sent to LLMs.** Allergen cross-checking is performed entirely on your local server via deterministic database set operations.
+> - Models receive menu data (dish names, prices, declared allergens), menu photos you submit for ingestion, the text a guest types into the menu chat, and aggregate business figures (sales totals, computed actions) for summaries.
+> - **Guest allergen and dietary profiles, and guest personal data, are never sent to models.** Allergen cross-checking runs on your server with deterministic set operations.
+> - Models never produce numbers shown as analytics: summaries are rejected unless every number in them already appears in the computed facts.
 
 ### Provider Presets
 
@@ -259,8 +268,8 @@ make ci
 
 1. **Deterministic Allergen Safety**: Food allergies can be life-threatening. Mise never relies on generative models or fuzzy embeddings to evaluate dietary risks. Menu items are checked with exact set theory against the EU-14 regulatory allergen catalog.
 2. **Server-Side Idempotency**: Flaky mobile restaurant Wi-Fi can trigger duplicate network requests. Mise computes a deterministic SHA-256 payload hash on the server. If an identical `idempotency_key` is re-sent, the existing order is returned without duplicating tickets.
-3. **Role-Separated Signed Cookies**: All session states (`mise_guest`, `mise_owner`, `mise_staff`) use signed, httpOnly cookies with strict SameSite configurations, isolating guest browser contexts from operational restaurant management.
-4. **Daily Request Safeguards**: Non-local AI provider usage is capped via Redis UTC day keys (`LLM_DAILY_REQUEST_CAP`). When the cap or provider 429 limits are reached, the system falls back gracefully with HTTP 503 `ai_unavailable` while dining and kitchen operations proceed without interruption.
+3. **Signed Cookies**: Two HMAC-signed, httpOnly, `SameSite=Lax` cookies: `mise_auth` (owner or staff role, 8 hours) and `mise_guest` (guest session, 4 hours), keeping guest sessions separate from restaurant management.
+4. **Daily Request Safeguards**: Non-local AI provider usage is capped via Redis UTC day keys (`LLM_DAILY_REQUEST_CAP`). When the cap or provider 429 limits are reached, AI endpoints return HTTP 503 `ai_unavailable`; the revenue brief and what-if fall back to template text, and dining and kitchen operations are unaffected.
 
 ---
 

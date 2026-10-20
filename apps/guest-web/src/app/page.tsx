@@ -161,7 +161,7 @@ export default function HomePage() {
               </h1>
 
               <p className="text-base sm:text-lg text-[#8FA3B3] leading-relaxed">
-                Autonomous restaurant operations and revenue optimization platform, powered by AI inference.
+                Ordering, kitchen display and revenue analytics for independent restaurants.
               </p>
 
               <div className="pt-2 flex flex-wrap gap-3">
@@ -307,7 +307,7 @@ export default function HomePage() {
                   Owner dashboard
                 </h3>
                 <p className="text-xs text-[#8FA3B3] leading-relaxed">
-                  Real-time profit tracking, AI daily briefing with forecast curves, scenario simulator, and VLM menu ingest.
+                  Revenue brief with menu engineering and a backtested forecast, what-if calculator, and VLM menu ingest.
                 </p>
 
                 <div className="space-y-2">
@@ -315,7 +315,7 @@ export default function HomePage() {
                     href={`${ownerUrl}/brief`}
                     className="block p-2.5 rounded-xl bg-[#070B10] border border-[#38BDF8]/15 hover:border-[#22D3EE]/40 transition-colors text-xs text-[#F3F8FC] font-semibold"
                   >
-                    📈 Daily AI Brief & Forecast →
+                    📈 Revenue Brief & Forecast →
                   </a>
                   <a
                     href={`${ownerUrl}/menu/ingest`}
@@ -327,7 +327,7 @@ export default function HomePage() {
                     href={`${ownerUrl}/ai`}
                     className="block p-2.5 rounded-xl bg-[#070B10] border border-[#38BDF8]/15 hover:border-[#22D3EE]/40 transition-colors text-xs text-[#F3F8FC] font-semibold"
                   >
-                    🔮 Weekend Rush Simulation →
+                    🔮 What-if Calculator →
                   </a>
                 </div>
               </div>
@@ -349,7 +349,7 @@ export default function HomePage() {
               Guided tour (3 minutes)
             </h2>
             <p className="text-xs sm:text-sm text-[#8FA3B3] mt-1">
-              Follow this step-by-step walkthrough to experience end-to-end autonomous restaurant intelligence:
+              Follow this step-by-step walkthrough from guest order to kitchen ticket to owner analytics:
             </p>
           </div>
 
@@ -386,7 +386,7 @@ export default function HomePage() {
                 Minute 3: Owner Copilot
               </h4>
               <p className="text-xs text-[#8FA3B3] leading-relaxed">
-                Open the <span className="text-[#34D399]">Owner Dashboard</span>. Inspect AI daily briefing, try the menu image ingest with VLM, and simulate rush hour covers and revenue.
+                Open the <span className="text-[#34D399]">Owner Dashboard</span>. Generate demo data on the Revenue Brief, try the menu image ingest with VLM, and run a what-if price change.
               </p>
             </div>
           </div>

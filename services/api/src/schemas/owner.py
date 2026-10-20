@@ -104,33 +104,143 @@ class MenuIngestResponse(BaseModel):
     items: list[OwnerMenuItemResponse]
 
 
-class DailyBriefAction(BaseModel):
-    type: str
+# --- Analytics: brief, forecast, what-if, demo order simulation ---
+
+
+class DataSources(BaseModel):
+    live: int
+    simulated: int
+
+
+class Kpis(BaseModel):
+    orders: int
+    revenue_eur: float
+    aov_eur: float
+    contribution_margin_eur: float
+    margin_pct: float
+
+
+class MenuEngineeringItem(BaseModel):
+    item_id: str
+    name: str
+    units: int
+    weekly_units: float
+    revenue_eur: float
+    unit_margin_eur: float
+    contribution_eur: float
+    menu_class: Literal["star", "plowhorse", "puzzle", "dog"]
+
+
+class MenuThresholds(BaseModel):
+    median_units: float
+    median_unit_margin_eur: float
+
+
+class Pairing(BaseModel):
+    a: str
+    b: str
+    a_name: str
+    b_name: str
+    orders_together: int
+    lift: float
+
+
+class PeakHour(BaseModel):
+    hour: int
+    avg_orders_per_day: float
+    avg_revenue_per_day_eur: float
+
+
+class BacktestMetric(BaseModel):
+    method: str
+    wape: float | None
+    mae: float | None
+    n_points: int
+
+
+class ForecastPoint(BaseModel):
+    date: str
+    item_id: str
+    name: str
+    daypart: Literal["lunch", "dinner"]
+    forecast: float
+    lo: float
+    hi: float
+
+
+class ForecastSummary(BaseModel):
+    run_id: uuid.UUID
+    method: str | None
+    model_name: str | None
+    history_days: int
+    low_confidence: bool
+    backtest: list[BacktestMetric]
+    points: list[ForecastPoint]
+
+
+class BriefAction(BaseModel):
+    rank: int
+    type: Literal["promote_puzzle", "reprice_plowhorse", "review_dog", "prep_target"]
+    item_id: str | None
     item: str
-    reason: str
+    title: str
+    evidence: dict[str, float | int | str]
+    estimated_impact_eur_per_week: float | None
+    formula: str
 
 
 class DailyBriefResponse(BaseModel):
     date: str
+    window_start: str
+    window_end: str
+    data_sources: DataSources
+    kpis: Kpis
+    menu_engineering: list[MenuEngineeringItem]
+    thresholds: MenuThresholds
+    pairings: list[Pairing]
+    peak_hours: list[PeakHour]
+    forecast: ForecastSummary
+    actions: list[BriefAction]
     summary: str
-    actions: list[DailyBriefAction]
+    summary_source: Literal["llm", "template"]
 
 
-class SimulateRequest(BaseModel):
-    scenario: str = "weekend_rush"
-    parameters: dict | None = None
+class WhatIfRequest(BaseModel):
+    scenario: Literal["price_change", "promotion", "demand_surge"]
+    item_id: uuid.UUID | None = None
+    change_pct: float | None = Field(default=None, ge=-90, le=100)
+    discount_pct: float | None = Field(default=None, gt=0, le=90)
+    multiplier: float | None = Field(default=None, gt=0, le=5)
+    elasticity: float | None = Field(default=None, ge=-10, le=0)
 
 
-class SimulateRecommendation(BaseModel):
-    action: str
-    item: str | None = None
-    shift: str | None = None
-    quantity: int | None = None
-    extra_staff: int | None = None
+class WhatIfTotals(BaseModel):
+    revenue_eur: float
+    margin_eur: float
 
 
-class SimulateResponse(BaseModel):
+class WhatIfResponse(BaseModel):
     scenario: str
-    predicted_covers: int
-    predicted_revenue_eur: float
-    recommendations: list[SimulateRecommendation]
+    item: str | None
+    window_start: str
+    window_end: str
+    data_sources: DataSources
+    baseline: WhatIfTotals
+    result: WhatIfTotals
+    delta: WhatIfTotals
+    assumptions: list[str]
+    explanation: str
+    explanation_source: Literal["llm", "template"]
+
+
+class SimulateOrdersRequest(BaseModel):
+    days: int = Field(default=56, ge=7, le=120)
+    seed: int = 42
+    promotion: bool = True
+
+
+class SimulateOrdersResponse(BaseModel):
+    orders_created: int
+    start_date: str
+    end_date: str
+    assumptions: dict

@@ -53,13 +53,56 @@ export interface paths {
         };
         /**
          * Inference Metrics
-         * @description Aggregated inference metrics.
+         * @description Aggregated inference metrics with cost tracking.
          *
-         *     TODO: Require owner auth (mise_owner cookie) when M1.3 lands.
+         *     - cost_usd comes from usage.cost in the inference provider response
+         *     - daily_budget_remaining_usd from the most recent rate-limit header
          */
         get: operations["inference_metrics_api_metrics_inference_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Auth Config
+         * @description Return public authentication and environment config (e.g. demo_mode).
+         */
+        get: operations["get_auth_config_api_auth_config_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/demo-login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Demo Login
+         * @description Issue signed auth cookie for owner or staff in DEMO_MODE without credentials.
+         *
+         *     Rate limited to 20 per minute per client IP. Returns 404 if DEMO_MODE is false.
+         */
+        post: operations["demo_login_api_auth_demo_login_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -120,6 +163,28 @@ export interface paths {
          * @description Return current authenticated role.
          */
         get: operations["get_me_api_auth_me_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/demo/info": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Demo Info
+         * @description Return live links for demo guest table, owner dashboard, and kitchen display.
+         *
+         *     Returns 404 if DEMO_MODE is false.
+         */
+        get: operations["get_demo_info_api_demo_info_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -194,6 +259,29 @@ export interface paths {
         get: operations["get_guest_menu_api_guest_menu_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/guest/chat": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Guest Chat
+         * @description Send a chat message to the AI menu assistant.
+         *
+         *     Rate limited to GUEST_CHAT_LIMIT messages per session.
+         *     The server builds the menu context — client only displays the response.
+         */
+        post: operations["guest_chat_api_guest_chat_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -431,10 +519,175 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/restaurants/{slug}/menu-items/ingest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ingest Menu
+         * @description Analyze a menu photo via VLM and create menu items automatically.
+         */
+        post: operations["ingest_menu_api_restaurants__slug__menu_items_ingest_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/restaurants/{slug}/ai/brief": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Daily Brief
+         * @description Deterministic analytics brief; the LLM only narrates. Cached for 10m in DEMO_MODE.
+         */
+        get: operations["daily_brief_api_restaurants__slug__ai_brief_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/restaurants/{slug}/ai/simulate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Simulate
+         * @description Deterministic what-if calculator; the LLM may only explain the result.
+         */
+        post: operations["simulate_api_restaurants__slug__ai_simulate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/restaurants/{slug}/demo/simulate-orders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Simulate Demo Orders
+         * @description Replace source='simulated' orders with a seeded synthetic history. DEMO_MODE only.
+         */
+        post: operations["simulate_demo_orders_api_restaurants__slug__demo_simulate_orders_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/restaurants/{slug}/demo/reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reset Demo Data
+         * @description Re-seed restaurant data and regenerate simulated state. DEMO_MODE only.
+         */
+        post: operations["reset_demo_data_api_restaurants__slug__demo_reset_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AuthConfigResponse */
+        AuthConfigResponse: {
+            /** Demo Mode */
+            demo_mode: boolean;
+        };
+        /** BacktestMetric */
+        BacktestMetric: {
+            /** Method */
+            method: string;
+            /** Wape */
+            wape: number | null;
+            /** Mae */
+            mae: number | null;
+            /** N Points */
+            n_points: number;
+        };
+        /** BriefAction */
+        BriefAction: {
+            /** Rank */
+            rank: number;
+            /**
+             * Type
+             * @enum {string}
+             */
+            type: "promote_puzzle" | "reprice_plowhorse" | "review_dog" | "prep_target";
+            /** Item Id */
+            item_id: string | null;
+            /** Item */
+            item: string;
+            /** Title */
+            title: string;
+            /** Evidence */
+            evidence: {
+                [key: string]: number | string;
+            };
+            /** Estimated Impact Eur Per Week */
+            estimated_impact_eur_per_week: number | null;
+            /** Formula */
+            formula: string;
+        };
+        /** ChatMessageRequest */
+        ChatMessageRequest: {
+            /** Message */
+            message: string;
+        };
+        /** ChatMessageResponse */
+        ChatMessageResponse: {
+            /** Reply */
+            reply: string;
+            /**
+             * Suggested Items
+             * @default []
+             */
+            suggested_items: components["schemas"]["ChatSuggestedItem"][];
+        };
+        /** ChatSuggestedItem */
+        ChatSuggestedItem: {
+            /** Name */
+            name: string;
+            /**
+             * Reason
+             * @default
+             */
+            reason: string;
+        };
         /** CreateGuestSessionRequest */
         CreateGuestSessionRequest: {
             /** Qr Token */
@@ -467,6 +720,102 @@ export interface components {
              * @default false
              */
             acknowledge_allergen_risk: boolean;
+        };
+        /** DailyBriefResponse */
+        DailyBriefResponse: {
+            /** Date */
+            date: string;
+            /** Window Start */
+            window_start: string;
+            /** Window End */
+            window_end: string;
+            data_sources: components["schemas"]["DataSources"];
+            kpis: components["schemas"]["Kpis"];
+            /** Menu Engineering */
+            menu_engineering: components["schemas"]["MenuEngineeringItem"][];
+            thresholds: components["schemas"]["MenuThresholds"];
+            /** Pairings */
+            pairings: components["schemas"]["Pairing"][];
+            /** Peak Hours */
+            peak_hours: components["schemas"]["PeakHour"][];
+            forecast: components["schemas"]["ForecastSummary"];
+            /** Actions */
+            actions: components["schemas"]["BriefAction"][];
+            /** Summary */
+            summary: string;
+            /**
+             * Summary Source
+             * @enum {string}
+             */
+            summary_source: "llm" | "template";
+        };
+        /** DataSources */
+        DataSources: {
+            /** Live */
+            live: number;
+            /** Simulated */
+            simulated: number;
+        };
+        /** DemoInfoResponse */
+        DemoInfoResponse: {
+            /** Guest Url */
+            guest_url: string;
+            /** Owner Url */
+            owner_url: string;
+            /** Kitchen Url */
+            kitchen_url: string;
+            /** Qr Token */
+            qr_token?: string | null;
+            /** Table Label */
+            table_label?: string | null;
+        };
+        /** DemoLoginRequest */
+        DemoLoginRequest: {
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "owner" | "staff";
+        };
+        /** ForecastPoint */
+        ForecastPoint: {
+            /** Date */
+            date: string;
+            /** Item Id */
+            item_id: string;
+            /** Name */
+            name: string;
+            /**
+             * Daypart
+             * @enum {string}
+             */
+            daypart: "lunch" | "dinner";
+            /** Forecast */
+            forecast: number;
+            /** Lo */
+            lo: number;
+            /** Hi */
+            hi: number;
+        };
+        /** ForecastSummary */
+        ForecastSummary: {
+            /**
+             * Run Id
+             * Format: uuid
+             */
+            run_id: string;
+            /** Method */
+            method: string | null;
+            /** Model Name */
+            model_name: string | null;
+            /** History Days */
+            history_days: number;
+            /** Low Confidence */
+            low_confidence: boolean;
+            /** Backtest */
+            backtest: components["schemas"]["BacktestMetric"][];
+            /** Points */
+            points: components["schemas"]["ForecastPoint"][];
         };
         /** GuestMenuItemResponse */
         GuestMenuItemResponse: {
@@ -569,6 +918,15 @@ export interface components {
             min_latency_ms?: number | null;
             /** Max Latency Ms */
             max_latency_ms?: number | null;
+            /** Total Cost Usd */
+            total_cost_usd?: number | null;
+            /** Daily Budget Remaining Usd */
+            daily_budget_remaining_usd?: number | null;
+            /**
+             * Provider Label
+             * @default OpenAI-compatible endpoint
+             */
+            provider_label: string;
         };
         /** KitchenOrderItemResponse */
         KitchenOrderItemResponse: {
@@ -638,6 +996,19 @@ export interface components {
             /** Orders */
             orders: components["schemas"]["KitchenOrderResponse"][];
         };
+        /** Kpis */
+        Kpis: {
+            /** Orders */
+            orders: number;
+            /** Revenue Eur */
+            revenue_eur: number;
+            /** Aov Eur */
+            aov_eur: number;
+            /** Contribution Margin Eur */
+            contribution_margin_eur: number;
+            /** Margin Pct */
+            margin_pct: number;
+        };
         /** LoginRequest */
         LoginRequest: {
             /**
@@ -676,6 +1047,58 @@ export interface components {
              * @enum {string}
              */
             role: "owner" | "staff";
+        };
+        /** MenuEngineeringItem */
+        MenuEngineeringItem: {
+            /** Item Id */
+            item_id: string;
+            /** Name */
+            name: string;
+            /** Units */
+            units: number;
+            /** Weekly Units */
+            weekly_units: number;
+            /** Revenue Eur */
+            revenue_eur: number;
+            /** Unit Margin Eur */
+            unit_margin_eur: number;
+            /** Contribution Eur */
+            contribution_eur: number;
+            /**
+             * Menu Class
+             * @enum {string}
+             */
+            menu_class: "star" | "plowhorse" | "puzzle" | "dog";
+        };
+        /**
+         * MenuIngestRequest
+         * @description Request to analyze a menu photo or text via AI.
+         */
+        MenuIngestRequest: {
+            /** Image Url */
+            image_url: string;
+            /**
+             * Language
+             * @default it
+             */
+            language: string;
+        };
+        /**
+         * MenuIngestResponse
+         * @description Response after AI menu ingest — created item IDs.
+         */
+        MenuIngestResponse: {
+            /** Created Count */
+            created_count: number;
+            /** Items */
+            items: components["schemas"]["OwnerMenuItemResponse"][];
+        };
+        /** MenuThresholds */
+        MenuThresholds: {
+            /** Median Units */
+            median_units: number;
+            /** Median Unit Margin Eur */
+            median_unit_margin_eur: number;
         };
         /** OrderItemRequest */
         OrderItemRequest: {
@@ -832,6 +1255,21 @@ export interface components {
             /** Guest Url */
             guest_url: string;
         };
+        /** Pairing */
+        Pairing: {
+            /** A */
+            a: string;
+            /** B */
+            b: string;
+            /** A Name */
+            a_name: string;
+            /** B Name */
+            b_name: string;
+            /** Orders Together */
+            orders_together: number;
+            /** Lift */
+            lift: number;
+        };
         /** PatchGuestSessionRequest */
         PatchGuestSessionRequest: {
             /** Language */
@@ -864,6 +1302,46 @@ export interface components {
             /** Is Gluten Free */
             is_gluten_free?: boolean | null;
         };
+        /** PeakHour */
+        PeakHour: {
+            /** Hour */
+            hour: number;
+            /** Avg Orders Per Day */
+            avg_orders_per_day: number;
+            /** Avg Revenue Per Day Eur */
+            avg_revenue_per_day_eur: number;
+        };
+        /** SimulateOrdersRequest */
+        SimulateOrdersRequest: {
+            /**
+             * Days
+             * @default 56
+             */
+            days: number;
+            /**
+             * Seed
+             * @default 42
+             */
+            seed: number;
+            /**
+             * Promotion
+             * @default true
+             */
+            promotion: boolean;
+        };
+        /** SimulateOrdersResponse */
+        SimulateOrdersResponse: {
+            /** Orders Created */
+            orders_created: number;
+            /** Start Date */
+            start_date: string;
+            /** End Date */
+            end_date: string;
+            /** Assumptions */
+            assumptions: {
+                [key: string]: unknown;
+            };
+        };
         /** StatusOkResponse */
         StatusOkResponse: {
             /**
@@ -884,6 +1362,55 @@ export interface components {
             input?: unknown;
             /** Context */
             ctx?: Record<string, never>;
+        };
+        /** WhatIfRequest */
+        WhatIfRequest: {
+            /**
+             * Scenario
+             * @enum {string}
+             */
+            scenario: "price_change" | "promotion" | "demand_surge";
+            /** Item Id */
+            item_id?: string | null;
+            /** Change Pct */
+            change_pct?: number | null;
+            /** Discount Pct */
+            discount_pct?: number | null;
+            /** Multiplier */
+            multiplier?: number | null;
+            /** Elasticity */
+            elasticity?: number | null;
+        };
+        /** WhatIfResponse */
+        WhatIfResponse: {
+            /** Scenario */
+            scenario: string;
+            /** Item */
+            item: string | null;
+            /** Window Start */
+            window_start: string;
+            /** Window End */
+            window_end: string;
+            data_sources: components["schemas"]["DataSources"];
+            baseline: components["schemas"]["WhatIfTotals"];
+            result: components["schemas"]["WhatIfTotals"];
+            delta: components["schemas"]["WhatIfTotals"];
+            /** Assumptions */
+            assumptions: string[];
+            /** Explanation */
+            explanation: string;
+            /**
+             * Explanation Source
+             * @enum {string}
+             */
+            explanation_source: "llm" | "template";
+        };
+        /** WhatIfTotals */
+        WhatIfTotals: {
+            /** Revenue Eur */
+            revenue_eur: number;
+            /** Margin Eur */
+            margin_eur: number;
         };
     };
     responses: never;
@@ -960,6 +1487,73 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["InferenceMetricsResponse"];
                 };
+            };
+        };
+    };
+    get_auth_config_api_auth_config_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthConfigResponse"];
+                };
+            };
+        };
+    };
+    demo_login_api_auth_demo_login_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DemoLoginRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoginResponse"];
+                };
+            };
+            /** @description Demo mode disabled */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Rate limit exceeded (max 20 per minute per IP) */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -1050,6 +1644,33 @@ export interface operations {
             };
             /** @description Unauthenticated */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_demo_info_api_demo_info_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DemoInfoResponse"];
+                };
+            };
+            /** @description Demo mode disabled */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1184,6 +1805,53 @@ export interface operations {
             };
             /** @description Unauthenticated or expired session */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    guest_chat_api_guest_chat_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChatMessageRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatMessageResponse"];
+                };
+            };
+            /** @description Unauthenticated or expired session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Chat message limit reached */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1790,6 +2458,283 @@ export interface operations {
                 content?: never;
             };
             /** @description Restaurant not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ingest_menu_api_restaurants__slug__menu_items_ingest_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MenuIngestRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MenuIngestResponse"];
+                };
+            };
+            /** @description Unauthenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized (Owner only) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Restaurant not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Demo mode limit reached (max 3 per hour per IP) */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    daily_brief_api_restaurants__slug__ai_brief_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DailyBriefResponse"];
+                };
+            };
+            /** @description Unauthenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized (Owner only) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Restaurant not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    simulate_api_restaurants__slug__ai_simulate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WhatIfRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WhatIfResponse"];
+                };
+            };
+            /** @description Unauthenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized (Owner only) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Restaurant not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid scenario parameters */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    simulate_demo_orders_api_restaurants__slug__demo_simulate_orders_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SimulateOrdersRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimulateOrdersResponse"];
+                };
+            };
+            /** @description Unauthenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized (Owner only) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demo mode disabled or restaurant not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reset_demo_data_api_restaurants__slug__demo_reset_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatusOkResponse"];
+                };
+            };
+            /** @description Unauthenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized (Owner only) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demo mode disabled or restaurant not found */
             404: {
                 headers: {
                     [name: string]: unknown;

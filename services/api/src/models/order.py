@@ -41,6 +41,7 @@ class Order(Base):
             "(status <> 'bumped') OR (bumped_at IS NOT NULL)",
             name="chk_orders_bumped_at_required",
         ),
+        CheckConstraint("source IN ('live', 'simulated')", name="chk_orders_source"),
         UniqueConstraint(
             "guest_session_id", "idempotency_key", name="orders_guest_idempotency_key"
         ),
@@ -48,6 +49,7 @@ class Order(Base):
         Index("idx_orders_guest_session_id", "guest_session_id"),
         Index("idx_orders_table_id", "table_id"),
         Index("idx_orders_kitchen_query", "restaurant_id", "status", "placed_at"),
+        Index("idx_orders_analytics", "restaurant_id", "source", "placed_at"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -71,6 +73,7 @@ class Order(Base):
         nullable=True,
     )
     status: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'placed'"))
+    source: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'live'"))
     total: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     idempotency_key: Mapped[str] = mapped_column(Text, nullable=False)
     payload_hash: Mapped[str] = mapped_column(Text, nullable=False)
