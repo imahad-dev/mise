@@ -490,17 +490,26 @@ async def simulate(
         401: {"description": "Unauthenticated"},
         403: {"description": "Unauthorized (Owner only)"},
         404: {"description": "Demo mode disabled or restaurant not found"},
+        429: {"description": "Demo limit reached (max 3 per hour per IP)"},
     },
 )
 async def simulate_demo_orders(
     slug: str,
     payload: SimulateOrdersRequest,
+    request: Request,
     role: Role = Depends(require_owner),
     db: AsyncSession = Depends(get_db),
 ) -> SimulateOrdersResponse:
     """Replace source='simulated' orders with a seeded synthetic history. DEMO_MODE only."""
     if not settings.demo_mode:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Demo mode is disabled")
+    await enforce_ip_limit(
+        request,
+        "demo:simulate",
+        limit=3,
+        window_s=3600,
+        detail="Demo limit reached: maximum 3 demo data generations per hour per IP",
+    )
     restaurant = await _get_restaurant(slug, db)
     assumptions = SimAssumptions(
         days=payload.days,

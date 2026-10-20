@@ -23,13 +23,12 @@ from sqlalchemy.orm import selectinload
 from src.models.audit import AuditLog
 from src.models.menu import MenuItem
 from src.models.order import Order
+from src.models.restaurant import Restaurant
 from src.models.session import GuestSession
 from src.services.order_snapshot import line_total, snapshot_order_item
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
-
-    from src.models.restaurant import Restaurant
 
 DAYPARTS = ("lunch", "dinner")
 PROMOTION_EVENT = "promotion"
@@ -159,8 +158,13 @@ async def persist_simulation(
 ) -> dict:
     """Replace this restaurant's simulated orders with a fresh seeded run ending yesterday.
 
-    Does not commit; the caller owns the transaction.
+    Does not commit; the caller owns the transaction. Concurrent runs for the same restaurant
+    are serialized by a row lock held until that transaction ends, so the second run replaces
+    the first instead of adding to it. FOR NO KEY UPDATE does not block live order inserts.
     """
+    await db.execute(
+        select(Restaurant.id).where(Restaurant.id == restaurant.id).with_for_update(key_share=True)
+    )
     tz = ZoneInfo(restaurant.timezone)
     today = today or datetime.now(tz).date()
     start = today - timedelta(days=a.days)

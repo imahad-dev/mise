@@ -252,6 +252,7 @@ Per-IP limits (Redis fixed windows, `services/api/src/request_limits.py`):
 | `POST /api/auth/login` | 5 failed attempts per 5 minutes |
 | `POST /api/auth/demo-login` | 20 per minute |
 | `POST /api/restaurants/{slug}/menu-items/ingest` (DEMO_MODE) | 3 per hour |
+| `POST /api/restaurants/{slug}/demo/simulate-orders` | 3 per hour |
 
 The client address comes from the TCP peer. Only when the peer is inside `TRUSTED_PROXY_CIDRS`
 (JSON list, default `["172.16.0.0/12"]`, the Docker bridge networks the Next.js apps run on) is

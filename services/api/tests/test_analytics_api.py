@@ -14,6 +14,7 @@ from src.config import settings
 from src.models.forecast import ForecastRun
 from src.models.order import Order
 from src.models.restaurant import Restaurant
+from src.redis_client import redis_client
 
 
 @pytest.fixture
@@ -24,6 +25,15 @@ async def seeded_restaurant(db_session: AsyncSession) -> Restaurant:
         select(Restaurant).where(Restaurant.slug == "trattoria-da-mario")
     )
     return res.scalar_one()
+
+
+@pytest.fixture(autouse=True)
+async def _reset_simulate_rate_limit():
+    """Each test starts with a fresh demo:simulate bucket for the test client's IP."""
+    key = "rate_limit:demo:simulate:127.0.0.1"
+    await redis_client.delete(key)
+    yield
+    await redis_client.delete(key)
 
 
 def _as_owner(client: AsyncClient) -> None:
