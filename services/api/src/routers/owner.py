@@ -20,6 +20,7 @@ from src.models.dining_table import DiningTable
 from src.models.menu import MenuItem
 from src.models.restaurant import Restaurant
 from src.redis_client import redis_client
+from src.request_limits import enforce_ip_limit
 from src.schemas.owner import (
     DailyBriefResponse,
     MenuIngestRequest,
@@ -392,21 +393,13 @@ async def ingest_menu(
     restaurant = await _get_restaurant(slug, db)
 
     if settings.demo_mode:
-        client_ip = request.client.host if request.client else "127.0.0.1"
-        rl_key = f"rate_limit:demo:ingest:{client_ip}"
-        try:
-            count = await redis_client.incr(rl_key)
-            if count == 1:
-                await redis_client.expire(rl_key, 3600)
-            if count > 3:
-                raise HTTPException(
-                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                    detail="Demo limit reached: maximum 3 menu ingestions per hour per IP",
-                )
-        except HTTPException:
-            raise
-        except Exception as e:
-            logger.warning("Redis error checking ingest rate limit: %s", e)
+        await enforce_ip_limit(
+            request,
+            "demo:ingest",
+            limit=3,
+            window_s=3600,
+            detail="Demo limit reached: maximum 3 menu ingestions per hour per IP",
+        )
 
     created_items = await ingest_menu_from_image(
         inference=inference,

@@ -67,6 +67,9 @@ class Settings(BaseSettings):
     mock_error_rate: float = 0.0
     mock_timeout_ms: int = 0
 
+    # Proxies allowed to set X-Forwarded-For (default: Docker bridge networks)
+    trusted_proxy_cidrs: list[str] = ["172.16.0.0/12"]
+
     # Demo
     demo_mode: bool = False
     demo_restaurant_slug: str = "trattoria-da-mario"
