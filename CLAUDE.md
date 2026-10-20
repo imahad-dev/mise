@@ -31,7 +31,7 @@ Alembic + Postgres 16 + Redis 7 (`services/api`), two Next.js 15 apps (`apps/gue
 - Never send guest allergens, preferences, session ids or any personal data to a model. No
   client-supplied prompts.
 - Cookies: `mise_auth` (owner and staff) and `mise_guest`. Languages: `en` and `it` only.
-- No hackathon or vendor-specific branding (`scripts/check_branding.sh`). README and docs
+- No event or vendor-specific branding (`scripts/check_branding.sh`). README and docs
   describe only what is implemented and tested.
 
 ## Commands
