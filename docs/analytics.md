@@ -94,7 +94,7 @@ guaranteed coverage.
 | Action | Picked | Estimated impact per week |
 |---|---|---|
 | Promote puzzle | top 2 puzzles by unit margin | 0.20 × weekly units × unit margin (assumes featuring lifts units 20%) |
-| Reprice plowhorse | top 2 plowhorses by units | what-if price change +5% at elasticity −0.8 (margin delta) |
+| Reprice plowhorse | top 2 plowhorses by units | what-if price change +5% at elasticity −0.8 on the current menu price and cost (margin delta; same baseline as the What-if page) |
 | Review dog | dog with the lowest contribution | weekly units × (median unit margin − unit margin) |
 | Prep targets | top 3 items by forecast for the next day | none; prep = ceil(Σ dayparts upper interval bound) |
 

@@ -9,7 +9,7 @@ import pytest
 from fastapi import HTTPException
 
 from src.services.analytics import classify_menu, item_totals
-from src.services.brief import build_actions, template_summary
+from src.services.brief import baseline_for, build_actions, template_summary
 from src.services.forecast import build_input, forecast
 from src.services.narrative import narrate, numbers_grounded, numbers_in_text
 from src.services.simulator import (
@@ -249,14 +249,22 @@ def test_build_actions_ranked_with_formulas():
         ]
     }
     names = {k: k.title() for k in totals}
-    actions = build_actions(totals, classes, thresholds, fc, names)
+    # Current menu (price, cost); plowhorse is unchanged since the window: 10 and 8
+    prices = {
+        "star": (15.0, 5.0),
+        "plow": (10.0, 8.0),
+        "puzzle": (20.0, 8.0),
+        "dog": (5.0, 4.0),
+        "mid": (10.0, 5.0),
+    }
+    actions = build_actions(totals, classes, thresholds, fc, names, prices)
 
     assert 3 <= len(actions) <= 5
     assert [a["rank"] for a in actions] == list(range(1, len(actions) + 1))
     by_type = {a["type"]: a for a in actions}
     assert by_type["promote_puzzle"]["estimated_impact_eur_per_week"] == 6.0  # 0.2 x 2.5 x 12
     assert by_type["review_dog"]["estimated_impact_eur_per_week"] == 5.0  # 1.25 x (5 - 1)
-    # Plowhorse: avg price 10, cost 8; +5% at -0.8 -> 22.5 x 0.96 x 2.5 - 22.5 x 2 = 9.0
+    # Plowhorse: price 10, cost 8; +5% at -0.8 -> 22.5 x 0.96 x 2.5 - 22.5 x 2 = 9.0
     assert by_type["reprice_plowhorse"]["estimated_impact_eur_per_week"] == 9.0
     assert actions[-1]["type"] == "prep_target"
     assert actions[-1]["evidence"] == {"Star forecast / prep": "7.0 / 12"}
@@ -357,3 +365,47 @@ def test_template_summary_only_uses_fact_numbers():
     text = template_summary(facts)
     assert "simulated" in text
     assert numbers_grounded(text, facts)
+
+
+def test_brief_reprice_matches_whatif_at_current_menu_price():
+    """After a price change the brief and the what-if page give the same margin delta."""
+    totals = {
+        "plow": {
+            "units": 90,
+            "weekly_units": 22.5,
+            "unit_margin": 2.0,
+            "revenue": 900.0,
+            "contribution": 180.0,
+        },
+        "star": {
+            "units": 100,
+            "weekly_units": 25,
+            "unit_margin": 10.0,
+            "revenue": 1500.0,
+            "contribution": 1000.0,
+        },
+        "dog": {
+            "units": 5,
+            "weekly_units": 1.25,
+            "unit_margin": 1.0,
+            "revenue": 25.0,
+            "contribution": 5.0,
+        },
+    }
+    classes = {"plow": "plowhorse", "star": "star", "dog": "dog"}
+    thresholds = {"median_units": 90, "median_unit_margin_eur": 2.0}
+    names = {k: k.title() for k in totals}
+    # The owner raised the plowhorse from its historical 10.00 to 11.00 yesterday
+    prices = {"plow": (11.0, 8.0), "star": (15.0, 5.0), "dog": (5.0, 4.0)}
+
+    actions = build_actions(totals, classes, thresholds, {"points": []}, names, prices)
+    reprice = next(a for a in actions if a["type"] == "reprice_plowhorse")
+
+    # The what-if endpoint builds its baselines the same way, over the whole menu
+    baselines = [baseline_for(i, names[i], t, *prices[i]) for i, t in totals.items()]
+    whatif = run_whatif("price_change", baselines, {"item_id": "plow", "change_pct": 5})
+
+    assert reprice["estimated_impact_eur_per_week"] == whatif["delta"]["margin_eur"]
+    assert reprice["evidence"]["price_eur"] == 11.0
+    # 22.5 x 0.96 x (11.55 - 8) - 22.5 x 3 = 9.18
+    assert whatif["delta"]["margin_eur"] == 9.18
