@@ -1,4 +1,4 @@
-.PHONY: up down reset dev logs build migrate migration seed simulate lint test test-py test-ts smoke smoke-llm gen-client setup ci verify-a verify-b verify-c verify-d verify-e verify-f
+.PHONY: up down reset dev logs build migrate migration seed simulate lint test test-py test-ts e2e smoke smoke-llm gen-client setup ci verify-a verify-b verify-c verify-d verify-e verify-f
 
 # --- Setup ---
 setup:
@@ -48,6 +48,10 @@ test-py:
 
 test-ts:
 	pnpm -r test
+
+# Browser tests against a running stack (LLM_PROVIDER=mock DEMO_MODE=true make up)
+e2e:
+	pnpm exec playwright test
 
 test:
 	$(MAKE) test-py
