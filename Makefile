@@ -10,10 +10,10 @@ up:
 	docker compose up -d --build --wait
 
 down:
-	docker compose down
+	docker compose --profile edge --profile test down
 
 reset:
-	docker compose down -v
+	docker compose --profile edge --profile test down -v
 
 dev:
 	docker compose -f docker-compose.yml -f docker-compose.dev.yml up

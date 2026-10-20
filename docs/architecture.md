@@ -258,10 +258,12 @@ The client address comes from the TCP peer. Only when the peer is inside `TRUSTE
 (JSON list, default `["172.16.0.0/12"]`, the Docker bridge networks the Next.js apps run on) is
 `X-Forwarded-For` used: the API walks it from the right and takes the first hop that is not a
 trusted proxy, because hops further left were written by the client. Next.js rewrites only set
-`X-Forwarded-For` when the browser did not send one, so behind the Next.js proxy alone a client
-can still choose its own address; put a proxy that appends the real peer (Caddy, a tunnel) in
-front for public deployments. Locally, traffic through published Docker ports arrives from
-the bridge gateway (e.g. `172.18.0.1`), so all local visitors share one bucket. If Redis is
+`X-Forwarded-For` when the browser did not send one, so behind the Next.js apps alone (ports
+3000/3001) a client can choose its own address. For public deployments run the edge proxy,
+`docker compose --profile edge up -d`, and expose only its ports (8080 guest, 8081 owner):
+Caddy discards client-sent `X-Forwarded-For` and sets the real peer address, which
+`make verify-f` checks. Locally, traffic through published Docker ports arrives from the bridge
+gateway (e.g. `172.18.0.1`), so all local visitors share one bucket. If Redis is
 unreachable the limits fail open and log a warning.
 
 ### Free-Only Policy & Rate Limits

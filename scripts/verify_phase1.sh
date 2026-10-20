@@ -189,6 +189,17 @@ step_live_order_survives() {
   [ "$status" = "200" ] && [ "$live" = "1 1 1" ] && [ "$before" = "$after" ]
 }
 
+step_edge_proxy() { # Caddy (edge profile) must replace a client-sent X-Forwarded-For
+  docker compose --profile edge up -d --wait caddy || return 1
+  docker compose exec -T redis sh -c     "redis-cli --scan --pattern 'rate_limit:demo_login:*' | xargs -r redis-cli DEL" >/dev/null
+  curl -sf --max-time 10 -H "X-Forwarded-For: 203.0.113.77" -H "Content-Type: application/json"     -X POST "http://127.0.0.1:8081/api/auth/demo-login" -d '{"role": "owner"}' >/dev/null ||
+    return 1
+  local keys
+  keys=$(docker compose exec -T redis redis-cli --scan --pattern 'rate_limit:demo_login:*')
+  echo "demo_login buckets after spoofed request via Caddy: $keys"
+  [ -n "$keys" ] && ! grep -q "203.0.113.77" <<<"$keys"
+}
+
 step_ci() { make ci; }
 
 run_step "stack: make reset, make up, API healthy" step_stack
@@ -197,5 +208,6 @@ run_step "seed twice: identical counts" step_seed_twice
 run_step "simulate-orders: sequential and parallel runs give identical counts" step_simulate
 run_step "brief and what-if: structure, grounded numbers, stored backtest" step_brief_whatif
 run_step "live order survives demo data regeneration" step_live_order_survives
+run_step "edge proxy (Caddy) ignores spoofed X-Forwarded-For" step_edge_proxy
 run_step "make ci" step_ci
 echo "PASS verify-f: all steps"

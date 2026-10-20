@@ -155,6 +155,25 @@ services:
       start_period: 20s
       retries: 3
 
+  # Edge proxy for public deployments: `docker compose --profile edge up -d`.
+  # Replaces any client-sent X-Forwarded-For with the real peer address, so per-IP rate
+  # limits cannot be spoofed. Guest app on :8080, owner app on :8081 (see Caddyfile).
+  caddy:
+    profiles: ["edge"]
+    image: caddy:2.8.4-alpine
+    ports:
+      - "8080:8080"
+      - "8081:8081"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+    depends_on:
+      api:
+        condition: service_healthy
+      guest-web:
+        condition: service_healthy
+      owner-web:
+        condition: service_healthy
+
 volumes:
   pgdata:
   redisdata:
