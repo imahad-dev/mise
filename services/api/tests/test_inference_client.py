@@ -264,6 +264,24 @@ def test_openrouter_free_model_guard():
     assert s.llm_model.endswith(":free")
 
 
+def test_mock_provider_never_calls_a_real_endpoint():
+    """LLM_PROVIDER=mock overrides any real base URL (e.g. one left in .env) with the mock."""
+    from src.config import Settings
+
+    s = Settings(
+        llm_provider="mock",
+        llm_base_url="https://api.example-provider.test/v1",
+        vlm_base_url="https://api.example-provider.test/v1",
+        mock_base_url="http://inference:8080/v1",
+    )
+    assert s.llm_base_url == s.vlm_base_url == "http://inference:8080/v1"
+
+    real = Settings(
+        llm_provider="openai_compatible", llm_base_url="https://api.example-provider.test/v1"
+    )
+    assert real.llm_base_url == "https://api.example-provider.test/v1"
+
+
 @pytest.mark.asyncio
 async def test_daily_request_cap_guard(monkeypatch):
     """When daily request cap is exceeded, check_daily_request_cap raises 503 ai_unavailable."""

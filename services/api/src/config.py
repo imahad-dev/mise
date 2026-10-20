@@ -54,6 +54,7 @@ class Settings(BaseSettings):
     vlm_base_url: str = "http://inference:8080/v1"
     vlm_model: str = "mock-vlm"
     vlm_model_fallbacks: list[str] = []
+    mock_base_url: str = "http://inference:8080/v1"  # used for both when LLM_PROVIDER=mock
 
     # Free-only policy & Rate limiting
     llm_free_only: bool = True
@@ -102,6 +103,18 @@ class Settings(BaseSettings):
         if v not in valid:
             raise ValueError(f"LLM_PROVIDER must be one of {valid}, got {v!r}")
         return v
+
+    @model_validator(mode="after")
+    def force_mock_endpoints(self) -> "Settings":
+        """LLM_PROVIDER=mock is a hard switch: every call goes to the bundled mock server.
+
+        Without this, LLM_PROVIDER=mock with a real LLM_BASE_URL in .env would call the real
+        provider (and skip the daily cap, which is off for mock).
+        """
+        if self.llm_provider == "mock":
+            self.llm_base_url = self.mock_base_url
+            self.vlm_base_url = self.mock_base_url
+        return self
 
     @model_validator(mode="after")
     def validate_free_only_guard(self) -> "Settings":
