@@ -188,3 +188,30 @@ async def test_whatif_unknown_item_returns_422(client: AsyncClient, seeded_resta
         },
     )
     assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
+@pytest.mark.timeout(120)
+async def test_regenerating_demo_data_drops_stale_forecast(
+    client: AsyncClient, db_session: AsyncSession, seeded_restaurant: Restaurant
+):
+    slug = seeded_restaurant.slug
+    _as_owner(client)
+
+    await _simulate(client, slug, days=28, seed=1)
+    with patch.object(settings, "demo_mode", False):
+        first = (await client.get(f"/api/restaurants/{slug}/ai/brief")).json()
+
+    await _simulate(client, slug, days=28, seed=2)
+    runs = (
+        await db_session.execute(
+            select(func.count())
+            .select_from(ForecastRun)
+            .where(ForecastRun.restaurant_id == seeded_restaurant.id)
+        )
+    ).scalar_one()
+    assert runs == 0
+
+    with patch.object(settings, "demo_mode", False):
+        second = (await client.get(f"/api/restaurants/{slug}/ai/brief")).json()
+    assert second["forecast"]["run_id"] != first["forecast"]["run_id"]

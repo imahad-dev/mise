@@ -21,6 +21,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import selectinload
 
 from src.models.audit import AuditLog
+from src.models.forecast import ForecastRun
 from src.models.menu import MenuItem
 from src.models.order import Order
 from src.models.restaurant import Restaurant
@@ -126,7 +127,8 @@ def generate_orders(
 
 
 async def clear_simulated(db: AsyncSession, restaurant_id: uuid.UUID) -> None:
-    """Delete previously simulated orders (items cascade), their sessions and promo events."""
+    """Delete previously simulated orders (items cascade), their sessions, promo events and the
+    restaurant's stored forecasts (they were fitted on the data being replaced)."""
     sess_ids = list(
         (
             await db.execute(
@@ -148,6 +150,7 @@ async def clear_simulated(db: AsyncSession, restaurant_id: uuid.UUID) -> None:
             AuditLog.payload["source"].astext == "simulated",
         )
     )
+    await db.execute(delete(ForecastRun).where(ForecastRun.restaurant_id == restaurant_id))
 
 
 async def persist_simulation(
