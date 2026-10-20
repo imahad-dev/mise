@@ -26,7 +26,7 @@ Mise is an ordering, kitchen and revenue analytics platform for independent rest
   - 7-day forecast per item and daypart (lunch/dinner): seasonal-naive and 4-week-mean baselines plus a gradient-boosting model, compared in a 14-day rolling-origin backtest; the lowest-WAPE method is used and its WAPE is shown next to the naive baseline. Under 14 days of history it uses the baseline and is flagged low confidence. No weather, holidays or reservations are modeled.
   - 3 to 5 ranked actions (promote puzzles, reprice plowhorses, review dogs, prep targets) with evidence numbers and estimated weekly impact from documented formulas.
   - What-if calculator (`/ai`): price change, promotion or demand surge on recent sales with stated elasticity assumptions; returns weekly revenue and margin deltas. Cannibalization, capacity and staffing are not modeled.
-  - Simulated demo data (`make simulate` or the **Generate demo data** button in DEMO_MODE), always stored as `source='simulated'` and labeled in the UI.
+  - Simulated demo data (`make simulate` or the **Generate demo data** button in DEMO_MODE, limited to 3 runs per hour per client IP), always stored as `source='simulated'` and labeled in the UI. Regenerating replaces the previous simulated orders and stored forecasts; live orders are never touched.
   - Visual Menu Ingestion (VLM) for digitizing paper menus from photo URLs into structured catalog items.
   - Table management and QR code generator.
   - Methods, assumptions and limits: [docs/analytics.md](docs/analytics.md).
@@ -262,6 +262,11 @@ bash scripts/check_branding.sh
 
 # Complete CI pipeline
 make ci
+
+# End-to-end Phase 1 check on a fresh stack (wipes dev volumes; mock LLM only):
+# migrations up/down/check, seed twice, demo data (sequential + parallel), brief, what-if,
+# live order survival, then make ci
+LLM_PROVIDER=mock DEMO_MODE=true make verify-f
 ```
 
 ---

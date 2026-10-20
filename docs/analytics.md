@@ -100,6 +100,9 @@ guaranteed coverage.
 
 Weekly units = units in the window / 4. Each action lists its evidence numbers and formula.
 
+In DEMO_MODE the brief response is cached in Redis for 10 minutes; generating demo data clears
+that cache. Recomputing a forecast runs in a worker thread so other requests are not blocked.
+
 ## Summary text and the numbers guard
 
 The facts (KPIs, actions with evidence, pairings by item name, peak hours, forecast method and
