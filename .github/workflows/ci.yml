@@ -91,6 +91,8 @@ jobs:
       - name: Run Python migrations & tests
         run: |
           uv run --project services/api alembic -c services/api/alembic.ini upgrade head
+          # Fail on drift between SQLAlchemy models and migrations
+          uv run --project services/api alembic -c services/api/alembic.ini check
           uv run --project services/api pytest -v services/api/tests
 
       - name: Run Frontend tests
