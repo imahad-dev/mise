@@ -138,17 +138,17 @@ def _predict(
             for t in targets
         ]
         return [max(0.0, float(v)) for v in model.predict(np.asarray(rows))]
-    # Extend with NaN so baseline lags into the future resolve to the cold-start fill.
-    ext = np.concatenate([y[:origin].astype(float), np.full(HORIZON_DAYS, np.nan)])
-    out = []
-    for t in targets:
-        raw = _lag(ext, t, 7) if method == "seasonal_naive" else _trailing_mean_nan(ext, t)
-        out.append(_fill(raw, y, origin))
-    return out
+    # Every lag is >= 7 days, so with targets < origin + 7 no value at or after origin is read.
+    assert max(targets) < origin + HORIZON_DAYS
+    return [
+        _fill(_lag(y, t, 7) if method == "seasonal_naive" else _trailing_mean(y, t), y, origin)
+        for t in targets
+    ]
 
 
-def _trailing_mean_nan(y: np.ndarray, t: int) -> float:
-    vals = [y[t - k] for k in (7, 14, 21, 28) if t - k >= 0 and not math.isnan(y[t - k])]
+def _trailing_mean(y: np.ndarray, t: int) -> float:
+    """Mean of the same weekday over the last 4 weeks (weeks available)."""
+    vals = [y[t - k] for k in (7, 14, 21, 28) if t - k >= 0]
     return float(np.mean(vals)) if vals else math.nan
 
 
