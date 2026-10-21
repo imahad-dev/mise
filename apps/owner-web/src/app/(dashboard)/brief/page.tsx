@@ -48,9 +48,9 @@ function Quadrant({ brief }: { brief: DailyBrief }) {
       role="img"
       aria-label="Menu engineering quadrant: units sold versus unit margin"
     >
-      <rect x={PAD} y={PAD} width={W - 2 * PAD} height={H - 2 * PAD} fill="#070B10" />
-      <line x1={medianX} x2={medianX} y1={PAD} y2={H - PAD} stroke="#8FA3B3" strokeDasharray="4 4" />
-      <line x1={PAD} x2={W - PAD} y1={medianY} y2={medianY} stroke="#8FA3B3" strokeDasharray="4 4" />
+      <rect x={PAD} y={PAD} width={W - 2 * PAD} height={H - 2 * PAD} fill="#F6F0E6" />
+      <line x1={medianX} x2={medianX} y1={PAD} y2={H - PAD} stroke="#6B5A48" strokeDasharray="4 4" />
+      <line x1={PAD} x2={W - PAD} y1={medianY} y2={medianY} stroke="#6B5A48" strokeDasharray="4 4" />
       {labels.map(([cls, text, x, y]) => (
         <text
           key={cls}
@@ -70,14 +70,14 @@ function Quadrant({ brief }: { brief: DailyBrief }) {
           </title>
         </circle>
       ))}
-      <text x={W / 2} y={H - PAD + 18} fontSize="11" fill="#8FA3B3" textAnchor="middle">
+      <text x={W / 2} y={H - PAD + 18} fontSize="11" fill="#6B5A48" textAnchor="middle">
         Units sold →
       </text>
       <text
         x={12}
         y={H / 2}
         fontSize="11"
-        fill="#8FA3B3"
+        fill="#6B5A48"
         textAnchor="middle"
         transform={`rotate(-90 12 ${H / 2})`}
       >

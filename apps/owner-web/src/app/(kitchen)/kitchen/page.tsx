@@ -251,7 +251,7 @@ export default function KitchenDisplayPage() {
             />
             <button
               type="submit"
-              className="w-full py-4 rounded-2xl bg-kds-fresh hover:bg-kds-fresh text-cream font-black text-xl shadow-lg active:scale-95 transition-all"
+              className="w-full py-4 rounded-2xl bg-kds-fresh hover:opacity-90 text-espresso font-black text-xl shadow-lg active:scale-95 transition-all"
             >
               ACCESS KITCHEN
             </button>
@@ -286,7 +286,7 @@ export default function KitchenDisplayPage() {
           <span>⚠️ {actionError}</span>
           <button
             onClick={() => setActionError(null)}
-            className="text-xs px-2 py-1 rounded bg-kds-late/20 hover:bg-kds-late"
+            className="text-xs px-2 py-1 rounded bg-kds-late/20 hover:bg-kds-late/40"
           >
             ✕
           </button>
@@ -297,9 +297,9 @@ export default function KitchenDisplayPage() {
       {isReconnecting && (
         <div
           data-testid="kitchen-connection-lost-banner"
-          className="bg-kds-late text-cream py-3 px-6 rounded-2xl text-center text-lg font-black tracking-wide uppercase flex items-center justify-center gap-3 animate-pulse shadow-2xl"
+          className="bg-kds-late text-espresso py-3 px-6 rounded-2xl text-center text-lg font-black tracking-wide uppercase flex items-center justify-center gap-3 animate-pulse shadow-2xl"
         >
-          <span className="w-3 h-3 rounded-full bg-cream animate-ping" />
+          <span className="w-3 h-3 rounded-full bg-espresso animate-ping" />
           CONNECTION INTERRUPTED — POLLING FALLBACK ACTIVE
         </div>
       )}
@@ -307,7 +307,7 @@ export default function KitchenDisplayPage() {
       {/* Top Controls Bar */}
       <header className="flex flex-wrap items-center justify-between gap-4 bg-kds-card p-4 rounded-2xl border border-cream/10">
         <div className="flex items-center gap-4">
-          <span className="text-2xl font-black tracking-wider text-kds-fresh">KITCHEN</span>
+          <span className="font-serif text-2xl font-black tracking-wider text-kds-fresh">KITCHEN</span>
           <span className="text-sm text-kds-muted font-mono">
             {new Date(nowServer).toLocaleTimeString()}
           </span>
@@ -339,7 +339,7 @@ export default function KitchenDisplayPage() {
           {mostRecentBumped && recallRemainingSeconds > 0 && (
             <button
               onClick={() => handleRecall(mostRecentBumped.id)}
-              className="px-5 py-2.5 rounded-xl bg-kds-warn hover:bg-kds-warn text-espresso font-black text-sm uppercase tracking-wide shadow-lg animate-pulse"
+              className="px-5 py-2.5 rounded-xl bg-kds-warn hover:opacity-90 text-espresso font-black text-sm uppercase tracking-wide shadow-lg animate-pulse"
             >
               ↺ RECALL TABLE {mostRecentBumped.table_label || ""} ({recallRemainingSeconds}s)
             </button>
@@ -364,10 +364,10 @@ export default function KitchenDisplayPage() {
             // - warning (>=10 min): thick amber border
             // - critical (>=20 min): thick red border
             let ageBorder = "border-l-8 border-l-kds-fresh";
-            let ageBadge = "bg-kds-fresh/20 text-kds-fresh border border-kds-fresh";
+            let ageBadge = "bg-kds-fresh text-espresso";
             if (elapsedMinutes >= 20) {
-              ageBorder = "border-l-8 border-l-kds-late ring-1 ring-kds-late";
-              ageBadge = "bg-kds-late text-cream font-black animate-pulse";
+              ageBorder = "border-l-8 border-l-kds-late ring-1 ring-kds-late/40";
+              ageBadge = "bg-kds-late text-espresso font-black animate-pulse";
             } else if (elapsedMinutes >= 10) {
               ageBorder = "border-l-8 border-l-kds-warn";
               ageBadge = "bg-kds-warn text-espresso font-black";
@@ -376,7 +376,7 @@ export default function KitchenDisplayPage() {
             return (
               <div
                 key={order.id}
-                className={`rounded-2xl bg-espresso border border-cream/10 p-5 flex flex-col justify-between space-y-4 shadow-2xl transition-all ${ageBorder}`}
+                className={`rounded-2xl bg-kds-card border border-cream/10 p-5 flex flex-col justify-between space-y-4 shadow-2xl transition-all ${ageBorder}`}
               >
                 {/* Ticket Header */}
                 <div className="space-y-2 border-b border-cream/10 pb-3">
@@ -398,7 +398,7 @@ export default function KitchenDisplayPage() {
 
                   {/* Guest allergens to avoid summary banner - SOLID RED */}
                   {order.allergens_to_avoid && order.allergens_to_avoid.length > 0 && (
-                    <div className="p-2.5 rounded-xl bg-kds-late text-cream text-xs font-black uppercase tracking-wide shadow-md">
+                    <div className="p-2.5 rounded-xl bg-kds-late text-espresso text-xs font-black uppercase tracking-wide shadow-md">
                       🚨 GUEST ALLERGIES: {order.allergens_to_avoid.join(", ")}
                     </div>
                   )}
@@ -422,7 +422,7 @@ export default function KitchenDisplayPage() {
 
                       {/* Prominent Solid Red Allergy Banner on Affected Items */}
                       {item.conflict_with_order_allergens && (
-                        <div className="mt-2 py-1.5 px-2.5 rounded-lg bg-kds-late text-cream text-xs font-black uppercase text-center tracking-wider shadow-sm">
+                        <div className="mt-2 py-1.5 px-2.5 rounded-lg bg-kds-late text-espresso text-xs font-black uppercase text-center tracking-wider shadow-sm">
                           ⚠️ ALLERGY WARNING: {item.matched_allergens.join(", ")}
                         </div>
                       )}
@@ -440,7 +440,7 @@ export default function KitchenDisplayPage() {
                 <div className="pt-2">
                   <button
                     onClick={() => handleBump(order.id)}
-                    className="w-full min-h-[48px] py-3.5 rounded-xl bg-kds-accent hover:opacity-90 active:scale-95 text-espresso font-black text-lg shadow-xl uppercase tracking-wider transition-all"
+                    className="w-full min-h-[48px] rounded-xl bg-kds-accent py-3.5 text-lg font-black uppercase tracking-wider text-espresso shadow-xl transition-all hover:opacity-90 active:scale-95"
                   >
                     BUMP
                   </button>
