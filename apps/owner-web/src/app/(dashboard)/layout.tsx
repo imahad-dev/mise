@@ -68,7 +68,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <Image src="/brand/logo-mark.svg" alt="" width={32} height={32} priority />
           <span>
             <span className="block font-serif text-lg font-bold leading-tight">Mise</span>
-            <span className="block text-xs text-ink-muted">Trattoria da Mario</span>
           </span>
         </Link>
       }
