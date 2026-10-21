@@ -20,6 +20,7 @@ from src.schemas.guest import (
     CreateGuestSessionRequest,
     GuestMenuItemResponse,
     GuestMenuResponse,
+    GuestMenuRestaurant,
     GuestSessionResponse,
     PatchGuestSessionRequest,
 )
@@ -192,7 +193,20 @@ async def get_guest_menu(
             )
         )
 
-    return GuestMenuResponse(items=menu_responses)
+    table_label = None
+    if session.table_id is not None:
+        table_label = (
+            await db.execute(select(DiningTable.label).where(DiningTable.id == session.table_id))
+        ).scalar_one_or_none()
+
+    return GuestMenuResponse(
+        restaurant=GuestMenuRestaurant(
+            id=restaurant.id, name=restaurant.name, currency=restaurant.currency
+        ),
+        table_id=session.table_id,
+        table_label=table_label,
+        items=menu_responses,
+    )
 
 
 # --- Checkpoint D: Guest Chat ---

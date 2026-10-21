@@ -861,8 +861,25 @@ export interface components {
         };
         /** GuestMenuResponse */
         GuestMenuResponse: {
+            restaurant: components["schemas"]["GuestMenuRestaurant"];
+            /** Table Id */
+            table_id?: string | null;
+            /** Table Label */
+            table_label?: string | null;
             /** Items */
             items: components["schemas"]["GuestMenuItemResponse"][];
+        };
+        /** GuestMenuRestaurant */
+        GuestMenuRestaurant: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Currency */
+            currency: string;
         };
         /** GuestSessionResponse */
         GuestSessionResponse: {
@@ -2697,6 +2714,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+            /** @description Demo limit reached (max 3 per hour per IP) */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

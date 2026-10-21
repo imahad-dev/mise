@@ -200,6 +200,8 @@ step_edge_proxy() { # Caddy (edge profile) must replace a client-sent X-Forwarde
   [ -n "$keys" ] && ! grep -q "203.0.113.77" <<<"$keys"
 }
 
+step_e2e() { clear_demo_limits && pnpm exec playwright test; }
+
 step_ci() { make ci; }
 
 run_step "stack: make reset, make up, API healthy" step_stack
@@ -208,6 +210,7 @@ run_step "seed twice: identical counts" step_seed_twice
 run_step "simulate-orders: sequential and parallel runs give identical counts" step_simulate
 run_step "brief and what-if: structure, grounded numbers, stored backtest" step_brief_whatif
 run_step "live order survives demo data regeneration" step_live_order_survives
+run_step "browser tests: guest order, kitchen bump, owner brief and what-if" step_e2e
 run_step "edge proxy (Caddy) ignores spoofed X-Forwarded-For" step_edge_proxy
 run_step "make ci" step_ci
 echo "PASS verify-f: all steps"

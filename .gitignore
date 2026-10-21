@@ -40,3 +40,9 @@ Thumbs.db
 *.log
 coverage/
 htmlcov/
+# Playwright
+test-results/
+playwright-report/
+
+# Brainstorm mockups
+.superpowers/

@@ -167,6 +167,14 @@ async def test_guest_session_flow_and_no_unit_cost(
     menu_data = resp_menu.json()
     assert len(menu_data["items"]) == 25
     assert_no_unit_cost(menu_data)
+    # The guest menu page renders these; their absence crashed the page.
+    assert menu_data["restaurant"] == {
+        "id": str(seeded_restaurant.id),
+        "name": seeded_restaurant.name,
+        "currency": seeded_restaurant.currency,
+    }
+    assert menu_data["table_id"] == str(table.id)
+    assert menu_data["table_label"] == table.label
 
 
 @pytest.mark.asyncio

@@ -260,12 +260,15 @@ make test
 # Run repo branding and hygiene audit
 bash scripts/check_branding.sh
 
+# Browser tests (Playwright) against a running stack; first time: pnpm exec playwright install chromium
+LLM_PROVIDER=mock DEMO_MODE=true make up && make e2e
+
 # Complete CI pipeline
 make ci
 
 # End-to-end Phase 1 check on a fresh stack (wipes dev volumes; mock LLM only):
 # migrations up/down/check, seed twice, demo data (sequential + parallel), brief, what-if,
-# live order survival, then make ci
+# live order survival, browser tests, edge proxy, then make ci
 LLM_PROVIDER=mock DEMO_MODE=true make verify-f
 ```
 
