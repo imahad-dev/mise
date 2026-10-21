@@ -61,124 +61,126 @@
   }
 }
 
-/* Buttons */
-.btn-primary,
-.btn-ghost,
-.btn-dark,
-.btn-danger {
-  min-height: 44px;
-  padding: 0.625rem 1.25rem;
-  border-radius: 9999px;
-  font-weight: 600;
-  font-size: 0.875rem;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  cursor: pointer;
-  transition: background-color 0.15s, border-color 0.15s;
-}
-.btn-primary {
-  background: var(--color-terracotta);
-  color: var(--color-cream);
-}
-.btn-primary:hover {
-  background: var(--color-terracotta-strong);
-}
-.btn-ghost {
-  background: transparent;
-  color: var(--color-ink);
-  border: 1px solid rgb(43 33 24 / 0.28);
-}
-.btn-ghost:hover {
-  background: var(--color-paper-2);
-}
-.btn-dark {
-  background: var(--color-ink);
-  color: var(--color-paper);
-}
-.btn-danger {
-  background: var(--color-danger-fg);
-  color: var(--color-cream);
-}
-.btn-primary:disabled,
-.btn-ghost:disabled,
-.btn-dark:disabled,
-.btn-danger:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-/* Round icon button (e.g. "+" add). Needs an aria-label. 40px meets the 24px minimum target. */
-.btn-icon {
-  min-height: 40px;
-  width: 40px;
-  padding: 0;
-  font-size: 1.25rem;
-  line-height: 1;
-}
+@layer components {
+  /* Buttons */
+  .btn-primary,
+  .btn-ghost,
+  .btn-dark,
+  .btn-danger {
+    min-height: 44px;
+    padding: 0.625rem 1.25rem;
+    border-radius: 9999px;
+    font-weight: 600;
+    font-size: 0.875rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    transition: background-color 0.15s, border-color 0.15s;
+  }
+  .btn-primary {
+    background: var(--color-terracotta);
+    color: var(--color-cream);
+  }
+  .btn-primary:hover {
+    background: var(--color-terracotta-strong);
+  }
+  .btn-ghost {
+    background: transparent;
+    color: var(--color-ink);
+    border: 1px solid rgb(43 33 24 / 0.28);
+  }
+  .btn-ghost:hover {
+    background: var(--color-paper-2);
+  }
+  .btn-dark {
+    background: var(--color-ink);
+    color: var(--color-paper);
+  }
+  .btn-danger {
+    background: var(--color-danger-fg);
+    color: var(--color-cream);
+  }
+  .btn-primary:disabled,
+  .btn-ghost:disabled,
+  .btn-dark:disabled,
+  .btn-danger:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+  /* Round icon button (e.g. "+" add). Needs an aria-label. 40px meets the 24px minimum target. */
+  .btn-icon {
+    min-height: 40px;
+    width: 40px;
+    padding: 0;
+    font-size: 1.25rem;
+    line-height: 1;
+  }
 
-/* Surfaces */
-.mise-card {
-  background: var(--color-card);
-  border: 1px solid var(--color-line);
-  border-radius: 16px;
-  padding: 1.25rem;
-}
-.stat-tile {
-  background: var(--color-card);
-  border: 1px solid var(--color-line);
-  border-radius: 14px;
-  padding: 1rem 1.25rem;
-}
+  /* Surfaces */
+  .mise-card {
+    background: var(--color-card);
+    border: 1px solid var(--color-line);
+    border-radius: 16px;
+    padding: 1.25rem;
+  }
+  .stat-tile {
+    background: var(--color-card);
+    border: 1px solid var(--color-line);
+    border-radius: 14px;
+    padding: 1rem 1.25rem;
+  }
 
-/* Chips: colour + icon + word, never colour alone */
-.chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  padding: 0.2rem 0.65rem;
-  border-radius: 9999px;
-  font-size: 0.75rem;
-  font-weight: 600;
-  min-height: 24px;
-}
-.chip-neutral {
-  background: var(--color-paper-2);
-  color: #5c4a36;
-}
-.chip-contains {
-  background: var(--color-danger-bg);
-  color: var(--color-danger-fg);
-}
-.chip-unverified {
-  background: var(--color-warn-bg);
-  color: var(--color-warn-fg);
-}
-.chip-safe {
-  background: var(--color-safe-bg);
-  color: var(--color-safe-fg);
-}
+  /* Chips: colour + icon + word, never colour alone */
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.2rem 0.65rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    min-height: 24px;
+  }
+  .chip-neutral {
+    background: var(--color-paper-2);
+    color: #5c4a36;
+  }
+  .chip-contains {
+    background: var(--color-danger-bg);
+    color: var(--color-danger-fg);
+  }
+  .chip-unverified {
+    background: var(--color-warn-bg);
+    color: var(--color-warn-fg);
+  }
+  .chip-safe {
+    background: var(--color-safe-bg);
+    color: var(--color-safe-fg);
+  }
 
-/* Bottom sheet on native <dialog> */
-.sheet {
-  margin: auto auto 0;
-  width: 100%;
-  max-width: 32rem;
-  max-height: 90vh;
-  padding: 0;
-  border: 0;
-  border-radius: 22px 22px 0 0;
-  background: var(--color-card);
-  color: var(--color-ink);
-  box-shadow: 0 -8px 24px rgb(43 33 24 / 0.18);
-}
-.sheet::backdrop {
-  background: rgb(43 33 24 / 0.4);
-}
-@media (min-width: 640px) {
+  /* Bottom sheet on native <dialog> */
   .sheet {
-    margin: auto;
-    border-radius: 22px;
+    margin: auto auto 0;
+    width: 100%;
+    max-width: 32rem;
+    max-height: 90vh;
+    padding: 0;
+    border: 0;
+    border-radius: 22px 22px 0 0;
+    background: var(--color-card);
+    color: var(--color-ink);
+    box-shadow: 0 -8px 24px rgb(43 33 24 / 0.18);
+  }
+  .sheet::backdrop {
+    background: rgb(43 33 24 / 0.4);
+  }
+  @media (min-width: 640px) {
+    .sheet {
+      margin: auto;
+      border-radius: 22px;
+    }
   }
 }
 
