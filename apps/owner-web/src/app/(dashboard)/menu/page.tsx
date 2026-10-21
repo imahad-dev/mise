@@ -132,7 +132,7 @@ export default function MenuManagementPage() {
             <div
               key={item.id}
               className={`p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-colors ${
-                !item.available ? "bg-paper opacity-70" : "hover:bg-white/[0.02]"
+                !item.available ? "bg-paper opacity-70" : "hover:bg-paper-2"
               }`}
             >
               {/* Item Info */}
