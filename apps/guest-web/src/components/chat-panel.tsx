@@ -72,7 +72,7 @@ export function ChatPanel({ locale = "en" }: ChatPanelProps) {
       {!isOpen ? (
         <button
           onClick={() => setIsOpen(true)}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-terracotta hover:bg-terracotta text-cream font-medium shadow-lg shadow-ink/10 transition-all text-sm active:scale-95"
+          className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-terracotta hover:bg-terracotta-strong text-cream font-medium shadow-lg shadow-ink/10 transition-all text-sm active:scale-95"
           aria-label={dict.ui.chatTitle}
         >
           <svg className="w-4 h-4 fill-current" viewBox="0 0 20 20">
@@ -147,7 +147,7 @@ export function ChatPanel({ locale = "en" }: ChatPanelProps) {
             <button
               type="submit"
               disabled={isLoading || !input.trim()}
-              className="px-3 py-1.5 rounded-lg bg-terracotta hover:bg-terracotta disabled:opacity-50 text-cream text-xs font-medium"
+              className="px-3 py-1.5 rounded-lg bg-terracotta hover:bg-terracotta-strong disabled:opacity-50 text-cream text-xs font-medium"
             >
               {dict.ui.chatSend}
             </button>

@@ -2,6 +2,7 @@
 
 import React, { use, useState } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { getDictionary } from "../../../i18n";
 
 const EU14_ALLERGENS = [
@@ -91,10 +92,8 @@ export default function QrPickerPage({
       <div className="max-w-md w-full mx-auto space-y-6">
         {/* Header */}
         <div className="text-center space-y-2">
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-terracotta text-terracotta font-bold text-2xl border border-terracotta">
-            M
-          </div>
-          <h1 className="text-2xl font-bold tracking-tight text-ink">
+          <Image src="/brand/logo-mark.svg" alt="Mise" width={56} height={56} priority />
+          <h1 className="text-3xl text-ink">
             {dict.ui.welcomeTitle}
           </h1>
           <p className="text-sm text-ink-muted">{dict.ui.welcomeSubtitle}</p>
@@ -203,7 +202,7 @@ export default function QrPickerPage({
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3.5 px-4 rounded-2xl bg-terracotta hover:bg-terracotta active:scale-[0.98] text-cream font-semibold text-sm shadow-xl shadow-ink/10 transition-all disabled:opacity-50"
+            className="w-full py-3.5 px-4 rounded-2xl bg-terracotta hover:bg-terracotta-strong active:scale-[0.98] text-cream font-semibold text-sm shadow-xl shadow-ink/10 transition-all disabled:opacity-50"
           >
             {loading ? "..." : dict.ui.continueToMenu}
           </button>
