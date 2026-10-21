@@ -14,9 +14,6 @@ importers:
 
   apps/guest-web:
     dependencies:
-      '@fontsource-variable/inter':
-        specifier: ^5.1.1
-        version: 5.3.0
       api-client:
         specifier: workspace:*
         version: link:../../packages/api-client
@@ -32,6 +29,9 @@ importers:
       react-dom:
         specifier: ^19.0.0
         version: 19.3.0(react@19.3.0)
+      ui:
+        specifier: workspace:^
+        version: link:../../packages/ui
     devDependencies:
       '@tailwindcss/postcss':
         specifier: ^4
@@ -72,9 +72,6 @@ importers:
 
   apps/owner-web:
     dependencies:
-      '@fontsource-variable/inter':
-        specifier: ^5.1.1
-        version: 5.3.0
       api-client:
         specifier: workspace:*
         version: link:../../packages/api-client
@@ -90,6 +87,9 @@ importers:
       react-dom:
         specifier: ^19.0.0
         version: 19.3.0(react@19.3.0)
+      ui:
+        specifier: workspace:^
+        version: link:../../packages/ui
     devDependencies:
       '@tailwindcss/postcss':
         specifier: ^4
