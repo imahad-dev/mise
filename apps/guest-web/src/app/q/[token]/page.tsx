@@ -158,7 +158,7 @@ export default function QrPickerPage({
                     onClick={() => toggleDiet(diet)}
                     className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
                       selected
-                        ? "bg-safe-bg text-terracotta border-terracotta"
+                        ? "bg-safe-bg text-safe-fg border-safe-fg/40"
                         : "bg-paper-2 text-ink-muted border-line hover:border-line"
                     }`}
                   >

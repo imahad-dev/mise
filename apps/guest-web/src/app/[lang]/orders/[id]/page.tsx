@@ -55,13 +55,13 @@ export default function OrderStatusPage({
     switch (status) {
       case "placed":
         return (
-          <span className="px-3 py-1 rounded-full text-xs font-semibold bg-safe-bg text-terracotta border border-terracotta">
+          <span className="px-3 py-1 rounded-full text-xs font-semibold bg-safe-bg text-safe-fg border border-safe-fg/40">
             {dict.ui.statusPlaced}
           </span>
         );
       case "bumped":
         return (
-          <span className="px-3 py-1 rounded-full text-xs font-semibold bg-paper-2 text-terracotta border border-terracotta/60">
+          <span className="px-3 py-1 rounded-full text-xs font-semibold bg-paper-2 text-ink border border-terracotta/60">
             {dict.ui.statusBumped}
           </span>
         );
