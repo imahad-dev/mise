@@ -87,26 +87,26 @@ export default function QrPickerPage({
   };
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col justify-center px-4 py-8 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-paper text-ink flex flex-col justify-center px-4 py-8 sm:px-6 lg:px-8">
       <div className="max-w-md w-full mx-auto space-y-6">
         {/* Header */}
         <div className="text-center space-y-2">
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-emerald-600/20 text-emerald-400 font-bold text-2xl border border-emerald-500/30">
+          <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-terracotta text-terracotta font-bold text-2xl border border-terracotta">
             M
           </div>
-          <h1 className="text-2xl font-bold tracking-tight text-zinc-100">
+          <h1 className="text-2xl font-bold tracking-tight text-ink">
             {dict.ui.welcomeTitle}
           </h1>
-          <p className="text-sm text-zinc-400">{dict.ui.welcomeSubtitle}</p>
+          <p className="text-sm text-ink-muted">{dict.ui.welcomeSubtitle}</p>
         </div>
 
         {/* Staff Notice Alert */}
-        <div className="rounded-xl p-3.5 bg-amber-950/40 border border-amber-900/40 text-xs text-amber-300/90 leading-relaxed">
+        <div className="rounded-xl p-3.5 bg-warn-bg border border-warn-fg/30 text-xs text-warn-fg/90 leading-relaxed">
           ℹ️ {dict.staffNotice}
         </div>
 
         {error && (
-          <div className="rounded-xl p-3 bg-rose-950/60 border border-rose-800 text-xs text-rose-300">
+          <div className="rounded-xl p-3 bg-danger-bg border border-danger-fg/40 text-xs text-danger-fg">
             {error}
           </div>
         )}
@@ -114,8 +114,8 @@ export default function QrPickerPage({
         {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Language selector */}
-          <div className="bg-zinc-900/70 p-4 rounded-2xl border border-zinc-800 space-y-2.5">
-            <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-400">
+          <div className="bg-card p-4 rounded-2xl border border-line space-y-2.5">
+            <label className="block text-xs font-semibold uppercase tracking-wider text-ink-muted">
               {dict.ui.selectLanguage}
             </label>
             <div className="grid grid-cols-2 gap-2">
@@ -124,8 +124,8 @@ export default function QrPickerPage({
                 onClick={() => setLanguage("en")}
                 className={`py-2 px-3 rounded-xl text-sm font-medium transition-all ${
                   language === "en"
-                    ? "bg-emerald-600 text-white shadow-md shadow-emerald-950"
-                    : "bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
+                    ? "bg-terracotta text-cream shadow-md shadow-ink/10"
+                    : "bg-paper-2 text-ink-muted hover:bg-paper-2"
                 }`}
               >
                 🇬🇧 English
@@ -135,8 +135,8 @@ export default function QrPickerPage({
                 onClick={() => setLanguage("it")}
                 className={`py-2 px-3 rounded-xl text-sm font-medium transition-all ${
                   language === "it"
-                    ? "bg-emerald-600 text-white shadow-md shadow-emerald-950"
-                    : "bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
+                    ? "bg-terracotta text-cream shadow-md shadow-ink/10"
+                    : "bg-paper-2 text-ink-muted hover:bg-paper-2"
                 }`}
               >
                 🇮🇹 Italiano
@@ -145,8 +145,8 @@ export default function QrPickerPage({
           </div>
 
           {/* Diets selector */}
-          <div className="bg-zinc-900/70 p-4 rounded-2xl border border-zinc-800 space-y-2.5">
-            <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-400">
+          <div className="bg-card p-4 rounded-2xl border border-line space-y-2.5">
+            <label className="block text-xs font-semibold uppercase tracking-wider text-ink-muted">
               {dict.ui.selectDietary}
             </label>
             <div className="flex flex-wrap gap-2">
@@ -159,8 +159,8 @@ export default function QrPickerPage({
                     onClick={() => toggleDiet(diet)}
                     className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
                       selected
-                        ? "bg-emerald-950 text-emerald-300 border-emerald-600"
-                        : "bg-zinc-800/80 text-zinc-400 border-zinc-700 hover:border-zinc-600"
+                        ? "bg-safe-bg text-terracotta border-terracotta"
+                        : "bg-paper-2 text-ink-muted border-line hover:border-line"
                     }`}
                   >
                     {dict.dietary[diet] || diet} {selected ? "✓" : "+"}
@@ -171,8 +171,8 @@ export default function QrPickerPage({
           </div>
 
           {/* Allergens selector */}
-          <div className="bg-zinc-900/70 p-4 rounded-2xl border border-zinc-800 space-y-2.5">
-            <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-400">
+          <div className="bg-card p-4 rounded-2xl border border-line space-y-2.5">
+            <label className="block text-xs font-semibold uppercase tracking-wider text-ink-muted">
               {dict.ui.selectAllergens}
             </label>
             <div className="grid grid-cols-2 gap-2">
@@ -185,8 +185,8 @@ export default function QrPickerPage({
                     onClick={() => toggleAllergen(allergen)}
                     className={`px-2.5 py-1.5 rounded-xl text-xs font-medium border text-left flex items-center justify-between transition-all ${
                       selected
-                        ? "bg-rose-950/70 text-rose-200 border-rose-600"
-                        : "bg-zinc-800/60 text-zinc-400 border-zinc-800 hover:border-zinc-700"
+                        ? "bg-danger-bg text-danger-fg border-danger-fg/40"
+                        : "bg-paper-2 text-ink-muted border-line hover:border-line"
                     }`}
                   >
                     <span className="truncate">{dict.allergens[allergen] || allergen}</span>
@@ -203,7 +203,7 @@ export default function QrPickerPage({
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3.5 px-4 rounded-2xl bg-emerald-600 hover:bg-emerald-500 active:scale-[0.98] text-white font-semibold text-sm shadow-xl shadow-emerald-950 transition-all disabled:opacity-50"
+            className="w-full py-3.5 px-4 rounded-2xl bg-terracotta hover:bg-terracotta active:scale-[0.98] text-cream font-semibold text-sm shadow-xl shadow-ink/10 transition-all disabled:opacity-50"
           >
             {loading ? "..." : dict.ui.continueToMenu}
           </button>

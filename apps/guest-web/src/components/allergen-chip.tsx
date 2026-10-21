@@ -30,9 +30,9 @@ export function AllergenChip({
     return (
       <span
         data-testid="allergen-chip-contains"
-        className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-rose-950/80 text-rose-300 border border-rose-800/60 ${className}`}
+        className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-danger-bg text-danger-fg border border-danger-fg/40 ${className}`}
       >
-        <span className="w-1.5 h-1.5 rounded-full bg-rose-400 animate-pulse" />
+        <span className="w-1.5 h-1.5 rounded-full bg-danger-fg animate-pulse" />
         {label}
       </span>
     );
@@ -42,9 +42,9 @@ export function AllergenChip({
     return (
       <span
         data-testid="allergen-chip-unverified"
-        className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-950/60 text-amber-300 border border-amber-800/50 ${className}`}
+        className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-warn-bg text-warn-fg border border-warn-fg/30 ${className}`}
       >
-        <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+        <span className="w-1.5 h-1.5 rounded-full bg-warn-fg" />
         {dict.allergenStatus.unverified}
       </span>
     );
@@ -54,9 +54,9 @@ export function AllergenChip({
   return (
     <span
       data-testid="allergen-chip-no-declared-match"
-      className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-950/60 text-emerald-300 border border-emerald-800/50 ${className}`}
+      className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-safe-bg text-terracotta border border-terracotta ${className}`}
     >
-      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+      <span className="w-1.5 h-1.5 rounded-full bg-olive" />
       {dict.allergenStatus.no_declared_match}
     </span>
   );

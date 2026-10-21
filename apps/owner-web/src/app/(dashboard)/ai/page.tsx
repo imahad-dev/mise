@@ -98,15 +98,15 @@ export default function WhatIfPage() {
     }
   };
 
-  const field = "w-full rounded-lg bg-[#070B10] border border-[#38BDF8]/20 px-3 py-2 min-h-[44px] text-sm";
+  const field = "w-full rounded-lg bg-paper border border-line px-3 py-2 min-h-[44px] text-sm";
 
   return (
     <div className="space-y-8">
       <div>
         <h1 className="text-3xl font-extrabold tracking-tight">
-          What-if <span className="gradient-text">Calculator</span>
+          What-if <span className="text-terracotta">Calculator</span>
         </h1>
-        <p className="text-xs text-[#8FA3B3] mt-1">
+        <p className="text-xs text-ink-muted mt-1">
           Deterministic weekly estimate from the last 28 days of sales at current menu prices.
           The AI model may only explain the result; it never produces the numbers.
         </p>
@@ -114,14 +114,14 @@ export default function WhatIfPage() {
 
       <form onSubmit={submit} className="mise-card p-6 space-y-5">
         <fieldset className="grid gap-3 md:grid-cols-3">
-          <legend className="text-xs font-bold text-[#22D3EE] uppercase tracking-wider mb-2">
+          <legend className="text-xs font-bold text-terracotta uppercase tracking-wider mb-2">
             Scenario
           </legend>
           {SCENARIOS.map((s) => (
             <label
               key={s.id}
               className={`mise-card p-4 cursor-pointer space-y-1 ${
-                scenario === s.id ? "border-[#22D3EE] ring-1 ring-[#22D3EE]/50" : ""
+                scenario === s.id ? "border-terracotta ring-1 ring-terracotta" : ""
               }`}
             >
               <input
@@ -132,15 +132,15 @@ export default function WhatIfPage() {
                 onChange={() => setScenario(s.id)}
                 className="mr-2"
               />
-              <span className="font-bold text-[#F3F8FC]">{s.label}</span>
-              <p className="text-xs text-[#8FA3B3]">{s.desc}</p>
+              <span className="font-bold text-ink">{s.label}</span>
+              <p className="text-xs text-ink-muted">{s.desc}</p>
             </label>
           ))}
         </fieldset>
 
         <div className="grid gap-4 md:grid-cols-3">
           {scenario !== "demand_surge" && (
-            <label className="space-y-1 text-xs text-[#8FA3B3]">
+            <label className="space-y-1 text-xs text-ink-muted">
               Menu item
               <select className={field} value={itemId} onChange={(e) => setItemId(e.target.value)} required>
                 {items.map((i) => (
@@ -152,28 +152,28 @@ export default function WhatIfPage() {
             </label>
           )}
           {scenario === "price_change" && (
-            <label className="space-y-1 text-xs text-[#8FA3B3]">
+            <label className="space-y-1 text-xs text-ink-muted">
               Price change (%)
               <input className={field} type="number" step="0.5" min={-90} max={100} value={changePct}
                 onChange={(e) => setChangePct(e.target.value)} required />
             </label>
           )}
           {scenario === "promotion" && (
-            <label className="space-y-1 text-xs text-[#8FA3B3]">
+            <label className="space-y-1 text-xs text-ink-muted">
               Discount (%)
               <input className={field} type="number" step="1" min={1} max={90} value={discountPct}
                 onChange={(e) => setDiscountPct(e.target.value)} required />
             </label>
           )}
           {scenario === "demand_surge" && (
-            <label className="space-y-1 text-xs text-[#8FA3B3]">
+            <label className="space-y-1 text-xs text-ink-muted">
               Demand multiplier
               <input className={field} type="number" step="0.05" min={0.1} max={5} value={multiplier}
                 onChange={(e) => setMultiplier(e.target.value)} required />
             </label>
           )}
           {scenario !== "demand_surge" && (
-            <label className="space-y-1 text-xs text-[#8FA3B3]">
+            <label className="space-y-1 text-xs text-ink-muted">
               Elasticity (optional)
               <input className={field} type="number" step="0.1" min={-10} max={0} value={elasticity}
                 placeholder={scenario === "price_change" ? "-0.8 (default)" : "-2.0 (default)"}
@@ -188,7 +188,7 @@ export default function WhatIfPage() {
       </form>
 
       {error && (
-        <div role="alert" className="p-4 rounded-xl bg-[#EF4444]/15 border border-[#EF4444]/40 text-xs text-[#EF4444]">
+        <div role="alert" className="p-4 rounded-xl bg-danger-bg border border-danger-fg text-xs text-danger-fg">
           {error}
         </div>
       )}
@@ -196,7 +196,7 @@ export default function WhatIfPage() {
       {result && !loading && (
         <div className="space-y-6">
           {result.data_sources.simulated > 0 && (
-            <div role="status" className="p-4 rounded-xl bg-[#FF9F2E]/15 border border-[#FF9F2E]/40 text-xs text-[#FF9F2E] font-semibold">
+            <div role="status" className="p-4 rounded-xl bg-warn-bg border border-warn-fg/30 text-xs text-warn-fg font-semibold">
               Baseline uses {result.data_sources.simulated} simulated demo orders
               ({result.window_start} to {result.window_end}).
             </div>
@@ -204,18 +204,18 @@ export default function WhatIfPage() {
           <div className="grid gap-4 sm:grid-cols-3">
             {(["baseline", "result", "delta"] as const).map((k) => (
               <div key={k} className="stat-tile space-y-2">
-                <span className="text-xs text-[#8FA3B3] uppercase font-semibold">
+                <span className="text-xs text-ink-muted uppercase font-semibold">
                   {k === "baseline" ? "Baseline / week" : k === "result" ? "Scenario / week" : "Change / week"}
                 </span>
-                <div className="text-sm text-[#F3F8FC]">
+                <div className="text-sm text-ink">
                   Revenue{" "}
                   <span className="font-extrabold text-xl">
                     {k === "delta" ? signed(result[k].revenue_eur) : eur(result[k].revenue_eur)}
                   </span>
                 </div>
-                <div className="text-sm text-[#F3F8FC]">
+                <div className="text-sm text-ink">
                   Margin{" "}
-                  <span className={`font-extrabold text-xl ${k === "delta" ? (result.delta.margin_eur >= 0 ? "text-[#34D399]" : "text-[#EF4444]") : ""}`}>
+                  <span className={`font-extrabold text-xl ${k === "delta" ? (result.delta.margin_eur >= 0 ? "text-olive" : "text-danger-fg") : ""}`}>
                     {k === "delta" ? signed(result[k].margin_eur) : eur(result[k].margin_eur)}
                   </span>
                 </div>
@@ -224,19 +224,19 @@ export default function WhatIfPage() {
           </div>
 
           <div className="mise-card p-5 space-y-2">
-            <h3 className="text-base font-bold text-[#F3F8FC]">Assumptions</h3>
-            <ul className="list-disc pl-5 text-xs text-[#8FA3B3] space-y-1">
+            <h3 className="text-base font-bold text-ink">Assumptions</h3>
+            <ul className="list-disc pl-5 text-xs text-ink-muted space-y-1">
               {result.assumptions.map((a) => (
                 <li key={a}>{a}</li>
               ))}
             </ul>
           </div>
 
-          <div className="glass-panel p-5 space-y-2">
+          <div className="mise-card p-5 space-y-2">
             <span className={`chip ${result.explanation_source === "llm" ? "chip-safe" : "chip-unverified"}`}>
               {result.explanation_source === "llm" ? "AI explanation, numbers checked" : "Template explanation"}
             </span>
-            <p className="text-sm text-[#F3F8FC] leading-relaxed">{result.explanation}</p>
+            <p className="text-sm text-ink leading-relaxed">{result.explanation}</p>
           </div>
         </div>
       )}

@@ -55,25 +55,25 @@ export default function OrderStatusPage({
     switch (status) {
       case "placed":
         return (
-          <span className="px-3 py-1 rounded-full text-xs font-semibold bg-emerald-950 text-emerald-300 border border-emerald-600/60">
+          <span className="px-3 py-1 rounded-full text-xs font-semibold bg-safe-bg text-terracotta border border-terracotta">
             {dict.ui.statusPlaced}
           </span>
         );
       case "bumped":
         return (
-          <span className="px-3 py-1 rounded-full text-xs font-semibold bg-blue-950 text-blue-300 border border-blue-600/60">
+          <span className="px-3 py-1 rounded-full text-xs font-semibold bg-paper-2 text-terracotta border border-terracotta/60">
             {dict.ui.statusBumped}
           </span>
         );
       case "cancelled":
         return (
-          <span className="px-3 py-1 rounded-full text-xs font-semibold bg-rose-950 text-rose-300 border border-rose-600/60">
+          <span className="px-3 py-1 rounded-full text-xs font-semibold bg-danger-bg text-danger-fg border border-danger-fg/40">
             {dict.ui.statusCancelled}
           </span>
         );
       default:
         return (
-          <span className="px-3 py-1 rounded-full text-xs font-semibold bg-zinc-800 text-zinc-300">
+          <span className="px-3 py-1 rounded-full text-xs font-semibold bg-paper-2 text-ink-muted">
             {status || "..."}
           </span>
         );
@@ -81,30 +81,30 @@ export default function OrderStatusPage({
   };
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col justify-between">
+    <div className="min-h-screen bg-paper text-ink flex flex-col justify-between">
       {/* Reconnecting banner (SSE down or reconnecting) */}
       {isReconnecting && (
         <div
           data-testid="reconnecting-banner"
-          className="bg-amber-500 text-zinc-950 px-4 py-2 text-xs font-bold text-center flex items-center justify-center gap-2 sticky top-0 z-50 animate-pulse"
+          className="bg-warn-fg text-cream px-4 py-2 text-xs font-bold text-center flex items-center justify-center gap-2 sticky top-0 z-50 animate-pulse"
         >
-          <span className="w-2 h-2 rounded-full bg-zinc-950" />
+          <span className="w-2 h-2 rounded-full bg-paper" />
           {dict.ui.reconnecting}
         </div>
       )}
 
       {/* Main Content */}
       <main className="max-w-xl w-full mx-auto p-4 sm:p-6 space-y-6">
-        <header className="flex items-center justify-between border-b border-zinc-800 pb-4">
+        <header className="flex items-center justify-between border-b border-line pb-4">
           <div>
-            <h1 className="text-xl font-bold text-zinc-100">{dict.ui.orderStatus}</h1>
-            <p className="text-xs text-zinc-500 font-mono mt-0.5">ID: {id}</p>
+            <h1 className="text-xl font-bold text-ink">{dict.ui.orderStatus}</h1>
+            <p className="text-xs text-ink-muted font-mono mt-0.5">ID: {id}</p>
           </div>
           {order && getStatusBadge(order.status)}
         </header>
 
         {error && !order && (
-          <div className="p-4 bg-rose-950/60 border border-rose-800 rounded-2xl text-xs text-rose-300">
+          <div className="p-4 bg-danger-bg border border-danger-fg/40 rounded-2xl text-xs text-danger-fg">
             {error.message}
           </div>
         )}
@@ -112,47 +112,47 @@ export default function OrderStatusPage({
         {order ? (
           <div className="space-y-6">
             {/* Status Summary Card */}
-            <div className="p-5 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-4">
+            <div className="p-5 rounded-2xl bg-card border border-line space-y-4">
               {order.table_label && (
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-zinc-400">{dict.ui.table}</span>
-                  <span className="font-medium text-emerald-400">{order.table_label}</span>
+                  <span className="text-ink-muted">{dict.ui.table}</span>
+                  <span className="font-medium text-terracotta">{order.table_label}</span>
                 </div>
               )}
               <div className="flex items-center justify-between text-sm">
-                <span className="text-zinc-400">{dict.ui.placedAt}</span>
-                <span className="text-xs text-zinc-300 font-mono">
+                <span className="text-ink-muted">{dict.ui.placedAt}</span>
+                <span className="text-xs text-ink-muted font-mono">
                   {new Date(order.placed_at).toLocaleTimeString()}
                 </span>
               </div>
             </div>
 
             {/* Items List */}
-            <div className="rounded-2xl bg-zinc-900 border border-zinc-800 p-5 space-y-3">
-              <h2 className="text-xs font-bold uppercase tracking-wider text-zinc-400 border-b border-zinc-800 pb-2">
+            <div className="rounded-2xl bg-card border border-line p-5 space-y-3">
+              <h2 className="text-xs font-bold uppercase tracking-wider text-ink-muted border-b border-line pb-2">
                 {dict.ui.items}
               </h2>
-              <div className="divide-y divide-zinc-800/80">
+              <div className="divide-y divide-line">
                 {order.items.map((item) => (
                   <div key={item.id} className="py-2.5 flex items-start justify-between text-sm">
                     <div>
-                      <div className="font-medium text-zinc-200">
+                      <div className="font-medium text-ink">
                         {item.quantity}x {item.item_name}
                       </div>
                       {item.notes && (
-                        <p className="text-xs text-zinc-500 italic mt-0.5">Note: {item.notes}</p>
+                        <p className="text-xs text-ink-muted italic mt-0.5">Note: {item.notes}</p>
                       )}
                     </div>
-                    <span className="font-semibold text-zinc-300">
+                    <span className="font-semibold text-ink-muted">
                       €{(Number(item.unit_price) * item.quantity).toFixed(2)}
                     </span>
                   </div>
                 ))}
               </div>
 
-              <div className="pt-3 border-t border-zinc-800 flex items-center justify-between font-bold text-sm">
-                <span className="text-zinc-400">{dict.ui.total}</span>
-                <span className="text-emerald-400 text-base">
+              <div className="pt-3 border-t border-line flex items-center justify-between font-bold text-sm">
+                <span className="text-ink-muted">{dict.ui.total}</span>
+                <span className="text-terracotta text-base">
                   €{Number(order.total).toFixed(2)}
                 </span>
               </div>
@@ -160,15 +160,15 @@ export default function OrderStatusPage({
           </div>
         ) : (
           <div className="py-12 flex flex-col items-center justify-center gap-3">
-            <div className="w-6 h-6 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
-            <p className="text-xs text-zinc-500">Connecting to order stream...</p>
+            <div className="w-6 h-6 border-2 border-terracotta border-t-transparent rounded-full animate-spin" />
+            <p className="text-xs text-ink-muted">Connecting to order stream...</p>
           </div>
         )}
 
         <div className="pt-4 text-center">
           <Link
             href={`/${lang}/menu`}
-            className="inline-block px-5 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-xs font-medium text-zinc-200 transition-all"
+            className="inline-block px-5 py-2.5 rounded-xl bg-paper-2 hover:bg-paper-2 text-xs font-medium text-ink transition-all"
           >
             ← {dict.ui.backToMenu}
           </Link>

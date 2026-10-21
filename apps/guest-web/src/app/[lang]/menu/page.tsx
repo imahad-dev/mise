@@ -194,10 +194,10 @@ export default function GuestMenuPage({
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-zinc-950 text-zinc-100 flex items-center justify-center">
+      <div className="min-h-screen bg-paper text-ink flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">
-          <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
-          <p className="text-xs text-zinc-400">Loading menu...</p>
+          <div className="w-8 h-8 border-2 border-terracotta border-t-transparent rounded-full animate-spin" />
+          <p className="text-xs text-ink-muted">Loading menu...</p>
         </div>
       </div>
     );
@@ -205,12 +205,12 @@ export default function GuestMenuPage({
 
   if (error || !menu) {
     return (
-      <div className="min-h-screen bg-zinc-950 text-zinc-100 flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-zinc-900 border border-zinc-800 rounded-2xl p-6 text-center space-y-4">
-          <p className="text-sm text-rose-400">{error || "Unable to display menu."}</p>
+      <div className="min-h-screen bg-paper text-ink flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-card border border-line rounded-2xl p-6 text-center space-y-4">
+          <p className="text-sm text-danger-fg">{error || "Unable to display menu."}</p>
           <button
             onClick={() => window.location.reload()}
-            className="px-4 py-2 bg-zinc-800 text-xs font-medium rounded-xl hover:bg-zinc-700"
+            className="px-4 py-2 bg-paper-2 text-xs font-medium rounded-xl hover:bg-paper-2"
           >
             Retry
           </button>
@@ -220,25 +220,25 @@ export default function GuestMenuPage({
   }
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 pb-28">
+    <div className="min-h-screen bg-paper text-ink pb-28">
       {/* Top Bar */}
-      <header className="sticky top-0 z-30 bg-zinc-950/90 backdrop-blur-md border-b border-zinc-800 px-4 py-3 sm:px-6">
+      <header className="sticky top-0 z-30 bg-paper backdrop-blur-md border-b border-line px-4 py-3 sm:px-6">
         <div className="max-w-3xl mx-auto flex items-center justify-between">
           <div>
-            <h1 className="text-base font-bold text-zinc-100">{menu.restaurant.name}</h1>
+            <h1 className="text-base font-bold text-ink">{menu.restaurant.name}</h1>
             {menu.table_label && (
-              <p className="text-xs text-emerald-400 font-medium">
+              <p className="text-xs text-terracotta font-medium">
                 Table: {menu.table_label}
               </p>
             )}
           </div>
           <button
             onClick={() => setCartOpen(true)}
-            className="relative px-3.5 py-1.5 rounded-full bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-xs font-semibold flex items-center gap-2"
+            className="relative px-3.5 py-1.5 rounded-full bg-paper-2 hover:bg-paper-2 border border-line text-xs font-semibold flex items-center gap-2"
           >
             <span>🛒 {dict.ui.cartTitle}</span>
             {cartCount > 0 && (
-              <span className="bg-emerald-500 text-zinc-950 px-1.5 py-0.5 rounded-full text-[10px] font-bold">
+              <span className="bg-terracotta text-cream px-1.5 py-0.5 rounded-full text-[10px] font-bold">
                 {cartCount}
               </span>
             )}
@@ -249,7 +249,7 @@ export default function GuestMenuPage({
       {/* Main Container */}
       <main className="max-w-3xl mx-auto px-4 py-4 sm:px-6 space-y-6">
         {/* Mandatory Staff Notice */}
-        <div className="rounded-xl p-3 bg-amber-950/40 border border-amber-900/40 text-xs text-amber-300 leading-relaxed flex items-start gap-2">
+        <div className="rounded-xl p-3 bg-warn-bg border border-warn-fg/30 text-xs text-warn-fg leading-relaxed flex items-start gap-2">
           <span className="text-sm">⚠️</span>
           <p>{dict.staffNotice}</p>
         </div>
@@ -259,7 +259,7 @@ export default function GuestMenuPage({
           const catItems = menu.items.filter((i) => i.category === cat);
           return (
             <section key={cat} className="space-y-3">
-              <h2 className="text-sm font-bold uppercase tracking-wider text-zinc-400 border-b border-zinc-800/80 pb-1">
+              <h2 className="text-sm font-bold uppercase tracking-wider text-ink-muted border-b border-line pb-1">
                 {cat}
               </h2>
               <div className="grid gap-3 sm:grid-cols-2">
@@ -268,20 +268,20 @@ export default function GuestMenuPage({
                   return (
                     <div
                       key={item.id}
-                      className={`p-4 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 flex flex-col justify-between transition-all ${
-                        isAvailable ? "hover:border-zinc-700" : "opacity-50"
+                      className={`p-4 rounded-2xl bg-card border border-line flex flex-col justify-between transition-all ${
+                        isAvailable ? "hover:border-line" : "opacity-50"
                       }`}
                     >
                       <div className="space-y-2">
                         <div className="flex items-start justify-between gap-2">
-                          <h3 className="font-semibold text-sm text-zinc-100">{item.name}</h3>
-                          <span className="text-sm font-bold text-emerald-400 whitespace-nowrap">
+                          <h3 className="font-semibold text-sm text-ink">{item.name}</h3>
+                          <span className="text-sm font-bold text-terracotta whitespace-nowrap">
                             {formatPrice(Number(item.price))}
                           </span>
                         </div>
 
                         {item.description && (
-                          <p className="text-xs text-zinc-400 leading-relaxed">
+                          <p className="text-xs text-ink-muted leading-relaxed">
                             {item.description}
                           </p>
                         )}
@@ -289,17 +289,17 @@ export default function GuestMenuPage({
                         {/* Dietary badges */}
                         <div className="flex flex-wrap gap-1.5 pt-1">
                           {item.is_vegetarian && (
-                            <span className="px-2 py-0.5 rounded-md text-[10px] font-medium bg-zinc-800 text-zinc-300 border border-zinc-700">
+                            <span className="px-2 py-0.5 rounded-md text-[10px] font-medium bg-paper-2 text-ink-muted border border-line">
                               🌱 {dict.dietary.vegetarian}
                             </span>
                           )}
                           {item.is_vegan && (
-                            <span className="px-2 py-0.5 rounded-md text-[10px] font-medium bg-zinc-800 text-zinc-300 border border-zinc-700">
+                            <span className="px-2 py-0.5 rounded-md text-[10px] font-medium bg-paper-2 text-ink-muted border border-line">
                               🌿 {dict.dietary.vegan}
                             </span>
                           )}
                           {item.is_gluten_free && (
-                            <span className="px-2 py-0.5 rounded-md text-[10px] font-medium bg-zinc-800 text-zinc-300 border border-zinc-700">
+                            <span className="px-2 py-0.5 rounded-md text-[10px] font-medium bg-paper-2 text-ink-muted border border-line">
                               🌾 {dict.dietary.gluten_free}
                             </span>
                           )}
@@ -320,13 +320,13 @@ export default function GuestMenuPage({
                         {isAvailable ? (
                           <button
                             onClick={() => handleAddToCart(item)}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-medium text-xs shadow-md transition-all"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-terracotta hover:bg-terracotta active:scale-95 text-cream font-medium text-xs shadow-md transition-all"
                           >
                             <span>+</span>
                             <span>{dict.ui.addToCart}</span>
                           </button>
                         ) : (
-                          <span className="text-xs text-zinc-500 font-medium italic">
+                          <span className="text-xs text-ink-muted font-medium italic">
                             {dict.ui.unavailable}
                           </span>
                         )}
@@ -345,10 +345,10 @@ export default function GuestMenuPage({
         <div className="fixed bottom-4 left-4 right-4 z-20 max-w-md mx-auto">
           <button
             onClick={() => setCartOpen(true)}
-            className="w-full py-3 px-5 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-sm shadow-xl shadow-emerald-950 flex items-center justify-between transition-all active:scale-[0.99]"
+            className="w-full py-3 px-5 rounded-2xl bg-terracotta hover:bg-terracotta text-cream font-semibold text-sm shadow-xl shadow-ink/10 flex items-center justify-between transition-all active:scale-[0.99]"
           >
             <div className="flex items-center gap-2">
-              <span className="bg-emerald-700 px-2 py-0.5 rounded-lg text-xs">
+              <span className="bg-terracotta px-2 py-0.5 rounded-lg text-xs">
                 {cartCount}
               </span>
               <span>{dict.ui.checkout}</span>
@@ -360,14 +360,14 @@ export default function GuestMenuPage({
 
       {/* Cart Modal / Drawer */}
       {cartOpen && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
-          <div className="bg-zinc-900 border border-zinc-800 w-full max-w-lg rounded-t-3xl sm:rounded-3xl max-h-[90vh] flex flex-col overflow-hidden shadow-2xl">
+        <div className="fixed inset-0 z-50 bg-ink/40 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div className="bg-card border border-line w-full max-w-lg rounded-t-3xl sm:rounded-3xl max-h-[90vh] flex flex-col overflow-hidden shadow-2xl">
             {/* Header */}
-            <div className="px-5 py-4 border-b border-zinc-800 flex items-center justify-between bg-zinc-900">
-              <h2 className="text-base font-bold text-zinc-100">{dict.ui.cartTitle}</h2>
+            <div className="px-5 py-4 border-b border-line flex items-center justify-between bg-card">
+              <h2 className="text-base font-bold text-ink">{dict.ui.cartTitle}</h2>
               <button
                 onClick={() => setCartOpen(false)}
-                className="text-zinc-400 hover:text-zinc-100 p-1 text-sm"
+                className="text-ink-muted hover:text-ink p-1 text-sm"
               >
                 ✕
               </button>
@@ -376,23 +376,23 @@ export default function GuestMenuPage({
             {/* Cart Items */}
             <div className="p-5 overflow-y-auto space-y-4 flex-1">
               {orderError && (
-                <div className="p-3 bg-rose-950/70 border border-rose-800 rounded-xl text-xs text-rose-300">
+                <div className="p-3 bg-danger-bg border border-danger-fg/40 rounded-xl text-xs text-danger-fg">
                   {orderError}
                 </div>
               )}
 
               {cart.items.length === 0 ? (
-                <p className="text-zinc-500 text-center py-8 text-sm">{dict.ui.emptyCart}</p>
+                <p className="text-ink-muted text-center py-8 text-sm">{dict.ui.emptyCart}</p>
               ) : (
                 <div className="space-y-3">
                   {cart.items.map((item, idx) => (
                     <div
                       key={`${item.menuItemId}-${idx}`}
-                      className="p-3 rounded-xl bg-zinc-950/60 border border-zinc-800/80 space-y-2"
+                      className="p-3 rounded-xl bg-paper border border-line space-y-2"
                     >
                       <div className="flex items-center justify-between text-sm">
-                        <span className="font-medium text-zinc-200">{item.name}</span>
-                        <span className="font-semibold text-emerald-400">
+                        <span className="font-medium text-ink">{item.name}</span>
+                        <span className="font-semibold text-terracotta">
                           {formatPrice(item.price * item.quantity)}
                         </span>
                       </div>
@@ -405,12 +405,12 @@ export default function GuestMenuPage({
                         />
 
                         {/* Quantity Controls */}
-                        <div className="flex items-center gap-2 bg-zinc-800/80 rounded-lg p-1">
+                        <div className="flex items-center gap-2 bg-paper-2 rounded-lg p-1">
                           <button
                             onClick={() =>
                               handleUpdateQuantity(item.menuItemId, item.quantity - 1, item.notes)
                             }
-                            className="w-6 h-6 flex items-center justify-center rounded bg-zinc-700 text-xs font-bold hover:bg-zinc-600"
+                            className="w-6 h-6 flex items-center justify-center rounded bg-paper-2 text-xs font-bold hover:bg-paper-2"
                           >
                             -
                           </button>
@@ -419,7 +419,7 @@ export default function GuestMenuPage({
                             onClick={() =>
                               handleUpdateQuantity(item.menuItemId, item.quantity + 1, item.notes)
                             }
-                            className="w-6 h-6 flex items-center justify-center rounded bg-zinc-700 text-xs font-bold hover:bg-zinc-600"
+                            className="w-6 h-6 flex items-center justify-center rounded bg-paper-2 text-xs font-bold hover:bg-paper-2"
                           >
                             +
                           </button>
@@ -432,10 +432,10 @@ export default function GuestMenuPage({
 
               {/* Allergen Acknowledgment Checkbox if Risk Present */}
               {cart.items.length > 0 && requiresAck && (
-                <div className="p-3.5 bg-rose-950/50 border border-rose-800/60 rounded-xl space-y-2">
+                <div className="p-3.5 bg-danger-bg border border-danger-fg/40 rounded-xl space-y-2">
                   <div className="flex items-start gap-2">
-                    <span className="text-rose-400">⚠️</span>
-                    <p className="text-xs text-rose-300 font-medium">
+                    <span className="text-danger-fg">⚠️</span>
+                    <p className="text-xs text-danger-fg font-medium">
                       {dict.ui.allergenWarningDescription}
                     </p>
                   </div>
@@ -444,9 +444,9 @@ export default function GuestMenuPage({
                       type="checkbox"
                       checked={cart.acknowledged}
                       onChange={(e) => handleAckChange(e.target.checked)}
-                      className="mt-0.5 rounded border-zinc-700 text-emerald-600 focus:ring-emerald-500 bg-zinc-950"
+                      className="mt-0.5 rounded border-line text-terracotta focus:ring-terracotta bg-paper"
                     />
-                    <span className="text-xs text-zinc-300 select-none">
+                    <span className="text-xs text-ink-muted select-none">
                       {dict.ui.allergenAckCheckbox}
                     </span>
                   </label>
@@ -456,17 +456,17 @@ export default function GuestMenuPage({
 
             {/* Footer / Total & Checkout */}
             {cart.items.length > 0 && (
-              <div className="p-5 border-t border-zinc-800 bg-zinc-900/90 space-y-3">
+              <div className="p-5 border-t border-line bg-card space-y-3">
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-zinc-400 font-medium">{dict.ui.total}</span>
-                  <span className="text-lg font-bold text-zinc-100">
+                  <span className="text-ink-muted font-medium">{dict.ui.total}</span>
+                  <span className="text-lg font-bold text-ink">
                     {formatPrice(cartTotal)}
                   </span>
                 </div>
                 <button
                   onClick={handleCheckout}
                   disabled={submittingOrder || (requiresAck && !cart.acknowledged)}
-                  className="w-full py-3.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-[0.98] disabled:opacity-40 text-white font-semibold text-sm shadow-lg shadow-emerald-950 transition-all"
+                  className="w-full py-3.5 px-4 rounded-xl bg-terracotta hover:bg-terracotta active:scale-[0.98] disabled:opacity-40 text-cream font-semibold text-sm shadow-lg shadow-ink/10 transition-all"
                 >
                   {submittingOrder ? dict.ui.placingOrder : dict.ui.placeOrder}
                 </button>

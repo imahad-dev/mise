@@ -48,20 +48,20 @@ export default function DashboardLayout({
   ];
 
   return (
-    <div className="min-h-screen bg-[#070B10] text-[#F3F8FC] flex flex-col font-sans">
+    <div className="min-h-screen bg-paper text-ink flex flex-col font-sans">
       {/* Demo Banner */}
       {demoMode && (
-        <div className="bg-[#FF9F2E]/10 border-b border-[#FF9F2E]/30 text-[#FF9F2E] px-4 py-1.5 text-center text-xs font-semibold backdrop-blur-md sticky top-0 z-50">
+        <div className="bg-warn-bg border-b border-warn-fg/30 text-warn-fg px-4 py-1.5 text-center text-xs font-semibold backdrop-blur-md sticky top-0 z-50">
           ⚠️ Demo environment: synthetic data
         </div>
       )}
 
       {/* Dashboard Top Navigation */}
-      <header className="sticky top-0 z-40 bg-[#0D141B]/90 backdrop-blur-md border-b border-[#38BDF8]/15">
+      <header className="sticky top-0 z-40 bg-card backdrop-blur-md border-b border-line">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-6">
             <Link href="/" className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl glass-panel p-1.5 flex items-center justify-center">
+              <div className="w-9 h-9 rounded-xl mise-card p-1.5 flex items-center justify-center">
                 <Image
                   src="/brand/logo-mark.svg"
                   alt="Mise Logo"
@@ -72,10 +72,10 @@ export default function DashboardLayout({
                 />
               </div>
               <div>
-                <span className="font-extrabold text-sm tracking-tight gradient-text block">
+                <span className="font-extrabold text-sm tracking-tight text-terracotta block">
                   Mise Operations
                 </span>
-                <span className="text-[10px] text-[#8FA3B3] block -mt-0.5">
+                <span className="text-[10px] text-ink-muted block -mt-0.5">
                   Revenue Copilot
                 </span>
               </div>
@@ -90,8 +90,8 @@ export default function DashboardLayout({
                     href={link.href}
                     className={`min-h-[44px] px-3 py-2 rounded-xl text-xs font-semibold inline-flex items-center transition-all ${
                       isActive
-                        ? "bg-[#2F7BFF]/15 text-[#22D3EE] border border-[#22D3EE]/30 shadow-sm"
-                        : "text-[#8FA3B3] hover:text-[#F3F8FC] hover:bg-white/5"
+                        ? "bg-terracotta/10 text-terracotta border border-terracotta shadow-sm"
+                        : "text-ink-muted hover:text-ink hover:bg-white/5"
                     }`}
                   >
                     {link.label}
@@ -112,7 +112,7 @@ export default function DashboardLayout({
         </div>
 
         {/* Mobile secondary navigation */}
-        <div className="lg:hidden flex items-center gap-1 px-4 py-2 overflow-x-auto border-t border-[#38BDF8]/10 bg-[#070B10]">
+        <div className="lg:hidden flex items-center gap-1 px-4 py-2 overflow-x-auto border-t border-line bg-paper">
           {navLinks.map((link) => {
             const isActive = pathname === link.href;
             return (
@@ -121,8 +121,8 @@ export default function DashboardLayout({
                 href={link.href}
                 className={`whitespace-nowrap px-2.5 py-1.5 rounded-lg text-xs font-medium ${
                   isActive
-                    ? "bg-[#2F7BFF]/20 text-[#22D3EE]"
-                    : "text-[#8FA3B3] hover:text-[#F3F8FC]"
+                    ? "bg-terracotta/10 text-terracotta"
+                    : "text-ink-muted hover:text-ink"
                 }`}
               >
                 {link.label}
