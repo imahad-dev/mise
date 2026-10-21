@@ -233,7 +233,7 @@ export default function KitchenDisplayPage() {
           </div>
 
           {loginError && (
-            <div className="p-3 bg-kds-late/20 border border-kds-late text-kds-late text-sm font-bold text-center rounded-xl">
+            <div className="p-3 bg-kds-late/20 border border-kds-late text-cream text-sm font-bold text-center rounded-xl">
               {loginError}
             </div>
           )}
@@ -282,7 +282,7 @@ export default function KitchenDisplayPage() {
     <div className="min-h-screen bg-espresso text-cream flex flex-col p-4 sm:p-6 space-y-6">
       {/* Action Error Banner */}
       {actionError && (
-        <div className="p-4 bg-kds-late/20 border-2 border-kds-late text-kds-late text-sm font-bold rounded-2xl flex items-center justify-between">
+        <div className="p-4 bg-kds-late/20 border-2 border-kds-late text-cream text-sm font-bold rounded-2xl flex items-center justify-between">
           <span>⚠️ {actionError}</span>
           <button
             onClick={() => setActionError(null)}
