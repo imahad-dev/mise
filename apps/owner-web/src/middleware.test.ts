@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { middleware } from "./middleware";
+import { config, middleware } from "./middleware";
 import { type NextRequest, NextResponse } from "next/server";
 
 vi.mock("next/server", () => ({
@@ -36,6 +36,13 @@ describe("owner-web middleware", () => {
     const result = middleware(fakeRequest("/login"));
     expect(NextResponse.next).toHaveBeenCalled();
     expect(result).toEqual({ type: "next", status: 200 });
+  });
+
+  it("matcher skips brand assets and the tab icon", () => {
+    const re = new RegExp(`^${config.matcher[0]}$`);
+    expect(re.test("/brand/logo-mark.svg")).toBe(false);
+    expect(re.test("/icon.svg")).toBe(false);
+    expect(re.test("/brief")).toBe(true);
   });
 
   it("allows /api/ paths without auth cookie", () => {
