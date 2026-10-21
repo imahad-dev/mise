@@ -43,7 +43,7 @@ export const en: TranslationDict = {
     notes: "Kitchen Notes",
     notesPlaceholder: "e.g., sauce on the side...",
     total: "Total",
-    checkout: "Review & Order",
+    checkout: "View order",
     emptyCart: "Your cart is empty.",
     itemAdded: "Added to order",
     placeOrder: "Confirm Order",

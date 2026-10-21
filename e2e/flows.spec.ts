@@ -37,8 +37,17 @@ test.describe.serial("guest to kitchen to owner", () => {
     await expect(page.getByRole("heading", { name: "Trattoria da Mario" })).toBeVisible();
     await expect(page.getByText(`Table: ${info.table_label}`)).toBeVisible();
 
-    await page.getByRole("button", { name: "Add" }).first().click();
-    await page.getByRole("button", { name: /Review & Order/ }).click();
+    await page.getByRole("button", { name: /^Add / }).first().click();
+    const orderBar = page.getByRole("button", { name: /View order/ });
+    await orderBar.click();
+
+    // Order sheet is a native modal dialog: Esc closes it and focus returns to the bar.
+    const sheet = page.getByRole("dialog", { name: "Your Order" });
+    await expect(sheet).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(sheet).toBeHidden();
+    await expect(orderBar).toBeFocused();
+    await orderBar.click();
 
     const ack = page.getByText("I have spoken with staff and understand the allergen risks");
     if (await ack.isVisible()) await ack.click();
