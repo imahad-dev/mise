@@ -1,10 +1,11 @@
 "use client";
 
-import React, { use, useCallback, useEffect, useState } from "react";
+import React, { use, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AllergenChip } from "../../../components/allergen-chip";
 import { ChatPanel } from "../../../components/chat-panel";
 import { getDictionary } from "../../../i18n";
+import { Badge, Button, Sheet, formatPrice as formatAmount } from "ui";
 import {
   addToCart,
   calculateCartTotal,
@@ -177,27 +178,15 @@ export default function GuestMenuPage({
   const cartCount = cart.items.reduce((s, i) => s + i.quantity, 0);
   const requiresAck = hasAllergenRisk(cart);
 
-  const formatPrice = useCallback(
-    (amount: number) => {
-      const currency = menu?.restaurant?.currency || "EUR";
-      try {
-        return new Intl.NumberFormat(lang, {
-          style: "currency",
-          currency,
-        }).format(amount);
-      } catch {
-        return `€${amount.toFixed(2)}`;
-      }
-    },
-    [lang, menu?.restaurant?.currency]
-  );
+  const formatPrice = (amount: number) =>
+    formatAmount(amount, menu?.restaurant?.currency || "EUR", lang);
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-zinc-950 text-zinc-100 flex items-center justify-center">
+      <div className="min-h-screen bg-paper text-ink flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">
-          <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
-          <p className="text-xs text-zinc-400">Loading menu...</p>
+          <div className="w-8 h-8 border-2 border-terracotta border-t-transparent rounded-full animate-spin" />
+          <p className="text-xs text-ink-muted">Loading menu...</p>
         </div>
       </div>
     );
@@ -205,12 +194,12 @@ export default function GuestMenuPage({
 
   if (error || !menu) {
     return (
-      <div className="min-h-screen bg-zinc-950 text-zinc-100 flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-zinc-900 border border-zinc-800 rounded-2xl p-6 text-center space-y-4">
-          <p className="text-sm text-rose-400">{error || "Unable to display menu."}</p>
+      <div className="min-h-screen bg-paper text-ink flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-card border border-line rounded-2xl p-6 text-center space-y-4">
+          <p className="text-sm text-danger-fg">{error || "Unable to display menu."}</p>
           <button
             onClick={() => window.location.reload()}
-            className="px-4 py-2 bg-zinc-800 text-xs font-medium rounded-xl hover:bg-zinc-700"
+            className="px-4 py-2 bg-paper-2 text-xs font-medium rounded-xl hover:bg-line"
           >
             Retry
           </button>
@@ -219,264 +208,197 @@ export default function GuestMenuPage({
     );
   }
 
+  const riskyNames = [...new Set(cart.items
+    .filter((i) => i.allergenStatus !== "no_declared_match")
+    .map((i) => i.name))];
+  const catId = (cat: string) => `cat-${cat.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
+
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 pb-28">
-      {/* Top Bar */}
-      <header className="sticky top-0 z-30 bg-zinc-950/90 backdrop-blur-md border-b border-zinc-800 px-4 py-3 sm:px-6">
-        <div className="max-w-3xl mx-auto flex items-center justify-between">
-          <div>
-            <h1 className="text-base font-bold text-zinc-100">{menu.restaurant.name}</h1>
-            {menu.table_label && (
-              <p className="text-xs text-emerald-400 font-medium">
-                Table: {menu.table_label}
-              </p>
-            )}
-          </div>
-          <button
-            onClick={() => setCartOpen(true)}
-            className="relative px-3.5 py-1.5 rounded-full bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-xs font-semibold flex items-center gap-2"
-          >
-            <span>🛒 {dict.ui.cartTitle}</span>
-            {cartCount > 0 && (
-              <span className="bg-emerald-500 text-zinc-950 px-1.5 py-0.5 rounded-full text-[10px] font-bold">
-                {cartCount}
-              </span>
-            )}
-          </button>
+    <div className="min-h-screen bg-paper pb-28 text-ink">
+      <header className="sticky top-0 z-30 border-b border-line bg-paper/95 px-4 pt-4 backdrop-blur sm:px-6">
+        <div className="mx-auto max-w-3xl">
+          {menu.table_label && (
+            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-muted">
+              {dict.ui.table}: {menu.table_label}
+            </p>
+          )}
+          <h1 className="text-2xl text-ink">{menu.restaurant.name}</h1>
+          <nav aria-label={dict.ui.menuTitle} className="-mx-1 mt-3 flex gap-2 overflow-x-auto pb-3">
+            {categories.map((cat) => (
+              <a
+                key={cat}
+                href={`#${catId(cat)}`}
+                className="whitespace-nowrap rounded-full border border-line px-3 py-1.5 text-xs font-semibold text-ink hover:bg-line"
+              >
+                {cat}
+              </a>
+            ))}
+          </nav>
         </div>
       </header>
 
-      {/* Main Container */}
-      <main className="max-w-3xl mx-auto px-4 py-4 sm:px-6 space-y-6">
-        {/* Mandatory Staff Notice */}
-        <div className="rounded-xl p-3 bg-amber-950/40 border border-amber-900/40 text-xs text-amber-300 leading-relaxed flex items-start gap-2">
-          <span className="text-sm">⚠️</span>
-          <p>{dict.staffNotice}</p>
-        </div>
-
-        {/* Categories & Items */}
-        {categories.map((cat) => {
-          const catItems = menu.items.filter((i) => i.category === cat);
-          return (
-            <section key={cat} className="space-y-3">
-              <h2 className="text-sm font-bold uppercase tracking-wider text-zinc-400 border-b border-zinc-800/80 pb-1">
-                {cat}
-              </h2>
-              <div className="grid gap-3 sm:grid-cols-2">
-                {catItems.map((item) => {
+      <main className="mx-auto max-w-3xl space-y-8 px-4 py-4 sm:px-6">
+        {categories.map((cat) => (
+          <section key={cat} id={catId(cat)} className="scroll-mt-32">
+            <h2 className="border-b border-line pb-1 text-lg font-semibold italic text-terracotta">
+              {cat}
+            </h2>
+            <ul>
+              {menu.items
+                .filter((i) => i.category === cat)
+                .map((item) => {
                   const isAvailable = item.available !== false;
                   return (
-                    <div
+                    <li
                       key={item.id}
-                      className={`p-4 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 flex flex-col justify-between transition-all ${
-                        isAvailable ? "hover:border-zinc-700" : "opacity-50"
-                      }`}
+                      className={`border-b border-dotted border-line py-4 ${isAvailable ? "" : "opacity-50"}`}
                     >
-                      <div className="space-y-2">
-                        <div className="flex items-start justify-between gap-2">
-                          <h3 className="font-semibold text-sm text-zinc-100">{item.name}</h3>
-                          <span className="text-sm font-bold text-emerald-400 whitespace-nowrap">
-                            {formatPrice(Number(item.price))}
-                          </span>
-                        </div>
-
-                        {item.description && (
-                          <p className="text-xs text-zinc-400 leading-relaxed">
-                            {item.description}
-                          </p>
-                        )}
-
-                        {/* Dietary badges */}
-                        <div className="flex flex-wrap gap-1.5 pt-1">
-                          {item.is_vegetarian && (
-                            <span className="px-2 py-0.5 rounded-md text-[10px] font-medium bg-zinc-800 text-zinc-300 border border-zinc-700">
-                              🌱 {dict.dietary.vegetarian}
-                            </span>
-                          )}
-                          {item.is_vegan && (
-                            <span className="px-2 py-0.5 rounded-md text-[10px] font-medium bg-zinc-800 text-zinc-300 border border-zinc-700">
-                              🌿 {dict.dietary.vegan}
-                            </span>
-                          )}
-                          {item.is_gluten_free && (
-                            <span className="px-2 py-0.5 rounded-md text-[10px] font-medium bg-zinc-800 text-zinc-300 border border-zinc-700">
-                              🌾 {dict.dietary.gluten_free}
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Server-derived Allergen Status Chip */}
-                        <div className="pt-1">
+                      <div className="flex items-baseline justify-between gap-3">
+                        <h3 className="text-base font-semibold text-ink">{item.name}</h3>
+                        <span className="whitespace-nowrap font-semibold tabular-nums text-ink">
+                          {formatPrice(Number(item.price))}
+                        </span>
+                      </div>
+                      {item.description && (
+                        <p className="mt-0.5 text-sm text-ink-muted">{item.description}</p>
+                      )}
+                      <div className="mt-2 flex items-center justify-between gap-3">
+                        <div className="flex flex-wrap gap-1.5">
                           <AllergenChip
                             status={item.allergen_status}
                             matchedAllergens={item.matched_allergens}
                             locale={lang}
                           />
+                          {item.is_vegetarian && <Badge>{dict.dietary.vegetarian}</Badge>}
+                          {item.is_vegan && <Badge>{dict.dietary.vegan}</Badge>}
+                          {item.is_gluten_free && <Badge>{dict.dietary.gluten_free}</Badge>}
                         </div>
-                      </div>
-
-                      {/* Add button */}
-                      <div className="pt-4 flex items-center justify-end">
                         {isAvailable ? (
-                          <button
+                          <Button
+                            size="icon"
+                            aria-label={`${dict.ui.addToCart} ${item.name}`}
                             onClick={() => handleAddToCart(item)}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-medium text-xs shadow-md transition-all"
-                          >
-                            <span>+</span>
-                            <span>{dict.ui.addToCart}</span>
-                          </button>
-                        ) : (
-                          <span className="text-xs text-zinc-500 font-medium italic">
-                            {dict.ui.unavailable}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </section>
-          );
-        })}
-      </main>
-
-      {/* Floating Bottom Cart Bar */}
-      {cartCount > 0 && !cartOpen && (
-        <div className="fixed bottom-4 left-4 right-4 z-20 max-w-md mx-auto">
-          <button
-            onClick={() => setCartOpen(true)}
-            className="w-full py-3 px-5 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-sm shadow-xl shadow-emerald-950 flex items-center justify-between transition-all active:scale-[0.99]"
-          >
-            <div className="flex items-center gap-2">
-              <span className="bg-emerald-700 px-2 py-0.5 rounded-lg text-xs">
-                {cartCount}
-              </span>
-              <span>{dict.ui.checkout}</span>
-            </div>
-            <span className="font-bold">{formatPrice(cartTotal)}</span>
-          </button>
-        </div>
-      )}
-
-      {/* Cart Modal / Drawer */}
-      {cartOpen && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
-          <div className="bg-zinc-900 border border-zinc-800 w-full max-w-lg rounded-t-3xl sm:rounded-3xl max-h-[90vh] flex flex-col overflow-hidden shadow-2xl">
-            {/* Header */}
-            <div className="px-5 py-4 border-b border-zinc-800 flex items-center justify-between bg-zinc-900">
-              <h2 className="text-base font-bold text-zinc-100">{dict.ui.cartTitle}</h2>
-              <button
-                onClick={() => setCartOpen(false)}
-                className="text-zinc-400 hover:text-zinc-100 p-1 text-sm"
-              >
-                ✕
-              </button>
-            </div>
-
-            {/* Cart Items */}
-            <div className="p-5 overflow-y-auto space-y-4 flex-1">
-              {orderError && (
-                <div className="p-3 bg-rose-950/70 border border-rose-800 rounded-xl text-xs text-rose-300">
-                  {orderError}
-                </div>
-              )}
-
-              {cart.items.length === 0 ? (
-                <p className="text-zinc-500 text-center py-8 text-sm">{dict.ui.emptyCart}</p>
-              ) : (
-                <div className="space-y-3">
-                  {cart.items.map((item, idx) => (
-                    <div
-                      key={`${item.menuItemId}-${idx}`}
-                      className="p-3 rounded-xl bg-zinc-950/60 border border-zinc-800/80 space-y-2"
-                    >
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="font-medium text-zinc-200">{item.name}</span>
-                        <span className="font-semibold text-emerald-400">
-                          {formatPrice(item.price * item.quantity)}
-                        </span>
-                      </div>
-
-                      <div className="flex items-center justify-between pt-1">
-                        <AllergenChip
-                          status={item.allergenStatus}
-                          matchedAllergens={item.matchedAllergens}
-                          locale={lang}
-                        />
-
-                        {/* Quantity Controls */}
-                        <div className="flex items-center gap-2 bg-zinc-800/80 rounded-lg p-1">
-                          <button
-                            onClick={() =>
-                              handleUpdateQuantity(item.menuItemId, item.quantity - 1, item.notes)
-                            }
-                            className="w-6 h-6 flex items-center justify-center rounded bg-zinc-700 text-xs font-bold hover:bg-zinc-600"
-                          >
-                            -
-                          </button>
-                          <span className="text-xs font-semibold px-1">{item.quantity}</span>
-                          <button
-                            onClick={() =>
-                              handleUpdateQuantity(item.menuItemId, item.quantity + 1, item.notes)
-                            }
-                            className="w-6 h-6 flex items-center justify-center rounded bg-zinc-700 text-xs font-bold hover:bg-zinc-600"
                           >
                             +
-                          </button>
-                        </div>
+                          </Button>
+                        ) : (
+                          <span className="text-xs italic text-ink-muted">{dict.ui.unavailable}</span>
+                        )}
                       </div>
-                    </div>
-                  ))}
-                </div>
-              )}
+                    </li>
+                  );
+                })}
+            </ul>
+          </section>
+        ))}
+      </main>
 
-              {/* Allergen Acknowledgment Checkbox if Risk Present */}
-              {cart.items.length > 0 && requiresAck && (
-                <div className="p-3.5 bg-rose-950/50 border border-rose-800/60 rounded-xl space-y-2">
-                  <div className="flex items-start gap-2">
-                    <span className="text-rose-400">⚠️</span>
-                    <p className="text-xs text-rose-300 font-medium">
-                      {dict.ui.allergenWarningDescription}
-                    </p>
-                  </div>
-                  <label className="flex items-start gap-2 cursor-pointer pt-1">
-                    <input
-                      type="checkbox"
-                      checked={cart.acknowledged}
-                      onChange={(e) => handleAckChange(e.target.checked)}
-                      className="mt-0.5 rounded border-zinc-700 text-emerald-600 focus:ring-emerald-500 bg-zinc-950"
-                    />
-                    <span className="text-xs text-zinc-300 select-none">
-                      {dict.ui.allergenAckCheckbox}
-                    </span>
-                  </label>
-                </div>
-              )}
-            </div>
-
-            {/* Footer / Total & Checkout */}
-            {cart.items.length > 0 && (
-              <div className="p-5 border-t border-zinc-800 bg-zinc-900/90 space-y-3">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-zinc-400 font-medium">{dict.ui.total}</span>
-                  <span className="text-lg font-bold text-zinc-100">
-                    {formatPrice(cartTotal)}
-                  </span>
-                </div>
-                <button
-                  onClick={handleCheckout}
-                  disabled={submittingOrder || (requiresAck && !cart.acknowledged)}
-                  className="w-full py-3.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-[0.98] disabled:opacity-40 text-white font-semibold text-sm shadow-lg shadow-emerald-950 transition-all"
-                >
-                  {submittingOrder ? dict.ui.placingOrder : dict.ui.placeOrder}
-                </button>
-              </div>
-            )}
-          </div>
+      {cartCount > 0 && (
+        <div className="fixed inset-x-4 bottom-4 z-20 mx-auto max-w-md">
+          <Button className="w-full justify-between py-3.5 text-base" onClick={() => setCartOpen(true)}>
+            <span>
+              {dict.ui.checkout} · {cartCount}
+            </span>
+            <span className="tabular-nums">{formatPrice(cartTotal)}</span>
+          </Button>
         </div>
       )}
 
-      {/* Floating Chat Assistant */}
+      <Sheet
+        open={cartOpen}
+        onClose={() => setCartOpen(false)}
+        title={dict.ui.cartTitle}
+        footer={
+          cart.items.length > 0 && (
+            <>
+              <div className="flex items-center justify-between text-sm">
+                <span className="font-medium text-ink-muted">{dict.ui.total}</span>
+                <span className="text-lg font-semibold tabular-nums text-ink">
+                  {formatPrice(cartTotal)}
+                </span>
+              </div>
+              <Button
+                className="w-full"
+                onClick={handleCheckout}
+                disabled={submittingOrder || (requiresAck && !cart.acknowledged)}
+              >
+                {submittingOrder ? dict.ui.placingOrder : dict.ui.placeOrder}
+              </Button>
+              <p className="text-[11px] leading-relaxed text-ink-muted">{dict.staffNotice}</p>
+            </>
+          )
+        }
+      >
+        {orderError && (
+          <div role="alert" className="rounded-xl bg-danger-bg p-3 text-xs text-danger-fg">
+            {orderError}
+          </div>
+        )}
+
+        {cart.items.length === 0 ? (
+          <p className="py-8 text-center text-sm text-ink-muted">{dict.ui.emptyCart}</p>
+        ) : (
+          <ul className="divide-y divide-line">
+            {cart.items.map((item, idx) => (
+              <li key={`${item.menuItemId}-${idx}`} className="space-y-2 py-3">
+                <div className="flex items-center justify-between gap-3 text-sm">
+                  <span className="font-medium text-ink">{item.name}</span>
+                  <span className="font-semibold tabular-nums text-ink">
+                    {formatPrice(item.price * item.quantity)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <AllergenChip
+                    status={item.allergenStatus}
+                    matchedAllergens={item.matchedAllergens}
+                    locale={lang}
+                  />
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      aria-label={`${dict.ui.decrease} ${item.name}`}
+                      onClick={() => handleUpdateQuantity(item.menuItemId, item.quantity - 1, item.notes)}
+                    >
+                      −
+                    </Button>
+                    <span className="w-5 text-center text-sm font-semibold tabular-nums">
+                      {item.quantity}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      aria-label={`${dict.ui.increase} ${item.name}`}
+                      onClick={() => handleUpdateQuantity(item.menuItemId, item.quantity + 1, item.notes)}
+                    >
+                      +
+                    </Button>
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {cart.items.length > 0 && requiresAck && (
+          <div className="space-y-2 rounded-xl bg-danger-bg p-3.5 text-danger-fg">
+            <p className="text-sm font-semibold">⚠ {dict.ui.allergenWarningTitle}</p>
+            <p className="text-xs">
+              {dict.ui.allergenWarningDescription} <b>{riskyNames.join(", ")}</b>
+            </p>
+            <label className="flex cursor-pointer items-start gap-2 pt-1 text-xs text-ink">
+              <input
+                type="checkbox"
+                checked={cart.acknowledged}
+                onChange={(e) => handleAckChange(e.target.checked)}
+                className="mt-0.5 accent-terracotta"
+              />
+              <span>{dict.ui.allergenAckCheckbox}</span>
+            </label>
+          </div>
+        )}
+      </Sheet>
+
       <ChatPanel locale={lang} />
     </div>
   );

@@ -85,16 +85,7 @@ graph TD
 
 ## Screenshots
 
-<!-- Add your application screenshots here -->
-| Guest Menu & Allergen Filter | Kitchen Display System (KDS) |
-|:---:|:---:|
-| ![Guest Menu](docs/screenshots/guest-menu.png) | ![Kitchen Display](docs/screenshots/kitchen-display.png) |
-| *English/Italian menu with EU-14 allergen filters* | *Real-time ticket stream with prominent allergy banners* |
-
-| Revenue Brief | What-if Calculator |
-|:---:|:---:|
-| ![Revenue Brief](docs/screenshots/daily-brief.png) | ![What-if Calculator](docs/screenshots/scenario-simulator.png) |
-| *KPIs, menu-engineering quadrant, backtested forecast and ranked actions* | *Weekly revenue and margin deltas with listed assumptions* |
+Screenshots are produced by `make e2e` in `test-results/screens/` (guest menu and order sheet on a phone, owner brief and kitchen display on desktop).
 
 ---
 

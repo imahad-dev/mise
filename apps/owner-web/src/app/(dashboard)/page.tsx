@@ -99,41 +99,41 @@ export default function DashboardOrdersPage() {
   return (
     <div className="space-y-6">
       {/* Header bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-[#38BDF8]/15 pb-4">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-line pb-4">
         <div>
           <h1 className="text-2xl font-extrabold tracking-tight">
-            Live <span className="gradient-text">Orders Stream</span>
+            Live <span className="text-terracotta">Orders Stream</span>
           </h1>
-          <p className="text-xs text-[#8FA3B3] mt-1">
-            Real-time kitchen stream for restaurant: <span className="text-[#22D3EE] font-mono">{slug}</span>
+          <p className="text-xs text-ink-muted mt-1">
+            Real-time kitchen stream for restaurant: <span className="text-terracotta font-mono">{slug}</span>
           </p>
         </div>
 
         <div className="flex items-center gap-2">
           {isReconnecting ? (
             <span className="chip chip-unverified animate-pulse">
-              <span className="w-2 h-2 rounded-full bg-[#F59E0B]" />
+              <span className="w-2 h-2 rounded-full bg-warn-fg" />
               Reconnecting (Polling active)
             </span>
           ) : isConnected ? (
             <span className="chip chip-safe">
-              <span className="w-2 h-2 rounded-full bg-[#34D399] animate-ping" />
+              <span className="w-2 h-2 rounded-full bg-olive animate-ping" />
               Live SSE Connected
             </span>
           ) : (
-            <span className="text-xs text-[#8FA3B3]">Connecting...</span>
+            <span className="text-xs text-ink-muted">Connecting...</span>
           )}
         </div>
       </div>
 
       {actionError && (
-        <div className="p-3 bg-[#EF4444]/15 border border-[#EF4444]/40 rounded-xl text-xs text-[#EF4444]">
+        <div className="p-3 bg-danger-bg border border-danger-fg rounded-xl text-xs text-danger-fg">
           {actionError}
         </div>
       )}
 
       {error && !data && (
-        <div className="p-4 bg-[#EF4444]/15 border border-[#EF4444]/40 rounded-2xl text-xs text-[#EF4444]">
+        <div className="p-4 bg-danger-bg border border-danger-fg rounded-2xl text-xs text-danger-fg">
           {error.message}
         </div>
       )}
@@ -141,24 +141,24 @@ export default function DashboardOrdersPage() {
       {/* Stats summary */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
         <div className="stat-tile">
-          <p className="text-xs text-[#8FA3B3] uppercase font-bold tracking-wider">Active Placed</p>
-          <p className="text-3xl font-extrabold text-[#F3F8FC] mt-1">{placedOrders.length}</p>
+          <p className="text-xs text-ink-muted uppercase font-bold tracking-wider">Active Placed</p>
+          <p className="text-3xl font-extrabold text-ink mt-1">{placedOrders.length}</p>
         </div>
         <div className="stat-tile">
-          <p className="text-xs text-[#8FA3B3] uppercase font-bold tracking-wider">Recently Bumped (60s)</p>
-          <p className="text-3xl font-extrabold text-[#F3F8FC] mt-1">{recentlyBumped.length}</p>
+          <p className="text-xs text-ink-muted uppercase font-bold tracking-wider">Recently Bumped (60s)</p>
+          <p className="text-3xl font-extrabold text-ink mt-1">{recentlyBumped.length}</p>
         </div>
         <div className="stat-tile col-span-2 sm:col-span-1">
-          <p className="text-xs text-[#8FA3B3] uppercase font-bold tracking-wider">Total Stream</p>
-          <p className="text-3xl font-extrabold text-[#22D3EE] mt-1">{orders.length}</p>
+          <p className="text-xs text-ink-muted uppercase font-bold tracking-wider">Total Stream</p>
+          <p className="text-3xl font-extrabold text-terracotta mt-1">{orders.length}</p>
         </div>
       </div>
 
       {/* Orders grid */}
       {orders.length === 0 ? (
-        <div className="p-12 text-center rounded-3xl glass-panel space-y-2">
-          <p className="text-sm font-semibold text-[#F3F8FC]">No active orders right now.</p>
-          <p className="text-xs text-[#8FA3B3]">New orders placed by guests will appear instantly.</p>
+        <div className="p-12 text-center rounded-3xl mise-card space-y-2">
+          <p className="text-sm font-semibold text-ink">No active orders right now.</p>
+          <p className="text-xs text-ink-muted">New orders placed by guests will appear instantly.</p>
         </div>
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -168,17 +168,17 @@ export default function DashboardOrdersPage() {
               <div
                 key={order.id}
                 className={`mise-card flex flex-col justify-between space-y-4 transition-all ${
-                  isBumped ? "opacity-60 bg-[#070B10]" : ""
+                  isBumped ? "opacity-60 bg-paper" : ""
                 }`}
               >
                 {/* Header */}
                 <div className="space-y-2">
                   <div className="flex items-start justify-between">
                     <div>
-                      <span className="text-base font-extrabold text-[#22D3EE]">
+                      <span className="text-base font-extrabold text-terracotta">
                         {order.table_label ? `Table ${order.table_label}` : "Takeout"}
                       </span>
-                      <p className="text-[11px] font-mono text-[#8FA3B3] mt-0.5">
+                      <p className="text-[11px] font-mono text-ink-muted mt-0.5">
                         {order.id.slice(0, 8)} • {new Date(order.placed_at).toLocaleTimeString()}
                       </p>
                     </div>
@@ -191,17 +191,17 @@ export default function DashboardOrdersPage() {
 
                   {/* Allergen alert banner if order has guest avoidance */}
                   {order.allergens_to_avoid && order.allergens_to_avoid.length > 0 && (
-                    <div className="p-2 rounded-lg bg-[#EF4444]/15 border border-[#EF4444]/40 text-xs text-[#EF4444] font-bold">
+                    <div className="p-2 rounded-lg bg-danger-bg border border-danger-fg text-xs text-danger-fg font-bold">
                       ⚠️ Avoid: {order.allergens_to_avoid.join(", ")}
                     </div>
                   )}
 
                   {/* Items List */}
-                  <div className="divide-y divide-[#38BDF8]/10 pt-2">
+                  <div className="divide-y divide-line pt-2">
                     {order.items.map((item) => (
                       <div key={item.id} className="py-2 space-y-1">
                         <div className="flex items-start justify-between text-xs">
-                          <span className="font-semibold text-[#F3F8FC]">
+                          <span className="font-semibold text-ink">
                             {item.quantity}x {item.kitchen_name}
                           </span>
                           {item.conflict_with_order_allergens && (
@@ -211,10 +211,10 @@ export default function DashboardOrdersPage() {
                           )}
                         </div>
                         {item.notes && (
-                          <p className="text-[11px] text-[#FF9F2E] italic">Note: {item.notes}</p>
+                          <p className="text-[11px] text-warn-fg italic">Note: {item.notes}</p>
                         )}
                         {item.matched_allergens && item.matched_allergens.length > 0 && (
-                          <p className="text-[10px] text-[#EF4444] font-medium">
+                          <p className="text-[10px] text-danger-fg font-medium">
                             Matches: {item.matched_allergens.join(", ")}
                           </p>
                         )}
@@ -224,7 +224,7 @@ export default function DashboardOrdersPage() {
                 </div>
 
                 {/* Actions */}
-                <div className="pt-3 border-t border-[#38BDF8]/15 flex items-center justify-between">
+                <div className="pt-3 border-t border-line flex items-center justify-between">
                   {!isBumped ? (
                     <button
                       onClick={() => handleBump(order.id)}

@@ -68,11 +68,11 @@ export function ChatPanel({ locale = "en" }: ChatPanelProps) {
   };
 
   return (
-    <div className="fixed bottom-4 right-4 z-40">
+    <div className="fixed bottom-20 right-4 sm:bottom-4 z-40">
       {!isOpen ? (
         <button
           onClick={() => setIsOpen(true)}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white font-medium shadow-lg shadow-emerald-950/50 transition-all text-sm active:scale-95"
+          className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-terracotta hover:bg-terracotta-strong text-cream font-medium shadow-lg shadow-ink/10 transition-all text-sm active:scale-95"
           aria-label={dict.ui.chatTitle}
         >
           <svg className="w-4 h-4 fill-current" viewBox="0 0 20 20">
@@ -81,16 +81,16 @@ export function ChatPanel({ locale = "en" }: ChatPanelProps) {
           {dict.ui.chatTitle}
         </button>
       ) : (
-        <div className="w-80 sm:w-96 rounded-2xl bg-zinc-900 border border-zinc-800 shadow-2xl flex flex-col max-h-[500px] overflow-hidden">
+        <div className="w-80 sm:w-96 rounded-2xl bg-card border border-line shadow-2xl flex flex-col max-h-[500px] overflow-hidden">
           {/* Header */}
-          <div className="px-4 py-3 bg-zinc-800/80 border-b border-zinc-700/60 flex items-center justify-between">
+          <div className="px-4 py-3 bg-paper-2 border-b border-line flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-emerald-400" />
-              <h3 className="text-sm font-semibold text-zinc-100">{dict.ui.chatTitle}</h3>
+              <span className="w-2 h-2 rounded-full bg-olive" />
+              <h3 className="text-sm font-semibold text-ink">{dict.ui.chatTitle}</h3>
             </div>
             <button
               onClick={() => setIsOpen(false)}
-              className="text-zinc-400 hover:text-zinc-200 text-xs px-2 py-1 rounded"
+              className="text-ink-muted hover:text-ink text-xs px-2 py-1 rounded"
               aria-label="Close"
             >
               ✕
@@ -98,14 +98,14 @@ export function ChatPanel({ locale = "en" }: ChatPanelProps) {
           </div>
 
           {/* Privacy Notice Banner */}
-          <div className="px-3 py-2 bg-amber-950/40 border-b border-amber-900/30 text-[11px] text-amber-300/90 leading-tight">
+          <div className="px-3 py-2 bg-warn-bg border-b border-warn-fg/30 text-[11px] text-warn-fg/90 leading-tight">
             ⚠️ {dict.ui.chatNotice}
           </div>
 
           {/* Messages */}
           <div className="p-3 flex-1 overflow-y-auto space-y-2 min-h-[160px] max-h-[300px] text-xs">
             {messages.length === 0 ? (
-              <p className="text-zinc-500 text-center py-6 italic">
+              <p className="text-ink-muted text-center py-6 italic">
                 Ask about dish ingredients or dietary options.
               </p>
             ) : (
@@ -117,8 +117,8 @@ export function ChatPanel({ locale = "en" }: ChatPanelProps) {
                   <div
                     className={`max-w-[85%] rounded-xl px-3 py-2 ${
                       m.sender === "user"
-                        ? "bg-emerald-600 text-white rounded-br-none"
-                        : "bg-zinc-800 text-zinc-200 rounded-bl-none border border-zinc-700"
+                        ? "bg-terracotta text-cream rounded-br-none"
+                        : "bg-paper-2 text-ink rounded-bl-none border border-line"
                     }`}
                   >
                     {m.text}
@@ -128,7 +128,7 @@ export function ChatPanel({ locale = "en" }: ChatPanelProps) {
             )}
             {isLoading && (
               <div className="flex justify-start">
-                <div className="bg-zinc-800 text-zinc-400 rounded-xl px-3 py-2 text-xs">
+                <div className="bg-paper-2 text-ink-muted rounded-xl px-3 py-2 text-xs">
                   Thinking...
                 </div>
               </div>
@@ -136,18 +136,18 @@ export function ChatPanel({ locale = "en" }: ChatPanelProps) {
           </div>
 
           {/* Input form */}
-          <form onSubmit={handleSend} className="p-2 border-t border-zinc-800 flex gap-1.5 bg-zinc-900">
+          <form onSubmit={handleSend} className="p-2 border-t border-line flex gap-1.5 bg-card">
             <input
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder={dict.ui.chatPlaceholder}
-              className="flex-1 bg-zinc-950 border border-zinc-700 rounded-lg px-2.5 py-1.5 text-xs text-zinc-100 focus:outline-none focus:border-emerald-500 placeholder:text-zinc-500"
+              className="flex-1 bg-paper border border-line rounded-lg px-2.5 py-1.5 text-xs text-ink focus:outline-none focus:border-terracotta placeholder:text-ink-muted"
             />
             <button
               type="submit"
               disabled={isLoading || !input.trim()}
-              className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-medium"
+              className="px-3 py-1.5 rounded-lg bg-terracotta hover:bg-terracotta-strong disabled:opacity-50 text-cream text-xs font-medium"
             >
               {dict.ui.chatSend}
             </button>

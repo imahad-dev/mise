@@ -5,6 +5,7 @@ const API_URL = process.env.API_URL ?? "http://api:8000";
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  transpilePackages: ["ui"],
   outputFileTracingRoot: path.join(process.cwd(), "../../"),
 
   async rewrites() {

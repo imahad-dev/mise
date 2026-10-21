@@ -1,23 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
-  <defs>
-    <linearGradient id="miseGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#2F7BFF" />
-      <stop offset="100%" stop-color="#22D3EE" />
-    </linearGradient>
-  </defs>
-
-  <!-- Compass Outer Ring -->
-  <circle cx="256" cy="256" r="210" stroke="url(#miseGrad)" stroke-width="22" stroke-dasharray="16 10" />
-  <circle cx="256" cy="256" r="186" stroke="url(#miseGrad)" stroke-width="4" opacity="0.4" />
-
-  <!-- Compass Cardinal Markers -->
-  <path d="M 256 22 L 256 50 M 256 462 L 256 490 M 22 256 L 50 256 M 462 256 L 490 256" stroke="url(#miseGrad)" stroke-width="10" stroke-linecap="round" />
-
-  <!-- Three Growth / Metrics Bars -->
-  <rect x="156" y="280" width="36" height="84" rx="10" fill="url(#miseGrad)" opacity="0.6" />
-  <rect x="238" y="230" width="36" height="134" rx="10" fill="url(#miseGrad)" opacity="0.85" />
-  <rect x="320" y="180" width="36" height="184" rx="10" fill="url(#miseGrad)" />
-
-  <!-- Dynamic Upward Copilot Arrow -->
-  <path d="M 256 86 L 336 172 H 284 V 220 H 228 V 172 H 176 Z" fill="url(#miseGrad)" />
+  <circle cx="256" cy="256" r="210" stroke="#2B2118" stroke-width="22" stroke-dasharray="16 10" />
+  <circle cx="256" cy="256" r="186" stroke="#2B2118" stroke-width="4" opacity="0.35" />
+  <path d="M 256 22 L 256 50 M 256 462 L 256 490 M 22 256 L 50 256 M 462 256 L 490 256" stroke="#2B2118" stroke-width="10" stroke-linecap="round" />
+  <rect x="156" y="280" width="36" height="84" rx="10" fill="#B5462B" opacity="0.55" />
+  <rect x="238" y="230" width="36" height="134" rx="10" fill="#B5462B" opacity="0.8" />
+  <rect x="320" y="180" width="36" height="184" rx="10" fill="#B5462B" />
+  <path d="M 256 86 L 336 172 H 284 V 220 H 228 V 172 H 176 Z" fill="#B5462B" />
 </svg>

@@ -4,14 +4,14 @@
   "description": "Mobile-first digital menu and ordering experience",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#09090b",
-  "theme_color": "#18181b",
+  "background_color": "#F6F0E6",
+  "theme_color": "#F6F0E6",
   "icons": [
     {
-      "src": "/globe.svg",
-      "sizes": "192x192 512x512",
+      "src": "/brand/logo-mark.svg",
+      "sizes": "any",
       "type": "image/svg+xml",
-      "purpose": "any maskable"
+      "purpose": "any"
     }
   ]
 }

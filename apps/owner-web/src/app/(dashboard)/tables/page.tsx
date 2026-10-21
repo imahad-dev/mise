@@ -65,15 +65,15 @@ export default function TablesPage() {
   if (loading) {
     return (
       <div className="py-20 text-center">
-        <div className="inline-block w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
-        <p className="text-xs text-zinc-500 mt-2">Loading tables & generating QR codes...</p>
+        <div className="inline-block w-8 h-8 border-2 border-terracotta border-t-transparent rounded-full animate-spin" />
+        <p className="text-xs text-ink-muted mt-2">Loading tables & generating QR codes...</p>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="p-4 bg-rose-950/60 border border-rose-800 rounded-2xl text-xs text-rose-300">
+      <div className="p-4 bg-danger-bg border border-danger-fg/40 rounded-2xl text-xs text-danger-fg">
         {error}
       </div>
     );
@@ -82,12 +82,12 @@ export default function TablesPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-[#38BDF8]/15 pb-4 print:hidden">
+      <div className="flex items-center justify-between border-b border-line pb-4 print:hidden">
         <div>
           <h1 className="text-2xl font-extrabold tracking-tight">
-            Dining Tables & <span className="gradient-text">QR Cards</span>
+            Dining Tables & <span className="text-terracotta">QR Cards</span>
           </h1>
-          <p className="text-xs text-[#8FA3B3] mt-1">
+          <p className="text-xs text-ink-muted mt-1">
             Printable guest QR codes with direct onboarding URLs.
           </p>
         </div>
@@ -109,16 +109,16 @@ export default function TablesPage() {
           >
             {/* Table Label */}
             <div>
-              <span className="text-xs font-bold uppercase tracking-wider text-[#22D3EE] print:text-zinc-600">
+              <span className="text-xs font-bold uppercase tracking-wider text-terracotta print:text-ink-muted">
                 Dining Table
               </span>
-              <h2 className="text-2xl font-black text-[#F3F8FC] print:text-black mt-0.5">
+              <h2 className="text-2xl font-black text-ink print:text-black mt-0.5">
                 {table.label}
               </h2>
             </div>
 
             {/* QR Code Graphic */}
-            <div className="p-3 bg-white rounded-2xl shadow-md border border-zinc-200">
+            <div className="p-3 bg-white rounded-2xl shadow-md border border-line">
               {table.qrDataUrl ? (
                 /* eslint-disable-next-line @next/next/no-img-element */
                 <img
@@ -127,7 +127,7 @@ export default function TablesPage() {
                   className="w-56 h-56 object-contain"
                 />
               ) : (
-                <div className="w-56 h-56 flex items-center justify-center text-zinc-400 text-xs">
+                <div className="w-56 h-56 flex items-center justify-center text-ink-muted text-xs">
                   Generating QR...
                 </div>
               )}
@@ -135,10 +135,10 @@ export default function TablesPage() {
 
             {/* URL info */}
             <div className="w-full space-y-1">
-              <p className="text-[11px] font-mono text-[#8FA3B3] print:text-zinc-700 break-all select-all">
+              <p className="text-[11px] font-mono text-ink-muted print:text-ink-muted break-all select-all">
                 {table.guest_url}
               </p>
-              <p className="text-[10px] text-[#8FA3B3]/70 print:text-zinc-500">
+              <p className="text-[10px] text-ink-muted print:text-ink-muted">
                 Scan with any smartphone camera to browse menu & order.
               </p>
             </div>

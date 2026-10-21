@@ -25,9 +25,9 @@ export default function KitchenLayout({
   }, []);
 
   return (
-    <div className="min-h-screen bg-[#070B10] text-[#F3F8FC] flex flex-col font-sans select-none antialiased">
+    <div className="min-h-screen bg-espresso text-cream flex flex-col font-sans select-none antialiased">
       {demoMode && (
-        <div className="bg-[#FF9F2E]/10 border-b border-[#FF9F2E]/30 text-[#FF9F2E] px-4 py-1.5 text-center text-xs font-semibold backdrop-blur-md sticky top-0 z-50">
+        <div className="bg-kds-warn/15 border-b border-kds-warn text-kds-warn px-4 py-1.5 text-center text-xs font-semibold backdrop-blur-md sticky top-0 z-50">
           ⚠️ Demo environment: synthetic data
         </div>
       )}

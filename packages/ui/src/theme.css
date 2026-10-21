@@ -1,0 +1,196 @@
+/* Mise design system: tokens, fonts, base and house classes. Imported by both apps. */
+@import "@fontsource-variable/inter";
+@import "@fontsource-variable/fraunces";
+@import "@fontsource-variable/fraunces/wght-italic.css";
+
+/* Tailwind must scan the shared components for class names. */
+@source "./";
+
+@theme {
+  --color-paper: #f6f0e6;
+  --color-paper-2: #efe6d7;
+  --color-card: #fbf7f0;
+  --color-ink: #2b2118;
+  --color-ink-muted: #6b5a48;
+  --color-line: rgb(43 33 24 / 0.14);
+  --color-terracotta: #b5462b;
+  --color-terracotta-strong: #9a3518;
+  --color-cream: #fff8ef;
+  --color-olive: #4a5d3a;
+
+  --color-danger-bg: #f7dcd6;
+  --color-danger-fg: #8a1c12;
+  --color-warn-bg: #f5e6c4;
+  --color-warn-fg: #7a4e08;
+  --color-safe-bg: #e3ead5;
+  --color-safe-fg: #3b4d2c;
+
+  /* Kitchen display (dark). Text on the accent colours must be espresso (contrast >= 4.9). */
+  --color-espresso: #17120d;
+  --color-kds-card: #221b14;
+  --color-kds-muted: #bbaa94;
+  --color-kds-accent: #e2673f;
+  --color-kds-fresh: #8db46a;
+  --color-kds-warn: #e0a33a;
+  --color-kds-late: #e5533d;
+
+  --font-sans: "Inter Variable", Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-serif: "Fraunces Variable", Georgia, "Times New Roman", serif;
+}
+
+@layer base {
+  * {
+    border-color: var(--color-line);
+  }
+  body {
+    background-color: var(--color-paper);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    min-height: 100vh;
+  }
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-serif);
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-terracotta);
+    outline-offset: 2px;
+  }
+}
+
+@layer components {
+  /* Buttons */
+  .btn-primary,
+  .btn-ghost,
+  .btn-dark,
+  .btn-danger {
+    min-height: 44px;
+    padding: 0.625rem 1.25rem;
+    border-radius: 9999px;
+    font-weight: 600;
+    font-size: 0.875rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    transition: background-color 0.15s, border-color 0.15s;
+  }
+  .btn-primary {
+    background: var(--color-terracotta);
+    color: var(--color-cream);
+  }
+  .btn-primary:hover {
+    background: var(--color-terracotta-strong);
+  }
+  .btn-ghost {
+    background: transparent;
+    color: var(--color-ink);
+    border: 1px solid rgb(43 33 24 / 0.28);
+  }
+  .btn-ghost:hover {
+    background: var(--color-paper-2);
+  }
+  .btn-dark {
+    background: var(--color-ink);
+    color: var(--color-paper);
+  }
+  .btn-danger {
+    background: var(--color-danger-fg);
+    color: var(--color-cream);
+  }
+  .btn-primary:disabled,
+  .btn-ghost:disabled,
+  .btn-dark:disabled,
+  .btn-danger:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+  /* Round icon button (e.g. "+" add). Needs an aria-label. 40px meets the 24px minimum target. */
+  .btn-icon {
+    min-height: 40px;
+    width: 40px;
+    padding: 0;
+    font-size: 1.25rem;
+    line-height: 1;
+  }
+
+  /* Surfaces */
+  .mise-card {
+    background: var(--color-card);
+    border: 1px solid var(--color-line);
+    border-radius: 16px;
+    padding: 1.25rem;
+  }
+  .stat-tile {
+    background: var(--color-card);
+    border: 1px solid var(--color-line);
+    border-radius: 14px;
+    padding: 1rem 1.25rem;
+  }
+
+  /* Chips: colour + icon + word, never colour alone */
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.2rem 0.65rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    min-height: 24px;
+  }
+  .chip-neutral {
+    background: var(--color-paper-2);
+    color: #5c4a36;
+  }
+  .chip-contains {
+    background: var(--color-danger-bg);
+    color: var(--color-danger-fg);
+  }
+  .chip-unverified {
+    background: var(--color-warn-bg);
+    color: var(--color-warn-fg);
+  }
+  .chip-safe {
+    background: var(--color-safe-bg);
+    color: var(--color-safe-fg);
+  }
+
+  /* Bottom sheet on native <dialog> */
+  .sheet {
+    margin: auto auto 0;
+    width: 100%;
+    max-width: 32rem;
+    max-height: 90vh;
+    padding: 0;
+    border: 0;
+    border-radius: 22px 22px 0 0;
+    background: var(--color-card);
+    color: var(--color-ink);
+    box-shadow: 0 -8px 24px rgb(43 33 24 / 0.18);
+  }
+  .sheet::backdrop {
+    background: rgb(43 33 24 / 0.4);
+  }
+  @media (min-width: 640px) {
+    .sheet {
+      margin: auto;
+      border-radius: 22px;
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

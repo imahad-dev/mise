@@ -94,15 +94,15 @@ export default function MenuManagementPage() {
   if (loading) {
     return (
       <div className="py-20 text-center">
-        <div className="inline-block w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
-        <p className="text-xs text-zinc-500 mt-2">Loading menu items...</p>
+        <div className="inline-block w-8 h-8 border-2 border-terracotta border-t-transparent rounded-full animate-spin" />
+        <p className="text-xs text-ink-muted mt-2">Loading menu items...</p>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="p-4 bg-rose-950/60 border border-rose-800 rounded-2xl text-xs text-rose-300">
+      <div className="p-4 bg-danger-bg border border-danger-fg/40 rounded-2xl text-xs text-danger-fg">
         {error}
       </div>
     );
@@ -110,19 +110,19 @@ export default function MenuManagementPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between border-b border-[#38BDF8]/15 pb-4">
+      <div className="flex items-center justify-between border-b border-line pb-4">
         <div>
           <h1 className="text-2xl font-extrabold tracking-tight">
-            Menu Items & <span className="gradient-text">Verification</span>
+            Menu Items & <span className="text-terracotta">Verification</span>
           </h1>
-          <p className="text-xs text-[#8FA3B3] mt-1">
+          <p className="text-xs text-ink-muted mt-1">
             Manage dish availability, unit costs, and verify allergen & dietary declarations.
           </p>
         </div>
-        <span className="text-xs font-mono text-[#8FA3B3]">{items.length} items total</span>
+        <span className="text-xs font-mono text-ink-muted">{items.length} items total</span>
       </div>
 
-      <div className="mise-card p-0 divide-y divide-[#38BDF8]/10 overflow-hidden">
+      <div className="mise-card p-0 divide-y divide-line overflow-hidden">
         {items.map((item) => {
           const primaryName = item.translations[0]?.name || "Unnamed Item";
           const isVerified = item.allergen_verified && item.dietary_verified;
@@ -132,22 +132,22 @@ export default function MenuManagementPage() {
             <div
               key={item.id}
               className={`p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-colors ${
-                !item.available ? "bg-[#070B10]/60 opacity-70" : "hover:bg-white/[0.02]"
+                !item.available ? "bg-paper opacity-70" : "hover:bg-line"
               }`}
             >
               {/* Item Info */}
               <div className="space-y-1.5 flex-1">
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold uppercase tracking-wider text-[#22D3EE]">
+                  <span className="text-xs font-bold uppercase tracking-wider text-terracotta">
                     {item.category}
                   </span>
-                  <span className="text-[#8FA3B3]/40">•</span>
-                  <h2 className="text-sm font-bold text-[#F3F8FC]">{primaryName}</h2>
+                  <span className="text-ink-muted">•</span>
+                  <h2 className="text-sm font-bold text-ink">{primaryName}</h2>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-3 text-xs text-[#8FA3B3] font-mono">
+                <div className="flex flex-wrap items-center gap-3 text-xs text-ink-muted font-mono">
                   <span>Price: €{Number(item.price).toFixed(2)}</span>
-                  <span>Unit Cost: <strong className="text-[#F3F8FC]">€{Number(item.unit_cost).toFixed(2)}</strong></span>
+                  <span>Unit Cost: <strong className="text-ink">€{Number(item.unit_cost).toFixed(2)}</strong></span>
                   {item.allergens.length > 0 && (
                     <span className="chip chip-contains text-[10px]">
                       Contains: {item.allergens.join(", ")}
@@ -182,8 +182,8 @@ export default function MenuManagementPage() {
                   disabled={isBusy}
                   className={`min-h-[44px] px-3.5 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
                     item.available
-                      ? "bg-[#0D141B] text-[#F3F8FC] border-[#38BDF8]/20 hover:border-[#38BDF8]/50"
-                      : "bg-[#EF4444]/15 text-[#EF4444] border-[#EF4444]/40 hover:bg-[#EF4444]/25"
+                      ? "bg-card text-ink border-line hover:border-ink-muted"
+                      : "bg-danger-bg text-danger-fg border-danger-fg hover:bg-danger-bg"
                   }`}
                 >
                   {item.available ? "Active (Available)" : "Sold Out (Disabled)"}
