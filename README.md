@@ -85,7 +85,7 @@ graph TD
 
 ## Screenshots
 
-<!-- Add your application screenshots here -->
+Screenshots are produced by `make e2e` in `test-results/screens/` (guest menu and order sheet on a phone, owner brief and kitchen display on desktop).
 | Guest Menu & Allergen Filter | Kitchen Display System (KDS) |
 |:---:|:---:|
 | ![Guest Menu](docs/screenshots/guest-menu.png) | ![Kitchen Display](docs/screenshots/kitchen-display.png) |

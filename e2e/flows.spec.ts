@@ -36,6 +36,8 @@ test.describe.serial("guest to kitchen to owner", () => {
     await expect(page).toHaveURL(/\/en\/menu$/);
     await expect(page.getByRole("heading", { name: "Trattoria da Mario" })).toBeVisible();
     await expect(page.getByText(`Table: ${info.table_label}`)).toBeVisible();
+    await page.setViewportSize({ width: 375, height: 812 });
+    await page.screenshot({ path: "test-results/screens/guest-menu-phone.png", fullPage: true });
 
     await page.getByRole("button", { name: /^Add / }).first().click();
     const orderBar = page.getByRole("button", { name: /View order/ });
@@ -48,6 +50,7 @@ test.describe.serial("guest to kitchen to owner", () => {
     await expect(sheet).toBeHidden();
     await expect(orderBar).toBeFocused();
     await orderBar.click();
+    await page.screenshot({ path: "test-results/screens/order-sheet-phone.png" });
 
     const ack = page.getByText("I have spoken with staff and understand the allergen risks");
     if (await ack.isVisible()) await ack.click();
@@ -66,6 +69,7 @@ test.describe.serial("guest to kitchen to owner", () => {
 
     const bump = page.getByRole("button", { name: "BUMP" });
     await expect(bump).toHaveCount(1);
+    await page.screenshot({ path: "test-results/screens/kitchen-desktop.png", fullPage: true });
     await bump.click();
     await expect(bump).toHaveCount(0);
 
@@ -86,6 +90,7 @@ test.describe.serial("guest to kitchen to owner", () => {
     await expect(page.getByText("Average order value")).toBeVisible();
     await expect(page.getByRole("heading", { name: "Ranked actions" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "7-day demand forecast" })).toBeVisible();
+    await page.screenshot({ path: "test-results/screens/owner-brief-desktop.png", fullPage: true });
 
     await page.goto(`${OWNER}/ai`);
     await page.getByLabel("Demand surge").check();
