@@ -92,7 +92,7 @@ export default function QrPickerPage({
       <div className="max-w-md w-full mx-auto space-y-6">
         {/* Header */}
         <div className="text-center space-y-2">
-          <Image src="/brand/logo-mark.svg" alt="Mise" width={56} height={56} priority />
+          <Image src="/brand/logo-mark.svg" alt="Mise" width={56} height={56} priority className="mx-auto" />
           <h1 className="text-3xl text-ink">
             {dict.ui.welcomeTitle}
           </h1>
