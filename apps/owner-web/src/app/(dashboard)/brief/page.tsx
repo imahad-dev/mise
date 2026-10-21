@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useState } from "react";
+import { StatTile } from "ui";
 import {
   CLASS_COLORS,
   METHOD_LABELS,
@@ -16,16 +17,6 @@ const DEFAULT_SLUG = process.env.NEXT_PUBLIC_RESTAURANT_SLUG || "trattoria-da-ma
 const W = 560;
 const H = 320;
 const PAD = 36;
-
-function KpiTile({ label, value, sub }: { label: string; value: string; sub?: string }) {
-  return (
-    <div className="stat-tile space-y-1">
-      <span className="text-xs text-ink-muted uppercase font-semibold">{label}</span>
-      <div className="text-3xl font-extrabold text-ink">{value}</div>
-      {sub && <div className="text-xs text-ink-muted">{sub}</div>}
-    </div>
-  );
-}
 
 function Quadrant({ brief }: { brief: DailyBrief }) {
   const { points, medianX, medianY } = quadrantLayout(
@@ -206,13 +197,13 @@ export default function DailyBriefPage() {
         brief && (
           <>
             <div className="grid gap-4 sm:grid-cols-3">
-              <KpiTile
+              <StatTile
                 label="Revenue"
                 value={eur(brief.kpis.revenue_eur)}
                 sub={`${brief.kpis.orders} orders`}
               />
-              <KpiTile label="Average order value" value={eur(brief.kpis.aov_eur)} />
-              <KpiTile
+              <StatTile label="Average order value" value={eur(brief.kpis.aov_eur)} />
+              <StatTile
                 label="Contribution margin"
                 value={eur(brief.kpis.contribution_margin_eur)}
                 sub={`${brief.kpis.margin_pct}% of revenue`}
