@@ -68,7 +68,7 @@ export function ChatPanel({ locale = "en" }: ChatPanelProps) {
   };
 
   return (
-    <div className="fixed bottom-4 right-4 z-40">
+    <div className="fixed bottom-20 right-4 sm:bottom-4 z-40">
       {!isOpen ? (
         <button
           onClick={() => setIsOpen(true)}

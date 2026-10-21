@@ -357,7 +357,7 @@ export default function GuestMenuPage({
                     <Button
                       variant="outline"
                       size="icon"
-                      aria-label={`− ${item.name}`}
+                      aria-label={`${dict.ui.decrease} ${item.name}`}
                       onClick={() => handleUpdateQuantity(item.menuItemId, item.quantity - 1, item.notes)}
                     >
                       −
@@ -368,7 +368,7 @@ export default function GuestMenuPage({
                     <Button
                       variant="outline"
                       size="icon"
-                      aria-label={`+ ${item.name}`}
+                      aria-label={`${dict.ui.increase} ${item.name}`}
                       onClick={() => handleUpdateQuantity(item.menuItemId, item.quantity + 1, item.notes)}
                     >
                       +

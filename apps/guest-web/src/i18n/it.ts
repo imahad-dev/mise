@@ -44,6 +44,8 @@ export const it: TranslationDict = {
     notesPlaceholder: "es. salsa a parte...",
     total: "Totale",
     checkout: "Vedi ordine",
+    decrease: "Togli uno",
+    increase: "Aggiungi uno",
     emptyCart: "Il carrello è vuoto.",
     itemAdded: "Aggiunto all'ordine",
     placeOrder: "Invia Ordine",

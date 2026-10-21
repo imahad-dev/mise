@@ -41,6 +41,8 @@ export interface TranslationDict {
     notesPlaceholder: string;
     total: string;
     checkout: string;
+    decrease: string;
+    increase: string;
     emptyCart: string;
     itemAdded: string;
     placeOrder: string;
