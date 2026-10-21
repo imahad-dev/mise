@@ -73,7 +73,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </Link>
       }
       sidebarFooter={
-        <button onClick={handleLogout} className="btn-ghost mt-4 w-full">
+        <button onClick={handleLogout} className="btn-ghost md:mt-4 md:w-full">
           Sign out
         </button>
       }

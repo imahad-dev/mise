@@ -48,6 +48,10 @@ export function AppShell({
   return (
     <div className="flex min-h-screen flex-col bg-paper text-ink">
       {banner}
+      <header className="flex items-center justify-between gap-3 border-b border-line bg-paper-2 px-4 py-3 md:hidden">
+        {brand}
+        {sidebarFooter}
+      </header>
       <div className="flex flex-1">
         <aside className="hidden w-60 shrink-0 flex-col border-r border-line bg-paper-2 px-4 py-5 md:flex">
           {brand}
