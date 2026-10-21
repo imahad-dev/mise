@@ -32,7 +32,7 @@ export function Sheet({ open, onClose, title, children, footer }: SheetProps) {
       aria-labelledby={titleId}
       onClose={onClose}
       onClick={(e) => {
-        if (e.target === e.currentTarget) onClose(); // click on the backdrop
+        if (e.target === e.currentTarget) e.currentTarget.close(); // click on the backdrop
       }}
     >
       <div className="flex max-h-[90vh] flex-col">
@@ -42,7 +42,7 @@ export function Sheet({ open, onClose, title, children, footer }: SheetProps) {
           </h2>
           <button
             type="button"
-            onClick={onClose}
+            onClick={() => ref.current?.close()}
             aria-label="Close"
             className="btn-ghost btn-icon text-base"
           >
