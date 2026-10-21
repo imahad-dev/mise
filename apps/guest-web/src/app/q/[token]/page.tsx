@@ -124,7 +124,7 @@ export default function QrPickerPage({
                 className={`py-2 px-3 rounded-xl text-sm font-medium transition-all ${
                   language === "en"
                     ? "bg-terracotta text-cream shadow-md shadow-ink/10"
-                    : "bg-paper-2 text-ink-muted hover:bg-paper-2"
+                    : "bg-paper-2 text-ink-muted hover:bg-line"
                 }`}
               >
                 🇬🇧 English
@@ -135,7 +135,7 @@ export default function QrPickerPage({
                 className={`py-2 px-3 rounded-xl text-sm font-medium transition-all ${
                   language === "it"
                     ? "bg-terracotta text-cream shadow-md shadow-ink/10"
-                    : "bg-paper-2 text-ink-muted hover:bg-paper-2"
+                    : "bg-paper-2 text-ink-muted hover:bg-line"
                 }`}
               >
                 🇮🇹 Italiano
@@ -159,7 +159,7 @@ export default function QrPickerPage({
                     className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
                       selected
                         ? "bg-safe-bg text-safe-fg border-safe-fg/40"
-                        : "bg-paper-2 text-ink-muted border-line hover:border-line"
+                        : "bg-paper-2 text-ink-muted border-line hover:border-ink-muted"
                     }`}
                   >
                     {dict.dietary[diet] || diet} {selected ? "✓" : "+"}
@@ -185,7 +185,7 @@ export default function QrPickerPage({
                     className={`px-2.5 py-1.5 rounded-xl text-xs font-medium border text-left flex items-center justify-between transition-all ${
                       selected
                         ? "bg-danger-bg text-danger-fg border-danger-fg/40"
-                        : "bg-paper-2 text-ink-muted border-line hover:border-line"
+                        : "bg-paper-2 text-ink-muted border-line hover:border-ink-muted"
                     }`}
                   >
                     <span className="truncate">{dict.allergens[allergen] || allergen}</span>

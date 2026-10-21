@@ -329,7 +329,7 @@ export default function KitchenDisplayPage() {
             className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 border transition-all ${
               soundEnabled
                 ? "bg-kds-fresh/20 text-kds-fresh border-kds-fresh"
-                : "bg-kds-card text-kds-muted border-cream/10 hover:border-cream/10"
+                : "bg-kds-card text-kds-muted border-cream/10 hover:border-cream/30"
             }`}
           >
             <span>{soundEnabled ? "🔊 Sound Enabled" : "🔇 Enable Sound"}</span>

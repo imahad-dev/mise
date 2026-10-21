@@ -199,7 +199,7 @@ export default function GuestMenuPage({
           <p className="text-sm text-danger-fg">{error || "Unable to display menu."}</p>
           <button
             onClick={() => window.location.reload()}
-            className="px-4 py-2 bg-paper-2 text-xs font-medium rounded-xl hover:bg-paper-2"
+            className="px-4 py-2 bg-paper-2 text-xs font-medium rounded-xl hover:bg-line"
           >
             Retry
           </button>
@@ -208,9 +208,9 @@ export default function GuestMenuPage({
     );
   }
 
-  const riskyNames = cart.items
+  const riskyNames = [...new Set(cart.items
     .filter((i) => i.allergenStatus !== "no_declared_match")
-    .map((i) => i.name);
+    .map((i) => i.name))];
   const catId = (cat: string) => `cat-${cat.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
 
   return (
@@ -228,7 +228,7 @@ export default function GuestMenuPage({
               <a
                 key={cat}
                 href={`#${catId(cat)}`}
-                className="whitespace-nowrap rounded-full border border-line px-3 py-1.5 text-xs font-semibold text-ink hover:bg-paper-2"
+                className="whitespace-nowrap rounded-full border border-line px-3 py-1.5 text-xs font-semibold text-ink hover:bg-line"
               >
                 {cat}
               </a>
@@ -295,7 +295,7 @@ export default function GuestMenuPage({
 
       {cartCount > 0 && (
         <div className="fixed inset-x-4 bottom-4 z-20 mx-auto max-w-md">
-          <Button className="w-full justify-between !py-3.5 text-base" onClick={() => setCartOpen(true)}>
+          <Button className="w-full justify-between py-3.5 text-base" onClick={() => setCartOpen(true)}>
             <span>
               {dict.ui.checkout} · {cartCount}
             </span>

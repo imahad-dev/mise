@@ -132,7 +132,7 @@ export default function MenuManagementPage() {
             <div
               key={item.id}
               className={`p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-colors ${
-                !item.available ? "bg-paper opacity-70" : "hover:bg-paper-2"
+                !item.available ? "bg-paper opacity-70" : "hover:bg-line"
               }`}
             >
               {/* Item Info */}
@@ -182,7 +182,7 @@ export default function MenuManagementPage() {
                   disabled={isBusy}
                   className={`min-h-[44px] px-3.5 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
                     item.available
-                      ? "bg-card text-ink border-line hover:border-line"
+                      ? "bg-card text-ink border-line hover:border-ink-muted"
                       : "bg-danger-bg text-danger-fg border-danger-fg hover:bg-danger-bg"
                   }`}
                 >

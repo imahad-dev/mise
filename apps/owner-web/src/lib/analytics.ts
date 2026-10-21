@@ -74,7 +74,7 @@ export interface DailyBrief {
 
 export const CLASS_COLORS: Record<MenuClass, string> = {
   star: "#4A5D3A",
-  plowhorse: "#8C7A64",
+  plowhorse: "#6B5A48",
   puzzle: "#B5462B",
   dog: "#8A1C12",
 };
