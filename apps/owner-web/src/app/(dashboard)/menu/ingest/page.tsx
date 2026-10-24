@@ -65,9 +65,9 @@ export default function MenuIngestPage() {
       setCreatedCount(data.created_count);
       setItems(data.items || []);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : String(err));
+      if (slugRef.current === slug) setError(err instanceof Error ? err.message : String(err));
     } finally {
-      setLoading(false);
+      if (slugRef.current === slug) setLoading(false);
     }
   };
 
