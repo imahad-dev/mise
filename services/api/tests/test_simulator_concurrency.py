@@ -28,7 +28,7 @@ from src.models.restaurant import Restaurant
 from src.models.session import GuestSession
 from src.models.user import User
 from src.redis_client import redis_client
-from src.services.simulator import SimAssumptions, generate_orders
+from src.services.simulator import SimAssumptions, SimItem, generate_orders
 
 RATE_KEY = "rate_limit:demo:simulate:127.0.0.1"
 DAYS = 14
@@ -140,8 +140,12 @@ async def test_concurrent_generate_demo_data_equals_one_run(committed_restaurant
             .all()
         )
     today = datetime.now(ZoneInfo("Europe/Rome")).date()
+    # No venue profile: every item has weight 1 and the default assumptions apply
     expected = generate_orders(
-        ids, today - timedelta(days=DAYS), SimAssumptions(days=DAYS), ZoneInfo("Europe/Rome")
+        [SimItem(id=i) for i in ids],
+        today - timedelta(days=DAYS),
+        SimAssumptions(days=DAYS),
+        ZoneInfo("Europe/Rome"),
     )
     expected_orders = len(expected)
     expected_items = sum(len(o.lines) for o in expected)

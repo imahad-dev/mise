@@ -68,6 +68,10 @@ async def test_simulated_orders_feed_brief_and_forecast(
     summary = await _simulate(client, slug, days=56)
     n = summary["orders_created"]
     assert n > 500
+    # The venue profile from the seed applies; the request still sets days and seed
+    assert summary["assumptions"]["lunch_hours"] == [13, 16]
+    assert summary["assumptions"]["payment_mix"][0] == ["cash", 0.6]
+    assert summary["assumptions"]["days"] == 56
 
     rows = (
         await db_session.execute(

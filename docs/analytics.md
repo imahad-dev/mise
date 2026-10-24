@@ -144,7 +144,8 @@ same snapshot code as live orders, are stored as `status='bumped'` (so they neve
 kitchen display) and `source='simulated'`, under one synthetic expired guest session with no
 allergen or dietary data.
 
-Assumptions (`SimAssumptions`, all parameters):
+Assumptions (`SimAssumptions`, all parameters). These are the defaults; each venue's seed file
+has a `simulation` block that overrides them (see below):
 
 | Assumption | Default |
 |---|---|
@@ -154,8 +155,43 @@ Assumptions (`SimAssumptions`, all parameters):
 | Service windows (local) | lunch 12:00–15:00, dinner 19:00–23:00, uniform arrival minute |
 | Party size 1–6 | 10%, 45%, 15%, 22%, 4%, 4% |
 | Dishes per order | max(party size, Poisson(1.4 × party size)) |
-| Item popularity | Zipf, weight ∝ 1 / rank^1.0, rank from a seeded shuffle of the menu |
-| Promotion | the rank-6 item, days 21–27, demand weight × 1.8 (disable with `--no-promo`) |
+| Item popularity | proportional to the item's weight (1 when the venue gives none) |
+| Option choice | proportional to the item's option weights (equal when none, or when their count no longer matches the item's options) |
+| Promotion | the rank-6 item by weight, days 21–27, demand weight × 1.8 (disable with `--no-promo`) |
 | Noise | daily multiplicative factor exp(N(0, 0.12)) on arrival rates |
+| Payment method | cash 60%, card 20%, wallet 15%, Raast 5% |
+| Bill settled after | uniform 45–75 minutes after the order |
+
+**Venue profiles.** `scripts/seed.py` stores the seed's `simulation` block in
+`restaurant.onboarding["simulation"]`, together with `weights` (each item's `sim_weight`, by
+item key) and `option_weights` (each item's list, in the order of its options). The simulate
+endpoint and `scripts/simulate.py` build the assumptions from that profile, then apply the
+request's days, seed and promotion switch. Without `--slug`, `scripts/simulate.py` simulates
+every demo venue.
+
+| Profile | Angeethi House | Kehwa & Crumb |
+|---|---|---|
+| Lunch orders, Mon→Sun | 9, 9, 10, 10, 13, 18, 16 | 12, 12, 13, 14, 16, 22, 20 |
+| Dinner orders, Mon→Sun | 14, 15, 15, 17, 26, 30, 22 | 16, 16, 18, 20, 26, 30, 24 |
+| Lunch window | 13:00–16:00 | 15:00–18:00 (afternoon) |
+| Dinner window | 20:00–23:00 | 20:00–23:00 |
+| Party size 1–6 | 5%, 20%, 15%, 30%, 15%, 15% | 35%, 40%, 15%, 10%, 0, 0 |
+| Dishes per guest | 1.6 | 1.5 |
+| Payment mix | cash 60 / card 20 / wallet 15 / Raast 5 | cash 35 / card 40 / wallet 15 / Raast 10 |
+
+**The payment mix is an assumption.** We found no published breakdown of payment methods for
+Pakistani restaurants; the shares only make the demo's cash-versus-digital split visible and
+must not be read as market data.
+
+**Bills.** Each simulated order is one party with one bill: `source='simulated'`, no bill
+number, no table, `status='settled'`, opened at the order time and settled 45–75 minutes later.
+The subtotal is the order total; tax comes from `tax_for(jurisdiction, payment method, local
+settle date, subtotal)` and the bill total is subtotal plus tax. When no tax rate is in force
+(no jurisdiction, or a date before the first configured rate) the order is written without a
+bill. Regenerating deletes simulated bills together with simulated orders.
+
+Random draws: arrival times, party sizes and dishes use `default_rng(seed)`; option, payment
+method and settle-time draws use a second generator seeded `[seed, 1]`, so changing the payment
+mix or an item's options never shifts the order stream.
 
 Item choice is independent of course or category; quantities are capped at 20 per line.

@@ -24,13 +24,29 @@ from src.models.menu import MenuItem, MenuItemOption, MenuTranslation
 from src.models.restaurant import Restaurant
 from src.models.user import Membership, User
 from src.passwords import hash_password
+from src.services.simulator import SEED_ITEM_NAMESPACE, SimAssumptions
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_SEED_FILES = ["data/seed/angeethi_house.json", "data/seed/kehwa_and_crumb.json"]
 DEFAULT_DEMO_USERS_FILE = "data/seed/demo_users.json"
 
-SEED_ITEM_NAMESPACE = uuid.UUID("a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d")
+
+def simulation_profile(data: dict[str, Any]) -> dict[str, Any] | None:
+    """The seed's `simulation` block plus per-item `weights` and `option_weights` (by item
+    key), validated, as stored in restaurant.onboarding["simulation"]; None without a block."""
+    sim = data.get("simulation")
+    if sim is None:
+        return None
+    SimAssumptions.from_profile(sim)  # raises on unknown keys or bad values
+    weights: dict[str, float] = {}
+    option_weights: dict[str, list[float]] = {}
+    for item in data.get("items", []):
+        if "sim_weight" in item:
+            weights[item["key"]] = item["sim_weight"]
+        if "option_weights" in item:  # a count mismatch falls back to equal weights
+            option_weights[item["key"]] = item["option_weights"]
+    return {**sim, "weights": weights, "option_weights": option_weights}
 
 
 def load_seed_data(file_path: str) -> dict[str, Any]:
@@ -96,6 +112,7 @@ async def seed_data(
     rest_data = data["restaurant"]
     tables_data = data.get("tables", [])
     items_data = data.get("items", [])
+    profile = simulation_profile(data)
 
     # 1. Upsert Restaurant
     stmt_rest = select(Restaurant).where(Restaurant.slug == rest_data["slug"])
@@ -131,6 +148,9 @@ async def seed_data(
         restaurant.active = rest_data.get("active", True)
         await session.flush()
         print(f"Updated restaurant: {restaurant.name} ({restaurant.slug})")
+    if profile is not None:  # a new dict: JSONB does not track in-place mutation
+        restaurant.onboarding = {**(restaurant.onboarding or {}), "simulation": profile}
+        await session.flush()
 
     # 2. Upsert Dining Tables via explicit query (no relationship traversal)
     stmt_tables = select(DiningTable).where(DiningTable.restaurant_id == restaurant.id)

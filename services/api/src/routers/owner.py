@@ -1,5 +1,6 @@
 import logging
 import uuid
+from dataclasses import replace
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -489,10 +490,12 @@ async def simulate_demo_orders(
         detail="Demo limit reached: maximum 3 demo data generations per hour per IP",
     )
     restaurant = access.restaurant
-    assumptions = SimAssumptions(
+    base = SimAssumptions.from_profile(restaurant.onboarding.get("simulation", {}))
+    assumptions = replace(
+        base,
         days=payload.days,
         seed=payload.seed,
-        promo_item_rank=SimAssumptions.promo_item_rank if payload.promotion else None,
+        promo_item_rank=base.promo_item_rank if payload.promotion else None,
     )
     summary = await persist_simulation(db, restaurant, assumptions)
     await db.commit()

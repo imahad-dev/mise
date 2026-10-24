@@ -53,22 +53,22 @@
   ],
   "simulation": {
     "lunch_rate": [
-      6,
-      6,
-      7,
-      7,
-      10,
-      12,
-      12
-    ],
-    "dinner_rate": [
-      8,
-      8,
+      9,
       9,
       10,
-      16,
+      10,
+      13,
       18,
-      17
+      16
+    ],
+    "dinner_rate": [
+      14,
+      15,
+      15,
+      17,
+      26,
+      30,
+      22
     ],
     "lunch_hours": [
       13,
@@ -79,20 +79,32 @@
       23
     ],
     "party_size_weights": [
-      0.03,
-      0.17,
+      0.05,
+      0.2,
       0.15,
-      0.25,
+      0.3,
       0.15,
-      0.25
+      0.15
     ],
-    "dishes_per_guest": 1.5,
-    "payment_mix": {
-      "cash": 60,
-      "card": 20,
-      "wallet": 15,
-      "raast": 5
-    }
+    "dishes_per_guest": 1.6,
+    "payment_mix": [
+      [
+        "cash",
+        0.6
+      ],
+      [
+        "card",
+        0.2
+      ],
+      [
+        "wallet",
+        0.15
+      ],
+      [
+        "raast",
+        0.05
+      ]
+    ]
   },
   "items": [
     {

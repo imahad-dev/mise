@@ -14,6 +14,7 @@ from src.services.forecast import build_input, forecast
 from src.services.narrative import narrate, numbers_grounded, numbers_in_text
 from src.services.simulator import (
     SimAssumptions,
+    SimItem,
     generate_orders,
     popularity_ranking,
     promo_window,
@@ -23,18 +24,20 @@ from src.services.whatif import ItemBaseline, run_whatif
 TZ = ZoneInfo("Europe/Rome")
 START = date(2026, 8, 1)
 ITEM_IDS = [uuid.UUID(int=i + 1) for i in range(25)]
+# Zipf-shaped weights (1 / rank) so the golden data keeps a clear popularity spread
+SIM_ITEMS = [SimItem(id=i, weight=1 / (n + 1)) for n, i in enumerate(ITEM_IDS)]
 
 
 def golden_input(days: int = 56, seed: int = 42):
     """Simulated orders aggregated exactly like analytics.daily_item_sales (local day, daypart)."""
     a = SimAssumptions(days=days, seed=seed)
     rows = []
-    for o in generate_orders(ITEM_IDS, START, a, TZ):
+    for o in generate_orders(SIM_ITEMS, START, a, TZ):
         local = o.placed_at.astimezone(TZ)
         daypart = "lunch" if local.hour < 16 else "dinner"
-        rows.extend((str(k), local.date(), daypart, q) for k, q in o.lines.items())
+        rows.extend((str(item), local.date(), daypart, q) for (item, _), q in o.lines.items())
     window = promo_window(a, START)
-    promo_item = str(popularity_ranking(ITEM_IDS, seed)[a.promo_item_rank])
+    promo_item = str(popularity_ranking(SIM_ITEMS)[a.promo_item_rank])
     promos = [(promo_item, window[0], window[1])] if window else []
     return build_input(rows, promos, START, START + timedelta(days=days - 1))
 
@@ -44,19 +47,20 @@ def golden_input(days: int = 56, seed: int = 42):
 
 def test_simulator_is_seeded_and_structured():
     a = SimAssumptions(days=14, seed=7)
-    first = generate_orders(ITEM_IDS, START, a, TZ)
-    second = generate_orders(ITEM_IDS, START, a, TZ)
+    first = generate_orders(SIM_ITEMS, START, a, TZ)
+    second = generate_orders(SIM_ITEMS, START, a, TZ)
     assert [(o.placed_at, o.lines) for o in first] == [(o.placed_at, o.lines) for o in second]
     assert first, "expected orders"
     for o in first:
         hour = o.placed_at.astimezone(TZ).hour
         assert 12 <= hour < 15 or 19 <= hour < 23
         assert all(1 <= q <= 20 for q in o.lines.values())
-    # Zipf: the rank-0 item outsells the last-ranked item
-    ranked = popularity_ranking(ITEM_IDS, 7)
+    # Weighted popularity: the rank-0 item outsells the last-ranked item
+    ranked = popularity_ranking(SIM_ITEMS)
     units = {i: 0 for i in ITEM_IDS}
     for o in first:
-        for k, q in o.lines.items():
+        for (k, option), q in o.lines.items():
+            assert option is None  # these items have no options
             units[k] += q
     assert units[ranked[0]] > units[ranked[-1]]
 
