@@ -1,5 +1,6 @@
-"""Guest session management, guest menu, and AI chat endpoints."""
+"""Guest session management, guest menu, AI chat and bill endpoints."""
 
+import json
 from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
@@ -10,10 +11,14 @@ from sqlalchemy.orm import selectinload
 from src.auth import get_current_guest_session, set_guest_cookie
 from src.database import get_db
 from src.inference.client import InferenceClient, get_inference_client
+from src.models.bill import Bill
 from src.models.dining_table import DiningTable
 from src.models.menu import MenuItem
+from src.models.order import Order
 from src.models.restaurant import Restaurant
 from src.models.session import GuestSession
+from src.redis_client import publish_event
+from src.schemas.bills import GuestBillResponse
 from src.schemas.guest import (
     ChatMessageRequest,
     ChatMessageResponse,
@@ -248,4 +253,78 @@ async def guest_chat(
     return ChatMessageResponse(
         reply=result.get("reply", ""),
         suggested_items=result.get("suggested_items", []),
+    )
+
+
+# --- Bills ---
+
+
+@router.post(
+    "/bill-request",
+    response_model=GuestBillResponse,
+    status_code=status.HTTP_200_OK,
+    responses={
+        401: {"description": "Unauthenticated or expired session"},
+        404: {"description": "No open bill"},
+    },
+)
+async def request_bill(
+    session: GuestSession = Depends(get_current_guest_session),
+    db: AsyncSession = Depends(get_db),
+) -> GuestBillResponse:
+    """Ask for the table's open bill. Idempotent: the first request time is kept."""
+    bill = None
+    if session.table_id is not None:
+        bill = (
+            await db.execute(
+                select(Bill)
+                .where(
+                    Bill.restaurant_id == session.restaurant_id,
+                    Bill.table_id == session.table_id,
+                    Bill.status == "open",
+                )
+                .with_for_update()
+            )
+        ).scalar_one_or_none()
+    if bill is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No open bill")
+    if bill.bill_requested_at is None:
+        bill.bill_requested_at = datetime.now(UTC)
+    await db.commit()
+    await publish_event(
+        f"kitchen:{session.restaurant_id}",
+        json.dumps({"event": "bill_requested", "bill_id": str(bill.id)}),
+    )
+    return GuestBillResponse(
+        bill_no=bill.bill_no, status=bill.status, bill_requested_at=bill.bill_requested_at
+    )
+
+
+@router.get(
+    "/bill",
+    response_model=GuestBillResponse,
+    status_code=status.HTTP_200_OK,
+    responses={
+        401: {"description": "Unauthenticated or expired session"},
+        404: {"description": "No bill for this session"},
+    },
+)
+async def get_guest_bill(
+    session: GuestSession = Depends(get_current_guest_session),
+    db: AsyncSession = Depends(get_db),
+) -> GuestBillResponse:
+    """The bill of the session's latest billed order."""
+    bill = (
+        await db.execute(
+            select(Bill)
+            .join(Order, Order.bill_id == Bill.id)
+            .where(Order.guest_session_id == session.id)
+            .order_by(Order.placed_at.desc(), Bill.opened_at.desc())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    if bill is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No bill")
+    return GuestBillResponse(
+        bill_no=bill.bill_no, status=bill.status, bill_requested_at=bill.bill_requested_at
     )
