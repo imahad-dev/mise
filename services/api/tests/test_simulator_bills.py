@@ -121,6 +121,7 @@ async def test_persist_simulation_writes_one_settled_bill_per_party(db_session: 
     summary = await persist_simulation(db_session, restaurant, a)
     n = summary["orders_created"]
     assert n > 500
+    assert summary["bills_created"] == n
 
     rows = (
         await db_session.execute(
@@ -240,6 +241,7 @@ async def test_simulation_without_tax_jurisdiction_writes_no_bills(db_session: A
     await db_session.flush()
     summary = await persist_simulation(db_session, restaurant, SimAssumptions(days=7))
     assert summary["orders_created"] > 0
+    assert summary["bills_created"] == 0
     bills = (
         await db_session.execute(
             select(func.count()).select_from(Bill).where(Bill.restaurant_id == restaurant.id)

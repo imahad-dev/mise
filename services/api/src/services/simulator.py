@@ -30,7 +30,7 @@ from src.models.order import Order
 from src.models.restaurant import Restaurant
 from src.models.session import GuestSession
 from src.services.order_snapshot import line_total, snapshot_order_item
-from src.services.tax import PAYMENT_METHODS, TaxRateError, default_rates, tax_for
+from src.services.tax import PAYMENT_METHODS, TaxRate, TaxRateError, default_rates, tax_for
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -267,7 +267,11 @@ async def clear_simulated(db: AsyncSession, restaurant_id: uuid.UUID) -> None:
 
 
 def _simulated_bill(
-    restaurant: Restaurant, so: SimOrder, subtotal: Decimal, tz: ZoneInfo
+    restaurant: Restaurant,
+    so: SimOrder,
+    subtotal: Decimal,
+    tz: ZoneInfo,
+    rates: tuple[TaxRate, ...],
 ) -> Bill | None:
     """A settled simulated bill for one party, or None when no tax rate is in force then
     (no jurisdiction, or a date before the first configured rate)."""
@@ -278,7 +282,7 @@ def _simulated_bill(
             so.payment_method,
             settled_at.astimezone(tz).date(),
             subtotal,
-            default_rates(),
+            rates,
         )
     except TaxRateError:
         return None
@@ -352,6 +356,8 @@ async def persist_simulation(
     db.add(session)
     await db.flush()
 
+    # Loaded once, outside the per-bill try: a missing or invalid tax file must raise.
+    rates = default_rates()
     orders: list[Order] = []
     bills: list[Bill] = []
     for n, so in enumerate(sim_orders):
@@ -372,7 +378,7 @@ async def persist_simulation(
             [[str(i), str(o) if o else None, q] for (i, o), q in lines], separators=(",", ":")
         )
         total = sum((line_total(s) for s in snaps), Decimal("0.00"))
-        bill = _simulated_bill(restaurant, so, total, tz)
+        bill = _simulated_bill(restaurant, so, total, tz, rates)
         if bill is not None:
             bills.append(bill)
         orders.append(
@@ -429,6 +435,7 @@ async def persist_simulation(
     await db.flush()
     return {
         "orders_created": len(sim_orders),
+        "bills_created": len(bills),
         "start_date": start.isoformat(),
         "end_date": (today - timedelta(days=1)).isoformat(),
         "assumptions": a.to_dict(),

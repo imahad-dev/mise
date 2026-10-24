@@ -243,6 +243,7 @@ class SimulateOrdersRequest(BaseModel):
 
 class SimulateOrdersResponse(BaseModel):
     orders_created: int
+    bills_created: int
     start_date: str
     end_date: str
     assumptions: dict

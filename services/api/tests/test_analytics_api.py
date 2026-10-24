@@ -72,6 +72,7 @@ async def test_simulated_orders_feed_brief_and_forecast(
     assert summary["assumptions"]["lunch_hours"] == [13, 16]
     assert summary["assumptions"]["payment_mix"][0] == ["cash", 0.6]
     assert summary["assumptions"]["days"] == 56
+    assert summary["bills_created"] == n  # one settled bill per simulated party
 
     rows = (
         await db_session.execute(
