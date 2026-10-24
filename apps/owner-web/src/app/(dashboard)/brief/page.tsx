@@ -6,7 +6,7 @@ import { StatTile } from "ui";
 import {
   CLASS_COLORS,
   METHOD_LABELS,
-  eur,
+  money,
   forecastTable,
   quadrantLayout,
   wapePct,
@@ -57,7 +57,7 @@ function Quadrant({ brief }: { brief: DailyBrief }) {
       {points.map((p) => (
         <circle key={p.item.item_id} cx={p.x} cy={p.y} r={6} fill={CLASS_COLORS[p.item.menu_class]}>
           <title>
-            {`${p.item.name}: ${p.item.units} sold, ${eur(p.item.unit_margin_eur)} margin per unit (${p.item.menu_class})`}
+            {`${p.item.name}: ${p.item.units} sold, ${money(p.item.unit_margin, brief.currency)} margin per unit (${p.item.menu_class})`}
           </title>
         </circle>
       ))}
@@ -209,13 +209,13 @@ export default function DailyBriefPage() {
             <div className="grid gap-4 sm:grid-cols-3">
               <StatTile
                 label="Revenue"
-                value={eur(brief.kpis.revenue_eur)}
+                value={money(brief.kpis.revenue, brief.currency)}
                 sub={`${brief.kpis.orders} orders`}
               />
-              <StatTile label="Average order value" value={eur(brief.kpis.aov_eur)} />
+              <StatTile label="Average order value" value={money(brief.kpis.aov, brief.currency)} />
               <StatTile
                 label="Contribution margin"
-                value={eur(brief.kpis.contribution_margin_eur)}
+                value={money(brief.kpis.contribution_margin, brief.currency)}
                 sub={`${brief.kpis.margin_pct}% of revenue`}
               />
             </div>
@@ -244,10 +244,10 @@ export default function DailyBriefPage() {
                       <span className="chip chip-unverified uppercase">
                         #{a.rank} {a.type.replace("_", " ")}
                       </span>
-                      {a.estimated_impact_eur_per_week != null && (
+                      {a.estimated_impact_per_week != null && (
                         <span className="text-xs font-bold text-olive">
-                          est. {a.estimated_impact_eur_per_week >= 0 ? "+" : ""}
-                          {eur(a.estimated_impact_eur_per_week)}/week
+                          est. {a.estimated_impact_per_week >= 0 ? "+" : ""}
+                          {money(a.estimated_impact_per_week, brief.currency)}/week
                         </span>
                       )}
                     </div>
@@ -271,7 +271,7 @@ export default function DailyBriefPage() {
                 <h3 className="text-base font-bold text-ink">Menu engineering</h3>
                 <p className="text-xs text-ink-muted">
                   Dashed lines are the medians: {brief.thresholds.median_units} units and{" "}
-                  {eur(brief.thresholds.median_unit_margin_eur)} margin per unit. Hover a dot for
+                  {money(brief.thresholds.median_unit_margin, brief.currency)} margin per unit. Hover a dot for
                   details.
                 </p>
               </div>

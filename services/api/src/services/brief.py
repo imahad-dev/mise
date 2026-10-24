@@ -5,7 +5,7 @@ Action formulas (all weekly, documented in docs/analytics.md):
 - reprice_plowhorse: what-if price_change of +REPRICE_PCT% at the default price elasticity
 - review_dog: weekly_units x (median_unit_margin - unit_margin), the gain if its volume moved
   to a median-margin dish
-- prep_target: ceil of the summed upper forecast bound for the next service day (no EUR impact)
+- prep_target: ceil of the summed upper forecast bound for the next service day (no money impact)
 """
 
 from __future__ import annotations
@@ -156,13 +156,13 @@ def build_actions(
                 "title": f"Promote {name(i)}",
                 "evidence": {
                     "weekly_units": t["weekly_units"],
-                    "unit_margin_eur": t["unit_margin"],
+                    "unit_margin": t["unit_margin"],
                     "median_units": thresholds["median_units"],
                 },
-                "estimated_impact_eur_per_week": round(
+                "estimated_impact_per_week": round(
                     PROMOTE_UPLIFT * t["weekly_units"] * t["unit_margin"], 2
                 ),
-                "formula": f"{PROMOTE_UPLIFT} x weekly_units x unit_margin_eur",
+                "formula": f"{PROMOTE_UPLIFT} x weekly_units x unit_margin",
             }
         )
 
@@ -180,11 +180,11 @@ def build_actions(
                 "title": f"Raise the price of {name(i)} by {REPRICE_PCT}%",
                 "evidence": {
                     "weekly_units": t["weekly_units"],
-                    "price_eur": round(price, 2),
-                    "unit_cost_eur": round(cost, 2),
-                    "median_unit_margin_eur": thresholds["median_unit_margin_eur"],
+                    "price": round(price, 2),
+                    "unit_cost": round(cost, 2),
+                    "median_unit_margin": thresholds["median_unit_margin"],
                 },
-                "estimated_impact_eur_per_week": wi["delta"]["margin_eur"],
+                "estimated_impact_per_week": wi["delta"]["margin"],
                 "formula": (
                     f"what-if price_change +{REPRICE_PCT}% at elasticity "
                     f"{DEFAULT_PRICE_ELASTICITY}: "
@@ -196,7 +196,7 @@ def build_actions(
     dogs = sorted(by_class["dog"], key=lambda i: totals[i]["contribution"])[:1]
     for i in dogs:
         t = totals[i]
-        gap = thresholds["median_unit_margin_eur"] - t["unit_margin"]
+        gap = thresholds["median_unit_margin"] - t["unit_margin"]
         money.append(
             {
                 "type": "review_dog",
@@ -205,15 +205,15 @@ def build_actions(
                 "title": f"Review {name(i)} (rework, reprice or replace)",
                 "evidence": {
                     "weekly_units": t["weekly_units"],
-                    "unit_margin_eur": t["unit_margin"],
-                    "median_unit_margin_eur": thresholds["median_unit_margin_eur"],
+                    "unit_margin": t["unit_margin"],
+                    "median_unit_margin": thresholds["median_unit_margin"],
                 },
-                "estimated_impact_eur_per_week": round(t["weekly_units"] * gap, 2),
-                "formula": "weekly_units x (median_unit_margin_eur - unit_margin_eur)",
+                "estimated_impact_per_week": round(t["weekly_units"] * gap, 2),
+                "formula": "weekly_units x (median_unit_margin - unit_margin)",
             }
         )
 
-    money.sort(key=lambda a: -(a["estimated_impact_eur_per_week"] or 0))
+    money.sort(key=lambda a: -(a["estimated_impact_per_week"] or 0))
     actions = money[:MAX_MONEY_ACTIONS]
 
     if fc.get("points"):
@@ -236,7 +236,7 @@ def build_actions(
                         f"{name(i)} forecast / prep": f"{round(v[0], 1)} / {math.ceil(v[1])}"
                         for i, v in top
                     },
-                    "estimated_impact_eur_per_week": None,
+                    "estimated_impact_per_week": None,
                     "formula": "prep = ceil(sum over dayparts of the upper interval bound)",
                 }
             )
@@ -253,16 +253,17 @@ def template_summary(facts: dict) -> str:
             f"No orders between {w['start']} and {w['end']}. "
             "Generate demo data or take live orders to see analytics."
         )
+    cur = facts["currency"]
     text = (
         f"In the {w['days']} days to {w['end']}: {k['orders']} orders, revenue "
-        f"EUR {k['revenue_eur']}, average order EUR {k['aov_eur']}, contribution margin "
-        f"EUR {k['contribution_margin_eur']} ({k['margin_pct']}%)."
+        f"{cur} {k['revenue']}, average order {cur} {k['aov']}, contribution margin "
+        f"{cur} {k['contribution_margin']} ({k['margin_pct']}%)."
     )
-    money = [a for a in facts["actions"] if a["estimated_impact_eur_per_week"] is not None]
+    money = [a for a in facts["actions"] if a["estimated_impact_per_week"] is not None]
     if money:
         text += (
             f" Top action: {money[0]['title']} "
-            f"(estimated EUR {money[0]['estimated_impact_eur_per_week']} per week)."
+            f"(estimated {cur} {money[0]['estimated_impact_per_week']} per week)."
         )
     if facts["data_sources"]["simulated"]:
         text += " Figures include simulated demo orders."
@@ -295,6 +296,7 @@ async def compute_brief(
     backtest = (fc.get("backtest") or {}).get("methods", {})
     facts = {
         "restaurant": restaurant.name,
+        "currency": restaurant.currency,
         "window": {
             "start": w.start.isoformat(),
             "end": (w.end - timedelta(days=1)).isoformat(),
@@ -303,7 +305,7 @@ async def compute_brief(
         "data_sources": sources,
         "kpis": kpis,
         "actions": [
-            {k: a[k] for k in ("rank", "title", "evidence", "estimated_impact_eur_per_week")}
+            {k: a[k] for k in ("rank", "title", "evidence", "estimated_impact_per_week")}
             for a in actions
         ],
         "top_pairings": [
@@ -326,15 +328,16 @@ async def compute_brief(
             "name": names.get(i, "Unknown item"),
             "units": t["units"],
             "weekly_units": t["weekly_units"],
-            "revenue_eur": t["revenue"],
-            "unit_margin_eur": t["unit_margin"],
-            "contribution_eur": t["contribution"],
+            "revenue": t["revenue"],
+            "unit_margin": t["unit_margin"],
+            "contribution": t["contribution"],
             "menu_class": classes[i],
         }
         for i, t in sorted(totals.items(), key=lambda kv: -kv[1]["units"])
     ]
     return {
         "date": today.isoformat(),
+        "currency": restaurant.currency,
         "window_start": facts["window"]["start"],
         "window_end": facts["window"]["end"],
         "data_sources": sources,
@@ -377,16 +380,18 @@ async def compute_whatif(
     baselines = [
         baseline_for(i, names.get(i, ""), t, *prices[i]) for i, t in totals.items() if i in prices
     ]
-    result = run_whatif(scenario, baselines, params)
+    result = run_whatif(scenario, baselines, params, restaurant.currency)
     d = result["delta"]
+    cur = restaurant.currency
     template = (
-        f"Estimated weekly change: revenue {d['revenue_eur']:+.2f} EUR, contribution margin "
-        f"{d['margin_eur']:+.2f} EUR, under the assumptions listed."
+        f"Estimated weekly change: revenue {cur} {d['revenue']:+.2f}, contribution margin "
+        f"{cur} {d['margin']:+.2f}, under the assumptions listed."
     )
     item_id = params.get("item_id")
     # Ids are dropped: their digits would otherwise count as "allowed" numbers.
     llm_facts = {
         **{k: v for k, v in result.items() if k != "params"},
+        "currency": restaurant.currency,
         "item": names.get(str(item_id)) if item_id else None,
         "params": {k: v for k, v in params.items() if k != "item_id"},
     }
@@ -395,6 +400,7 @@ async def compute_whatif(
     )
     return {
         **result,
+        "currency": restaurant.currency,
         "item": names.get(str(item_id)) if item_id else None,
         "window_start": w.start.isoformat(),
         "window_end": (w.end - timedelta(days=1)).isoformat(),

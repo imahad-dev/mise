@@ -5,7 +5,7 @@ from unittest.mock import patch
 import pytest
 from httpx import AsyncClient
 from scripts.seed import load_seed_data, seed_data
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from tests.helpers import as_member
 
@@ -59,6 +59,10 @@ async def test_simulated_orders_feed_brief_and_forecast(
     client: AsyncClient, db_session: AsyncSession, seeded_restaurant: Restaurant
 ):
     slug = seeded_restaurant.slug
+    await db_session.execute(
+        update(Restaurant).where(Restaurant.id == seeded_restaurant.id).values(currency="PKR")
+    )
+    await db_session.commit()
     await as_member(client, db_session, seeded_restaurant.id, "owner")
 
     summary = await _simulate(client, slug, days=56)
@@ -97,12 +101,14 @@ async def test_simulated_orders_feed_brief_and_forecast(
     brief = resp.json()
     assert brief["summary_source"] == "template"
     assert "simulated" in brief["summary"]
+    assert brief["currency"] == "PKR"
+    assert "PKR " in brief["summary"] and "EUR" not in brief["summary"]
     assert brief["data_sources"]["live"] == 0
     assert brief["data_sources"]["simulated"] > 0
 
     k = brief["kpis"]
     assert k["orders"] == brief["data_sources"]["simulated"]
-    assert k["aov_eur"] == pytest.approx(k["revenue_eur"] / k["orders"], abs=0.01)
+    assert k["aov"] == pytest.approx(k["revenue"] / k["orders"], abs=0.01)
     assert 0 < k["margin_pct"] < 100
 
     classes = {m["menu_class"] for m in brief["menu_engineering"]}
@@ -140,10 +146,10 @@ async def test_simulated_orders_feed_brief_and_forecast(
     assert resp.status_code == 200, resp.text
     wi = resp.json()
     assert wi["explanation_source"] == "template"
-    assert wi["delta"]["revenue_eur"] == pytest.approx(
-        wi["baseline"]["revenue_eur"] * 0.5, abs=0.02
-    )
-    assert wi["delta"]["margin_eur"] == pytest.approx(wi["baseline"]["margin_eur"] * 0.5, abs=0.02)
+    assert wi["currency"] == "PKR"
+    assert "PKR " in wi["explanation"] and "EUR" not in wi["explanation"]
+    assert wi["delta"]["revenue"] == pytest.approx(wi["baseline"]["revenue"] * 0.5, abs=0.02)
+    assert wi["delta"]["margin"] == pytest.approx(wi["baseline"]["margin"] * 0.5, abs=0.02)
     assert wi["assumptions"]
 
     item_id = brief["menu_engineering"][0]["item_id"]

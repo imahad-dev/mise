@@ -114,9 +114,9 @@ class DataSources(BaseModel):
 
 class Kpis(BaseModel):
     orders: int
-    revenue_eur: float
-    aov_eur: float
-    contribution_margin_eur: float
+    revenue: float
+    aov: float
+    contribution_margin: float
     margin_pct: float
 
 
@@ -125,15 +125,15 @@ class MenuEngineeringItem(BaseModel):
     name: str
     units: int
     weekly_units: float
-    revenue_eur: float
-    unit_margin_eur: float
-    contribution_eur: float
+    revenue: float
+    unit_margin: float
+    contribution: float
     menu_class: Literal["star", "plowhorse", "puzzle", "dog"]
 
 
 class MenuThresholds(BaseModel):
     median_units: float
-    median_unit_margin_eur: float
+    median_unit_margin: float
 
 
 class Pairing(BaseModel):
@@ -148,7 +148,7 @@ class Pairing(BaseModel):
 class PeakHour(BaseModel):
     hour: int
     avg_orders_per_day: float
-    avg_revenue_per_day_eur: float
+    avg_revenue_per_day: float
 
 
 class BacktestMetric(BaseModel):
@@ -185,12 +185,13 @@ class BriefAction(BaseModel):
     item: str
     title: str
     evidence: dict[str, float | int | str]
-    estimated_impact_eur_per_week: float | None
+    estimated_impact_per_week: float | None
     formula: str
 
 
 class DailyBriefResponse(BaseModel):
     date: str
+    currency: str
     window_start: str
     window_end: str
     data_sources: DataSources
@@ -215,12 +216,13 @@ class WhatIfRequest(BaseModel):
 
 
 class WhatIfTotals(BaseModel):
-    revenue_eur: float
-    margin_eur: float
+    revenue: float
+    margin: float
 
 
 class WhatIfResponse(BaseModel):
     scenario: str
+    currency: str
     item: str | None
     window_start: str
     window_end: str

@@ -76,9 +76,9 @@ async def kpis(db: AsyncSession, w: Window) -> dict:
     orders, revenue, margin = int(row[0]), float(row[1]), float(row[2])
     return {
         "orders": orders,
-        "revenue_eur": round(revenue, 2),
-        "aov_eur": round(revenue / orders, 2) if orders else 0.0,
-        "contribution_margin_eur": round(margin, 2),
+        "revenue": round(revenue, 2),
+        "aov": round(revenue / orders, 2) if orders else 0.0,
+        "contribution_margin": round(margin, 2),
         "margin_pct": round(100 * margin / revenue, 1) if revenue else 0.0,
     }
 
@@ -146,7 +146,7 @@ async def peak_hours(db: AsyncSession, w: Window, limit: int = 3) -> list[dict]:
         {
             "hour": int(h),
             "avg_orders_per_day": round(int(n) / days, 1),
-            "avg_revenue_per_day_eur": round(float(rev) / days, 2),
+            "avg_revenue_per_day": round(float(rev) / days, 2),
         }
         for h, n, rev in rows.all()
     ]
@@ -193,7 +193,7 @@ def classify_menu(totals: dict[str, dict]) -> tuple[dict[str, str], dict]:
     count as high.
     """
     if not totals:
-        return {}, {"median_units": 0, "median_unit_margin_eur": 0.0}
+        return {}, {"median_units": 0, "median_unit_margin": 0.0}
     med_units = statistics.median(t["units"] for t in totals.values())
     med_margin = statistics.median(t["unit_margin"] for t in totals.values())
     classes = {}
@@ -205,4 +205,4 @@ def classify_menu(totals: dict[str, dict]) -> tuple[dict[str, str], dict]:
             if popular
             else ("puzzle" if profitable else "dog")
         )
-    return classes, {"median_units": med_units, "median_unit_margin_eur": round(med_margin, 2)}
+    return classes, {"median_units": med_units, "median_unit_margin": round(med_margin, 2)}

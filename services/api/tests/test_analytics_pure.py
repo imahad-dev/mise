@@ -73,7 +73,7 @@ def test_classify_menu_golden():
         "mid": {"units": 50, "unit_margin": 5.0},  # equals both medians -> star
     }
     classes, thresholds = classify_menu(totals)
-    assert thresholds == {"median_units": 50, "median_unit_margin_eur": 5.0}
+    assert thresholds == {"median_units": 50, "median_unit_margin": 5.0}
     assert classes == {
         "star": "star",
         "plow": "plowhorse",
@@ -153,22 +153,22 @@ ITEMS = [
 def test_whatif_price_change():
     r = run_whatif("price_change", ITEMS, {"item_id": "a", "change_pct": 10, "elasticity": -0.5})
     # Pasta: units 100 -> 95, price 10 -> 11
-    assert r["baseline"] == {"revenue_eur": 1600.0, "margin_eur": 960.0}
-    assert r["result"] == {"revenue_eur": 95 * 11 + 600, "margin_eur": 95 * 7 + 360}
-    assert r["delta"] == {"revenue_eur": 45.0, "margin_eur": 65.0}
+    assert r["baseline"] == {"revenue": 1600.0, "margin": 960.0}
+    assert r["result"] == {"revenue": 95 * 11 + 600, "margin": 95 * 7 + 360}
+    assert r["delta"] == {"revenue": 45.0, "margin": 65.0}
     assert any("elasticity -0.5" in s for s in r["assumptions"])
 
 
 def test_whatif_promotion():
     r = run_whatif("promotion", ITEMS, {"item_id": "b", "discount_pct": 20})
     # Steak: price 30 -> 24, units 20 x (1 + -2.0 x -20%) = 28
-    assert r["result"]["revenue_eur"] == pytest.approx(1000 + 28 * 24)
-    assert r["delta"]["margin_eur"] == pytest.approx(28 * 12 - 20 * 18)
+    assert r["result"]["revenue"] == pytest.approx(1000 + 28 * 24)
+    assert r["delta"]["margin"] == pytest.approx(28 * 12 - 20 * 18)
 
 
 def test_whatif_demand_surge():
     r = run_whatif("demand_surge", ITEMS, {"multiplier": 1.25})
-    assert r["delta"] == {"revenue_eur": 400.0, "margin_eur": 240.0}
+    assert r["delta"] == {"revenue": 400.0, "margin": 240.0}
 
 
 def test_whatif_rejects_bad_input():
@@ -262,13 +262,13 @@ def test_build_actions_ranked_with_formulas():
     assert 3 <= len(actions) <= 5
     assert [a["rank"] for a in actions] == list(range(1, len(actions) + 1))
     by_type = {a["type"]: a for a in actions}
-    assert by_type["promote_puzzle"]["estimated_impact_eur_per_week"] == 6.0  # 0.2 x 2.5 x 12
-    assert by_type["review_dog"]["estimated_impact_eur_per_week"] == 5.0  # 1.25 x (5 - 1)
+    assert by_type["promote_puzzle"]["estimated_impact_per_week"] == 6.0  # 0.2 x 2.5 x 12
+    assert by_type["review_dog"]["estimated_impact_per_week"] == 5.0  # 1.25 x (5 - 1)
     # Plowhorse: price 10, cost 8; +5% at -0.8 -> 22.5 x 0.96 x 2.5 - 22.5 x 2 = 9.0
-    assert by_type["reprice_plowhorse"]["estimated_impact_eur_per_week"] == 9.0
+    assert by_type["reprice_plowhorse"]["estimated_impact_per_week"] == 9.0
     assert actions[-1]["type"] == "prep_target"
     assert actions[-1]["evidence"] == {"Star forecast / prep": "7.0 / 12"}
-    money = [a["estimated_impact_eur_per_week"] for a in actions[:-1]]
+    money = [a["estimated_impact_per_week"] for a in actions[:-1]]
     assert money == sorted(money, reverse=True)
 
 
@@ -276,7 +276,7 @@ def test_build_actions_ranked_with_formulas():
 
 FACTS = {
     "window": {"start": "2026-09-22", "end": "2026-10-19", "days": 28},
-    "kpis": {"orders": 812, "revenue_eur": 12345.67, "margin_pct": 72.9},
+    "kpis": {"orders": 812, "revenue": 12345.67, "margin_pct": 72.9},
 }
 
 
@@ -352,18 +352,20 @@ async def test_narrate_llm_down_uses_template(inference):
 def test_template_summary_only_uses_fact_numbers():
     facts = {
         **FACTS,
+        "currency": "PKR",
         "kpis": {
             "orders": 812,
-            "revenue_eur": 12345.67,
-            "aov_eur": 15.2,
-            "contribution_margin_eur": 9000.1,
+            "revenue": 12345.67,
+            "aov": 15.2,
+            "contribution_margin": 9000.1,
             "margin_pct": 72.9,
         },
         "data_sources": {"live": 0, "simulated": 812},
-        "actions": [{"title": "Promote Puzzle", "estimated_impact_eur_per_week": 6.0}],
+        "actions": [{"title": "Promote Puzzle", "estimated_impact_per_week": 6.0}],
     }
     text = template_summary(facts)
     assert "simulated" in text
+    assert "PKR 12345.67" in text and "EUR" not in text
     assert numbers_grounded(text, facts)
 
 
@@ -393,7 +395,7 @@ def test_brief_reprice_matches_whatif_at_current_menu_price():
         },
     }
     classes = {"plow": "plowhorse", "star": "star", "dog": "dog"}
-    thresholds = {"median_units": 90, "median_unit_margin_eur": 2.0}
+    thresholds = {"median_units": 90, "median_unit_margin": 2.0}
     names = {k: k.title() for k in totals}
     # The owner raised the plowhorse from its historical 10.00 to 11.00 yesterday
     prices = {"plow": (11.0, 8.0), "star": (15.0, 5.0), "dog": (5.0, 4.0)}
@@ -405,7 +407,7 @@ def test_brief_reprice_matches_whatif_at_current_menu_price():
     baselines = [baseline_for(i, names[i], t, *prices[i]) for i, t in totals.items()]
     whatif = run_whatif("price_change", baselines, {"item_id": "plow", "change_pct": 5})
 
-    assert reprice["estimated_impact_eur_per_week"] == whatif["delta"]["margin_eur"]
-    assert reprice["evidence"]["price_eur"] == 11.0
+    assert reprice["estimated_impact_per_week"] == whatif["delta"]["margin"]
+    assert reprice["evidence"]["price"] == 11.0
     # 22.5 x 0.96 x (11.55 - 8) - 22.5 x 3 = 9.18
-    assert whatif["delta"]["margin_eur"] == 9.18
+    assert whatif["delta"]["margin"] == 9.18

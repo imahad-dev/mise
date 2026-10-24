@@ -2,17 +2,18 @@
 
 import React, { useEffect, useState } from "react";
 import { useSlugRef, useVenue } from "../../../lib/venue";
-import { eur, type DataSources } from "@/lib/analytics";
+import { money, type DataSources } from "@/lib/analytics";
 
 type Scenario = "price_change" | "promotion" | "demand_surge";
 
 interface Totals {
-  revenue_eur: number;
-  margin_eur: number;
+  revenue: number;
+  margin: number;
 }
 
 interface WhatIfResult {
   scenario: Scenario;
+  currency: string;
   item: string | null;
   window_start: string;
   window_end: string;
@@ -36,7 +37,8 @@ const SCENARIOS: { id: Scenario; label: string; desc: string }[] = [
   { id: "demand_surge", label: "Demand surge", desc: "Multiply every item's weekly demand." },
 ];
 
-const signed = (v: number) => `${v >= 0 ? "+" : "−"}${eur(Math.abs(v))}`;
+const signed = (v: number, currency: string) =>
+  `${v >= 0 ? "+" : "−"}${money(Math.abs(v), currency)}`;
 
 export default function WhatIfPage() {
   const { venue } = useVenue();
@@ -225,13 +227,13 @@ export default function WhatIfPage() {
                 <div className="text-sm text-ink">
                   Revenue{" "}
                   <span className="font-extrabold text-xl">
-                    {k === "delta" ? signed(result[k].revenue_eur) : eur(result[k].revenue_eur)}
+                    {k === "delta" ? signed(result[k].revenue, result.currency) : money(result[k].revenue, result.currency)}
                   </span>
                 </div>
                 <div className="text-sm text-ink">
                   Margin{" "}
-                  <span className={`font-extrabold text-xl ${k === "delta" ? (result.delta.margin_eur >= 0 ? "text-olive" : "text-danger-fg") : ""}`}>
-                    {k === "delta" ? signed(result[k].margin_eur) : eur(result[k].margin_eur)}
+                  <span className={`font-extrabold text-xl ${k === "delta" ? (result.delta.margin >= 0 ? "text-olive" : "text-danger-fg") : ""}`}>
+                    {k === "delta" ? signed(result[k].margin, result.currency) : money(result[k].margin, result.currency)}
                   </span>
                 </div>
               </div>
