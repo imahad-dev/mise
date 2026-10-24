@@ -57,6 +57,10 @@ def test_no_rate_for_date_raises():
         '[{"jurisdiction":"PB","payment_class":"digital","rate":"0.08","effective_from":"2026-07-01","source":"x"},'
         ' {"jurisdiction":"PB","payment_class":"digital","rate":"0.09","effective_from":"2026-07-01","source":"y"}]',  # noqa: E501
         '{"not": "a list"}',
+        '[{"jurisdiction":"PB","payment_class":"digital","rate":"NaN","effective_from":"2026-07-01","source":"x"}]',
+        '[{"jurisdiction":"PB","payment_class":"digital","rate":"0.08","effective_from":"2026-07-01","source":""}]',
+        '[{"jurisdiction":"PB","payment_class":"digital","rate":"0.08","effective_from":"2026-07-01","source":null}]',
+        '[{"jurisdiction":"","payment_class":"digital","rate":"0.08","effective_from":"2026-07-01","source":"x"}]',
     ],
 )
 def test_invalid_files_are_rejected(tmp_path, bad):
@@ -64,3 +68,14 @@ def test_invalid_files_are_rejected(tmp_path, bad):
     p.write_text(bad, encoding="utf-8")
     with pytest.raises(TaxRateError):
         load_rates(p)
+
+
+def test_shipped_rates_file_loads():
+    rates = load_rates()
+    assert len(rates) == 4
+    assert {(r.jurisdiction, r.payment_class) for r in rates} == {
+        ("PB", "standard"),
+        ("PB", "digital"),
+        ("ICT", "standard"),
+        ("ICT", "digital"),
+    }

@@ -69,6 +69,12 @@ def load_rates(path: Path | None = None) -> list[TaxRate]:
             )
         except (KeyError, TypeError, ValueError, ArithmeticError) as e:
             raise TaxRateError(f"Bad tax rate entry {entry!r}: {e}") from e
+        if not r.jurisdiction.strip() or not isinstance(entry["source"], str):
+            raise TaxRateError(f"Bad tax rate entry {entry!r}: jurisdiction/source required")
+        if not r.source.strip():
+            raise TaxRateError(f"Bad tax rate entry {entry!r}: empty source")
+        if not r.rate.is_finite():
+            raise TaxRateError(f"Rate must be finite: {r.rate}")
         if r.payment_class not in ("standard", "digital"):
             raise TaxRateError(f"Unknown payment class {r.payment_class!r}")
         if not Decimal("0") <= r.rate <= Decimal("1"):

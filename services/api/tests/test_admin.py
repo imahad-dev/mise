@@ -100,3 +100,45 @@ async def test_short_password_rejected(db_session):
             role="owner",
             password="short",
         )
+
+
+def _kw(**over):
+    base = {
+        "slug": "z1",
+        "name": "Z",
+        "city": "Lahore",
+        "jurisdiction": "PB",
+        "currency": "PKR",
+        "timezone": "Asia/Karachi",
+    }
+    return {**base, **over}
+
+
+async def test_bad_timezone_rejected(db_session):
+    with pytest.raises(AdminError, match="timezone"):
+        await create_restaurant(db_session, **_kw(timezone="Mars/Base"))
+
+
+async def test_bad_currency_rejected(db_session):
+    with pytest.raises(AdminError, match="Currency"):
+        await create_restaurant(db_session, **_kw(currency="pkr"))
+
+
+async def test_duplicate_slug_rejected(db_session):
+    await create_restaurant(db_session, **_kw())
+    with pytest.raises(AdminError, match="already exists"):
+        await create_restaurant(db_session, **_kw())
+
+
+async def test_duplicate_membership_rejected(db_session):
+    await create_restaurant(db_session, **_kw())
+    args = {
+        "email": "d@x.pk",
+        "name": "D",
+        "restaurant_slug": "z1",
+        "role": "owner",
+        "password": "pw-123456",
+    }
+    await add_user(db_session, **args)
+    with pytest.raises(AdminError, match="already a member"):
+        await add_user(db_session, **args)

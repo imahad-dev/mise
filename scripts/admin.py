@@ -14,7 +14,9 @@ exists is only given another membership; no password is asked for.
 import argparse
 import asyncio
 import getpass
+import re
 import sys
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -46,6 +48,12 @@ async def create_restaurant(
         raise AdminError(
             f"No tax rates for jurisdiction {jurisdiction!r} (known: {known})"
         )
+    if not re.fullmatch(r"[A-Z]{3}", currency):
+        raise AdminError(f"Currency must be 3 uppercase letters, got {currency!r}")
+    try:
+        ZoneInfo(timezone)
+    except (ZoneInfoNotFoundError, ValueError, OSError) as e:
+        raise AdminError(f"Unknown timezone {timezone!r}") from e
     taken = await db.execute(select(Restaurant.id).where(Restaurant.slug == slug))
     if taken.scalar_one_or_none() is not None:
         raise AdminError(f"Restaurant slug {slug!r} already exists")
