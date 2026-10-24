@@ -9,7 +9,13 @@ import pytest
 from fastapi import HTTPException
 
 from src.services.analytics import classify_menu, item_totals
-from src.services.brief import baseline_for, build_actions, template_summary
+from src.services.brief import (
+    baseline_for,
+    build_actions,
+    item_baselines,
+    row_names,
+    template_summary,
+)
 from src.services.forecast import build_input, forecast
 from src.services.narrative import narrate, numbers_grounded, numbers_in_text
 from src.services.simulator import (
@@ -94,6 +100,9 @@ def test_item_totals_margin_and_weekly_units():
     ]
     t = item_totals(daily, weeks=2)["a"]
     assert t == {
+        "item_id": "a",
+        "option_id": None,
+        "option_label": None,
         "units": 4,
         "revenue": 40.0,
         "cost": 12.0,
@@ -101,6 +110,54 @@ def test_item_totals_margin_and_weekly_units():
         "unit_margin": 7.0,
         "weekly_units": 2.0,
     }
+
+
+def test_item_totals_one_row_per_option():
+    def row(option, label, units, revenue):
+        return {
+            "item_id": "k",
+            "option_id": option,
+            "option_label": label,
+            "units": units,
+            "revenue": revenue,
+            "cost": 4.0 * units,
+        }
+
+    daily = [
+        row("half", "½ kg", 2, 20.0),
+        row("full", "1 kg", 1, 19.0),
+        row("half", "½ kg", 1, 10.0),
+    ]
+    t = item_totals(daily, weeks=1)
+    assert set(t) == {"k:half", "k:full"}
+    assert t["k:half"]["units"] == 3 and t["k:half"]["option_label"] == "½ kg"
+    assert row_names(t, {"k": "Karahi"}) == {"k:half": "Karahi — ½ kg", "k:full": "Karahi — 1 kg"}
+
+
+def test_whatif_dish_with_options_equals_per_option_sum():
+    """The summed what-if baseline of a dish gives the same deltas as its option rows."""
+    totals = {
+        "k:half": {"item_id": "k", "weekly_units": 10.0},
+        "k:full": {"item_id": "k", "weekly_units": 4.0},
+        "x": {"item_id": "x", "weekly_units": 5.0},
+    }
+    prices = {"k:half": (11.0, 5.0), "k:full": (21.0, 9.5), "x": (3.0, 1.0)}
+    summed = item_baselines(totals, {"k": "Karahi", "x": "Tea"}, prices)
+    assert {b.item_id for b in summed} == {"k", "x"}
+    per_option = [ItemBaseline(i, i, totals[i]["weekly_units"], *prices[i]) for i in totals]
+
+    got = run_whatif("price_change", summed, {"item_id": "k", "change_pct": 10})["delta"]
+    parts = [
+        run_whatif("price_change", per_option, {"item_id": o, "change_pct": 10})["delta"]
+        for o in ("k:half", "k:full")
+    ]
+    for key in ("revenue", "margin"):
+        assert got[key] == pytest.approx(sum(p[key] for p in parts), abs=0.02)
+
+    got = run_whatif("demand_surge", summed, {"multiplier": 1.5})
+    want = run_whatif("demand_surge", per_option, {"multiplier": 1.5})
+    assert got["baseline"] == pytest.approx(want["baseline"], abs=0.02)
+    assert got["delta"] == pytest.approx(want["delta"], abs=0.02)
 
 
 # --- Forecast ---
@@ -370,6 +427,33 @@ def test_template_summary_only_uses_fact_numbers():
     text = template_summary(facts)
     assert "simulated" in text
     assert "PKR 12345.67" in text and "EUR" not in text
+    assert numbers_grounded(text, facts)
+
+
+def test_template_summary_states_digital_share_and_saving():
+    facts = {
+        **FACTS,
+        "currency": "PKR",
+        "kpis": {
+            "orders": 4,
+            "revenue": 4500.0,
+            "aov": 1125.0,
+            "contribution_margin": 2000.0,
+            "margin_pct": 44.4,
+        },
+        "data_sources": {"live": 4, "simulated": 0},
+        "actions": [],
+        "payment_mix": {
+            "bills": {"standard": 2, "digital": 2},
+            "revenue_share": {"standard": 0.3333, "digital": 0.6667},
+            "digital_revenue_pct": 66.67,
+            "tax_by_rate": [{"rate": "0.08", "tax": "240.00"}, {"rate": "0.16", "tax": "240.00"}],
+            "digital_tax_saving": "240.00",
+        },
+    }
+    text = template_summary(facts)
+    assert "Digital payments were 66.67% of billed revenue" in text
+    assert "saved guests PKR 240.00 in tax" in text
     assert numbers_grounded(text, facts)
 
 

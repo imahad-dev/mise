@@ -4,6 +4,7 @@ import {
   money,
   forecastTable,
   quadrantLayout,
+  sharePct,
   wapePct,
   type ForecastPoint,
   type MenuEngineeringItem,
@@ -11,6 +12,7 @@ import {
 
 const item = (id: string, units: number, margin: number): MenuEngineeringItem => ({
   item_id: id,
+  option_id: null,
   name: id,
   units,
   weekly_units: units / 4,
@@ -63,5 +65,7 @@ describe("formatting", () => {
     expect(money(1234.5, "PKR")).toBe(formatPrice(1234.5, "PKR"));
     expect(wapePct(0.4123)).toBe("41.2%");
     expect(wapePct(null)).toBe("n/a");
+    expect(sharePct(0.6667)).toBe("66.7%");
+    expect(sharePct(0)).toBe("0.0%");
   });
 });

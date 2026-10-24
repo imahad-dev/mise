@@ -122,6 +122,7 @@ class Kpis(BaseModel):
 
 class MenuEngineeringItem(BaseModel):
     item_id: str
+    option_id: str | None
     name: str
     units: int
     weekly_units: float
@@ -149,6 +150,30 @@ class PeakHour(BaseModel):
     hour: int
     avg_orders_per_day: float
     avg_revenue_per_day: float
+
+
+class PaymentClassCounts(BaseModel):
+    standard: int
+    digital: int
+
+
+class PaymentClassShares(BaseModel):
+    standard: float
+    digital: float
+
+
+class TaxByRate(BaseModel):
+    rate: Decimal
+    tax: Decimal
+
+
+class PaymentMix(BaseModel):
+    """Settled bills in the window: standard (cash, bank transfer) vs digital payments."""
+
+    bills: PaymentClassCounts
+    revenue_share: PaymentClassShares
+    tax_by_rate: list[TaxByRate]
+    digital_tax_saving: Decimal
 
 
 class BacktestMetric(BaseModel):
@@ -200,6 +225,7 @@ class DailyBriefResponse(BaseModel):
     thresholds: MenuThresholds
     pairings: list[Pairing]
     peak_hours: list[PeakHour]
+    payment_mix: PaymentMix
     forecast: ForecastSummary
     actions: list[BriefAction]
     summary: str

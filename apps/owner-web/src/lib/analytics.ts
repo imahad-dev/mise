@@ -5,6 +5,8 @@ export type MenuClass = "star" | "plowhorse" | "puzzle" | "dog";
 
 export interface MenuEngineeringItem {
   item_id: string;
+  /** Set on a portion/size row: one row per (dish, option). */
+  option_id: string | null;
   name: string;
   units: number;
   weekly_units: number;
@@ -46,6 +48,14 @@ export interface DataSources {
   simulated: number;
 }
 
+/** Decimal amounts arrive as strings ("240.00"). Standard = cash, bank transfer. */
+export interface PaymentMix {
+  bills: { standard: number; digital: number };
+  revenue_share: { standard: number; digital: number };
+  tax_by_rate: { rate: string; tax: string }[];
+  digital_tax_saving: string;
+}
+
 export interface DailyBrief {
   date: string;
   currency: string;
@@ -61,6 +71,7 @@ export interface DailyBrief {
   };
   menu_engineering: MenuEngineeringItem[];
   thresholds: { median_units: number; median_unit_margin: number };
+  payment_mix: PaymentMix;
   forecast: {
     method: string | null;
     model_name: string | null;
@@ -89,6 +100,11 @@ export const METHOD_LABELS: Record<string, string> = {
 
 export function money(v: number, currency: string): string {
   return formatPrice(v, currency);
+}
+
+/** 0.6667 -> "66.7%" */
+export function sharePct(v: number): string {
+  return `${(v * 100).toFixed(1)}%`;
 }
 
 export function wapePct(v: number | null | undefined): string {

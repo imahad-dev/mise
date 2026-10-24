@@ -2,13 +2,14 @@
 
 import React, { useCallback, useEffect, useState } from "react";
 import { useSlugRef, useVenue } from "../../../lib/venue";
-import { StatTile } from "ui";
+import { Card, StatTile } from "ui";
 import {
   CLASS_COLORS,
   METHOD_LABELS,
   money,
   forecastTable,
   quadrantLayout,
+  sharePct,
   wapePct,
   type DailyBrief,
   type MenuClass,
@@ -55,7 +56,7 @@ function Quadrant({ brief }: { brief: DailyBrief }) {
         </text>
       ))}
       {points.map((p) => (
-        <circle key={p.item.item_id} cx={p.x} cy={p.y} r={6} fill={CLASS_COLORS[p.item.menu_class]}>
+        <circle key={`${p.item.item_id}:${p.item.option_id ?? ""}`} cx={p.x} cy={p.y} r={6} fill={CLASS_COLORS[p.item.menu_class]}>
           <title>
             {`${p.item.name}: ${p.item.units} sold, ${money(p.item.unit_margin, brief.currency)} margin per unit (${p.item.menu_class})`}
           </title>
@@ -282,6 +283,52 @@ export default function DailyBriefPage() {
               )}
             </div>
 
+            <Card className="p-6 space-y-4">
+              <div>
+                <h3 className="text-base font-bold text-ink">Payments and tax</h3>
+                <p className="text-xs text-ink-muted">
+                  Settled bills in this window. Digital is card, mobile wallet or QR; standard is
+                  cash or bank transfer.
+                </p>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <StatTile
+                  label="Digital share of revenue"
+                  value={sharePct(brief.payment_mix.revenue_share.digital)}
+                  sub={`${brief.payment_mix.bills.digital} of ${
+                    brief.payment_mix.bills.digital + brief.payment_mix.bills.standard
+                  } bills`}
+                />
+                <StatTile
+                  label="Tax saved by digital payments"
+                  value={money(Number(brief.payment_mix.digital_tax_saving), brief.currency)}
+                  sub="Versus the standard rate on the same bills"
+                />
+              </div>
+              {brief.payment_mix.tax_by_rate.length ? (
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="text-ink-muted text-left">
+                      <th scope="col" className="py-2 pr-3">Tax rate</th>
+                      <th scope="col" className="py-2 pr-3">Tax collected</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {brief.payment_mix.tax_by_rate.map((r) => (
+                      <tr key={r.rate} className="border-t border-line">
+                        <td className="py-2 pr-3 font-mono text-ink">{sharePct(Number(r.rate))}</td>
+                        <td className="py-2 pr-3 font-mono text-ink">
+                          {money(Number(r.tax), brief.currency)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <p className="text-xs text-ink-muted">No settled bills in this window.</p>
+              )}
+            </Card>
+
             <div className="mise-card p-6 space-y-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
@@ -294,15 +341,19 @@ export default function DailyBriefPage() {
                 <BacktestBadge forecast={brief.forecast} />
               </div>
               <div className="flex gap-2" role="group" aria-label="Daypart">
-                {(["lunch", "dinner"] as const).map((d) => (
+                {/* API values stay lunch/dinner; analytics splits the day at 18:00. */}
+                {([
+                  ["lunch", "Daytime"],
+                  ["dinner", "Evening"],
+                ] as const).map(([d, label]) => (
                   <button
                     key={d}
                     type="button"
                     aria-pressed={daypart === d}
                     onClick={() => setDaypart(d)}
-                    className={`${daypart === d ? "btn-primary" : "btn-ghost"} min-h-[44px] capitalize`}
+                    className={`${daypart === d ? "btn-primary" : "btn-ghost"} min-h-[44px]`}
                   >
-                    {d}
+                    {label}
                   </button>
                 ))}
               </div>

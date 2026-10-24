@@ -12,6 +12,7 @@ from tests.helpers import as_member
 from src.auth import sign_value
 from src.config import settings
 from src.models.forecast import ForecastRun
+from src.models.menu import MenuItem, MenuTranslation
 from src.models.order import Order
 from src.models.restaurant import Restaurant
 from src.redis_client import redis_client
@@ -121,6 +122,30 @@ async def test_simulated_orders_feed_brief_and_forecast(
     assert "star" in classes and "dog" in classes
     assert 3 <= len(brief["actions"]) <= 5
 
+    # One menu-engineering row per (dish, option): the karahi portions are separate rows
+    karahi_id = (
+        await db_session.execute(
+            select(MenuTranslation.menu_item_id)
+            .join(MenuItem)
+            .where(
+                MenuItem.restaurant_id == seeded_restaurant.id,
+                MenuTranslation.name == "Chicken Karahi",
+            )
+        )
+    ).scalar_one()
+    rows = {m["name"]: m for m in brief["menu_engineering"]}
+    for name in ("Chicken Karahi — ½ kg", "Chicken Karahi — 1 kg"):
+        assert rows[name]["item_id"] == str(karahi_id)
+        assert rows[name]["option_id"] is not None
+    assert rows["Chicken Karahi — ½ kg"]["option_id"] != rows["Chicken Karahi — 1 kg"]["option_id"]
+
+    # Every simulated party has a settled bill; the summary states digital share and saving
+    pm = brief["payment_mix"]
+    assert pm["bills"]["standard"] > 0 and pm["bills"]["digital"] > 0
+    assert pm["revenue_share"]["digital"] > 0
+    assert "Digital payments were" in brief["summary"]
+    assert f"PKR {pm['digital_tax_saving']} in tax" in brief["summary"]
+
     fc = brief["forecast"]
     assert fc["low_confidence"] is False
     assert fc["history_days"] == 56
@@ -157,13 +182,85 @@ async def test_simulated_orders_feed_brief_and_forecast(
     assert wi["delta"]["margin"] == pytest.approx(wi["baseline"]["margin"] * 0.5, abs=0.02)
     assert wi["assumptions"]
 
-    item_id = brief["menu_engineering"][0]["item_id"]
+    plain = next(m for m in brief["menu_engineering"] if m["option_id"] is None)
     resp = await client.post(
         f"/api/restaurants/{slug}/ai/simulate",
-        json={"scenario": "price_change", "item_id": item_id, "change_pct": 10},
+        json={"scenario": "price_change", "item_id": plain["item_id"], "change_pct": 10},
     )
     assert resp.status_code == 200, resp.text
-    assert resp.json()["item"] == brief["menu_engineering"][0]["name"]
+    assert resp.json()["item"] == plain["name"]
+
+    # A dish with options is addressed by its menu item id: the change applies to every portion
+    resp = await client.post(
+        f"/api/restaurants/{slug}/ai/simulate",
+        json={"scenario": "price_change", "item_id": str(karahi_id), "change_pct": 10},
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["item"] == "Chicken Karahi"
+    assert resp.json()["delta"]["revenue"] != 0
+
+
+@pytest.mark.asyncio
+async def test_brief_payment_mix_on_known_bills(
+    client: AsyncClient, db_session: AsyncSession, seeded_restaurant: Restaurant
+):
+    """Four settled live bills: shares, tax per rate and the digital tax saving are exact."""
+    from datetime import UTC, datetime, timedelta
+    from decimal import Decimal
+
+    from src.models.bill import Bill
+
+    settled = datetime.now(UTC) - timedelta(days=1)
+    known = [
+        ("cash", "1000", "0.16", "160"),
+        ("card", "2000", "0.08", "160"),
+        ("wallet", "1000", "0.08", "80"),
+        ("bank_transfer", "500", "0.16", "80"),
+    ]
+    for n, (method, subtotal, rate, tax) in enumerate(known, start=1):
+        db_session.add(
+            Bill(
+                restaurant_id=seeded_restaurant.id,
+                bill_no=n,
+                status="settled",
+                source="live",
+                payment_method=method,
+                subtotal=Decimal(subtotal),
+                tax_jurisdiction="PB",
+                tax_rate=Decimal(rate),
+                tax_amount=Decimal(tax),
+                total=Decimal(subtotal) + Decimal(tax),
+                opened_at=settled - timedelta(hours=1),
+                settled_at=settled,
+            )
+        )
+    await db_session.commit()
+    await as_member(client, db_session, seeded_restaurant.id, "owner")
+    with patch.object(settings, "demo_mode", False):
+        resp = await client.get(f"/api/restaurants/{seeded_restaurant.slug}/ai/brief")
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["payment_mix"] == {
+        "bills": {"standard": 2, "digital": 2},
+        "revenue_share": {"standard": 0.3333, "digital": 0.6667},
+        "tax_by_rate": [{"rate": "0.08", "tax": "240.00"}, {"rate": "0.16", "tax": "240.00"}],
+        "digital_tax_saving": "240.00",
+    }
+
+
+@pytest.mark.asyncio
+async def test_brief_payment_mix_without_bills_is_zero(
+    client: AsyncClient, db_session: AsyncSession, seeded_restaurant: Restaurant
+):
+    await as_member(client, db_session, seeded_restaurant.id, "owner")
+    with patch.object(settings, "demo_mode", False):
+        resp = await client.get(f"/api/restaurants/{seeded_restaurant.slug}/ai/brief")
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["payment_mix"] == {
+        "bills": {"standard": 0, "digital": 0},
+        "revenue_share": {"standard": 0.0, "digital": 0.0},
+        "tax_by_rate": [],
+        "digital_tax_saving": "0.00",
+    }
 
 
 @pytest.mark.asyncio

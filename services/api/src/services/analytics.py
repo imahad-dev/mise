@@ -9,15 +9,20 @@ from __future__ import annotations
 import statistics
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time
+from decimal import Decimal
 from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import text
 
+from src.services.tax import TaxRateError, payment_class, tax_for
+
 if TYPE_CHECKING:
     import uuid
 
     from sqlalchemy.ext.asyncio import AsyncSession
+
+    from src.models.restaurant import Restaurant
 
 LUNCH_END_HOUR = 18
 MIN_PAIR_ORDERS = 5  # co-occurrences below this are too noisy to report
@@ -83,31 +88,89 @@ async def kpis(db: AsyncSession, w: Window) -> dict:
     }
 
 
+def row_key(item_id: str, option_id: str | None) -> str:
+    """Menu-engineering row id: the item id, plus the option id for a portion/size row."""
+    return item_id if option_id is None else f"{item_id}:{option_id}"
+
+
 async def daily_item_sales(db: AsyncSession, w: Window) -> list[dict]:
-    """Units, revenue and cost per item per local day per daypart."""
+    """Units, revenue and cost per (item, option) per local day per daypart."""
     rows = await db.execute(
         text(
-            f"SELECT oi.menu_item_id, CAST({_LOCAL} AS date) AS d, "
+            f"SELECT oi.menu_item_id, oi.option_id, max(oi.option_label), "
+            f"CAST({_LOCAL} AS date) AS d, "
             f"CASE WHEN extract(hour FROM {_LOCAL}) < {LUNCH_END_HOUR} "
             "THEN 'lunch' ELSE 'dinner' END AS daypart, "
             "sum(oi.quantity), sum(oi.quantity * oi.unit_price), "
             "sum(oi.quantity * oi.unit_cost) "
             f"FROM orders o JOIN order_item oi ON oi.order_id = o.id WHERE {_SCOPE} "
-            "GROUP BY 1, 2, 3 ORDER BY 2, 1, 3"
+            "GROUP BY 1, 2, 4, 5 ORDER BY 4, 1, 2, 5"
         ),
         w.params(),
     )
     return [
         {
             "item_id": str(item_id),
+            "option_id": str(option_id) if option_id else None,
+            "option_label": label,
             "date": d,
             "daypart": daypart,
             "units": int(units),
             "revenue": float(revenue),
             "cost": float(cost),
         }
-        for item_id, d, daypart, units, revenue, cost in rows.all()
+        for item_id, option_id, label, d, daypart, units, revenue, cost in rows.all()
     ]
+
+
+_SHARE = Decimal("0.0001")
+_CENTS = Decimal("0.01")
+
+
+async def payment_mix(db: AsyncSession, w: Window, restaurant: Restaurant) -> dict:
+    """Bills settled in the window (live and simulated, like orders) by payment class.
+
+    Revenue is the pre-tax subtotal. digital_tax_saving = sum over digital bills of
+    (tax at the standard rate in force on the settle date - tax actually charged).
+    """
+    rows = await db.execute(
+        text(
+            "SELECT b.payment_method, b.subtotal, b.tax_rate, b.tax_amount, b.tax_jurisdiction, "
+            "CAST(b.settled_at AT TIME ZONE :tz AS date) FROM bills b "
+            "WHERE b.restaurant_id = :rid AND b.status = 'settled' "
+            "AND b.settled_at >= :start AND b.settled_at < :end"
+        ),
+        w.params(),
+    )
+    bills = {"standard": 0, "digital": 0}
+    revenue = {"standard": Decimal(0), "digital": Decimal(0)}
+    tax_by_rate: dict[Decimal, Decimal] = {}
+    saving = Decimal(0)
+    for method, subtotal, rate, tax, jur, settled in rows.all():
+        cls = payment_class(method)
+        bills[cls] += 1
+        revenue[cls] += subtotal
+        tax_by_rate[rate] = tax_by_rate.get(rate, Decimal(0)) + tax
+        if cls == "digital":
+            try:
+                _, cash_tax = tax_for(
+                    jur or restaurant.tax_jurisdiction or "", "cash", settled, subtotal
+                )
+            except TaxRateError:
+                continue  # no standard rate on file for that date: no saving to claim
+            saving += cash_tax - tax
+    total = revenue["standard"] + revenue["digital"]
+    return {
+        "bills": bills,
+        "revenue_share": {
+            c: float((v / total).quantize(_SHARE)) if total else 0.0 for c, v in revenue.items()
+        },
+        "tax_by_rate": [
+            {"rate": r.normalize(), "tax": t.quantize(_CENTS)}
+            for r, t in sorted(tax_by_rate.items())
+        ],
+        "digital_tax_saving": saving.quantize(_CENTS),
+    }
 
 
 async def top_pairings(db: AsyncSession, w: Window, limit: int = 5) -> list[dict]:
@@ -169,10 +232,21 @@ async def promotions(db: AsyncSession, restaurant_id: uuid.UUID) -> list[tuple[s
 
 
 def item_totals(daily: list[dict], weeks: float) -> dict[str, dict]:
-    """Per item units, revenue, contribution, unit margin and weekly units."""
+    """Per (item, option) row: units, revenue, contribution, unit margin and weekly units."""
     out: dict[str, dict] = {}
     for r in daily:
-        t = out.setdefault(r["item_id"], {"units": 0, "revenue": 0.0, "cost": 0.0})
+        option_id = r.get("option_id")
+        t = out.setdefault(
+            row_key(r["item_id"], option_id),
+            {
+                "item_id": r["item_id"],
+                "option_id": option_id,
+                "option_label": r.get("option_label"),
+                "units": 0,
+                "revenue": 0.0,
+                "cost": 0.0,
+            },
+        )
         t["units"] += r["units"]
         t["revenue"] += r["revenue"]
         t["cost"] += r["cost"]
