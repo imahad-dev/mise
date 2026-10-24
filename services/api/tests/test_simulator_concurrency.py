@@ -121,7 +121,10 @@ async def test_concurrent_generate_demo_data_equals_one_run(committed_restaurant
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
             sign_in(ac, owner)
             url = f"/api/restaurants/{slug}/demo/simulate-orders"
-            with patch.object(settings, "demo_mode", True):
+            with (
+                patch.object(settings, "demo_mode", True),
+                patch.object(settings, "demo_restaurant_slugs", [slug]),
+            ):
                 r1, r2 = await asyncio.gather(
                     ac.post(url, json={"days": DAYS}), ac.post(url, json={"days": DAYS})
                 )
@@ -160,6 +163,9 @@ async def test_simulate_orders_rate_limited_per_ip(committed_restaurant):
     await redis_client.set(RATE_KEY, 3)  # three generations already used this hour
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         sign_in(ac, owner)
-        with patch.object(settings, "demo_mode", True):
+        with (
+            patch.object(settings, "demo_mode", True),
+            patch.object(settings, "demo_restaurant_slugs", [slug]),
+        ):
             resp = await ac.post(f"/api/restaurants/{slug}/demo/simulate-orders", json={})
     assert resp.status_code == 429

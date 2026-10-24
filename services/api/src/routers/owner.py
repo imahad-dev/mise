@@ -18,7 +18,7 @@ from src.inference.client import (
 )
 from src.models.audit import AuditLog
 from src.models.dining_table import DiningTable
-from src.models.menu import MenuItem
+from src.models.menu import MenuItem, MenuItemOption
 from src.redis_client import redis_client
 from src.request_limits import enforce_ip_limit
 from src.schemas.owner import (
@@ -141,6 +141,16 @@ async def patch_menu_item(
     item = res.scalar_one_or_none()
     if item is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Menu item not found")
+
+    if payload.price is not None or payload.unit_cost is not None:
+        has_options = await db.scalar(
+            select(MenuItemOption.id).where(MenuItemOption.menu_item_id == item.id).limit(1)
+        )
+        if has_options is not None:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Edit the size prices instead",
+            )
 
     if payload.price is not None:
         item.price = payload.price
@@ -462,6 +472,12 @@ async def simulate(
     return WhatIfResponse(**result)
 
 
+def _require_demo_venue(access: RestaurantAccess) -> None:
+    """Demo data tools exist only in DEMO_MODE and only for the configured demo venues."""
+    if not settings.demo_mode or access.restaurant.slug not in settings.demo_restaurant_slugs:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Demo mode is disabled")
+
+
 @router.post(
     "/demo/simulate-orders",
     response_model=SimulateOrdersResponse,
@@ -480,8 +496,7 @@ async def simulate_demo_orders(
     db: AsyncSession = Depends(get_db),
 ) -> SimulateOrdersResponse:
     """Replace source='simulated' orders with a seeded synthetic history. DEMO_MODE only."""
-    if not settings.demo_mode:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Demo mode is disabled")
+    _require_demo_venue(access)
     await enforce_ip_limit(
         request,
         "demo:simulate",
@@ -521,11 +536,7 @@ async def reset_demo_data(
     db: AsyncSession = Depends(get_db),
 ) -> StatusOkResponse:
     """Re-seed restaurant data and regenerate simulated state. DEMO_MODE only."""
-    if not settings.demo_mode:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Demo mode is disabled",
-        )
+    _require_demo_venue(access)
 
     from scripts.seed import find_seed_for_slug, seed_data
 

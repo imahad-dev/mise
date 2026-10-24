@@ -463,3 +463,30 @@ async def test_generate_demo_data_keeps_live_orders(
     assert (live, live_items, session_alive) == ("live", 2, True)
     assert len(sim_second) == n2
     assert not sim_first & sim_second  # every simulated order was replaced
+
+
+@pytest.mark.asyncio
+async def test_demo_tools_404_for_non_demo_venue_even_in_demo_mode(
+    client: AsyncClient, db_session: AsyncSession
+):
+    """An owner of a real venue cannot generate or reset demo data, nor write rows."""
+    real = Restaurant(
+        name="Real Venue",
+        slug="real-venue",
+        timezone="Asia/Karachi",
+        currency="PKR",
+        languages=["en"],
+        default_language="en",
+    )
+    db_session.add(real)
+    await db_session.flush()
+    await as_member(client, db_session, real.id, "owner")
+    with patch.object(settings, "demo_mode", True):
+        sim = await client.post("/api/restaurants/real-venue/demo/simulate-orders", json={})
+        reset = await client.post("/api/restaurants/real-venue/demo/reset")
+    assert sim.status_code == 404
+    assert reset.status_code == 404
+    count = await db_session.scalar(
+        select(func.count()).select_from(Order).where(Order.restaurant_id == real.id)
+    )
+    assert count == 0

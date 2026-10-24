@@ -281,7 +281,10 @@ async def test_demo_reset_404_without_a_seed_for_the_venue(
     db_session.add(venue)
     await db_session.flush()
     await as_member(client, db_session, venue.id, "owner")
-    with patch.object(settings, "demo_mode", True):
+    with (
+        patch.object(settings, "demo_mode", True),
+        patch.object(settings, "demo_restaurant_slugs", ["no-seed-venue"]),
+    ):
         resp = await client.post("/api/restaurants/no-seed-venue/demo/reset")
     assert resp.status_code == 404
     assert resp.json()["detail"] == "No demo seed for this restaurant"
