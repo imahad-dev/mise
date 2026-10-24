@@ -71,6 +71,17 @@ def is_idempotency_unique_violation(err: IntegrityError) -> bool:
     return "orders_guest_idempotency_key" in err_str or "idempotency_key" in err_str
 
 
+async def order_response(db: AsyncSession, order: Order) -> OrderResponse:
+    """OrderResponse with the venue currency, loaded explicitly (relationships are lazy="raise")."""
+    currency = await db.scalar(
+        select(Restaurant.currency).where(Restaurant.id == order.restaurant_id)
+    )
+    fields = {
+        name: getattr(order, name) for name in OrderResponse.model_fields if name != "currency"
+    }
+    return OrderResponse.model_validate({**fields, "currency": currency}, from_attributes=True)
+
+
 @router.post(
     "",
     response_model=OrderResponse,
@@ -89,7 +100,7 @@ async def create_order(
     response: Response,
     session: GuestSession = Depends(get_current_guest_session),
     db: AsyncSession = Depends(get_db),
-) -> Order:
+) -> OrderResponse:
     """Place an order with canonical hash idempotency, allergen check, and audit logging."""
     payload_hash = compute_payload_hash(payload.items)
 
@@ -108,7 +119,7 @@ async def create_order(
     if existing_order is not None:
         if existing_order.payload_hash == payload_hash:
             response.status_code = status.HTTP_200_OK
-            return existing_order
+            return await order_response(db, existing_order)
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Idempotency key mismatch with different payload",
@@ -267,7 +278,7 @@ async def create_order(
         conc_order = res_conc.scalar_one_or_none()
         if conc_order is not None and conc_order.payload_hash == payload_hash:
             response.status_code = status.HTTP_200_OK
-            return conc_order
+            return await order_response(db, conc_order)
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Order conflict",
@@ -285,7 +296,7 @@ async def create_order(
     await publish_event(f"orders:{final_order.id}", order_event)
 
     response.status_code = status.HTTP_201_CREATED
-    return final_order
+    return await order_response(db, final_order)
 
 
 @router.get(
@@ -298,7 +309,7 @@ async def get_order(
     id: uuid.UUID,
     session: GuestSession = Depends(get_current_guest_session),
     db: AsyncSession = Depends(get_db),
-) -> Order:
+) -> OrderResponse:
     """Retrieve an order. Returns 404 unless order belongs to the session cookie's session."""
     stmt = (
         select(Order)
@@ -313,7 +324,7 @@ async def get_order(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Order not found",
         )
-    return order
+    return await order_response(db, order)
 
 
 @router.get(

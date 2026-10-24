@@ -1,6 +1,6 @@
 "use client";
 
-import React, { use, useCallback, useEffect, useState } from "react";
+import React, { use, useCallback } from "react";
 import Link from "next/link";
 import { ChatPanel } from "../../../../components/chat-panel";
 import { useSse } from "../../../../hooks/use-sse";
@@ -22,6 +22,7 @@ interface OrderDetails {
   table_label?: string | null;
   status: "placed" | "bumped" | "cancelled" | string;
   total: string | number;
+  currency: string;
   placed_at: string;
   bumped_at?: string | null;
   items: OrderItem[];
@@ -34,16 +35,6 @@ export default function OrderStatusPage({
 }) {
   const { lang, id } = use(params);
   const dict = getDictionary(lang);
-
-  // The order response carries no currency; the guest's menu names the venue's.
-  const [currency, setCurrency] = useState<string | null>(null);
-  useEffect(() => {
-    fetch("/api/guest/menu")
-      .then((res) => (res.ok ? res.json() : null))
-      .then((menu) => setCurrency(menu?.restaurant?.currency ?? "EUR"))
-      .catch(() => setCurrency("EUR"));
-  }, []);
-  const money = (amount: number) => (currency ? formatPrice(amount, currency, lang) : "");
 
   const fetchOrderState = useCallback(async (): Promise<OrderDetails> => {
     const res = await fetch(`/api/orders/${id}`);
@@ -157,7 +148,7 @@ export default function OrderStatusPage({
                       )}
                     </div>
                     <span className="font-semibold text-ink-muted">
-                      {money(Number(item.unit_price) * item.quantity)}
+                      {formatPrice(Number(item.unit_price) * item.quantity, order.currency, lang)}
                     </span>
                   </div>
                 ))}
@@ -166,7 +157,7 @@ export default function OrderStatusPage({
               <div className="pt-3 border-t border-line flex items-center justify-between font-bold text-sm">
                 <span className="text-ink-muted">{dict.ui.total}</span>
                 <span className="text-terracotta text-base">
-                  {money(Number(order.total))}
+                  {formatPrice(Number(order.total), order.currency, lang)}
                 </span>
               </div>
             </div>

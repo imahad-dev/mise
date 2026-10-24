@@ -44,6 +44,7 @@ class OrderResponse(BaseModel):
     table_id: uuid.UUID | None
     status: str
     total: Decimal
+    currency: str
     idempotency_key: str
     allergen_conflict_acknowledged: bool
     allergens_to_avoid: list[str]

@@ -120,6 +120,7 @@ async def test_order_snapshots_option_price(client, karahi_setup):
     assert resp.status_code == 201
     body = resp.json()
     assert body["total"] == "2340.00"
+    assert body["currency"] == "PKR"
     line = next(i for i in body["items"] if i["menu_item_id"] == str(s.karahi.id))
     assert line["option_label"] == "Full" and line["unit_price"] == "2100.00"
 
@@ -216,3 +217,6 @@ async def test_identical_replay_returns_same_order(client, karahi_setup):
     again = await client.post("/api/orders", json=body)
     assert first.status_code == 201 and again.status_code == 200
     assert again.json()["id"] == first.json()["id"]
+    assert again.json()["currency"] == "PKR"
+    fetched = await client.get(f"/api/orders/{first.json()['id']}")
+    assert fetched.status_code == 200 and fetched.json()["currency"] == "PKR"

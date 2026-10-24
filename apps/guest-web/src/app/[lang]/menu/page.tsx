@@ -1,6 +1,6 @@
 "use client";
 
-import React, { use, useEffect, useState } from "react";
+import React, { use, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AllergenChip } from "../../../components/allergen-chip";
 import { ChatPanel } from "../../../components/chat-panel";
@@ -71,6 +71,10 @@ export default function GuestMenuPage({
   const [cart, setCart] = useState<CartState>(getCart());
   const [cartOpen, setCartOpen] = useState(false);
   const [sizePickerItem, setSizePickerItem] = useState<MenuItem | null>(null);
+  // Last picked dish, so the size sheet keeps its title and rows while it closes.
+  const lastPickedItem = useRef<MenuItem | null>(null);
+  if (sizePickerItem) lastPickedItem.current = sizePickerItem;
+  const pickerItem = sizePickerItem ?? lastPickedItem.current;
   const [submittingOrder, setSubmittingOrder] = useState(false);
   const [orderError, setOrderError] = useState<string | null>(null);
 
@@ -425,16 +429,16 @@ export default function GuestMenuPage({
       <Sheet
         open={sizePickerItem !== null}
         onClose={() => setSizePickerItem(null)}
-        title={sizePickerItem?.name ?? ""}
+        title={pickerItem?.name ?? ""}
       >
         <p className="text-sm text-ink-muted">{dict.menu.chooseSize}</p>
         <ul className="space-y-2">
-          {(sizePickerItem?.options ?? []).map((option) => (
+          {(pickerItem?.options ?? []).map((option) => (
             <li key={option.id}>
               <Button
                 variant="outline"
                 className="w-full justify-between"
-                aria-label={`${dict.ui.addToCart} ${sizePickerItem?.name} ${option.label}`}
+                aria-label={`${dict.ui.addToCart} ${pickerItem?.name} ${option.label}`}
                 onClick={() => {
                   if (sizePickerItem) handleAddToCart(sizePickerItem, option);
                   setSizePickerItem(null);
