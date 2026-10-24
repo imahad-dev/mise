@@ -44,8 +44,6 @@ jobs:
       POSTGRES_PASSWORD: change_me_in_production
       REDIS_URL: redis://localhost:6379/0
       API_SECRET_KEY: test_secret_key_for_ci
-      OWNER_API_KEY: test_owner_key_for_ci
-      STAFF_PIN: "0000"
       PUBLIC_GUEST_URL: http://localhost:3000
 
     steps:

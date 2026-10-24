@@ -2,8 +2,6 @@
 set -eo pipefail
 
 API_BASE_URL="${API_BASE_URL:-http://127.0.0.1:8000}"
-OWNER_API_KEY="${OWNER_API_KEY:-change_me_in_production}"
-STAFF_PIN="${STAFF_PIN:-0000}"
 
 OWNER_JAR=$(mktemp /tmp/owner_jar_XXXXXX 2>/dev/null || mktemp)
 STAFF_JAR=$(mktemp /tmp/staff_jar_XXXXXX 2>/dev/null || mktemp)
@@ -27,19 +25,19 @@ if [ "$HEALTHY" -ne 1 ]; then
     exit 1
 fi
 
-# 1. Owner Login
+# 1. Owner Login (seeded demo users; the stack must run with DEMO_MODE=true)
 echo "-> 1. Owner Login"
 curl -s -f -c "$OWNER_JAR" \
     -H "Content-Type: application/json" \
-    -d "{\"role\":\"owner\",\"secret\":\"$OWNER_API_KEY\"}" \
-    "$API_BASE_URL/api/auth/login" > /dev/null
+    -d '{"role":"owner"}' \
+    "$API_BASE_URL/api/auth/demo-login" > /dev/null
 
 # 2. Staff Login
 echo "-> 2. Staff Login"
 curl -s -f -c "$STAFF_JAR" \
     -H "Content-Type: application/json" \
-    -d "{\"role\":\"staff\",\"secret\":\"$STAFF_PIN\"}" \
-    "$API_BASE_URL/api/auth/login" > /dev/null
+    -d '{"role":"staff"}' \
+    "$API_BASE_URL/api/auth/demo-login" > /dev/null
 
 # 3. Owner lists tables to get valid QR token
 echo "-> 3. Fetching Dining Tables"

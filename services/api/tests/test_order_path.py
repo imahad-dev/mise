@@ -3,7 +3,6 @@ Authentication, Guest Sessions, Orders Path, Kitchen, and Owner Management.
 """
 
 import asyncio
-import time
 import uuid
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
@@ -16,9 +15,9 @@ from httpx import ASGITransport, AsyncClient
 from scripts.seed import load_seed_data, seed_data
 from sqlalchemy import delete, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
+from tests.helpers import as_member, make_user, sign_in
 
 from src.auth import AUTH_COOKIE_NAME, GUEST_COOKIE_NAME, sign_value
-from src.config import settings
 from src.database import async_session_factory, get_db
 from src.main import app
 from src.models.audit import AuditLog
@@ -53,15 +52,24 @@ async def seeded_restaurant(db_session: AsyncSession) -> Restaurant:
 
 
 @pytest.mark.asyncio
-async def test_auth_login_and_cookie_flags(client: AsyncClient):
-    """Test owner and staff login, cookie attributes (httponly, samesite), and me/logout."""
+async def test_auth_login_and_cookie_flags(
+    client: AsyncClient, db_session: AsyncSession, seeded_restaurant: Restaurant
+):
+    """Test staff and owner login, cookie attributes (httponly, samesite), and me/logout."""
+    await make_user(
+        db_session, [(seeded_restaurant.id, "staff")], email="staff@example.com", password="pw-s"
+    )
+    await make_user(
+        db_session, [(seeded_restaurant.id, "owner")], email="owner@example.com", password="pw-o"
+    )
+
     # 1. Staff login
     resp_staff = await client.post(
         "/api/auth/login",
-        json={"role": "staff", "secret": settings.staff_pin},
+        json={"email": "staff@example.com", "password": "pw-s"},
     )
     assert resp_staff.status_code == 200
-    assert resp_staff.json() == {"status": "ok", "role": "staff"}
+    assert resp_staff.json() == {"status": "ok", "name": "Test user", "email": "staff@example.com"}
 
     # Verify cookie attributes
     set_cookie = resp_staff.headers.get("set-cookie", "")
@@ -73,7 +81,7 @@ async def test_auth_login_and_cookie_flags(client: AsyncClient):
     client.cookies.set(AUTH_COOKIE_NAME, resp_staff.cookies[AUTH_COOKIE_NAME])
     resp_me = await client.get("/api/auth/me")
     assert resp_me.status_code == 200
-    assert resp_me.json() == {"role": "staff"}
+    assert resp_me.json() == {"name": "Test user", "email": "staff@example.com"}
 
     # 3. Logout
     resp_logout = await client.post("/api/auth/logout")
@@ -82,10 +90,10 @@ async def test_auth_login_and_cookie_flags(client: AsyncClient):
     # 4. Owner login
     resp_owner = await client.post(
         "/api/auth/login",
-        json={"role": "owner", "secret": settings.owner_api_key},
+        json={"email": "owner@example.com", "password": "pw-o"},
     )
     assert resp_owner.status_code == 200
-    assert resp_owner.json() == {"status": "ok", "role": "owner"}
+    assert resp_owner.json() == {"status": "ok", "name": "Test user", "email": "owner@example.com"}
 
 
 @pytest.mark.asyncio
@@ -100,14 +108,14 @@ async def test_auth_login_rate_limiting(client: AsyncClient):
         for _ in range(4):
             r = await client.post(
                 "/api/auth/login",
-                json={"role": "staff", "secret": "wrong_pin"},
+                json={"email": "nobody@example.com", "password": "wrong"},
             )
             assert r.status_code == 401
 
         # 5th failed attempt reaches limit -> 429
         r5 = await client.post(
             "/api/auth/login",
-            json={"role": "staff", "secret": "wrong_pin"},
+            json={"email": "nobody@example.com", "password": "wrong"},
         )
         assert r5.status_code == 429
     finally:
@@ -632,11 +640,12 @@ async def test_snapshots_unchanged_after_later_menu_edit(
 async def test_auth_matrix_401_and_403(
     client: AsyncClient,
     seeded_restaurant: Restaurant,
+    db_session: AsyncSession,
 ):
     """Matrix test: unauthenticated -> 401, staff -> 403 on owner routes, owner -> 200 on all."""
     slug = seeded_restaurant.slug
-    owner_cookie = sign_value(f"owner:{int(time.time()) + 3600}")
-    staff_cookie = sign_value(f"staff:{int(time.time()) + 3600}")
+    owner = await make_user(db_session, [(seeded_restaurant.id, "owner")])
+    staff = await make_user(db_session, [(seeded_restaurant.id, "staff")])
 
     kitchen_url = f"/api/restaurants/{slug}/kitchen/orders"
     menu_url = f"/api/restaurants/{slug}/menu-items"
@@ -649,13 +658,13 @@ async def test_auth_matrix_401_and_403(
     assert (await client.get(tables_url)).status_code == 401
 
     # --- 2. Staff cookie -> 200 on kitchen, 403 on owner endpoints ---
-    client.cookies.set(AUTH_COOKIE_NAME, staff_cookie)
+    sign_in(client, staff)
     assert (await client.get(kitchen_url)).status_code == 200
     assert (await client.get(menu_url)).status_code == 403
     assert (await client.get(tables_url)).status_code == 403
 
     # --- 3. Owner cookie -> 200 on all endpoints ---
-    client.cookies.set(AUTH_COOKIE_NAME, owner_cookie)
+    sign_in(client, owner)
     assert (await client.get(kitchen_url)).status_code == 200
     assert (await client.get(menu_url)).status_code == 200
     assert (await client.get(tables_url)).status_code == 200
@@ -669,8 +678,7 @@ async def test_kitchen_bump_idempotent_and_recall_timing(
 ):
     """Kitchen bump is idempotent; recall succeeds at 59s and is rejected at 61s."""
     slug = seeded_restaurant.slug
-    staff_cookie = sign_value(f"staff:{int(time.time()) + 3600}")
-    client.cookies.set(AUTH_COOKIE_NAME, staff_cookie)
+    await as_member(client, db_session, seeded_restaurant.id, "staff")
 
     # Create order
     session = GuestSession(
@@ -737,8 +745,7 @@ async def test_owner_patch_resets_verified_flags_and_audit(
     dietary flags reset dietary_verified.
     """
     slug = seeded_restaurant.slug
-    owner_cookie = sign_value(f"owner:{int(time.time()) + 3600}")
-    client.cookies.set(AUTH_COOKIE_NAME, owner_cookie)
+    await as_member(client, db_session, seeded_restaurant.id, "owner")
 
     # Pick an item initially verified
     res = await db_session.execute(

@@ -14,12 +14,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from src.auth import Role, require_staff_or_owner
+from src.access import RestaurantAccess, member_access
 from src.database import get_db
 from src.models.audit import AuditLog
 from src.models.dining_table import DiningTable
 from src.models.order import Order
-from src.models.restaurant import Restaurant
 from src.redis_client import publish_event, redis_client
 from src.schemas.kitchen import (
     KitchenOrderItemResponse,
@@ -30,18 +29,6 @@ from src.schemas.kitchen import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/restaurants/{slug}/kitchen", tags=["kitchen"])
-
-
-async def _get_restaurant(slug: str, db: AsyncSession) -> Restaurant:
-    stmt = select(Restaurant).where(Restaurant.slug == slug)
-    res = await db.execute(stmt)
-    restaurant = res.scalar_one_or_none()
-    if restaurant is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Restaurant '{slug}' not found",
-        )
-    return restaurant
 
 
 def _build_kitchen_order_response(
@@ -93,12 +80,11 @@ def _build_kitchen_order_response(
     },
 )
 async def get_kitchen_orders(
-    slug: str,
-    role: Role = Depends(require_staff_or_owner),
+    access: RestaurantAccess = Depends(member_access),
     db: AsyncSession = Depends(get_db),
 ) -> KitchenOrdersListResponse:
     """Return placed orders plus the most recent order bumped within the last 60 seconds."""
-    restaurant = await _get_restaurant(slug, db)
+    restaurant = access.restaurant
 
     # 1. Fetch tables for label resolution
     stmt_tables = select(DiningTable).where(DiningTable.restaurant_id == restaurant.id)
@@ -148,15 +134,14 @@ async def get_kitchen_orders(
     },
 )
 async def stream_kitchen_orders(
-    slug: str,
-    role: Role = Depends(require_staff_or_owner),
+    access: RestaurantAccess = Depends(member_access),
     db: AsyncSession = Depends(get_db),
 ) -> StreamingResponse:
     """Stream kitchen change notifications via Server-Sent Events.
 
     Generators hold no database session.
     """
-    restaurant = await _get_restaurant(slug, db)
+    restaurant = access.restaurant
     await db.close()
 
     channel_name = f"kitchen:{restaurant.id}"
@@ -203,13 +188,12 @@ async def stream_kitchen_orders(
     },
 )
 async def bump_order(
-    slug: str,
     id: uuid.UUID,
-    role: Role = Depends(require_staff_or_owner),
+    access: RestaurantAccess = Depends(member_access),
     db: AsyncSession = Depends(get_db),
 ) -> KitchenOrderResponse:
     """Mark an order as bumped. Idempotent: already bumped order returns existing bumped_at."""
-    restaurant = await _get_restaurant(slug, db)
+    restaurant = access.restaurant
 
     stmt = (
         select(Order)
@@ -241,7 +225,7 @@ async def bump_order(
     audit = AuditLog(
         restaurant_id=restaurant.id,
         event_type="order_bumped",
-        actor=role,
+        actor=f"user:{access.user.id}",
         payload={"order_id": str(order.id), "bumped_at": str(now)},
     )
     db.add(audit)
@@ -271,13 +255,12 @@ async def bump_order(
     },
 )
 async def recall_order(
-    slug: str,
     id: uuid.UUID,
-    role: Role = Depends(require_staff_or_owner),
+    access: RestaurantAccess = Depends(member_access),
     db: AsyncSession = Depends(get_db),
 ) -> KitchenOrderResponse:
     """Recall an order if within 60s of bump. Sets status back to placed."""
-    restaurant = await _get_restaurant(slug, db)
+    restaurant = access.restaurant
 
     stmt = (
         select(Order)
@@ -314,7 +297,7 @@ async def recall_order(
     audit = AuditLog(
         restaurant_id=restaurant.id,
         event_type="order_recalled",
-        actor=role,
+        actor=f"user:{access.user.id}",
         payload={"order_id": str(order.id), "previous_bumped_at": str(previous_bumped_at)},
     )
     db.add(audit)

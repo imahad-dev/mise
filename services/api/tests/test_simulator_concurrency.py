@@ -5,7 +5,6 @@ run in separate transactions exactly as in production. Teardown deletes everythi
 """
 
 import asyncio
-import time
 import uuid
 from datetime import datetime, timedelta
 from decimal import Decimal
@@ -16,8 +15,8 @@ import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import delete, func, select
+from tests.helpers import make_user, sign_in
 
-from src.auth import AUTH_COOKIE_NAME, sign_value
 from src.config import settings
 from src.database import async_session_factory, get_db
 from src.main import app
@@ -27,6 +26,7 @@ from src.models.menu import MenuItem, MenuTranslation
 from src.models.order import Order, OrderItem
 from src.models.restaurant import Restaurant
 from src.models.session import GuestSession
+from src.models.user import User
 from src.redis_client import redis_client
 from src.services.simulator import SimAssumptions, generate_orders
 
@@ -65,10 +65,11 @@ async def committed_restaurant():
             )
             await s.flush()
             s.add(MenuTranslation(menu_item_id=item_id, language="en", name=f"Dish {n}"))
+        owner = await make_user(s, [(restaurant_id, "owner")])
         await s.commit()
     await redis_client.delete(RATE_KEY)
     try:
-        yield restaurant_id, slug
+        yield restaurant_id, slug, owner
     finally:
         await redis_client.delete(RATE_KEY)
         async with async_session_factory() as s:
@@ -82,6 +83,7 @@ async def committed_restaurant():
             )
             await s.execute(delete(MenuItem).where(MenuItem.restaurant_id == restaurant_id))
             await s.execute(delete(Restaurant).where(Restaurant.id == restaurant_id))
+            await s.execute(delete(User).where(User.id == owner.id))
             await s.commit()
 
 
@@ -113,11 +115,11 @@ async def _counts(restaurant_id: uuid.UUID) -> tuple[int, int, int]:
 @pytest.mark.asyncio
 @pytest.mark.timeout(120)
 async def test_concurrent_generate_demo_data_equals_one_run(committed_restaurant):
-    restaurant_id, slug = committed_restaurant
+    restaurant_id, slug, owner = committed_restaurant
     saved_override = app.dependency_overrides.pop(get_db, None)
     try:
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-            ac.cookies.set(AUTH_COOKIE_NAME, sign_value(f"owner:{int(time.time()) + 3600}"))
+            sign_in(ac, owner)
             url = f"/api/restaurants/{slug}/demo/simulate-orders"
             with patch.object(settings, "demo_mode", True):
                 r1, r2 = await asyncio.gather(
@@ -150,10 +152,10 @@ async def test_concurrent_generate_demo_data_equals_one_run(committed_restaurant
 
 @pytest.mark.asyncio
 async def test_simulate_orders_rate_limited_per_ip(committed_restaurant):
-    _, slug = committed_restaurant
+    _, slug, owner = committed_restaurant
     await redis_client.set(RATE_KEY, 3)  # three generations already used this hour
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-        ac.cookies.set(AUTH_COOKIE_NAME, sign_value(f"owner:{int(time.time()) + 3600}"))
+        sign_in(ac, owner)
         with patch.object(settings, "demo_mode", True):
             resp = await ac.post(f"/api/restaurants/{slug}/demo/simulate-orders", json={})
     assert resp.status_code == 429

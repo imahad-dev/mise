@@ -39,7 +39,7 @@ async def get_demo_info(
     stmt = (
         select(DiningTable)
         .join(Restaurant)
-        .where(Restaurant.slug == settings.demo_restaurant_slug)
+        .where(Restaurant.slug == settings.demo_restaurant_slugs[0])
         .order_by(DiningTable.label)
         .limit(1)
     )

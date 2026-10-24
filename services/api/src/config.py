@@ -26,10 +26,6 @@ class Settings(BaseSettings):
     api_port: int = 8000
     api_secret_key: str = "change_me_in_production"
 
-    # Auth
-    owner_api_key: str = "change_me_in_production"
-    staff_pin: str = "0000"
-
     # URLs
     public_guest_url: str = "http://localhost:3000"
     public_owner_url: str = "http://localhost:3001"
@@ -73,7 +69,8 @@ class Settings(BaseSettings):
 
     # Demo
     demo_mode: bool = False
-    demo_restaurant_slug: str = "trattoria-da-mario"
+    demo_restaurant_slugs: list[str] = ["angeethi-house", "kehwa-and-crumb"]
+    demo_owner_email: str = "demo-owner@mise.demo"
 
     @property
     def database_url(self) -> str:
@@ -138,8 +135,6 @@ class Settings(BaseSettings):
 
         defaults = {
             "api_secret_key": "change_me_in_production",
-            "owner_api_key": "change_me_in_production",
-            "staff_pin": "0000",
             "postgres_password": "change_me_in_production",
         }
         for field, default_val in defaults.items():

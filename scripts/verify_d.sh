@@ -24,19 +24,10 @@ STAFF_JAR=""
 GUEST_JAR=""
 trap 'rm -f "$COOKIE_JAR" "$OWNER_JAR" "$STAFF_JAR" "$GUEST_JAR"' EXIT
 
-# Log in as owner or staff into a cookie jar. DEMO_MODE=true uses demo-login (no secrets);
-# otherwise the real login with OWNER_API_KEY / STAFF_PIN from the shell (compose defaults).
+# Log in as the seeded demo owner or staff user into a cookie jar (stack needs DEMO_MODE=true).
 auth_login() { # auth_login <owner|staff> <cookie jar>
-  if [ "${DEMO_MODE:-false}" = "true" ]; then
-    curl -sf --max-time 5 -X POST "$API/api/auth/demo-login" \
-      -H "Content-Type: application/json" -d "{\"role\":\"$1\"}" -c "$2" > /dev/null
-  else
-    local secret="${STAFF_PIN:-0000}"
-    [ "$1" = "owner" ] && secret="${OWNER_API_KEY:-change_me_in_production}"
-    curl -sf --max-time 5 -X POST "$API/api/auth/login" \
-      -H "Content-Type: application/json" \
-      -d "{\"role\":\"$1\",\"secret\":\"$secret\"}" -c "$2" > /dev/null
-  fi
+  curl -sf --max-time 5 -X POST "$API/api/auth/demo-login" \
+    -H "Content-Type: application/json" -d "{\"role\":\"$1\"}" -c "$2" > /dev/null
 }
 
 # ─── Setup ───────────────────────────────────────────────────────────

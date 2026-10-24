@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from src.auth import Role, require_owner
+from src.access import RestaurantAccess, owner_access
 from src.config import settings
 from src.database import get_db
 from src.inference.client import (
@@ -18,7 +18,6 @@ from src.inference.client import (
 from src.models.audit import AuditLog
 from src.models.dining_table import DiningTable
 from src.models.menu import MenuItem
-from src.models.restaurant import Restaurant
 from src.redis_client import redis_client
 from src.request_limits import enforce_ip_limit
 from src.schemas.owner import (
@@ -41,18 +40,6 @@ from src.services.simulator import SimAssumptions, persist_simulation
 
 router = APIRouter(prefix="/api/restaurants/{slug}", tags=["owner"])
 logger = logging.getLogger(__name__)
-
-
-async def _get_restaurant(slug: str, db: AsyncSession) -> Restaurant:
-    stmt = select(Restaurant).where(Restaurant.slug == slug)
-    res = await db.execute(stmt)
-    restaurant = res.scalar_one_or_none()
-    if restaurant is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Restaurant '{slug}' not found",
-        )
-    return restaurant
 
 
 def _build_owner_item_response(item: MenuItem) -> OwnerMenuItemResponse:
@@ -97,12 +84,11 @@ def _build_owner_item_response(item: MenuItem) -> OwnerMenuItemResponse:
     },
 )
 async def list_owner_menu_items(
-    slug: str,
-    role: Role = Depends(require_owner),
+    access: RestaurantAccess = Depends(owner_access),
     db: AsyncSession = Depends(get_db),
 ) -> list[OwnerMenuItemResponse]:
     """List all non-deleted menu items for the restaurant, including unit_cost."""
-    restaurant = await _get_restaurant(slug, db)
+    restaurant = access.restaurant
 
     stmt = (
         select(MenuItem)
@@ -129,10 +115,9 @@ async def list_owner_menu_items(
     },
 )
 async def patch_menu_item(
-    slug: str,
     id: uuid.UUID,
     payload: PatchMenuItemRequest,
-    role: Role = Depends(require_owner),
+    access: RestaurantAccess = Depends(owner_access),
     db: AsyncSession = Depends(get_db),
 ) -> OwnerMenuItemResponse:
     """Update menu item fields.
@@ -140,7 +125,7 @@ async def patch_menu_item(
     Changing allergens or ingredients sets allergen_verified=False with audit log.
     Changing dietary flags sets dietary_verified=False with audit log.
     """
-    restaurant = await _get_restaurant(slug, db)
+    restaurant = access.restaurant
 
     stmt = (
         select(MenuItem)
@@ -187,7 +172,7 @@ async def patch_menu_item(
         audit_all = AuditLog(
             restaurant_id=restaurant.id,
             event_type="owner_allergen_edit",
-            actor="owner",
+            actor=f"user:{access.user.id}",
             payload={"menu_item_id": str(item.id), "before": before_snap, "after": after_snap},
         )
         db.add(audit_all)
@@ -221,7 +206,7 @@ async def patch_menu_item(
         audit_diet = AuditLog(
             restaurant_id=restaurant.id,
             event_type="owner_dietary_edit",
-            actor="owner",
+            actor=f"user:{access.user.id}",
             payload={"menu_item_id": str(item.id), "before": before_diet, "after": after_diet},
         )
         db.add(audit_diet)
@@ -245,13 +230,12 @@ async def patch_menu_item(
     },
 )
 async def verify_menu_item(
-    slug: str,
     id: uuid.UUID,
-    role: Role = Depends(require_owner),
+    access: RestaurantAccess = Depends(owner_access),
     db: AsyncSession = Depends(get_db),
 ) -> OwnerMenuItemResponse:
     """Mark menu item as verified for both allergens and dietary preferences with audit log."""
-    restaurant = await _get_restaurant(slug, db)
+    restaurant = access.restaurant
 
     stmt = (
         select(MenuItem)
@@ -273,7 +257,7 @@ async def verify_menu_item(
     audit = AuditLog(
         restaurant_id=restaurant.id,
         event_type="owner_menu_verified",
-        actor="owner",
+        actor=f"user:{access.user.id}",
         payload={"menu_item_id": str(item.id)},
     )
     db.add(audit)
@@ -296,13 +280,12 @@ async def verify_menu_item(
     },
 )
 async def delete_menu_item(
-    slug: str,
     id: uuid.UUID,
-    role: Role = Depends(require_owner),
+    access: RestaurantAccess = Depends(owner_access),
     db: AsyncSession = Depends(get_db),
 ) -> StatusOkResponse:
     """Soft delete a menu item with audit log."""
-    restaurant = await _get_restaurant(slug, db)
+    restaurant = access.restaurant
 
     stmt = select(MenuItem).where(
         MenuItem.id == id,
@@ -320,7 +303,7 @@ async def delete_menu_item(
     audit = AuditLog(
         restaurant_id=restaurant.id,
         event_type="menu_item_deleted",
-        actor="owner",
+        actor=f"user:{access.user.id}",
         payload={"menu_item_id": str(item.id), "deleted_at": str(now)},
     )
     db.add(audit)
@@ -339,12 +322,11 @@ async def delete_menu_item(
     },
 )
 async def list_tables(
-    slug: str,
-    role: Role = Depends(require_owner),
+    access: RestaurantAccess = Depends(owner_access),
     db: AsyncSession = Depends(get_db),
 ) -> list[OwnerTableResponse]:
     """List tables with label, qr_token, and full guest URL built from PUBLIC_GUEST_URL."""
-    restaurant = await _get_restaurant(slug, db)
+    restaurant = access.restaurant
 
     stmt = (
         select(DiningTable)
@@ -382,15 +364,14 @@ async def list_tables(
     },
 )
 async def ingest_menu(
-    slug: str,
     payload: MenuIngestRequest,
     request: Request,
-    role: Role = Depends(require_owner),
+    access: RestaurantAccess = Depends(owner_access),
     db: AsyncSession = Depends(get_db),
     inference: InferenceClient = Depends(get_inference_client),
 ) -> MenuIngestResponse:
     """Analyze a menu photo via VLM and create menu items automatically."""
-    restaurant = await _get_restaurant(slug, db)
+    restaurant = access.restaurant
 
     if settings.demo_mode:
         await enforce_ip_limit(
@@ -426,14 +407,13 @@ async def ingest_menu(
     },
 )
 async def daily_brief(
-    slug: str,
-    role: Role = Depends(require_owner),
+    access: RestaurantAccess = Depends(owner_access),
     db: AsyncSession = Depends(get_db),
     inference: InferenceClient | None = Depends(get_optional_inference_client),
 ) -> DailyBriefResponse:
     """Deterministic analytics brief; the LLM only narrates. Cached for 10m in DEMO_MODE."""
-    restaurant = await _get_restaurant(slug, db)
-    cache_key = f"cache:demo:brief:{slug}"
+    restaurant = access.restaurant
+    cache_key = f"cache:demo:brief:{restaurant.slug}"
 
     if settings.demo_mode:
         try:
@@ -466,14 +446,13 @@ async def daily_brief(
     },
 )
 async def simulate(
-    slug: str,
     payload: WhatIfRequest,
-    role: Role = Depends(require_owner),
+    access: RestaurantAccess = Depends(owner_access),
     db: AsyncSession = Depends(get_db),
     inference: InferenceClient | None = Depends(get_optional_inference_client),
 ) -> WhatIfResponse:
     """Deterministic what-if calculator; the LLM may only explain the result."""
-    restaurant = await _get_restaurant(slug, db)
+    restaurant = access.restaurant
     params = payload.model_dump(exclude_none=True, exclude={"scenario"}, mode="json")
     try:
         result = await compute_whatif(db, restaurant, inference, payload.scenario, params)
@@ -494,10 +473,9 @@ async def simulate(
     },
 )
 async def simulate_demo_orders(
-    slug: str,
     payload: SimulateOrdersRequest,
     request: Request,
-    role: Role = Depends(require_owner),
+    access: RestaurantAccess = Depends(owner_access),
     db: AsyncSession = Depends(get_db),
 ) -> SimulateOrdersResponse:
     """Replace source='simulated' orders with a seeded synthetic history. DEMO_MODE only."""
@@ -510,7 +488,7 @@ async def simulate_demo_orders(
         window_s=3600,
         detail="Demo limit reached: maximum 3 demo data generations per hour per IP",
     )
-    restaurant = await _get_restaurant(slug, db)
+    restaurant = access.restaurant
     assumptions = SimAssumptions(
         days=payload.days,
         seed=payload.seed,
@@ -519,7 +497,7 @@ async def simulate_demo_orders(
     summary = await persist_simulation(db, restaurant, assumptions)
     await db.commit()
     try:
-        await redis_client.delete(f"cache:demo:brief:{slug}")
+        await redis_client.delete(f"cache:demo:brief:{restaurant.slug}")
     except Exception as e:
         logger.warning("Redis error clearing brief cache: %s", e)
     return SimulateOrdersResponse(**summary)
@@ -536,8 +514,7 @@ async def simulate_demo_orders(
     },
 )
 async def reset_demo_data(
-    slug: str,
-    role: Role = Depends(require_owner),
+    access: RestaurantAccess = Depends(owner_access),
     db: AsyncSession = Depends(get_db),
 ) -> StatusOkResponse:
     """Re-seed restaurant data and regenerate simulated state. DEMO_MODE only."""
@@ -546,8 +523,6 @@ async def reset_demo_data(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Demo mode is disabled",
         )
-
-    await _get_restaurant(slug, db)
 
     try:
         from scripts.seed import load_seed_data, seed_data

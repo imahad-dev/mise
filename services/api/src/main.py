@@ -16,6 +16,7 @@ from src.routers.kitchen import router as kitchen_router
 from src.routers.metrics import router as metrics_router
 from src.routers.orders import router as orders_router
 from src.routers.owner import router as owner_router
+from src.routers.restaurants import router as restaurants_router
 
 
 @asynccontextmanager
@@ -60,6 +61,7 @@ app.include_router(guest_router)
 app.include_router(orders_router)
 app.include_router(kitchen_router)
 app.include_router(owner_router)
+app.include_router(restaurants_router)
 
 
 if __name__ == "__main__":

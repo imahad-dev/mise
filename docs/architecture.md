@@ -280,10 +280,11 @@ unreachable the limits fail open and log a warning.
 - `GET /debug/sse` — Diagnostic unbuffered SSE counter stream.
 
 ### Authentication
-- `POST /api/auth/login` — Authenticates owner (API key) or staff (PIN). Sets signed cookie. Rate-limited.
-- `POST /api/auth/demo-login` — Fast-path login available when `DEMO_MODE=true`.
+- `POST /api/auth/login` — Authenticates a user by email and password (scrypt hash). Sets a signed cookie carrying the user id. Rate-limited.
+- `POST /api/auth/demo-login` — Signs in the seeded demo owner or venue staff user when `DEMO_MODE=true`.
 - `POST /api/auth/logout` — Clears authentication cookies.
-- `GET /api/auth/me` — Returns the current role.
+- `GET /api/auth/me` — Returns the signed-in user's name and email.
+- `GET /api/restaurants` — Lists the restaurants the signed-in user belongs to, with their role. Every `/api/restaurants/{slug}/...` route returns 404 to non-members.
 - `GET /api/auth/config` — Returns public environment flags (e.g. `demo_mode`).
 - `GET /api/demo/info` — Demo guest, owner and kitchen links (`DEMO_MODE` only).
 

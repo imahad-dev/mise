@@ -134,8 +134,6 @@ make simulate
 |----------|---------|---------|
 | `APP_ENV` | `dev` | Application environment (`dev`, `staging`, `production`). In non-dev, boot fails if default secrets are unchanged. |
 | `API_SECRET_KEY` | `change_me_in_production` | HMAC secret for signing auth session cookies. |
-| `OWNER_API_KEY` | `change_me_in_production` | Master key for restaurant owner management. |
-| `STAFF_PIN` | `0000` | 4-digit PIN for kitchen staff terminal authentication. |
 | `POSTGRES_HOST` / `POSTGRES_DB` | `postgres` / `mise` | PostgreSQL connection coordinates. |
 | `REDIS_URL` | `redis://redis:6379/0` | Redis connection URL for pub/sub and rate limiting. |
 | `LLM_PROVIDER` | `mock` | `mock` (internal fast mock server) or `openai_compatible`. `mock` is a hard switch: both base URLs are replaced by `MOCK_BASE_URL`, so a real URL left in `.env` is never called. |

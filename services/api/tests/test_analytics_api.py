@@ -1,6 +1,5 @@
 """API tests: simulated demo orders, deterministic brief, forecast_run storage and what-if."""
 
-import time
 from unittest.mock import patch
 
 import pytest
@@ -8,8 +7,9 @@ from httpx import AsyncClient
 from scripts.seed import load_seed_data, seed_data
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from tests.helpers import as_member
 
-from src.auth import AUTH_COOKIE_NAME, sign_value
+from src.auth import sign_value
 from src.config import settings
 from src.models.forecast import ForecastRun
 from src.models.order import Order
@@ -36,10 +36,6 @@ async def _reset_simulate_rate_limit():
     await redis_client.delete(key)
 
 
-def _as_owner(client: AsyncClient) -> None:
-    client.cookies.set(AUTH_COOKIE_NAME, sign_value(f"owner:{int(time.time()) + 3600}"))
-
-
 async def _simulate(client: AsyncClient, slug: str, **body) -> dict:
     with patch.object(settings, "demo_mode", True):
         resp = await client.post(f"/api/restaurants/{slug}/demo/simulate-orders", json=body)
@@ -49,9 +45,9 @@ async def _simulate(client: AsyncClient, slug: str, **body) -> dict:
 
 @pytest.mark.asyncio
 async def test_simulate_orders_404_when_demo_mode_false(
-    client: AsyncClient, seeded_restaurant: Restaurant
+    client: AsyncClient, db_session: AsyncSession, seeded_restaurant: Restaurant
 ):
-    _as_owner(client)
+    await as_member(client, db_session, seeded_restaurant.id, "owner")
     with patch.object(settings, "demo_mode", False):
         resp = await client.post(
             f"/api/restaurants/{seeded_restaurant.slug}/demo/simulate-orders", json={}
@@ -65,7 +61,7 @@ async def test_simulated_orders_feed_brief_and_forecast(
     client: AsyncClient, db_session: AsyncSession, seeded_restaurant: Restaurant
 ):
     slug = seeded_restaurant.slug
-    _as_owner(client)
+    await as_member(client, db_session, seeded_restaurant.id, "owner")
 
     summary = await _simulate(client, slug, days=56)
     n = summary["orders_created"]
@@ -163,9 +159,9 @@ async def test_simulated_orders_feed_brief_and_forecast(
 
 @pytest.mark.asyncio
 async def test_brief_with_no_orders_returns_empty_template(
-    client: AsyncClient, seeded_restaurant: Restaurant
+    client: AsyncClient, db_session: AsyncSession, seeded_restaurant: Restaurant
 ):
-    _as_owner(client)
+    await as_member(client, db_session, seeded_restaurant.id, "owner")
     with patch.object(settings, "demo_mode", False):
         resp = await client.get(f"/api/restaurants/{seeded_restaurant.slug}/ai/brief")
     assert resp.status_code == 200, resp.text
@@ -177,8 +173,10 @@ async def test_brief_with_no_orders_returns_empty_template(
 
 
 @pytest.mark.asyncio
-async def test_whatif_unknown_item_returns_422(client: AsyncClient, seeded_restaurant: Restaurant):
-    _as_owner(client)
+async def test_whatif_unknown_item_returns_422(
+    client: AsyncClient, db_session: AsyncSession, seeded_restaurant: Restaurant
+):
+    await as_member(client, db_session, seeded_restaurant.id, "owner")
     resp = await client.post(
         f"/api/restaurants/{seeded_restaurant.slug}/ai/simulate",
         json={
@@ -196,7 +194,7 @@ async def test_regenerating_demo_data_drops_stale_forecast(
     client: AsyncClient, db_session: AsyncSession, seeded_restaurant: Restaurant
 ):
     slug = seeded_restaurant.slug
-    _as_owner(client)
+    await as_member(client, db_session, seeded_restaurant.id, "owner")
 
     await _simulate(client, slug, days=28, seed=1)
     with patch.object(settings, "demo_mode", False):
@@ -220,7 +218,7 @@ async def test_regenerating_demo_data_drops_stale_forecast(
 @pytest.mark.asyncio
 @pytest.mark.timeout(120)
 async def test_health_stays_responsive_while_forecast_recomputes(
-    client: AsyncClient, seeded_restaurant: Restaurant
+    client: AsyncClient, db_session: AsyncSession, seeded_restaurant: Restaurant
 ):
     """A slow forecast (CPU-bound in production) must not block other requests."""
     import asyncio
@@ -229,7 +227,7 @@ async def test_health_stays_responsive_while_forecast_recomputes(
     from src.services import brief as brief_module
 
     slug = seeded_restaurant.slug
-    _as_owner(client)
+    await as_member(client, db_session, seeded_restaurant.id, "owner")
     await _simulate(client, slug, days=28)
 
     real_forecast = brief_module.forecast
@@ -335,7 +333,7 @@ async def test_generate_demo_data_keeps_live_orders(
     )
     await db_session.flush()
 
-    _as_owner(client)
+    await as_member(client, db_session, seeded_restaurant.id, "owner")
     n1 = (await _simulate(client, slug, days=14, seed=1))["orders_created"]
     live, live_items, session_alive, sim_first = await snapshot()
     assert (live, live_items, session_alive) == ("live", 2, True)
