@@ -1,6 +1,6 @@
 # Mise System Architecture
 
-Mise is a revenue copilot and operational platform for independent restaurants. Guests scan table QR codes to order from an English/Italian web menu with deterministic allergen safety filters. Kitchen staff process orders in real time via a Server-Sent Events (SSE) kitchen display system (KDS). Owners get a revenue brief computed from order history (KPIs, menu engineering, a backtested 7-day demand forecast, ranked actions), a deterministic what-if calculator, and VLM menu digitization. Methods and limits: [analytics.md](analytics.md).
+Mise is a revenue copilot and operational platform for independent restaurants. Guests scan table QR codes to order from an English/Italian web menu with deterministic allergen safety filters, pick a size where a dish has sizes, and ask for the bill. Owners and staff sign in with their own accounts and see only the restaurants they belong to; staff settle table bills and print a sample bill with illustrative sales tax. Kitchen staff process orders in real time via a Server-Sent Events (SSE) kitchen display system (KDS). Owners get a revenue brief computed from order history (KPIs, menu engineering, a backtested 7-day demand forecast, ranked actions), a deterministic what-if calculator, and VLM menu digitization. Methods and limits: [analytics.md](analytics.md).
 
 ---
 
@@ -35,7 +35,9 @@ Mise is a revenue copilot and operational platform for independent restaurants. 
 |----------|--------|-----------|
 | Frontend | Two Next.js ~15 applications: `guest-web` + `owner-web` | Isolated bundles: guest ordering footprint remains minimal (< 80 kB initial JS), while owner dashboard and kitchen displays run in separate route groups. |
 | API Proxy | Each frontend application rewrites only allowed `/api/*` paths to `http://api:8000` | Eliminates Cross-Origin Resource Sharing (CORS) complexity. Cookies are same-origin. Zero build-time API URLs required. |
-| Auth Cookies | Two signed httpOnly cookies: `mise_auth` (owner or staff role) and `mise_guest` (guest session) | Guest sessions are separate from restaurant management. Both use `SameSite=Lax` for QR code scan transitions. |
+| Accounts | Users with per-restaurant memberships (`owner` or `staff`); every `{slug}` route checks membership through `restaurant_access` and answers 404 to non-members | One installation can host several clients; no owner can tell whether another restaurant exists. |
+| Auth Cookies | Two signed httpOnly cookies: `mise_auth` (signed user id) and `mise_guest` (guest session) | Guest sessions are separate from restaurant management. Both use `SameSite=Lax` for QR code scan transitions. |
+| Sales tax | Rates as data in `data/tax_rates.json`, a pure `tax_for`, snapshotted on the bill at settle | Rates change by finance act; the file is reviewed in git with its legal source per row. |
 | Analytics | SQL aggregates over order_item snapshots; forecast chosen by backtest; LLM only narrates | Numbers are reproducible and auditable; the model cannot invent figures. |
 | Real-Time Streaming | Redis Pub/Sub + SSE with 15-second heartbeats | Clean push delivery to KDS and guest order tracking without persistent websocket connection overhead or database polling. |
 | Allergen Model | Deterministic, server-authoritative evaluation with precedence `contains > unverified > no_declared_match` | Guaranteed safety: avoids generative AI hallucinations in food allergy cross-checks. |
@@ -85,7 +87,10 @@ Represents an individual restaurant tenant.
 - `name` (TEXT, NOT NULL)
 - `slug` (TEXT, UNIQUE NOT NULL)
 - `timezone` (TEXT, NOT NULL DEFAULT 'Europe/Rome')
-- `currency` (TEXT, NOT NULL DEFAULT 'EUR')
+- `currency` (TEXT, NOT NULL DEFAULT 'EUR'; both demo venues use `PKR`)
+- `city` (TEXT, Nullable)
+- `tax_jurisdiction` (TEXT, Nullable) — key into `data/tax_rates.json` (`PB` Punjab, `ICT` Islamabad)
+- `onboarding` (JSONB) — includes the venue's `simulation` profile for demo data
 - `active` (BOOLEAN, NOT NULL DEFAULT true)
 - `languages` (TEXT[], NOT NULL DEFAULT '{en}')
 - `default_language` (TEXT, NOT NULL DEFAULT 'en')
@@ -121,6 +126,14 @@ CHECK (NOT (is_gluten_free AND 'gluten' = ANY(allergens)))
 CHECK (NOT is_vegan OR NOT (allergens && ARRAY['milk','eggs','fish','crustaceans','molluscs']::text[]))
 CHECK (NOT is_vegetarian OR NOT (allergens && ARRAY['fish','crustaceans','molluscs']::text[]))
 ```
+
+#### `menu_item_option`
+Sizes or portions of a dish (e.g. "½ kg" / "1 kg", "Regular" / "Large"). A dish with options keeps `menu_item.price` and `unit_cost` equal to its cheapest option.
+- `id` (UUID, PK)
+- `menu_item_id` (UUID, FK → menu_item.id ON DELETE CASCADE)
+- `label` (TEXT, NOT NULL), `price`, `unit_cost` (DECIMAL(10,2), NOT NULL, `>= 0`), `sort_order` (INTEGER)
+- `created_at`, `updated_at` (TIMESTAMPTZ)
+*Constraint*: `UNIQUE (menu_item_id, label)`
 
 #### `menu_translation`
 Localized titles and descriptions for menu items.
@@ -160,6 +173,7 @@ Immutable guest order header record.
 - `status` (TEXT, NOT NULL DEFAULT 'placed', `CHECK (status IN ('placed', 'bumped', 'cancelled'))`)
 - `source` (TEXT, NOT NULL DEFAULT 'live', `CHECK (source IN ('live', 'simulated'))`) — simulated demo orders are always marked
 - `total` (DECIMAL(10,2), NOT NULL, `CHECK (total >= 0)`)
+- `bill_id` (UUID, FK → bills.id, Nullable) — the table bill the order joined
 - `idempotency_key` (TEXT, NOT NULL)
 - `payload_hash` (TEXT, NOT NULL)
 - `allergen_conflict_acknowledged` (BOOLEAN, NOT NULL DEFAULT false)
@@ -178,6 +192,7 @@ Immutable line item with allergen disclosures snapshotted at placement time.
 - `quantity` (INTEGER, NOT NULL, `CHECK (quantity >= 1 AND quantity <= 20)`)
 - `unit_price` (DECIMAL(10,2), NOT NULL, `CHECK (unit_price >= 0)`)
 - `unit_cost` (DECIMAL(10,2), NOT NULL, `CHECK (unit_cost >= 0)`)
+- `option_id` (UUID, FK → menu_item_option.id, Nullable), `option_label` (TEXT, Nullable) — chosen size, snapshotted; price and cost come from the option on the server
 - `item_name` (TEXT, NOT NULL) — snapshotted in guest language
 - `kitchen_name` (TEXT, NOT NULL) — snapshotted in restaurant default language
 - `allergens` (TEXT[], NOT NULL DEFAULT '{}') — snapshotted from item
@@ -185,6 +200,27 @@ Immutable line item with allergen disclosures snapshotted at placement time.
 - `allergen_status` (TEXT, NOT NULL, `CHECK (allergen_status IN ('contains', 'unverified', 'no_declared_match'))`)
 - `notes` (TEXT, Nullable, `CHECK (notes IS NULL OR length(notes) <= 500)`)
 - `created_at` (TIMESTAMPTZ)
+
+#### `users`
+- `id` (UUID, PK), `email` (TEXT, UNIQUE, stored lower-case), `name` (TEXT)
+- `password_hash` (TEXT) — stdlib scrypt with a random 16-byte salt: `scrypt$n$r$p$salt$hash`
+- `created_at`, `updated_at` (TIMESTAMPTZ)
+
+#### `memberships`
+- `id` (UUID, PK), `user_id` (FK → users.id), `restaurant_id` (FK → restaurant.id)
+- `role` (TEXT, `CHECK (role IN ('owner', 'staff'))`)
+*Constraint*: `UNIQUE (user_id, restaurant_id)`
+
+#### `bills`
+One bill per table visit. Placing a table order joins the table's open bill or opens one.
+- `id` (UUID, PK), `restaurant_id` (FK), `table_id` (FK, Nullable)
+- `bill_no` (INTEGER, Nullable) — per-venue sequence, assigned at open under a per-restaurant advisory lock; required for live bills, NULL for simulated ones. *Constraint*: `UNIQUE (restaurant_id, bill_no)`
+- `status` (`open` | `settled`) — a partial unique index allows one open bill per table
+- `source` (`live` | `simulated`)
+- `bill_requested_at` (TIMESTAMPTZ, Nullable) — set by the guest's "Request bill"
+- `payment_method` (`cash`, `card`, `wallet`, `raast`, `bank_transfer`), `payment_reference` (max 64 chars)
+- `subtotal`, `tax_jurisdiction`, `tax_rate`, `tax_amount`, `total` — snapshotted at settle
+- `opened_at`, `settled_at`, `created_at`, `updated_at` (TIMESTAMPTZ)
 
 #### `audit_log`
 Append-only log for critical compliance and operational events.
@@ -235,14 +271,35 @@ To guarantee zero hallucinations in dietary safety, allergen checks are complete
 
 ### Order Idempotency
 - The client passes an `idempotency_key` (UUID generated in client local state).
-- The server computes a canonical SHA-256 hash across sorted order line items (item ID, quantity, notes).
+- The server computes a canonical SHA-256 hash across sorted order line items (item ID, option ID, quantity, notes).
 - If the same `(guest_session_id, idempotency_key)` is re-sent with the identical payload hash, the server returns the existing order with HTTP `200 OK`.
 - If the key is reused with a altered payload, the server rejects with HTTP `409 Conflict`.
 
 ### Authentication & Cookies
 1. **`mise_guest`**: Signed httpOnly cookie identifying the active guest session (4 hours). `SameSite=Lax`.
-2. **`mise_auth`**: Signed httpOnly cookie carrying the `owner` or `staff` role and expiry (8 hours). `SameSite=Lax`.
+2. **`mise_auth`**: Signed httpOnly cookie carrying the user id and expiry (8 hours). `SameSite=Lax`. No role is stored in the cookie: the role comes from the user's membership in the restaurant being accessed.
 Both cookies are signed server-side using HMAC-SHA256 with `API_SECRET_KEY`, and `Secure` outside `APP_ENV=dev`.
+
+### Accounts and Restaurant Isolation
+- `POST /api/auth/login` takes email and password; unknown email and wrong password give the same 401.
+- `restaurant_access(roles)` loads the restaurant and the caller's membership in one query. No membership or an unknown slug → 404 "Restaurant not found" (identical); member with the wrong role (staff on an owner-only route) → 403. The kitchen SSE stream checks access before subscribing. An API test walks the route table and asserts the 404 across venues for every `{slug}` route.
+- There is no public sign-up. Clients are onboarded with `scripts/admin.py`:
+  ```bash
+  docker compose exec api python scripts/admin.py create-restaurant \
+      --slug cafe-x --name "Cafe X" --city Lahore --jurisdiction PB --currency PKR --timezone Asia/Karachi
+  docker compose exec api python scripts/admin.py add-user \
+      --email boss@cafex.pk --name Boss --restaurant cafe-x --role owner
+  ```
+  `create-restaurant` rejects a jurisdiction with no tax rates; `add-user` prompts for the password (never taken from argv or printed) and only adds a membership for an existing user.
+- Demo users (seeded only when `DEMO_MODE=true`, `data/seed/demo_users.json`): a demo owner of both demo venues and one demo staff user per venue. `POST /api/auth/demo-login {role, venue?}` signs in as one of them and is disabled outside demo mode.
+
+### Bills and Sales Tax
+- Payment classes: `card`, `wallet` (JazzCash / Easypaisa) and `raast` (Raast QR) are `digital`; `cash` and `bank_transfer` are `standard`.
+- `data/tax_rates.json` lists rates per jurisdiction, payment class and `effective_from` date, each with its legal source: Punjab (`PB`) 16% standard / 8% digital from 2026-07-01 (16% / 5% from 2025-07-01, Punjab Sales Tax on Services Act 2012 as amended by the Punjab Finance Act 2026); Islamabad (`ICT`) 15% / 5% (ICT Tax on Services Ordinance 2001). The ICT law is silent on bank transfer; the standard rate is our assumption. Verification notes: `docs/research/2026-10-24-tax-rate-verification.md`.
+- The file is validated at startup (rates in [0, 1], known classes, unique jurisdiction/class/date); an invalid file stops the API. `tax_for(jurisdiction, payment_method, on_date, subtotal)` is pure: latest entry with `effective_from <= on_date`, amount rounded half-up to whole rupees, once per bill.
+- Settling snapshots subtotal, rate, tax and total on the bill. 409 if already settled; 422 if the bill has no active orders or no tax rate applies (the bill stays open).
+- Bill events (`bill_opened`, `bill_requested`, `bill_settled`) go on the venue's kitchen channel, so the Bills page reuses the kitchen SSE stream.
+- The printable bill is a **sample bill**: its footer always reads "Sample bill — not a tax invoice. Not connected to FBR or any provincial revenue authority." It has no fiscal number, QR code or authority logo, and the tax line is labelled "illustrative".
 
 ### Per-IP Rate Limits and Client Address
 Per-IP limits (Redis fixed windows, `services/api/src/request_limits.py`):
@@ -286,7 +343,7 @@ unreachable the limits fail open and log a warning.
 - `GET /api/auth/me` — Returns the signed-in user's name and email.
 - `GET /api/restaurants` — Lists the restaurants the signed-in user belongs to, with their role. Every `/api/restaurants/{slug}/...` route returns 404 to non-members.
 - `GET /api/auth/config` — Returns public environment flags (e.g. `demo_mode`).
-- `GET /api/demo/info` — Demo guest, owner and kitchen links (`DEMO_MODE` only).
+- `GET /api/demo/info` — Owner and kitchen links and, per demo venue, a table QR token and guest link (`DEMO_MODE` only).
 
 ### Guest Ordering (`guest-web`)
 - `POST /api/guest/sessions` — Initializes guest session from table QR token and dietary preferences.
@@ -297,6 +354,14 @@ unreachable the limits fail open and log a warning.
 - `GET /api/orders/{id}` — Order status retrieval.
 - `GET /api/orders/{id}/stream` — Real-time order progress via SSE.
 - `POST /api/guest/chat` — Menu chat assistant (menu context only; the guest's allergen and dietary profile is never sent to the model).
+
+- `POST /api/guest/bill-request` — Asks for the table's open bill (idempotent; 404 when there is none).
+- `GET /api/guest/bill` — Bill number, status and request time of the session's latest billed order.
+
+### Bills (`owner-web`, staff and owner)
+- `GET /api/restaurants/{slug}/bills?status=open|settled` — Open bills (requested first) or the 50 latest settled bills, with table, bill number, order count and running subtotal.
+- `GET /api/restaurants/{slug}/bills/{id}` — Lines grouped by dish and size, subtotal, and server-computed previews for cash or bank transfer vs card, wallet or QR; settled bills return their snapshot.
+- `POST /api/restaurants/{slug}/bills/{id}/settle` — `{payment_method, payment_reference?}`; snapshots tax and total.
 
 ### Kitchen Display (`owner-web`)
 - `GET /api/restaurants/{slug}/kitchen/orders` — Retrieves active placed orders with allergen snapshot banners.
@@ -313,6 +378,6 @@ unreachable the limits fail open and log a warning.
 - `POST /api/restaurants/{slug}/menu-items/ingest` — VLM extraction of menu dish data from photograph URLs.
 - `GET /api/restaurants/{slug}/ai/brief` — Deterministic revenue brief: KPIs, menu engineering, pairings, peak hours, backtested 7-day forecast, ranked actions; LLM-written or template summary.
 - `POST /api/restaurants/{slug}/ai/simulate` — Deterministic what-if (price change, promotion, demand surge) with listed assumptions.
-- `POST /api/restaurants/{slug}/demo/simulate-orders` — Replaces simulated demo orders with a seeded synthetic history (`DEMO_MODE` only).
+- `POST /api/restaurants/{slug}/demo/simulate-orders` — Replaces simulated demo orders and bills with a seeded synthetic history from the venue's simulation profile; returns `bills_created` (`DEMO_MODE` only).
 - `POST /api/restaurants/{slug}/demo/reset` — Re-seeds the demo menu and tables (`DEMO_MODE` only).
 - `GET /api/metrics/inference` — Aggregated inference metrics, token counts, average latency, and active provider label.

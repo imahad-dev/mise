@@ -1,6 +1,6 @@
 # Mise — Restaurant Revenue Copilot & Kitchen Operations Platform
 
-Mise is an ordering, kitchen and revenue analytics platform for independent restaurants. Guests scan table QR codes to open a web menu with deterministic allergen filtering, English and Italian localization, and ordering. Orders flow in real time to a Server-Sent Events (SSE) kitchen display system (KDS). Owners get a daily revenue brief computed from order history (KPIs, menu engineering, a backtested 7-day demand forecast and ranked actions), a deterministic what-if calculator, and visual menu ingestion. The language model only writes plain-language summaries of numbers that were already computed.
+Mise is an ordering, kitchen and revenue analytics platform for independent restaurants. Guests scan table QR codes to open a web menu with deterministic allergen filtering, English and Italian localization, and ordering. Dishes can have sizes (half / full, ½ kg / 1 kg, regular / large). Orders flow in real time to a Server-Sent Events (SSE) kitchen display system (KDS), and each table's orders gather on one bill that staff settle and print as a sample bill with illustrative Pakistani sales tax. Owners and staff sign in with their own accounts and see only the restaurants they belong to. Owners get a daily revenue brief computed from order history (KPIs, menu engineering, a backtested 7-day demand forecast and ranked actions), a deterministic what-if calculator, and visual menu ingestion. The language model only writes plain-language summaries of numbers that were already computed.
 
 ---
 
@@ -10,6 +10,8 @@ Mise is an ordering, kitchen and revenue analytics platform for independent rest
   - QR-driven table session initialization.
   - English and Italian (only these two languages are supported).
   - Deterministic EU-14 allergen cross-referencing with explicit acknowledgment guards.
+  - Size picker for dishes with sizes; prices in PKR (`Rs 2,100`) with the note "Prices exclude sales tax, which is added to your bill."
+  - "Request bill" on the order page, then "Bill requested" and "Paid · Bill no. 0042" states.
   - Cart persistence with server-verified idempotency tokens.
   - Live order status tracking powered by Server-Sent Events (SSE).
   - AI menu chat assistant (sees the menu only, never the guest's allergen or dietary profile).
@@ -18,15 +20,28 @@ Mise is an ordering, kitchen and revenue analytics platform for independent rest
   - Low-latency, high-contrast KDS optimized for busy kitchen lines.
   - Real-time SSE order streaming with automatic reconnection and polling fallbacks.
   - High-visibility allergy alert banners extracted from immutable order item snapshots.
+  - Each ticket line shows the chosen size ("Chicken Karahi — 1 kg").
   - Color-coded ticket aging (green under 10 minutes, amber from 10 minutes, red from 20 minutes).
   - Idempotent ticket bump workflow with a 60-second undo recall safety window.
 
+- **Accounts and venues**
+  - Per-user email and password sign-in (scrypt hashes); each user has an `owner` or `staff` membership per restaurant. Any `/api/restaurants/{slug}/...` route answers 404 "Restaurant not found" to a non-member, exactly as for an unknown slug; staff get 403 on owner-only routes.
+  - Owners with several venues switch between them in the sidebar; staff-only accounts open the kitchen display.
+  - No public sign-up: clients are onboarded with `scripts/admin.py` (see Quick Start).
+  - Two demo venues: **Angeethi House** (Lahore, Punjab; BBQ, karahi, handi, tandoor) and **Kehwa & Crumb** (Islamabad; coffee, chai, bakery). Prices and costs are illustrative.
+
+- **Bills and sample bill (`owner-web`, staff and owner)**
+  - Bills page: open table bills live over SSE, "Bill requested" first, lines grouped by dish and size, and side-by-side totals for cash or bank transfer vs card, wallet or QR.
+  - Payment methods: Cash, Card, JazzCash / Easypaisa, Raast QR, Bank transfer, with an optional reference. Settling snapshots subtotal, tax rate, tax and total on the bill.
+  - Printable 80 mm sample bill with "Sales tax (illustrative)" and the fixed footer "Sample bill — not a tax invoice. Not connected to FBR or any provincial revenue authority."
+  - Sales tax rates live in `data/tax_rates.json`, one row per jurisdiction, payment class and start date, each with its legal source: Punjab 16% (cash, bank transfer) / 8% (card, wallet, QR) from 1 July 2026 under the Punjab Sales Tax on Services Act 2012 as amended by the Punjab Finance Act 2026 (16% / 5% before); Islamabad 15% / 5% under the ICT (Tax on Services) Ordinance 2001. Verification notes: [docs/research/2026-10-24-tax-rate-verification.md](docs/research/2026-10-24-tax-rate-verification.md).
+
 - **Owner Revenue Copilot (`owner-web`)**
-  - Revenue brief (`/brief`) over the last 28 days: revenue, average order value and contribution margin from order snapshots; menu-engineering quadrant (star, plowhorse, puzzle, dog by median units and median unit margin); top item pairings by lift; peak hours.
+  - Revenue brief (`/brief`) over the last 28 days: revenue, average order value and contribution margin from order snapshots; menu-engineering quadrant (star, plowhorse, puzzle, dog by median units and median unit margin) with one row per dish and size; top item pairings by lift; peak hours; payments and tax (cash vs digital share of bills and revenue, tax per rate, and the tax saved by digital payments).
   - 7-day forecast per item and daypart (lunch/dinner): seasonal-naive and 4-week-mean baselines plus a gradient-boosting model, compared in a 14-day rolling-origin backtest; the lowest-WAPE method is used and its WAPE is shown next to the naive baseline. Under 14 days of history it uses the baseline and is flagged low confidence. No weather, holidays or reservations are modeled.
   - 3 to 5 ranked actions (promote puzzles, reprice plowhorses, review dogs, prep targets) with evidence numbers and estimated weekly impact from documented formulas.
   - What-if calculator (`/ai`): price change, promotion or demand surge on recent sales with stated elasticity assumptions; returns weekly revenue and margin deltas. Cannibalization, capacity and staffing are not modeled.
-  - Simulated demo data (`make simulate` or the **Generate demo data** button in DEMO_MODE, limited to 3 runs per hour per client IP), always stored as `source='simulated'` and labeled in the UI. Regenerating replaces the previous simulated orders and stored forecasts; live orders are never touched.
+  - Simulated demo data (`make simulate` or the **Generate demo data** button in DEMO_MODE, limited to 3 runs per hour per client IP), from each venue's own profile (service hours, party sizes, dish and size popularity, an assumed payment mix), with one settled bill per simulated party. Always stored as `source='simulated'` and labeled in the UI. Regenerating replaces the previous simulated orders, bills and stored forecasts; live orders and bills are never touched.
   - Visual Menu Ingestion (VLM) for digitizing paper menus from photo URLs into structured catalog items.
   - Table management and QR code generator.
   - Methods, assumptions and limits: [docs/analytics.md](docs/analytics.md).
@@ -48,7 +63,7 @@ graph TD
 
     subgraph Backend["FastAPI Backend (services/api :8000)"]
         API["FastAPI Core Engine<br/>AsyncPG & Psycopg"]
-        AUTH["Signed Cookie Auth<br/>(mise_auth: owner/staff, mise_guest)"]
+        AUTH["Signed Cookie Auth<br/>(mise_auth: user id, mise_guest)<br/>per-restaurant memberships"]
         ANALYTICS["Analytics & Forecast<br/>(SQL aggregates, backtested model)"]
         ALLERGEN["Deterministic Allergen Engine<br/>(EU-14 Exact Match & Precedence)"]
         IDEMP["Idempotency Guard<br/>(Server SHA-256 Payload Hash)"]
@@ -85,7 +100,7 @@ graph TD
 
 ## Screenshots
 
-Screenshots are produced by `make e2e` in `test-results/screens/` (guest menu and order sheet on a phone, owner brief and kitchen display on desktop).
+Screenshots are produced by `make e2e` in `test-results/screens/`: guest menu, size picker and order sheet on a phone; kitchen display, sample bill and owner brief on desktop.
 
 ---
 
@@ -112,12 +127,29 @@ docker compose up -d --build --wait
 # Run database migrations
 make migrate
 
-# Seed initial restaurant menu and tables
+# Seed both demo venues (menus with sizes, tables); with DEMO_MODE=true also the demo users
 make seed
 
-# Optional: 56 days of simulated demo orders for the brief and forecast
+# Optional: 56 days of simulated demo orders and settled bills for every demo venue
 make simulate
 ```
+
+With `DEMO_MODE=true` the owner login page has **Enter as demo owner** (both venues) and **Open
+kitchen display (demo staff)** (Angeethi House); `POST /api/auth/demo-login {"role": "staff",
+"venue": "kehwa-and-crumb"}` signs in the café's demo staff.
+
+### Onboarding a client restaurant
+
+```bash
+docker compose exec api python scripts/admin.py create-restaurant \
+    --slug cafe-x --name "Cafe X" --city Lahore --jurisdiction PB --currency PKR --timezone Asia/Karachi
+docker compose exec api python scripts/admin.py add-user \
+    --email boss@cafex.pk --name Boss --restaurant cafe-x --role owner
+```
+
+`create-restaurant` refuses a jurisdiction with no tax rates in `data/tax_rates.json`. `add-user`
+prompts for the password (never read from the command line or printed); for an existing user it
+only adds the membership.
 
 ### 3. Access Services
 
@@ -132,6 +164,7 @@ make simulate
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
+| `DEMO_MODE` | `false` | Enables demo users and demo login, `/api/demo/info`, demo data generation and the demo banner. |
 | `APP_ENV` | `dev` | Application environment (`dev`, `staging`, `production`). In non-dev, boot fails if default secrets are unchanged. |
 | `API_SECRET_KEY` | `change_me_in_production` | HMAC secret for signing auth session cookies. |
 | `POSTGRES_HOST` / `POSTGRES_DB` | `postgres` / `mise` | PostgreSQL connection coordinates. |
@@ -256,8 +289,10 @@ LLM_PROVIDER=mock DEMO_MODE=true make up && make e2e
 make ci
 
 # End-to-end Phase 1 check on a fresh stack (wipes dev volumes; mock LLM only):
-# migrations up/down/check, seed twice, demo data (sequential + parallel), brief, what-if,
-# live order survival, browser tests, edge proxy, then make ci
+# migrations up/down/check, seed twice (two venues, demo users), demo data for both venues
+# (sequential + parallel), brief and what-if in PKR, a live order and its settled bill surviving
+# regeneration, browser tests (both venues, sizes, bills, sample bill, isolation), edge proxy,
+# then make ci
 LLM_PROVIDER=mock DEMO_MODE=true make verify-f
 ```
 
@@ -267,7 +302,7 @@ LLM_PROVIDER=mock DEMO_MODE=true make verify-f
 
 1. **Deterministic Allergen Safety**: Food allergies can be life-threatening. Mise never relies on generative models or fuzzy embeddings to evaluate dietary risks. Menu items are checked with exact set theory against the EU-14 regulatory allergen catalog.
 2. **Server-Side Idempotency**: Flaky mobile restaurant Wi-Fi can trigger duplicate network requests. Mise computes a deterministic SHA-256 payload hash on the server. If an identical `idempotency_key` is re-sent, the existing order is returned without duplicating tickets.
-3. **Signed Cookies**: Two HMAC-signed, httpOnly, `SameSite=Lax` cookies: `mise_auth` (owner or staff role, 8 hours) and `mise_guest` (guest session, 4 hours), keeping guest sessions separate from restaurant management.
+3. **Signed Cookies**: Two HMAC-signed, httpOnly, `SameSite=Lax` cookies: `mise_auth` (user id, 8 hours; the role comes from the user's membership in each restaurant) and `mise_guest` (guest session, 4 hours), keeping guest sessions separate from restaurant management.
 4. **Per-IP Limits Behind a Proxy**: Login, demo login, demo ingest and demo data generation are limited per client IP. For public deployments run `docker compose --profile edge up -d` and expose only Caddy's ports (8080 guest, 8081 owner); Caddy replaces client-sent `X-Forwarded-For`, so the limits cannot be bypassed. Details in [docs/architecture.md](docs/architecture.md).
 5. **Daily Request Safeguards**: Non-local AI provider usage is capped via Redis UTC day keys (`LLM_DAILY_REQUEST_CAP`). When the cap or provider 429 limits are reached, AI endpoints return HTTP 503 `ai_unavailable`; the revenue brief and what-if fall back to template text, and dining and kitchen operations are unaffected.
 

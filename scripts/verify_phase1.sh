@@ -16,6 +16,7 @@ export LLM_BASE_URL=http://inference:8080/v1 VLM_BASE_URL=http://inference:8080/
 
 API="http://127.0.0.1:8000"
 SLUG="angeethi-house"
+CAFE="kehwa-and-crumb"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 OWNER_JAR="$TMP/owner.jar"
@@ -92,13 +93,14 @@ step_seed_twice() {
   local first; first=$(sql "$q")
   make seed || return 1
   local second; second=$(sql "$q")
-  echo "after seed 1: $first / after seed 2: $second"
-  [ "$first" = "$second" ] && [ "${first%% *}" = "1" ]
+  local users; users=$(sql "SELECT (SELECT count(*) FROM users) || ' ' || (SELECT count(*) FROM memberships)")
+  echo "after seed 1: $first / after seed 2: $second / users memberships: $users"
+  [ "$first" = "$second" ] && [ "${first%% *}" = "2" ] && [ "${users%% *}" -ge 3 ]
 }
 
-simulate() { # simulate <outfile>
+simulate() { # simulate <outfile> [slug]
   curl -sf --max-time 120 -b "$OWNER_JAR" -H "Content-Type: application/json" \
-    -X POST "$API/api/restaurants/$SLUG/demo/simulate-orders" -d '{"days": 56}' -o "$1"
+    -X POST "$API/api/restaurants/${2:-$SLUG}/demo/simulate-orders" -d '{"days": 56}' -o "$1"
 }
 
 step_simulate() {
@@ -117,19 +119,28 @@ step_simulate() {
   wait "$p2" || return 1
   local par; par=$(counts)
   local live; live=$(sql "SELECT count(*) FROM orders WHERE source <> 'simulated'")
-  echo "orders/items: run1=$one run2=$two parallel=$par non-simulated=$live"
-  [ "$one" = "$two" ] && [ "$one" = "$par" ] && [ "$live" = "0" ] && [ "${one%% *}" -gt 500 ]
+  json_check "$TMP/sim1.json" "d['bills_created'] > 0" "simulation settles bills" || return 1
+  clear_demo_limits
+  simulate "$TMP/sim_cafe.json" "$CAFE" || return 1
+  json_check "$TMP/sim_cafe.json" "d['bills_created'] > 0" "cafe simulation settles bills" || return 1
+  local venues
+  venues=$(sql "SELECT count(DISTINCT restaurant_id) FROM orders WHERE source = 'simulated'")
+  echo "orders/items: run1=$one run2=$two parallel=$par non-simulated=$live venues simulated=$venues"
+  [ "$one" = "$two" ] && [ "$one" = "$par" ] && [ "$live" = "0" ] && [ "${one%% *}" -gt 500 ] &&
+    [ "$venues" = "2" ]
 }
 
 step_brief_whatif() {
   curl -sf --max-time 60 -b "$OWNER_JAR" "$API/api/restaurants/$SLUG/ai/brief" \
     -o "$TMP/brief.json" || return 1
   json_check "$TMP/brief.json" \
-    "d['kpis']['orders'] > 0 and d['data_sources']['simulated'] > 0 and d['menu_engineering']
+    "d['currency'] == 'PKR' and d['kpis']['orders'] > 0 and d['data_sources']['simulated'] > 0 and d['menu_engineering']
      and 3 <= len(d['actions']) <= 5 and d['summary_source'] in ('llm', 'template')
      and not d['forecast']['low_confidence'] and d['forecast']['history_days'] == 56
      and {b['method'] for b in d['forecast']['backtest']} >= {'seasonal_naive', 'trailing_4w_mean'}
-     and len({p['date'] for p in d['forecast']['points']}) == 7" "brief structure" || return 1
+     and len({p['date'] for p in d['forecast']['points']}) == 7
+     and d['payment_mix']['bills']['standard'] + d['payment_mix']['bills']['digital'] > 0" \
+    "brief structure" || return 1
   grounded "$TMP/brief.json" summary || return 1
   local stored
   stored=$(sql "SELECT count(*) FROM forecast_run
@@ -141,8 +152,9 @@ step_brief_whatif() {
     -X POST "$API/api/restaurants/$SLUG/ai/simulate" \
     -d '{"scenario": "demand_surge", "multiplier": 1.2}' -o "$TMP/surge.json" || return 1
   json_check "$TMP/surge.json" \
-    "abs(d['delta']['revenue_eur'] - 0.2 * d['baseline']['revenue_eur']) < 0.02
-     and abs(d['delta']['margin_eur'] - 0.2 * d['baseline']['margin_eur']) < 0.02
+    "d['currency'] == 'PKR'
+     and abs(d['delta']['revenue'] - 0.2 * d['baseline']['revenue']) < 0.02
+     and abs(d['delta']['margin'] - 0.2 * d['baseline']['margin']) < 0.02
      and d['assumptions']" "demand surge arithmetic" || return 1
   grounded "$TMP/surge.json" explanation || return 1
 
@@ -152,7 +164,8 @@ step_brief_whatif() {
     -X POST "$API/api/restaurants/$SLUG/ai/simulate" \
     -d "{\"scenario\": \"price_change\", \"item_id\": \"$item\", \"change_pct\": 5}" \
     -o "$TMP/price.json" || return 1
-  json_check "$TMP/price.json" "d['item'] and d['result'] and d['assumptions']" "price change" ||
+  json_check "$TMP/price.json" "d['currency'] == 'PKR' and d['item'] and d['result'] and d['assumptions']" \
+    "price change" ||
     return 1
   grounded "$TMP/price.json" explanation
 }
@@ -163,15 +176,27 @@ step_live_order_survives() {
     python3 -c "import json,sys; print(json.load(sys.stdin)[0]['qr_token'])") || return 1
   curl -sf -c "$GUEST_JAR" -H "Content-Type: application/json" -X POST "$API/api/guest/sessions" \
     -d "{\"qr_token\": \"$token\", \"language\": \"en\"}" >/dev/null || return 1
-  local item
-  item=$(curl -sf -b "$GUEST_JAR" "$API/api/guest/menu" |
-    python3 -c "import json,sys; print(json.load(sys.stdin)['items'][0]['id'])") || return 1
+  local line # first dish, with its first size when it has sizes
+  line=$(curl -sf -b "$GUEST_JAR" "$API/api/guest/menu" | python3 -c "
+import json, sys
+i = json.load(sys.stdin)['items'][0]
+line = {'menu_item_id': i['id'], 'quantity': 2}
+if i['options']:
+    line['option_id'] = i['options'][0]['id']
+print(json.dumps(line))") || return 1
   curl -sf -b "$GUEST_JAR" -H "Content-Type: application/json" -X POST "$API/api/orders" \
     -d "{\"idempotency_key\": \"verify-$(date +%s)\", \"acknowledge_allergen_risk\": true,
-         \"items\": [{\"menu_item_id\": \"$item\", \"quantity\": 2}]}" -o "$TMP/order.json" ||
-    return 1
+         \"items\": [$line]}" -o "$TMP/order.json" || return 1
   local order_id
   order_id=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['id'])" "$TMP/order.json")
+  local bill_id; bill_id=$(sql "SELECT bill_id FROM orders WHERE id = '$order_id'")
+  [ -n "$bill_id" ] || { echo "live order $order_id has no bill"; return 1; }
+  curl -sf -b "$OWNER_JAR" -H "Content-Type: application/json" \
+    -X POST "$API/api/restaurants/$SLUG/bills/$bill_id/settle" -d '{"payment_method": "cash"}' \
+    -o "$TMP/bill.json" || return 1
+  json_check "$TMP/bill.json" \
+    "d['status'] == 'settled' and d['bill_no'] and float(d['total']) > float(d['subtotal'])" \
+    "settled live bill" || return 1
   local before; before=$(sql "SELECT count(*) FROM orders WHERE source = 'simulated'")
 
   clear_demo_limits
@@ -185,8 +210,10 @@ step_live_order_survives() {
                WHERE o.id = '$order_id')
     FROM orders WHERE id = '$order_id' AND source = 'live'")
   local after; after=$(sql "SELECT count(*) FROM orders WHERE source = 'simulated'")
-  echo "live order $order_id: GET=$status live/items/session=$live simulated before=$before after=$after"
-  [ "$status" = "200" ] && [ "$live" = "1 1 1" ] && [ "$before" = "$after" ]
+  local bill
+  bill=$(sql "SELECT status || ' ' || source FROM bills WHERE id = '$bill_id' AND bill_no IS NOT NULL")
+  echo "live order $order_id: GET=$status live/items/session=$live bill=$bill simulated before=$before after=$after"
+  [ "$status" = "200" ] && [ "$live" = "1 1 1" ] && [ "$bill" = "settled live" ] && [ "$before" = "$after" ]
 }
 
 step_edge_proxy() { # Caddy (edge profile) must replace a client-sent X-Forwarded-For
@@ -206,11 +233,11 @@ step_ci() { make ci; }
 
 run_step "stack: make reset, make up, API healthy" step_stack
 run_step "migrations: upgrade head, downgrade -1, upgrade head, alembic check" step_migrations
-run_step "seed twice: identical counts" step_seed_twice
+run_step "seed twice: identical counts, two venues, demo users" step_seed_twice
 run_step "simulate-orders: sequential and parallel runs give identical counts" step_simulate
 run_step "brief and what-if: structure, grounded numbers, stored backtest" step_brief_whatif
-run_step "live order survives demo data regeneration" step_live_order_survives
-run_step "browser tests: guest order, kitchen bump, owner brief and what-if" step_e2e
+run_step "live order and its settled bill survive demo data regeneration" step_live_order_survives
+run_step "browser tests: two venues, sized order, kitchen, bills, owner, isolation" step_e2e
 run_step "edge proxy (Caddy) ignores spoofed X-Forwarded-For" step_edge_proxy
 run_step "make ci" step_ci
 echo "PASS verify-f: all steps"

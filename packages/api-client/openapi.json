@@ -70,6 +70,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "Unauthenticated"
           }
         }
       }
@@ -102,7 +105,7 @@
           "auth"
         ],
         "summary": "Demo Login",
-        "description": "Issue signed auth cookie for owner or staff in DEMO_MODE without credentials.\n\nRate limited to 20 per minute per client IP. Returns 404 if DEMO_MODE is false.",
+        "description": "Sign in as the seeded demo owner or a venue's demo staff user in DEMO_MODE.\n\nRate limited to 20 per minute per client IP. Returns 404 if DEMO_MODE is false.",
         "operationId": "demo_login_api_auth_demo_login_post",
         "requestBody": {
           "content": {
@@ -126,7 +129,7 @@
             }
           },
           "404": {
-            "description": "Demo mode disabled"
+            "description": "Demo mode disabled or demo user not seeded"
           },
           "429": {
             "description": "Rate limit exceeded (max 20 per minute per IP)"
@@ -150,7 +153,7 @@
           "auth"
         ],
         "summary": "Login",
-        "description": "Authenticate staff or owner and set httpOnly signed cookie.\n\nRate limited via Redis to 5 failures per 5 minutes per client IP.",
+        "description": "Authenticate a user by email and password and set httpOnly signed cookie.\n\nRate limited via Redis to 5 failures per 5 minutes per client IP.",
         "operationId": "login_api_auth_login_post",
         "requestBody": {
           "content": {
@@ -220,7 +223,7 @@
           "auth"
         ],
         "summary": "Get Me",
-        "description": "Return current authenticated role.",
+        "description": "Return the signed-in user's name and email.",
         "operationId": "get_me_api_auth_me_get",
         "responses": {
           "200": {
@@ -446,6 +449,62 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/api/guest/bill-request": {
+      "post": {
+        "tags": [
+          "guest"
+        ],
+        "summary": "Request Bill",
+        "description": "Ask for the table's open bill. Idempotent: the first request time is kept.",
+        "operationId": "request_bill_api_guest_bill_request_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GuestBillResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated or expired session"
+          },
+          "404": {
+            "description": "No open bill"
+          }
+        }
+      }
+    },
+    "/api/guest/bill": {
+      "get": {
+        "tags": [
+          "guest"
+        ],
+        "summary": "Get Guest Bill",
+        "description": "The bill of the session's latest billed order.",
+        "operationId": "get_guest_bill_api_guest_bill_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GuestBillResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated or expired session"
+          },
+          "404": {
+            "description": "No bill for this session"
           }
         }
       }
@@ -712,15 +771,6 @@
         "operationId": "bump_order_api_restaurants__slug__kitchen_orders__id__bump_post",
         "parameters": [
           {
-            "name": "slug",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Slug"
-            }
-          },
-          {
             "name": "id",
             "in": "path",
             "required": true,
@@ -728,6 +778,15 @@
               "type": "string",
               "format": "uuid",
               "title": "Id"
+            }
+          },
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Slug"
             }
           }
         ],
@@ -774,15 +833,6 @@
         "operationId": "recall_order_api_restaurants__slug__kitchen_orders__id__recall_post",
         "parameters": [
           {
-            "name": "slug",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Slug"
-            }
-          },
-          {
             "name": "id",
             "in": "path",
             "required": true,
@@ -790,6 +840,15 @@
               "type": "string",
               "format": "uuid",
               "title": "Id"
+            }
+          },
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Slug"
             }
           }
         ],
@@ -825,6 +884,191 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/api/restaurants/{slug}/bills": {
+      "get": {
+        "tags": [
+          "bills"
+        ],
+        "summary": "List Bills",
+        "description": "Open bills (requested first, then oldest) or the 50 latest settled bills.",
+        "operationId": "list_bills_api_restaurants__slug__bills_get",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Slug"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "open",
+                "settled"
+              ],
+              "type": "string",
+              "default": "open",
+              "title": "Status"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "404": {
+            "description": "Restaurant or bill not found"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/restaurants/{slug}/bills/{bill_id}": {
+      "get": {
+        "tags": [
+          "bills"
+        ],
+        "summary": "Get Bill",
+        "operationId": "get_bill_api_restaurants__slug__bills__bill_id__get",
+        "parameters": [
+          {
+            "name": "bill_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Bill Id"
+            }
+          },
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Slug"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "404": {
+            "description": "Restaurant or bill not found"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/restaurants/{slug}/bills/{bill_id}/settle": {
+      "post": {
+        "tags": [
+          "bills"
+        ],
+        "summary": "Settle",
+        "operationId": "settle_api_restaurants__slug__bills__bill_id__settle_post",
+        "parameters": [
+          {
+            "name": "bill_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Bill Id"
+            }
+          },
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Slug"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SettleBillRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "404": {
+            "description": "Restaurant or bill not found"
+          },
+          "409": {
+            "description": "Bill already settled"
+          },
+          "422": {
+            "description": "No active orders or no tax rate configured"
           }
         }
       }
@@ -895,15 +1139,6 @@
         "operationId": "patch_menu_item_api_restaurants__slug__menu_items__id__patch",
         "parameters": [
           {
-            "name": "slug",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Slug"
-            }
-          },
-          {
             "name": "id",
             "in": "path",
             "required": true,
@@ -911,6 +1146,15 @@
               "type": "string",
               "format": "uuid",
               "title": "Id"
+            }
+          },
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Slug"
             }
           }
         ],
@@ -965,15 +1209,6 @@
         "operationId": "delete_menu_item_api_restaurants__slug__menu_items__id__delete",
         "parameters": [
           {
-            "name": "slug",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Slug"
-            }
-          },
-          {
             "name": "id",
             "in": "path",
             "required": true,
@@ -981,6 +1216,15 @@
               "type": "string",
               "format": "uuid",
               "title": "Id"
+            }
+          },
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Slug"
             }
           }
         ],
@@ -1027,15 +1271,6 @@
         "operationId": "verify_menu_item_api_restaurants__slug__menu_items__id__verify_post",
         "parameters": [
           {
-            "name": "slug",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Slug"
-            }
-          },
-          {
             "name": "id",
             "in": "path",
             "required": true,
@@ -1043,6 +1278,15 @@
               "type": "string",
               "format": "uuid",
               "title": "Id"
+            }
+          },
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Slug"
             }
           }
         ],
@@ -1423,6 +1667,31 @@
           }
         }
       }
+    },
+    "/api/restaurants": {
+      "get": {
+        "tags": [
+          "restaurants"
+        ],
+        "summary": "List My Restaurants",
+        "description": "List the restaurants the signed-in user is a member of, with their role in each.",
+        "operationId": "list_my_restaurants_api_restaurants_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MyRestaurantsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1482,6 +1751,343 @@
         ],
         "title": "BacktestMetric"
       },
+      "BillDetail": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "bill_no": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bill No"
+          },
+          "table_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Table Label"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "opened_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Opened At"
+          },
+          "order_count": {
+            "type": "integer",
+            "title": "Order Count"
+          },
+          "subtotal": {
+            "type": "string",
+            "title": "Subtotal"
+          },
+          "bill_requested_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bill Requested At"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/BillLine"
+            },
+            "type": "array",
+            "title": "Lines"
+          },
+          "preview_standard": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TaxPreview"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "preview_digital": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TaxPreview"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "payment_method": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payment Method"
+          },
+          "payment_reference": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payment Reference"
+          },
+          "tax_jurisdiction": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tax Jurisdiction"
+          },
+          "tax_rate": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tax Rate"
+          },
+          "tax_amount": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tax Amount"
+          },
+          "total": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total"
+          },
+          "settled_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Settled At"
+          },
+          "restaurant_name": {
+            "type": "string",
+            "title": "Restaurant Name"
+          },
+          "restaurant_city": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Restaurant City"
+          },
+          "currency": {
+            "type": "string",
+            "title": "Currency"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "bill_no",
+          "table_label",
+          "status",
+          "opened_at",
+          "order_count",
+          "subtotal",
+          "bill_requested_at",
+          "lines",
+          "preview_standard",
+          "preview_digital",
+          "payment_method",
+          "payment_reference",
+          "tax_jurisdiction",
+          "tax_rate",
+          "tax_amount",
+          "total",
+          "settled_at",
+          "restaurant_name",
+          "restaurant_city",
+          "currency"
+        ],
+        "title": "BillDetail"
+      },
+      "BillLine": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "option_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Option Label"
+          },
+          "quantity": {
+            "type": "integer",
+            "title": "Quantity"
+          },
+          "unit_price": {
+            "type": "string",
+            "title": "Unit Price"
+          },
+          "line_total": {
+            "type": "string",
+            "title": "Line Total"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "option_label",
+          "quantity",
+          "unit_price",
+          "line_total"
+        ],
+        "title": "BillLine"
+      },
+      "BillListResponse": {
+        "properties": {
+          "bills": {
+            "items": {
+              "$ref": "#/components/schemas/BillSummary"
+            },
+            "type": "array",
+            "title": "Bills"
+          }
+        },
+        "type": "object",
+        "required": [
+          "bills"
+        ],
+        "title": "BillListResponse"
+      },
+      "BillSummary": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "bill_no": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bill No"
+          },
+          "table_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Table Label"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "opened_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Opened At"
+          },
+          "order_count": {
+            "type": "integer",
+            "title": "Order Count"
+          },
+          "subtotal": {
+            "type": "string",
+            "title": "Subtotal"
+          },
+          "bill_requested_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bill Requested At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "bill_no",
+          "table_label",
+          "status",
+          "opened_at",
+          "order_count",
+          "subtotal",
+          "bill_requested_at"
+        ],
+        "title": "BillSummary"
+      },
       "BriefAction": {
         "properties": {
           "rank": {
@@ -1509,6 +2115,17 @@
             ],
             "title": "Item Id"
           },
+          "option_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Option Id"
+          },
           "item": {
             "type": "string",
             "title": "Item"
@@ -1534,7 +2151,7 @@
             "type": "object",
             "title": "Evidence"
           },
-          "estimated_impact_eur_per_week": {
+          "estimated_impact_per_week": {
             "anyOf": [
               {
                 "type": "number"
@@ -1543,7 +2160,7 @@
                 "type": "null"
               }
             ],
-            "title": "Estimated Impact Eur Per Week"
+            "title": "Estimated Impact Per Week"
           },
           "formula": {
             "type": "string",
@@ -1558,7 +2175,7 @@
           "item",
           "title",
           "evidence",
-          "estimated_impact_eur_per_week",
+          "estimated_impact_per_week",
           "formula"
         ],
         "title": "BriefAction"
@@ -1628,7 +2245,7 @@
               "it"
             ],
             "title": "Language",
-            "default": "it"
+            "default": "en"
           },
           "dietary_preferences": {
             "items": {
@@ -1709,6 +2326,10 @@
             "type": "string",
             "title": "Date"
           },
+          "currency": {
+            "type": "string",
+            "title": "Currency"
+          },
           "window_start": {
             "type": "string",
             "title": "Window Start"
@@ -1747,6 +2368,9 @@
             "type": "array",
             "title": "Peak Hours"
           },
+          "payment_mix": {
+            "$ref": "#/components/schemas/PaymentMix"
+          },
           "forecast": {
             "$ref": "#/components/schemas/ForecastSummary"
           },
@@ -1773,6 +2397,7 @@
         "type": "object",
         "required": [
           "date",
+          "currency",
           "window_start",
           "window_end",
           "data_sources",
@@ -1781,6 +2406,7 @@
           "thresholds",
           "pairings",
           "peak_hours",
+          "payment_mix",
           "forecast",
           "actions",
           "summary",
@@ -1808,10 +2434,6 @@
       },
       "DemoInfoResponse": {
         "properties": {
-          "guest_url": {
-            "type": "string",
-            "title": "Guest Url"
-          },
           "owner_url": {
             "type": "string",
             "title": "Owner Url"
@@ -1820,34 +2442,19 @@
             "type": "string",
             "title": "Kitchen Url"
           },
-          "qr_token": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Qr Token"
-          },
-          "table_label": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Table Label"
+          "venues": {
+            "items": {
+              "$ref": "#/components/schemas/DemoVenueInfo"
+            },
+            "type": "array",
+            "title": "Venues"
           }
         },
         "type": "object",
         "required": [
-          "guest_url",
           "owner_url",
-          "kitchen_url"
+          "kitchen_url",
+          "venues"
         ],
         "title": "DemoInfoResponse"
       },
@@ -1860,6 +2467,17 @@
               "staff"
             ],
             "title": "Role"
+          },
+          "venue": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Venue"
           }
         },
         "type": "object",
@@ -1867,6 +2485,51 @@
           "role"
         ],
         "title": "DemoLoginRequest"
+      },
+      "DemoVenueInfo": {
+        "properties": {
+          "slug": {
+            "type": "string",
+            "title": "Slug"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "city": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "City"
+          },
+          "guest_url": {
+            "type": "string",
+            "title": "Guest Url"
+          },
+          "qr_token": {
+            "type": "string",
+            "title": "Qr Token"
+          },
+          "table_label": {
+            "type": "string",
+            "title": "Table Label"
+          }
+        },
+        "type": "object",
+        "required": [
+          "slug",
+          "name",
+          "city",
+          "guest_url",
+          "qr_token",
+          "table_label"
+        ],
+        "title": "DemoVenueInfo"
       },
       "ForecastPoint": {
         "properties": {
@@ -1979,6 +2642,44 @@
         ],
         "title": "ForecastSummary"
       },
+      "GuestBillResponse": {
+        "properties": {
+          "bill_no": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bill No"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "bill_requested_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bill Requested At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "bill_no",
+          "status",
+          "bill_requested_at"
+        ],
+        "title": "GuestBillResponse"
+      },
       "GuestMenuItemResponse": {
         "properties": {
           "id": {
@@ -2076,6 +2777,14 @@
             },
             "type": "array",
             "title": "Matched Allergens"
+          },
+          "options": {
+            "items": {
+              "$ref": "#/components/schemas/GuestMenuOption"
+            },
+            "type": "array",
+            "title": "Options",
+            "default": []
           }
         },
         "additionalProperties": false,
@@ -2099,6 +2808,31 @@
           "matched_allergens"
         ],
         "title": "GuestMenuItemResponse"
+      },
+      "GuestMenuOption": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "price": {
+            "type": "string",
+            "title": "Price"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "label",
+          "price"
+        ],
+        "title": "GuestMenuOption"
       },
       "GuestMenuResponse": {
         "properties": {
@@ -2362,6 +3096,17 @@
             "type": "string",
             "title": "Kitchen Name"
           },
+          "option_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Option Label"
+          },
           "quantity": {
             "type": "integer",
             "title": "Quantity"
@@ -2538,17 +3283,17 @@
             "type": "integer",
             "title": "Orders"
           },
-          "revenue_eur": {
+          "revenue": {
             "type": "number",
-            "title": "Revenue Eur"
+            "title": "Revenue"
           },
-          "aov_eur": {
+          "aov": {
             "type": "number",
-            "title": "Aov Eur"
+            "title": "Aov"
           },
-          "contribution_margin_eur": {
+          "contribution_margin": {
             "type": "number",
-            "title": "Contribution Margin Eur"
+            "title": "Contribution Margin"
           },
           "margin_pct": {
             "type": "number",
@@ -2558,32 +3303,32 @@
         "type": "object",
         "required": [
           "orders",
-          "revenue_eur",
-          "aov_eur",
-          "contribution_margin_eur",
+          "revenue",
+          "aov",
+          "contribution_margin",
           "margin_pct"
         ],
         "title": "Kpis"
       },
       "LoginRequest": {
         "properties": {
-          "role": {
+          "email": {
             "type": "string",
-            "enum": [
-              "owner",
-              "staff"
-            ],
-            "title": "Role"
+            "maxLength": 254,
+            "minLength": 3,
+            "title": "Email"
           },
-          "secret": {
+          "password": {
             "type": "string",
-            "title": "Secret"
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Password"
           }
         },
         "type": "object",
         "required": [
-          "role",
-          "secret"
+          "email",
+          "password"
         ],
         "title": "LoginRequest"
       },
@@ -2594,19 +3339,20 @@
             "const": "ok",
             "title": "Status"
           },
-          "role": {
+          "name": {
             "type": "string",
-            "enum": [
-              "owner",
-              "staff"
-            ],
-            "title": "Role"
+            "title": "Name"
+          },
+          "email": {
+            "type": "string",
+            "title": "Email"
           }
         },
         "type": "object",
         "required": [
           "status",
-          "role"
+          "name",
+          "email"
         ],
         "title": "LoginResponse"
       },
@@ -2626,18 +3372,19 @@
       },
       "MeResponse": {
         "properties": {
-          "role": {
+          "name": {
             "type": "string",
-            "enum": [
-              "owner",
-              "staff"
-            ],
-            "title": "Role"
+            "title": "Name"
+          },
+          "email": {
+            "type": "string",
+            "title": "Email"
           }
         },
         "type": "object",
         "required": [
-          "role"
+          "name",
+          "email"
         ],
         "title": "MeResponse"
       },
@@ -2646,6 +3393,17 @@
           "item_id": {
             "type": "string",
             "title": "Item Id"
+          },
+          "option_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Option Id"
           },
           "name": {
             "type": "string",
@@ -2659,17 +3417,17 @@
             "type": "number",
             "title": "Weekly Units"
           },
-          "revenue_eur": {
+          "revenue": {
             "type": "number",
-            "title": "Revenue Eur"
+            "title": "Revenue"
           },
-          "unit_margin_eur": {
+          "unit_margin": {
             "type": "number",
-            "title": "Unit Margin Eur"
+            "title": "Unit Margin"
           },
-          "contribution_eur": {
+          "contribution": {
             "type": "number",
-            "title": "Contribution Eur"
+            "title": "Contribution"
           },
           "menu_class": {
             "type": "string",
@@ -2685,12 +3443,13 @@
         "type": "object",
         "required": [
           "item_id",
+          "option_id",
           "name",
           "units",
           "weekly_units",
-          "revenue_eur",
-          "unit_margin_eur",
-          "contribution_eur",
+          "revenue",
+          "unit_margin",
+          "contribution",
           "menu_class"
         ],
         "title": "MenuEngineeringItem"
@@ -2742,17 +3501,77 @@
             "type": "number",
             "title": "Median Units"
           },
-          "median_unit_margin_eur": {
+          "median_unit_margin": {
             "type": "number",
-            "title": "Median Unit Margin Eur"
+            "title": "Median Unit Margin"
           }
         },
         "type": "object",
         "required": [
           "median_units",
-          "median_unit_margin_eur"
+          "median_unit_margin"
         ],
         "title": "MenuThresholds"
+      },
+      "MyRestaurant": {
+        "properties": {
+          "slug": {
+            "type": "string",
+            "title": "Slug"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "city": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "City"
+          },
+          "currency": {
+            "type": "string",
+            "title": "Currency"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "owner",
+              "staff"
+            ],
+            "title": "Role"
+          }
+        },
+        "type": "object",
+        "required": [
+          "slug",
+          "name",
+          "city",
+          "currency",
+          "role"
+        ],
+        "title": "MyRestaurant"
+      },
+      "MyRestaurantsResponse": {
+        "properties": {
+          "restaurants": {
+            "items": {
+              "$ref": "#/components/schemas/MyRestaurant"
+            },
+            "type": "array",
+            "title": "Restaurants"
+          }
+        },
+        "type": "object",
+        "required": [
+          "restaurants"
+        ],
+        "title": "MyRestaurantsResponse"
       },
       "OrderItemRequest": {
         "properties": {
@@ -2760,6 +3579,18 @@
             "type": "string",
             "format": "uuid",
             "title": "Menu Item Id"
+          },
+          "option_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Option Id"
           },
           "quantity": {
             "type": "integer",
@@ -2798,6 +3629,29 @@
             "type": "string",
             "format": "uuid",
             "title": "Menu Item Id"
+          },
+          "option_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Option Id"
+          },
+          "option_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Option Label"
           },
           "quantity": {
             "type": "integer",
@@ -2847,6 +3701,8 @@
         "required": [
           "id",
           "menu_item_id",
+          "option_id",
+          "option_label",
           "quantity",
           "unit_price",
           "item_name",
@@ -2894,6 +3750,10 @@
           "total": {
             "type": "string",
             "title": "Total"
+          },
+          "currency": {
+            "type": "string",
+            "title": "Currency"
           },
           "idempotency_key": {
             "type": "string",
@@ -2951,6 +3811,7 @@
           "table_id",
           "status",
           "total",
+          "currency",
           "idempotency_key",
           "allergen_conflict_acknowledged",
           "allergens_to_avoid",
@@ -3385,6 +4246,72 @@
         "type": "object",
         "title": "PatchMenuItemRequest"
       },
+      "PaymentClassCounts": {
+        "properties": {
+          "standard": {
+            "type": "integer",
+            "title": "Standard"
+          },
+          "digital": {
+            "type": "integer",
+            "title": "Digital"
+          }
+        },
+        "type": "object",
+        "required": [
+          "standard",
+          "digital"
+        ],
+        "title": "PaymentClassCounts"
+      },
+      "PaymentClassShares": {
+        "properties": {
+          "standard": {
+            "type": "number",
+            "title": "Standard"
+          },
+          "digital": {
+            "type": "number",
+            "title": "Digital"
+          }
+        },
+        "type": "object",
+        "required": [
+          "standard",
+          "digital"
+        ],
+        "title": "PaymentClassShares"
+      },
+      "PaymentMix": {
+        "properties": {
+          "bills": {
+            "$ref": "#/components/schemas/PaymentClassCounts"
+          },
+          "revenue_share": {
+            "$ref": "#/components/schemas/PaymentClassShares"
+          },
+          "tax_by_rate": {
+            "items": {
+              "$ref": "#/components/schemas/TaxByRate"
+            },
+            "type": "array",
+            "title": "Tax By Rate"
+          },
+          "digital_tax_saving": {
+            "type": "string",
+            "title": "Digital Tax Saving"
+          }
+        },
+        "type": "object",
+        "required": [
+          "bills",
+          "revenue_share",
+          "tax_by_rate",
+          "digital_tax_saving"
+        ],
+        "title": "PaymentMix",
+        "description": "Settled bills in the window: standard (cash, bank transfer) vs digital payments."
+      },
       "PeakHour": {
         "properties": {
           "hour": {
@@ -3395,18 +4322,50 @@
             "type": "number",
             "title": "Avg Orders Per Day"
           },
-          "avg_revenue_per_day_eur": {
+          "avg_revenue_per_day": {
             "type": "number",
-            "title": "Avg Revenue Per Day Eur"
+            "title": "Avg Revenue Per Day"
           }
         },
         "type": "object",
         "required": [
           "hour",
           "avg_orders_per_day",
-          "avg_revenue_per_day_eur"
+          "avg_revenue_per_day"
         ],
         "title": "PeakHour"
+      },
+      "SettleBillRequest": {
+        "properties": {
+          "payment_method": {
+            "type": "string",
+            "enum": [
+              "cash",
+              "card",
+              "wallet",
+              "raast",
+              "bank_transfer"
+            ],
+            "title": "Payment Method"
+          },
+          "payment_reference": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payment Reference"
+          }
+        },
+        "type": "object",
+        "required": [
+          "payment_method"
+        ],
+        "title": "SettleBillRequest"
       },
       "SimulateOrdersRequest": {
         "properties": {
@@ -3437,6 +4396,10 @@
             "type": "integer",
             "title": "Orders Created"
           },
+          "bills_created": {
+            "type": "integer",
+            "title": "Bills Created"
+          },
           "start_date": {
             "type": "string",
             "title": "Start Date"
@@ -3454,6 +4417,7 @@
         "type": "object",
         "required": [
           "orders_created",
+          "bills_created",
           "start_date",
           "end_date",
           "assumptions"
@@ -3473,6 +4437,56 @@
           "status"
         ],
         "title": "StatusOkResponse"
+      },
+      "TaxByRate": {
+        "properties": {
+          "rate": {
+            "type": "string",
+            "title": "Rate"
+          },
+          "tax": {
+            "type": "string",
+            "title": "Tax"
+          }
+        },
+        "type": "object",
+        "required": [
+          "rate",
+          "tax"
+        ],
+        "title": "TaxByRate"
+      },
+      "TaxPreview": {
+        "properties": {
+          "payment_class": {
+            "type": "string",
+            "enum": [
+              "standard",
+              "digital"
+            ],
+            "title": "Payment Class"
+          },
+          "tax_rate": {
+            "type": "string",
+            "title": "Tax Rate"
+          },
+          "tax_amount": {
+            "type": "string",
+            "title": "Tax Amount"
+          },
+          "total": {
+            "type": "string",
+            "title": "Total"
+          }
+        },
+        "type": "object",
+        "required": [
+          "payment_class",
+          "tax_rate",
+          "tax_amount",
+          "total"
+        ],
+        "title": "TaxPreview"
       },
       "ValidationError": {
         "properties": {
@@ -3602,6 +4616,10 @@
             "type": "string",
             "title": "Scenario"
           },
+          "currency": {
+            "type": "string",
+            "title": "Currency"
+          },
           "item": {
             "anyOf": [
               {
@@ -3656,6 +4674,7 @@
         "type": "object",
         "required": [
           "scenario",
+          "currency",
           "item",
           "window_start",
           "window_end",
@@ -3671,19 +4690,19 @@
       },
       "WhatIfTotals": {
         "properties": {
-          "revenue_eur": {
+          "revenue": {
             "type": "number",
-            "title": "Revenue Eur"
+            "title": "Revenue"
           },
-          "margin_eur": {
+          "margin": {
             "type": "number",
-            "title": "Margin Eur"
+            "title": "Margin"
           }
         },
         "type": "object",
         "required": [
-          "revenue_eur",
-          "margin_eur"
+          "revenue",
+          "margin"
         ],
         "title": "WhatIfTotals"
       }

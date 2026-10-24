@@ -38,11 +38,34 @@ count as high):
 
 Items with no sales in the window are not classified.
 
+**Portion rows.** A dish with sizes (`menu_item_option`) is analysed per (dish, size): "Chicken
+Karahi — ½ kg" and "Chicken Karahi — 1 kg" are separate rows with their own units and margins,
+because a half and a full portion sell and earn differently. Each row carries the dish's
+`item_id` and, for a size row, its `option_id` (null for a dish without sizes). Brief actions
+name the row they apply to and carry the same two ids. The forecast stays per dish (its
+size rows summed). The What-if page works per dish: a price change applies to every size, and
+the current price it shows is the units-weighted average of the size prices (this is stated in
+the assumptions).
+
 ## Pairings and peak hours
 
 - Pair lift = P(A and B in an order) / (P(A) × P(B)) over orders in the window. Pairs seen
   together in fewer than 5 orders are dropped. Top 5 by lift.
 - Peak hours: the 3 local hours with the most orders, as average orders and revenue per day.
+
+## Payment mix and tax
+
+Over bills settled in the window (live and simulated, like orders), by payment class: `cash`
+and `bank_transfer` are **standard**; `card`, `wallet` (JazzCash / Easypaisa) and `raast` (Raast
+QR) are **digital**.
+
+- Bills per class, and each class's share of billed revenue (pre-tax subtotal).
+- Tax collected per rate (the rate snapshotted on each bill at settle).
+- Digital tax saving = Σ over digital bills of (tax at the standard rate in force on the settle
+  date − tax actually charged). Bills whose date has no standard rate on file add nothing.
+
+Rates come from `data/tax_rates.json` through `tax_for` (see [architecture.md](architecture.md)).
+The tax on the demo's bills is illustrative; the sample bill is not a tax invoice.
 
 ## Forecast
 
@@ -96,7 +119,7 @@ guaranteed coverage.
 | Promote puzzle | top 2 puzzles by unit margin | 0.20 × weekly units × unit margin (assumes featuring lifts units 20%) |
 | Reprice plowhorse | top 2 plowhorses by units | what-if price change +5% at elasticity −0.8 on the current menu price and cost (margin delta; same baseline as the What-if page) |
 | Review dog | dog with the lowest contribution | weekly units × (median unit margin − unit margin) |
-| Prep targets | top 3 items by forecast for the next day | none; prep = ceil(Σ dayparts upper interval bound) |
+| Prep targets | top 3 dishes by forecast for the next day (all sizes of a dish together) | none; prep = ceil(Σ dayparts upper interval bound) |
 
 Weekly units = units in the window / 4. Each action lists its evidence numbers and formula.
 
@@ -107,8 +130,8 @@ Money fields carry no currency in their names; the brief and what-if responses i
 
 ## Summary text and the numbers guard
 
-The facts (KPIs, actions with evidence, pairings by item name, peak hours, forecast method and
-backtest WAPE) are sent to the configured model with an instruction to only restate numbers. The
+The facts (KPIs, actions with evidence, pairings by item name, peak hours, payment mix, forecast
+method and backtest WAPE) are sent to the configured model with an instruction to only restate numbers. The
 response is accepted only if every number in it equals a number in the facts rounded to the
 same number of decimals (thousands separators allowed). Otherwise, or if the model is
 unavailable (no client, daily cap, 429, error), a template summary built from the same facts is
