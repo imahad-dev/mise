@@ -30,7 +30,7 @@ SupportedLanguage = Literal["en", "it"]
 
 class CreateGuestSessionRequest(BaseModel):
     qr_token: str
-    language: SupportedLanguage = "it"
+    language: SupportedLanguage = "en"
     dietary_preferences: list[DietaryPreference] = []
     allergens_to_avoid: list[EU14Allergen] = []
 

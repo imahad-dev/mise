@@ -1,12 +1,14 @@
 """Seed database from JSON file.
 
 Usage:
-    docker compose exec -T api python scripts/seed.py [--file data/seed/trattoria_da_mario.json] [--rotate-qr]
+    docker compose exec -T api python scripts/seed.py [--file data/seed/angeethi_house.json ...]
+        [--demo-users data/seed/demo_users.json] [--rotate-qr]
 """
 
 import argparse
 import asyncio
 import json
+import logging
 import secrets
 import uuid
 from pathlib import Path
@@ -15,10 +17,18 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+from src.config import settings
 from src.database import async_session_factory
 from src.models.dining_table import DiningTable
-from src.models.menu import MenuItem, MenuTranslation
+from src.models.menu import MenuItem, MenuItemOption, MenuTranslation
 from src.models.restaurant import Restaurant
+from src.models.user import Membership, User
+from src.passwords import hash_password
+
+logger = logging.getLogger(__name__)
+
+DEFAULT_SEED_FILES = ["data/seed/angeethi_house.json", "data/seed/kehwa_and_crumb.json"]
+DEFAULT_DEMO_USERS_FILE = "data/seed/demo_users.json"
 
 SEED_ITEM_NAMESPACE = uuid.UUID("a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d")
 
@@ -54,11 +64,21 @@ def find_seed_for_slug(slug: str) -> dict[str, Any] | None:
         seed_dir = base / "data" / "seed"
         if seed_dir.is_dir():
             for path in sorted(seed_dir.glob("*.json")):
-                data = json.loads(path.read_text(encoding="utf-8"))
-                if (
-                    isinstance(data, dict)
-                    and data.get("restaurant", {}).get("slug") == slug
-                ):
+                try:
+                    data = json.loads(path.read_text(encoding="utf-8"))
+                except (OSError, ValueError):
+                    logger.warning("Skipping unreadable seed file %s", path)
+                    continue
+                rest = data.get("restaurant") if isinstance(data, dict) else None
+                if not isinstance(rest, dict):
+                    if (
+                        not isinstance(data, dict) or "owner" not in data
+                    ):  # demo_users.json
+                        logger.warning(
+                            "Skipping seed file without a restaurant: %s", path
+                        )
+                    continue
+                if rest.get("slug") == slug:
                     return data
             return None
     return None
@@ -86,10 +106,12 @@ async def seed_data(
         restaurant = Restaurant(
             name=rest_data["name"],
             slug=rest_data["slug"],
-            timezone=rest_data.get("timezone", "Europe/Rome"),
-            currency=rest_data.get("currency", "EUR"),
-            languages=rest_data.get("languages", ["en", "it"]),
-            default_language=rest_data.get("default_language", "it"),
+            city=rest_data.get("city"),
+            tax_jurisdiction=rest_data.get("tax_jurisdiction"),
+            timezone=rest_data.get("timezone", "Asia/Karachi"),
+            currency=rest_data.get("currency", "PKR"),
+            languages=rest_data.get("languages", ["en"]),
+            default_language=rest_data.get("default_language", "en"),
             onboarding=rest_data.get("onboarding", {}),
             active=rest_data.get("active", True),
         )
@@ -98,10 +120,12 @@ async def seed_data(
         print(f"Created restaurant: {restaurant.name} ({restaurant.slug})")
     else:
         restaurant.name = rest_data["name"]
-        restaurant.timezone = rest_data.get("timezone", "Europe/Rome")
-        restaurant.currency = rest_data.get("currency", "EUR")
-        restaurant.languages = rest_data.get("languages", ["en", "it"])
-        restaurant.default_language = rest_data.get("default_language", "it")
+        restaurant.city = rest_data.get("city")
+        restaurant.tax_jurisdiction = rest_data.get("tax_jurisdiction")
+        restaurant.timezone = rest_data.get("timezone", "Asia/Karachi")
+        restaurant.currency = rest_data.get("currency", "PKR")
+        restaurant.languages = rest_data.get("languages", ["en"])
+        restaurant.default_language = rest_data.get("default_language", "en")
         if "onboarding" in rest_data:
             restaurant.onboarding = rest_data["onboarding"]
         restaurant.active = rest_data.get("active", True)
@@ -131,7 +155,7 @@ async def seed_data(
     # 3. Upsert Menu Items and Translations via explicit query with selectinload
     stmt_items = (
         select(MenuItem)
-        .options(selectinload(MenuItem.translations))
+        .options(selectinload(MenuItem.translations), selectinload(MenuItem.options))
         .where(MenuItem.restaurant_id == restaurant.id)
     )
     res_items = await session.execute(stmt_items)
@@ -141,22 +165,18 @@ async def seed_data(
     items_created = 0
     items_updated = 0
     for item_data in items_data:
-        item_key = item_data.get("key") or item_data["translations"]["it"]["name"]
-        item_uuid = uuid.uuid5(SEED_ITEM_NAMESPACE, f"{restaurant.slug}:{item_key}")
+        item_uuid = uuid.uuid5(
+            SEED_ITEM_NAMESPACE, f"{restaurant.slug}:{item_data['key']}"
+        )
         target_item = existing_items_by_id.get(item_uuid)
-
-        if target_item is None:
-            # Fallback: check if existing item has matching Italian translation name
-            for m_item in existing_items_list:
-                for trans in m_item.translations:
-                    if (
-                        trans.language == "it"
-                        and trans.name == item_data["translations"]["it"]["name"]
-                    ):
-                        target_item = m_item
-                        break
-                if target_item is not None:
-                    break
+        options_data = item_data.get("options", [])
+        if options_data:  # the item's own price is its cheapest option
+            cheapest = min(options_data, key=lambda opt: opt["price"])
+            item_data = {
+                **item_data,
+                "price": cheapest["price"],
+                "unit_cost": cheapest["unit_cost"],
+            }
 
         if target_item is None:
             target_item = MenuItem(
@@ -221,6 +241,40 @@ async def seed_data(
                     )
             items_updated += 1
 
+        # Options: matched by stable id; any option no longer in the file is deleted.
+        existing_options = (
+            {opt.id: opt for opt in target_item.options}
+            if item_uuid in existing_items_by_id
+            else {}
+        )
+        wanted_ids = set()
+        for position, opt_data in enumerate(options_data):
+            opt_id = uuid.uuid5(
+                SEED_ITEM_NAMESPACE,
+                f"{restaurant.slug}:{item_data['key']}:{opt_data['label']}",
+            )
+            wanted_ids.add(opt_id)
+            if opt_id in existing_options:
+                opt = existing_options[opt_id]
+                opt.label = opt_data["label"]
+                opt.price = opt_data["price"]
+                opt.unit_cost = opt_data["unit_cost"]
+                opt.sort_order = position
+            else:
+                session.add(
+                    MenuItemOption(
+                        id=opt_id,
+                        menu_item_id=target_item.id,
+                        label=opt_data["label"],
+                        price=opt_data["price"],
+                        unit_cost=opt_data["unit_cost"],
+                        sort_order=position,
+                    )
+                )
+        for opt_id, opt in existing_options.items():
+            if opt_id not in wanted_ids:
+                await session.delete(opt)
+
     await session.flush()
     total_items = len(items_data)
     print(
@@ -243,10 +297,69 @@ async def seed_data(
     print("-" * 38 + "\n")
 
 
+async def seed_demo_users(data: dict[str, Any], session: AsyncSession) -> None:
+    """Create the demo owner and per-venue staff users with their memberships.
+
+    Demo users get a random unusable password: they sign in only through demo-login.
+    Does not commit; caller manages transaction lifecycle.
+    """
+    owner = data["owner"]
+    wanted: list[tuple[str, str, str, str]] = [
+        (owner["email"], owner["name"], slug, "owner") for slug in owner["venues"]
+    ]
+    wanted += [
+        (u["email"], u["name"], u["venue"], "staff") for u in data.get("staff", [])
+    ]
+
+    slugs = {slug for _, _, slug, _ in wanted}
+    res = await session.execute(select(Restaurant).where(Restaurant.slug.in_(slugs)))
+    venue_ids = {r.slug: r.id for r in res.scalars().all()}
+
+    for email, name, slug, role in wanted:
+        if slug not in venue_ids:
+            print(f"Demo user {email}: venue {slug} is not seeded, skipped.")
+            continue
+        user = (
+            await session.execute(select(User).where(User.email == email))
+        ).scalar_one_or_none()
+        if user is None:
+            user = User(
+                email=email,
+                name=name,
+                password_hash=hash_password(secrets.token_urlsafe(32)),
+            )
+            session.add(user)
+            await session.flush()
+        else:
+            user.name = name
+        member = (
+            await session.execute(
+                select(Membership).where(
+                    Membership.user_id == user.id,
+                    Membership.restaurant_id == venue_ids[slug],
+                )
+            )
+        ).scalar_one_or_none()
+        if member is None:
+            session.add(
+                Membership(user_id=user.id, restaurant_id=venue_ids[slug], role=role)
+            )
+        else:
+            member.role = role
+    await session.flush()
+
+
 async def async_main(args: argparse.Namespace) -> None:
-    seed_payload = load_seed_data(args.file)
+    payloads = [load_seed_data(f) for f in (args.file or DEFAULT_SEED_FILES)]
+    users_file = args.demo_users or (
+        DEFAULT_DEMO_USERS_FILE if settings.demo_mode else None
+    )
     async with async_session_factory() as session:
-        await seed_data(seed_payload, session, rotate_qr=args.rotate_qr)
+        for payload in payloads:
+            await seed_data(payload, session, rotate_qr=args.rotate_qr)
+        if users_file:
+            await seed_demo_users(load_seed_data(users_file), session)
+            print(f"Demo users seeded from {users_file}.")
         await session.commit()
         print("Seed successfully committed to database.")
 
@@ -255,8 +368,12 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Seed Mise database")
     parser.add_argument(
         "--file",
-        default="data/seed/trattoria_da_mario.json",
-        help="Path to seed JSON file",
+        action="append",
+        help="Seed JSON file (repeatable); defaults to both demo venues",
+    )
+    parser.add_argument(
+        "--demo-users",
+        help="Demo users JSON file; applied by default only when DEMO_MODE is true",
     )
     parser.add_argument(
         "--rotate-qr",

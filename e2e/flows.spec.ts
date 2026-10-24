@@ -3,7 +3,7 @@ import { expect, request, test, type APIRequestContext } from "@playwright/test"
 const API = process.env.API_URL ?? "http://127.0.0.1:8000";
 const GUEST = process.env.GUEST_URL ?? "http://127.0.0.1:3000";
 const OWNER = process.env.OWNER_URL ?? "http://127.0.0.1:3001";
-const SLUG = process.env.RESTAURANT_SLUG ?? "trattoria-da-mario";
+const SLUG = process.env.RESTAURANT_SLUG ?? "angeethi-house";
 
 async function demoApi(role: "owner" | "staff"): Promise<APIRequestContext> {
   const ctx = await request.newContext({ baseURL: API });
@@ -30,12 +30,12 @@ test.describe.serial("guest to kitchen to owner", () => {
   test("guest scans the table QR, sees the menu and places an order", async ({ page }) => {
     const info = await (await (await request.newContext({ baseURL: API })).get("/api/demo/info")).json();
 
-    await page.goto(`${GUEST}/q/${info.qr_token}`);
+    await page.goto(`${GUEST}/q/${info.venues[0].qr_token}`);
     await page.getByRole("button", { name: "View Menu" }).click();
 
     await expect(page).toHaveURL(/\/en\/menu$/);
-    await expect(page.getByRole("heading", { name: "Trattoria da Mario" })).toBeVisible();
-    await expect(page.getByText(`Table: ${info.table_label}`)).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Angeethi House" })).toBeVisible();
+    await expect(page.getByText(`Table: ${info.venues[0].table_label}`)).toBeVisible();
     await page.setViewportSize({ width: 375, height: 812 });
     await page.screenshot({ path: "test-results/screens/guest-menu-phone.png", fullPage: true });
 

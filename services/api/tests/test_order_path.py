@@ -13,7 +13,7 @@ import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from scripts.seed import load_seed_data, seed_data
-from sqlalchemy import delete, select, text
+from sqlalchemy import delete, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from tests.helpers import as_member, make_user, sign_in
 
@@ -22,7 +22,7 @@ from src.database import async_session_factory, get_db
 from src.main import app
 from src.models.audit import AuditLog
 from src.models.dining_table import DiningTable
-from src.models.menu import MenuItem, MenuTranslation
+from src.models.menu import MenuItem, MenuItemOption, MenuTranslation
 from src.models.order import Order
 from src.models.restaurant import Restaurant
 from src.models.session import GuestSession
@@ -40,14 +40,16 @@ def assert_no_unit_cost(data: Any) -> None:
             assert_no_unit_cost(item)
 
 
+# Dishes with portion options need an option on every order line; these tests order a plain dish.
+NO_OPTIONS = ~MenuItem.id.in_(select(MenuItemOption.menu_item_id))
+
+
 @pytest.fixture
 async def seeded_restaurant(db_session: AsyncSession) -> Restaurant:
-    """Seed test database with Mario trattoria and return Restaurant."""
-    data = load_seed_data("data/seed/trattoria_da_mario.json")
+    """Seed test database with Angeethi House and return Restaurant."""
+    data = load_seed_data("data/seed/angeethi_house.json")
     await seed_data(data, db_session, rotate_qr=False)
-    res = await db_session.execute(
-        select(Restaurant).where(Restaurant.slug == "trattoria-da-mario")
-    )
+    res = await db_session.execute(select(Restaurant).where(Restaurant.slug == "angeethi-house"))
     return res.scalar_one()
 
 
@@ -173,7 +175,7 @@ async def test_guest_session_flow_and_no_unit_cost(
     resp_menu = await client.get("/api/guest/menu")
     assert resp_menu.status_code == 200
     menu_data = resp_menu.json()
-    assert len(menu_data["items"]) == 25
+    assert len(menu_data["items"]) == 26
     assert_no_unit_cost(menu_data)
     # The guest menu page renders these; their absence crashed the page.
     assert menu_data["restaurant"] == {
@@ -494,11 +496,12 @@ async def test_allergen_acknowledgment_required_and_recorded(
     await db_session.flush()
     client.cookies.set(GUEST_COOKIE_NAME, sign_value(str(session.id)))
 
-    # Find item with milk (e.g., Tiramisù or Margherita)
+    # Find a plain (option-less) item with milk
     res_milk = await db_session.execute(
         select(MenuItem).where(
             MenuItem.restaurant_id == seeded_restaurant.id,
             MenuItem.allergens.contains(["milk"]),
+            NO_OPTIONS,
         )
     )
     milk_item = res_milk.scalars().first()
@@ -531,12 +534,22 @@ async def test_allergen_acknowledgment_required_and_recorded(
     audit_ack = res_audit.scalars().first()
     assert audit_ack is not None
 
-    # 4. Safe item with no conflicts: acknowledge_allergen_risk=True leaves it False
+    # 4. Safe item with no conflicts: acknowledge_allergen_risk=True leaves it False.
+    # The seed ships every item unverified, so verify the milk-free ones here.
+    await db_session.execute(
+        update(MenuItem)
+        .where(
+            MenuItem.restaurant_id == seeded_restaurant.id,
+            ~MenuItem.allergens.contains(["milk"]),
+        )
+        .values(allergen_verified=True)
+    )
     res_safe = await db_session.execute(
         select(MenuItem).where(
             MenuItem.restaurant_id == seeded_restaurant.id,
             ~MenuItem.allergens.contains(["milk"]),
             MenuItem.allergen_verified.is_(True),
+            NO_OPTIONS,
         )
     )
     safe_item = res_safe.scalars().first()
@@ -608,7 +621,7 @@ async def test_snapshots_unchanged_after_later_menu_edit(
 
     # Fetch menu item
     res = await db_session.execute(
-        select(MenuItem).where(MenuItem.restaurant_id == seeded_restaurant.id).limit(1)
+        select(MenuItem).where(MenuItem.restaurant_id == seeded_restaurant.id, NO_OPTIONS).limit(1)
     )
     item = res.scalars().first()
     original_price = item.price
@@ -747,6 +760,13 @@ async def test_owner_patch_resets_verified_flags_and_audit(
     slug = seeded_restaurant.slug
     await as_member(client, db_session, seeded_restaurant.id, "owner")
 
+    # The seed ships every item unverified, so start from a verified one.
+    await db_session.execute(
+        update(MenuItem)
+        .where(MenuItem.restaurant_id == seeded_restaurant.id)
+        .values(allergen_verified=True, dietary_verified=True)
+    )
+
     # Pick an item initially verified
     res = await db_session.execute(
         select(MenuItem)
@@ -812,7 +832,7 @@ async def test_failing_redis_publish_does_not_fail_order(
     client.cookies.set(GUEST_COOKIE_NAME, sign_value(str(session.id)))
 
     res = await db_session.execute(
-        select(MenuItem).where(MenuItem.restaurant_id == seeded_restaurant.id).limit(1)
+        select(MenuItem).where(MenuItem.restaurant_id == seeded_restaurant.id, NO_OPTIONS).limit(1)
     )
     item = res.scalars().first()
 
@@ -847,7 +867,7 @@ async def test_order_integrity_error_non_idempotency_reraised(
     client.cookies.set(GUEST_COOKIE_NAME, sign_value(str(session.id)))
 
     res = await db_session.execute(
-        select(MenuItem).where(MenuItem.restaurant_id == seeded_restaurant.id).limit(1)
+        select(MenuItem).where(MenuItem.restaurant_id == seeded_restaurant.id, NO_OPTIONS).limit(1)
     )
     item = res.scalars().first()
 

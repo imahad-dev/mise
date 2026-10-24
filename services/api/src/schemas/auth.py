@@ -34,9 +34,16 @@ class DemoLoginRequest(BaseModel):
     venue: str | None = None
 
 
-class DemoInfoResponse(BaseModel):
+class DemoVenueInfo(BaseModel):
+    slug: str
+    name: str
+    city: str | None
     guest_url: str
+    qr_token: str
+    table_label: str
+
+
+class DemoInfoResponse(BaseModel):
     owner_url: str
     kitchen_url: str
-    qr_token: str | None = None
-    table_label: str | None = None
+    venues: list[DemoVenueInfo]

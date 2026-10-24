@@ -1,0 +1,867 @@
+{
+  "_note": "Fictional venue. Prices and costs are illustrative (2025-26 ranges), not quotes.",
+  "restaurant": {
+    "name": "Kehwa & Crumb",
+    "slug": "kehwa-and-crumb",
+    "city": "Islamabad",
+    "tax_jurisdiction": "ICT",
+    "timezone": "Asia/Karachi",
+    "currency": "PKR",
+    "languages": [
+      "en"
+    ],
+    "default_language": "en",
+    "active": true
+  },
+  "tables": [
+    {
+      "label": "T1"
+    },
+    {
+      "label": "T2"
+    },
+    {
+      "label": "T3"
+    },
+    {
+      "label": "T4"
+    },
+    {
+      "label": "T5"
+    },
+    {
+      "label": "T6"
+    },
+    {
+      "label": "T7"
+    },
+    {
+      "label": "T8"
+    }
+  ],
+  "simulation": {
+    "lunch_rate": [
+      9,
+      9,
+      10,
+      10,
+      13,
+      16,
+      15
+    ],
+    "dinner_rate": [
+      11,
+      11,
+      12,
+      13,
+      18,
+      20,
+      17
+    ],
+    "lunch_hours": [
+      15,
+      18
+    ],
+    "dinner_hours": [
+      20,
+      23
+    ],
+    "party_size_weights": [
+      0.35,
+      0.45,
+      0.2,
+      0,
+      0,
+      0
+    ],
+    "dishes_per_guest": 1.6,
+    "payment_mix": {
+      "cash": 35,
+      "card": 40,
+      "wallet": 15,
+      "raast": 10
+    }
+  },
+  "items": [
+    {
+      "key": "americano",
+      "category": "Hot Coffee",
+      "price": 550,
+      "unit_cost": 120,
+      "ingredients": [
+        "espresso",
+        "water"
+      ],
+      "allergens": [],
+      "allergen_verified": false,
+      "is_vegetarian": true,
+      "is_vegan": true,
+      "is_gluten_free": true,
+      "dietary_verified": false,
+      "available": true,
+      "featured": false,
+      "sort_order": 1,
+      "translations": {
+        "en": {
+          "name": "Americano",
+          "description": "Espresso with hot water"
+        }
+      },
+      "options": [
+        {
+          "label": "Regular",
+          "price": 550,
+          "unit_cost": 120
+        },
+        {
+          "label": "Large",
+          "price": 680,
+          "unit_cost": 150
+        }
+      ],
+      "sim_weight": 6,
+      "option_weights": [
+        0.7,
+        0.3
+      ]
+    },
+    {
+      "key": "cappuccino",
+      "category": "Hot Coffee",
+      "price": 650,
+      "unit_cost": 190,
+      "ingredients": [
+        "espresso",
+        "milk"
+      ],
+      "allergens": [
+        "milk"
+      ],
+      "allergen_verified": false,
+      "is_vegetarian": true,
+      "is_vegan": false,
+      "is_gluten_free": true,
+      "dietary_verified": false,
+      "available": true,
+      "featured": true,
+      "sort_order": 2,
+      "translations": {
+        "en": {
+          "name": "Cappuccino",
+          "description": "Espresso with steamed milk and foam"
+        }
+      },
+      "options": [
+        {
+          "label": "Regular",
+          "price": 650,
+          "unit_cost": 190
+        },
+        {
+          "label": "Large",
+          "price": 790,
+          "unit_cost": 240
+        }
+      ],
+      "sim_weight": 9,
+      "option_weights": [
+        0.65,
+        0.35
+      ]
+    },
+    {
+      "key": "cafe_latte",
+      "category": "Hot Coffee",
+      "price": 690,
+      "unit_cost": 200,
+      "ingredients": [
+        "espresso",
+        "milk"
+      ],
+      "allergens": [
+        "milk"
+      ],
+      "allergen_verified": false,
+      "is_vegetarian": true,
+      "is_vegan": false,
+      "is_gluten_free": true,
+      "dietary_verified": false,
+      "available": true,
+      "featured": false,
+      "sort_order": 3,
+      "translations": {
+        "en": {
+          "name": "Café Latte",
+          "description": "Espresso with steamed milk"
+        }
+      },
+      "options": [
+        {
+          "label": "Regular",
+          "price": 690,
+          "unit_cost": 200
+        },
+        {
+          "label": "Large",
+          "price": 820,
+          "unit_cost": 250
+        }
+      ],
+      "sim_weight": 8,
+      "option_weights": [
+        0.65,
+        0.35
+      ]
+    },
+    {
+      "key": "spanish_latte",
+      "category": "Hot Coffee",
+      "price": 790,
+      "unit_cost": 250,
+      "ingredients": [
+        "espresso",
+        "milk",
+        "condensed milk"
+      ],
+      "allergens": [
+        "milk"
+      ],
+      "allergen_verified": false,
+      "is_vegetarian": true,
+      "is_vegan": false,
+      "is_gluten_free": true,
+      "dietary_verified": false,
+      "available": true,
+      "featured": false,
+      "sort_order": 4,
+      "translations": {
+        "en": {
+          "name": "Spanish Latte",
+          "description": "Latte sweetened with condensed milk"
+        }
+      },
+      "options": [
+        {
+          "label": "Regular",
+          "price": 790,
+          "unit_cost": 250
+        },
+        {
+          "label": "Large",
+          "price": 950,
+          "unit_cost": 300
+        }
+      ],
+      "sim_weight": 9,
+      "option_weights": [
+        0.6,
+        0.4
+      ]
+    },
+    {
+      "key": "iced_latte",
+      "category": "Iced",
+      "price": 750,
+      "unit_cost": 220,
+      "ingredients": [
+        "espresso",
+        "milk",
+        "ice"
+      ],
+      "allergens": [
+        "milk"
+      ],
+      "allergen_verified": false,
+      "is_vegetarian": true,
+      "is_vegan": false,
+      "is_gluten_free": true,
+      "dietary_verified": false,
+      "available": true,
+      "featured": false,
+      "sort_order": 5,
+      "translations": {
+        "en": {
+          "name": "Iced Latte",
+          "description": "Espresso and cold milk over ice"
+        }
+      },
+      "options": [
+        {
+          "label": "Regular",
+          "price": 750,
+          "unit_cost": 220
+        },
+        {
+          "label": "Large",
+          "price": 900,
+          "unit_cost": 270
+        }
+      ],
+      "sim_weight": 8,
+      "option_weights": [
+        0.6,
+        0.4
+      ]
+    },
+    {
+      "key": "caramel_frappe",
+      "category": "Iced",
+      "price": 950,
+      "unit_cost": 300,
+      "ingredients": [
+        "espresso",
+        "milk",
+        "caramel",
+        "ice"
+      ],
+      "allergens": [
+        "milk"
+      ],
+      "allergen_verified": false,
+      "is_vegetarian": true,
+      "is_vegan": false,
+      "is_gluten_free": true,
+      "dietary_verified": false,
+      "available": true,
+      "featured": false,
+      "sort_order": 6,
+      "translations": {
+        "en": {
+          "name": "Caramel Frappé",
+          "description": "Blended coffee with caramel and cream"
+        }
+      },
+      "options": [
+        {
+          "label": "Regular",
+          "price": 950,
+          "unit_cost": 300
+        },
+        {
+          "label": "Large",
+          "price": 1150,
+          "unit_cost": 360
+        }
+      ],
+      "sim_weight": 6,
+      "option_weights": [
+        0.6,
+        0.4
+      ]
+    },
+    {
+      "key": "iced_spanish_latte",
+      "category": "Iced",
+      "price": 880,
+      "unit_cost": 270,
+      "ingredients": [
+        "espresso",
+        "milk",
+        "condensed milk",
+        "ice"
+      ],
+      "allergens": [
+        "milk"
+      ],
+      "allergen_verified": false,
+      "is_vegetarian": true,
+      "is_vegan": false,
+      "is_gluten_free": true,
+      "dietary_verified": false,
+      "available": true,
+      "featured": false,
+      "sort_order": 7,
+      "translations": {
+        "en": {
+          "name": "Iced Spanish Latte",
+          "description": "Iced latte sweetened with condensed milk"
+        }
+      },
+      "options": [
+        {
+          "label": "Regular",
+          "price": 880,
+          "unit_cost": 270
+        },
+        {
+          "label": "Large",
+          "price": 1050,
+          "unit_cost": 320
+        }
+      ],
+      "sim_weight": 6,
+      "option_weights": [
+        0.6,
+        0.4
+      ]
+    },
+    {
+      "key": "karak_chai",
+      "category": "Chai & Kehwa",
+      "price": 350,
+      "unit_cost": 60,
+      "ingredients": [
+        "tea",
+        "milk",
+        "cardamom"
+      ],
+      "allergens": [
+        "milk"
+      ],
+      "allergen_verified": false,
+      "is_vegetarian": true,
+      "is_vegan": false,
+      "is_gluten_free": true,
+      "dietary_verified": false,
+      "available": true,
+      "featured": false,
+      "sort_order": 8,
+      "translations": {
+        "en": {
+          "name": "Karak Chai",
+          "description": "Strong tea boiled with milk and cardamom"
+        }
+      },
+      "sim_weight": 7
+    },
+    {
+      "key": "kashmiri_chai",
+      "category": "Chai & Kehwa",
+      "price": 450,
+      "unit_cost": 110,
+      "ingredients": [
+        "tea",
+        "milk",
+        "almonds",
+        "pistachio"
+      ],
+      "allergens": [
+        "milk",
+        "tree_nuts"
+      ],
+      "allergen_verified": false,
+      "is_vegetarian": true,
+      "is_vegan": false,
+      "is_gluten_free": true,
+      "dietary_verified": false,
+      "available": true,
+      "featured": false,
+      "sort_order": 9,
+      "translations": {
+        "en": {
+          "name": "Kashmiri Chai",
+          "description": "Pink tea with milk, almonds and pistachio"
+        }
+      },
+      "sim_weight": 4
+    },
+    {
+      "key": "green_kehwa",
+      "category": "Chai & Kehwa",
+      "price": 300,
+      "unit_cost": 40,
+      "ingredients": [
+        "green tea",
+        "saffron",
+        "cardamom"
+      ],
+      "allergens": [],
+      "allergen_verified": false,
+      "is_vegetarian": true,
+      "is_vegan": true,
+      "is_gluten_free": true,
+      "dietary_verified": false,
+      "available": true,
+      "featured": false,
+      "sort_order": 10,
+      "translations": {
+        "en": {
+          "name": "Green Kehwa",
+          "description": "Green tea with saffron and cardamom"
+        }
+      },
+      "sim_weight": 3
+    },
+    {
+      "key": "butter_croissant",
+      "category": "Bakery",
+      "price": 450,
+      "unit_cost": 140,
+      "ingredients": [
+        "flour",
+        "butter",
+        "eggs"
+      ],
+      "allergens": [
+        "gluten",
+        "milk",
+        "eggs"
+      ],
+      "allergen_verified": false,
+      "is_vegetarian": true,
+      "is_vegan": false,
+      "is_gluten_free": false,
+      "dietary_verified": false,
+      "available": true,
+      "featured": false,
+      "sort_order": 11,
+      "translations": {
+        "en": {
+          "name": "Butter Croissant",
+          "description": "Flaky all-butter croissant"
+        }
+      },
+      "sim_weight": 6
+    },
+    {
+      "key": "almond_croissant",
+      "category": "Bakery",
+      "price": 620,
+      "unit_cost": 210,
+      "ingredients": [
+        "flour",
+        "butter",
+        "almonds",
+        "eggs"
+      ],
+      "allergens": [
+        "gluten",
+        "milk",
+        "eggs",
+        "tree_nuts"
+      ],
+      "allergen_verified": false,
+      "is_vegetarian": true,
+      "is_vegan": false,
+      "is_gluten_free": false,
+      "dietary_verified": false,
+      "available": true,
+      "featured": false,
+      "sort_order": 12,
+      "translations": {
+        "en": {
+          "name": "Almond Croissant",
+          "description": "Croissant filled with almond cream"
+        }
+      },
+      "sim_weight": 4
+    },
+    {
+      "key": "fudge_brownie",
+      "category": "Bakery",
+      "price": 495,
+      "unit_cost": 150,
+      "ingredients": [
+        "flour",
+        "chocolate",
+        "butter",
+        "eggs"
+      ],
+      "allergens": [
+        "gluten",
+        "milk",
+        "eggs"
+      ],
+      "allergen_verified": false,
+      "is_vegetarian": true,
+      "is_vegan": false,
+      "is_gluten_free": false,
+      "dietary_verified": false,
+      "available": true,
+      "featured": false,
+      "sort_order": 13,
+      "translations": {
+        "en": {
+          "name": "Fudge Brownie",
+          "description": "Dense chocolate brownie"
+        }
+      },
+      "sim_weight": 6
+    },
+    {
+      "key": "banana_bread",
+      "category": "Bakery",
+      "price": 420,
+      "unit_cost": 120,
+      "ingredients": [
+        "flour",
+        "banana",
+        "butter",
+        "eggs"
+      ],
+      "allergens": [
+        "gluten",
+        "milk",
+        "eggs"
+      ],
+      "allergen_verified": false,
+      "is_vegetarian": true,
+      "is_vegan": false,
+      "is_gluten_free": false,
+      "dietary_verified": false,
+      "available": true,
+      "featured": false,
+      "sort_order": 14,
+      "translations": {
+        "en": {
+          "name": "Banana Bread",
+          "description": "Moist banana loaf slice"
+        }
+      },
+      "sim_weight": 3
+    },
+    {
+      "key": "buttermilk_pancakes",
+      "category": "Breakfast",
+      "price": 650,
+      "unit_cost": 190,
+      "ingredients": [
+        "flour",
+        "buttermilk",
+        "eggs",
+        "maple syrup"
+      ],
+      "allergens": [
+        "gluten",
+        "milk",
+        "eggs"
+      ],
+      "allergen_verified": false,
+      "is_vegetarian": true,
+      "is_vegan": false,
+      "is_gluten_free": false,
+      "dietary_verified": false,
+      "available": true,
+      "featured": false,
+      "sort_order": 15,
+      "translations": {
+        "en": {
+          "name": "Buttermilk Pancakes",
+          "description": "Stack of pancakes with maple syrup"
+        }
+      },
+      "sim_weight": 3
+    },
+    {
+      "key": "french_toast",
+      "category": "Breakfast",
+      "price": 595,
+      "unit_cost": 170,
+      "ingredients": [
+        "brioche",
+        "eggs",
+        "milk",
+        "honey"
+      ],
+      "allergens": [
+        "gluten",
+        "milk",
+        "eggs"
+      ],
+      "allergen_verified": false,
+      "is_vegetarian": true,
+      "is_vegan": false,
+      "is_gluten_free": false,
+      "dietary_verified": false,
+      "available": true,
+      "featured": false,
+      "sort_order": 16,
+      "translations": {
+        "en": {
+          "name": "French Toast",
+          "description": "Egg-dipped brioche with honey"
+        }
+      },
+      "sim_weight": 3
+    },
+    {
+      "key": "chicken_club_sandwich",
+      "category": "Breakfast",
+      "price": 950,
+      "unit_cost": 360,
+      "ingredients": [
+        "bread",
+        "chicken",
+        "egg",
+        "cheese",
+        "mayonnaise"
+      ],
+      "allergens": [
+        "gluten",
+        "milk",
+        "eggs"
+      ],
+      "allergen_verified": false,
+      "is_vegetarian": false,
+      "is_vegan": false,
+      "is_gluten_free": false,
+      "dietary_verified": false,
+      "available": true,
+      "featured": false,
+      "sort_order": 17,
+      "translations": {
+        "en": {
+          "name": "Chicken Club Sandwich",
+          "description": "Triple-decker chicken sandwich with fries"
+        }
+      },
+      "sim_weight": 5
+    },
+    {
+      "key": "chicken_pesto_melt",
+      "category": "Breakfast",
+      "price": 1100,
+      "unit_cost": 420,
+      "ingredients": [
+        "ciabatta",
+        "chicken",
+        "basil pesto",
+        "cheese"
+      ],
+      "allergens": [
+        "gluten",
+        "milk",
+        "tree_nuts"
+      ],
+      "allergen_verified": false,
+      "is_vegetarian": false,
+      "is_vegan": false,
+      "is_gluten_free": false,
+      "dietary_verified": false,
+      "available": true,
+      "featured": false,
+      "sort_order": 18,
+      "translations": {
+        "en": {
+          "name": "Chicken Pesto Melt",
+          "description": "Grilled chicken, pesto and melted cheese on ciabatta"
+        }
+      },
+      "sim_weight": 4
+    },
+    {
+      "key": "new_york_cheesecake",
+      "category": "Desserts",
+      "price": 850,
+      "unit_cost": 300,
+      "ingredients": [
+        "cream cheese",
+        "biscuit",
+        "eggs",
+        "sugar"
+      ],
+      "allergens": [
+        "gluten",
+        "milk",
+        "eggs"
+      ],
+      "allergen_verified": false,
+      "is_vegetarian": true,
+      "is_vegan": false,
+      "is_gluten_free": false,
+      "dietary_verified": false,
+      "available": true,
+      "featured": false,
+      "sort_order": 19,
+      "translations": {
+        "en": {
+          "name": "New York Cheesecake",
+          "description": "Baked cheesecake on a biscuit base"
+        }
+      },
+      "sim_weight": 4
+    },
+    {
+      "key": "molten_lava_cake",
+      "category": "Desserts",
+      "price": 790,
+      "unit_cost": 250,
+      "ingredients": [
+        "chocolate",
+        "flour",
+        "butter",
+        "eggs"
+      ],
+      "allergens": [
+        "gluten",
+        "milk",
+        "eggs"
+      ],
+      "allergen_verified": false,
+      "is_vegetarian": true,
+      "is_vegan": false,
+      "is_gluten_free": false,
+      "dietary_verified": false,
+      "available": true,
+      "featured": false,
+      "sort_order": 20,
+      "translations": {
+        "en": {
+          "name": "Molten Lava Cake",
+          "description": "Warm chocolate cake with a liquid centre"
+        }
+      },
+      "sim_weight": 4
+    },
+    {
+      "key": "fresh_orange_juice",
+      "category": "Cold",
+      "price": 650,
+      "unit_cost": 220,
+      "ingredients": [
+        "oranges"
+      ],
+      "allergens": [],
+      "allergen_verified": false,
+      "is_vegetarian": true,
+      "is_vegan": true,
+      "is_gluten_free": true,
+      "dietary_verified": false,
+      "available": true,
+      "featured": false,
+      "sort_order": 21,
+      "translations": {
+        "en": {
+          "name": "Fresh Orange Juice",
+          "description": "Freshly squeezed orange juice"
+        }
+      },
+      "sim_weight": 2
+    },
+    {
+      "key": "mineral_water",
+      "category": "Cold",
+      "price": 100,
+      "unit_cost": 45,
+      "ingredients": [
+        "water"
+      ],
+      "allergens": [],
+      "allergen_verified": false,
+      "is_vegetarian": true,
+      "is_vegan": true,
+      "is_gluten_free": true,
+      "dietary_verified": false,
+      "available": true,
+      "featured": false,
+      "sort_order": 22,
+      "translations": {
+        "en": {
+          "name": "Mineral Water",
+          "description": "Bottled mineral water"
+        }
+      },
+      "options": [
+        {
+          "label": "Small",
+          "price": 100,
+          "unit_cost": 45
+        }
+      ],
+      "sim_weight": 3,
+      "option_weights": [
+        1.0
+      ]
+    }
+  ]
+}

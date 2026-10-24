@@ -41,14 +41,14 @@ curl -s -f -c "$STAFF_JAR" \
 
 # 3. Owner lists tables to get valid QR token
 echo "-> 3. Fetching Dining Tables"
-TABLES_JSON=$(curl -s -f -b "$OWNER_JAR" "$API_BASE_URL/api/restaurants/trattoria-da-mario/tables")
+TABLES_JSON=$(curl -s -f -b "$OWNER_JAR" "$API_BASE_URL/api/restaurants/angeethi-house/tables")
 QR_TOKEN=$(python3 -c "import sys, json; print(json.load(sys.stdin)[0]['qr_token'])" <<< "$TABLES_JSON")
 
 # 4. Guest creates session
 echo "-> 4. Creating Guest Session with token: $QR_TOKEN"
 SESS_JSON=$(curl -s -f -c "$GUEST_JAR" \
     -H "Content-Type: application/json" \
-    -d "{\"qr_token\":\"$QR_TOKEN\",\"language\":\"it\"}" \
+    -d "{\"qr_token\":\"$QR_TOKEN\",\"language\":\"en\"}" \
     "$API_BASE_URL/api/guest/sessions")
 
 # 5. Guest fetches menu (verify NO unit_cost)
@@ -69,17 +69,17 @@ echo "   Order placed: $ORDER_ID"
 
 # 7. Kitchen lists orders
 echo "-> 7. Kitchen List Orders"
-KITCHEN_JSON=$(curl -s -f -b "$STAFF_JAR" "$API_BASE_URL/api/restaurants/trattoria-da-mario/kitchen/orders")
+KITCHEN_JSON=$(curl -s -f -b "$STAFF_JAR" "$API_BASE_URL/api/restaurants/angeethi-house/kitchen/orders")
 python3 -c "import sys, json; orders=json.load(sys.stdin)['orders']; assert any(o['id'] == '$ORDER_ID' for o in orders), 'Order not in kitchen!'" <<< "$KITCHEN_JSON"
 
 # 8. Kitchen bumps order
 echo "-> 8. Kitchen Bumps Order"
-BUMP_JSON=$(curl -s -f -b "$STAFF_JAR" -X POST "$API_BASE_URL/api/restaurants/trattoria-da-mario/kitchen/orders/$ORDER_ID/bump")
+BUMP_JSON=$(curl -s -f -b "$STAFF_JAR" -X POST "$API_BASE_URL/api/restaurants/angeethi-house/kitchen/orders/$ORDER_ID/bump")
 python3 -c "import sys, json; assert json.load(sys.stdin)['status'] == 'bumped'" <<< "$BUMP_JSON"
 
 # 9. Kitchen recalls order (within 60s)
 echo "-> 9. Kitchen Recalls Order"
-RECALL_JSON=$(curl -s -f -b "$STAFF_JAR" -X POST "$API_BASE_URL/api/restaurants/trattoria-da-mario/kitchen/orders/$ORDER_ID/recall")
+RECALL_JSON=$(curl -s -f -b "$STAFF_JAR" -X POST "$API_BASE_URL/api/restaurants/angeethi-house/kitchen/orders/$ORDER_ID/recall")
 python3 -c "import sys, json; assert json.load(sys.stdin)['status'] == 'placed'" <<< "$RECALL_JSON"
 
 # 10. Owner PATCH menu item
@@ -87,7 +87,7 @@ echo "-> 10. Owner PATCH Menu Item"
 curl -s -f -b "$OWNER_JAR" -X PATCH \
     -H "Content-Type: application/json" \
     -d '{"available":true}' \
-    "$API_BASE_URL/api/restaurants/trattoria-da-mario/menu-items/$ITEM_ID" > /dev/null
+    "$API_BASE_URL/api/restaurants/angeethi-house/menu-items/$ITEM_ID" > /dev/null
 
 # 11. SSE Stream Check
 echo "-> 11. Checking Order SSE Stream"

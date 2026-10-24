@@ -14,7 +14,7 @@ pass() { echo -e "${GREEN}✓ $1${NC}"; }
 fail() { echo -e "${RED}✗ $1${NC}"; exit 1; }
 info() { echo -e "${YELLOW}→ $1${NC}"; }
 
-SLUG="trattoria-da-mario"
+SLUG="angeethi-house"
 API="http://127.0.0.1:8000"
 OWNER_WEB="http://127.0.0.1:3001"
 
@@ -100,7 +100,7 @@ INGEST_RESP=$(curl -sf --max-time 15 -X POST \
   "$API/api/restaurants/$SLUG/menu-items/ingest" \
   -b "$COOKIE_JAR" \
   -H "Content-Type: application/json" \
-  -d '{"image_url":"https://example.com/menu.jpg","language":"it"}' \
+  -d '{"image_url":"https://example.com/menu.jpg","language":"en"}' \
   2>/dev/null) || fail "menu ingest endpoint"
 echo "$INGEST_RESP" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['created_count']>=0" \
   || fail "ingest response validation"

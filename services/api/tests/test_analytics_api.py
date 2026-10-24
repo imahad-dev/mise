@@ -19,11 +19,9 @@ from src.redis_client import redis_client
 
 @pytest.fixture
 async def seeded_restaurant(db_session: AsyncSession) -> Restaurant:
-    data = load_seed_data("data/seed/trattoria_da_mario.json")
+    data = load_seed_data("data/seed/angeethi_house.json")
     await seed_data(data, db_session, rotate_qr=False)
-    res = await db_session.execute(
-        select(Restaurant).where(Restaurant.slug == "trattoria-da-mario")
-    )
+    res = await db_session.execute(select(Restaurant).where(Restaurant.slug == "angeethi-house"))
     return res.scalar_one()
 
 

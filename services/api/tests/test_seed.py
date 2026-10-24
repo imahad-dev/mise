@@ -1,19 +1,34 @@
 """Tests for database seed idempotency, row counts, and QR token stability."""
 
+import uuid
+
 import pytest
-from scripts.seed import load_seed_data, seed_data
+import scripts.seed as seed_module
+from scripts.seed import (
+    SEED_ITEM_NAMESPACE,
+    find_seed_for_slug,
+    load_seed_data,
+    seed_data,
+    seed_demo_users,
+)
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from src.models.dining_table import DiningTable
-from src.models.menu import MenuItem, MenuTranslation
+from src.models.menu import MenuItem, MenuItemOption, MenuTranslation
 from src.models.restaurant import Restaurant
+from src.models.user import Membership, User
+
+ANGEETHI = "data/seed/angeethi_house.json"
+KEHWA = "data/seed/kehwa_and_crumb.json"
+HALF_KG = "\u00bd kg"
 
 
 @pytest.mark.asyncio
 async def test_seed_data_idempotent_and_stable_tokens(db_session: AsyncSession):
     """Seed runs twice inside db_session: asserts row counts and stable table tokens."""
-    data = load_seed_data("data/seed/trattoria_da_mario.json")
+    data = load_seed_data(ANGEETHI)
     slug = data["restaurant"]["slug"]
 
     # --- Run 1 ---
@@ -31,7 +46,7 @@ async def test_seed_data_idempotent_and_stable_tokens(db_session: AsyncSession):
     tokens_run_1 = {t.label: t.qr_token for t in tables_1}
 
     # Verify initial table tokens are valid non-empty strings
-    assert len(tokens_run_1) == 6
+    assert len(tokens_run_1) == 12
     assert all(bool(token) for token in tokens_run_1.values())
 
     # --- Run 2 (idempotency verification) ---
@@ -43,30 +58,30 @@ async def test_seed_data_idempotent_and_stable_tokens(db_session: AsyncSession):
     )
     assert res_rest.scalar() == 1
 
-    # 2. Assert exactly 6 dining tables for this restaurant
+    # 2. Assert exactly 12 dining tables (T1-T8, F1-F4) for this restaurant
     res_tables = await db_session.execute(
         select(func.count())
         .select_from(DiningTable)
         .where(DiningTable.restaurant_id == restaurant.id)
     )
-    assert res_tables.scalar() == 6
+    assert res_tables.scalar() == 12
 
-    # 3. Assert exactly 25 menu items for this restaurant
+    # 3. Assert exactly 26 menu items for this restaurant
     res_items = await db_session.execute(
         select(func.count()).select_from(MenuItem).where(MenuItem.restaurant_id == restaurant.id)
     )
-    assert res_items.scalar() == 25
+    assert res_items.scalar() == 26
 
-    # 4. Assert exactly 50 menu translations (IT + EN for each item) for this restaurant
+    # 4. Assert exactly 26 menu translations (EN for each item) for this restaurant
     res_trans = await db_session.execute(
         select(func.count())
         .select_from(MenuTranslation)
         .join(MenuItem, MenuTranslation.menu_item_id == MenuItem.id)
         .where(MenuItem.restaurant_id == restaurant.id)
     )
-    assert res_trans.scalar() == 50
+    assert res_trans.scalar() == 26
 
-    # 5. Assert exactly 1 unverified item (allergen_verified is False) for this restaurant
+    # 5. Assert every item is unverified (allergen_verified is False) for this restaurant
     res_unverified = await db_session.execute(
         select(func.count())
         .select_from(MenuItem)
@@ -75,7 +90,7 @@ async def test_seed_data_idempotent_and_stable_tokens(db_session: AsyncSession):
             MenuItem.allergen_verified.is_(False),
         )
     )
-    assert res_unverified.scalar() == 1
+    assert res_unverified.scalar() == 26
 
     # 6. Assert unchanged table tokens after second run
     res_tables_2 = await db_session.execute(
@@ -92,7 +107,7 @@ async def test_seed_data_idempotent_and_stable_tokens(db_session: AsyncSession):
 @pytest.mark.asyncio
 async def test_seed_data_rotate_qr(db_session: AsyncSession):
     """rotate_qr=True generates new tokens for existing tables."""
-    data = load_seed_data("data/seed/trattoria_da_mario.json")
+    data = load_seed_data(ANGEETHI)
     slug = data["restaurant"]["slug"]
 
     await seed_data(data, db_session, rotate_qr=False)
@@ -115,7 +130,122 @@ async def test_seed_data_rotate_qr(db_session: AsyncSession):
     )
     tokens_2 = {t.label: t.qr_token for t in res_2.scalars().all()}
 
-    assert len(tokens_2) == 6
+    assert len(tokens_2) == 12
     # Each token should have changed
     for label, token in tokens_1.items():
         assert tokens_2[label] != token
+
+
+async def _counts(db: AsyncSession) -> tuple[int, int, int]:
+    return (
+        (await db.execute(select(func.count()).select_from(Restaurant))).scalar_one(),
+        (await db.execute(select(func.count()).select_from(MenuItem))).scalar_one(),
+        (await db.execute(select(func.count()).select_from(MenuItemOption))).scalar_one(),
+    )
+
+
+@pytest.mark.asyncio
+async def test_both_venues_seed_idempotently_with_stable_ids(db_session: AsyncSession):
+    angeethi, kehwa = load_seed_data(ANGEETHI), load_seed_data(KEHWA)
+    await seed_data(angeethi, db_session)
+    await seed_data(kehwa, db_session)
+    first = await _counts(db_session)
+    await seed_data(angeethi, db_session)
+    await seed_data(kehwa, db_session)
+    assert await _counts(db_session) == first
+    assert first[0] == 2
+
+    karahi_id = uuid.uuid5(SEED_ITEM_NAMESPACE, "angeethi-house:chicken_karahi")
+    karahi = (
+        await db_session.execute(
+            select(MenuItem).options(selectinload(MenuItem.options)).where(MenuItem.id == karahi_id)
+        )
+    ).scalar_one()
+    assert [o.label for o in karahi.options] == [HALF_KG, "1 kg"]
+    assert karahi.price == 1100
+    assert karahi.options[1].id == uuid.uuid5(
+        SEED_ITEM_NAMESPACE, "angeethi-house:chicken_karahi:1 kg"
+    )
+
+
+@pytest.mark.asyncio
+async def test_item_price_follows_cheapest_option(db_session: AsyncSession):
+    data = load_seed_data(KEHWA)
+    for item in data["items"]:
+        if item["key"] == "cappuccino":
+            item["price"], item["unit_cost"] = 1, 1  # a stale top-level price must not win
+    await seed_data(data, db_session)
+    cappuccino = (
+        await db_session.execute(
+            select(MenuItem).where(
+                MenuItem.id == uuid.uuid5(SEED_ITEM_NAMESPACE, "kehwa-and-crumb:cappuccino")
+            )
+        )
+    ).scalar_one()
+    assert (cappuccino.price, cappuccino.unit_cost) == (650, 190)
+
+
+@pytest.mark.asyncio
+async def test_reseed_deletes_options_no_longer_in_the_file(db_session: AsyncSession):
+    data = load_seed_data(ANGEETHI)
+    await seed_data(data, db_session)
+    for item in data["items"]:
+        if item["key"] == "chicken_karahi":
+            item["options"] = [o for o in item["options"] if o["label"] == HALF_KG]
+    await seed_data(data, db_session)
+    labels = (
+        (
+            await db_session.execute(
+                select(MenuItemOption.label).where(
+                    MenuItemOption.menu_item_id
+                    == uuid.uuid5(SEED_ITEM_NAMESPACE, "angeethi-house:chicken_karahi")
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert list(labels) == [HALF_KG]
+
+
+@pytest.mark.asyncio
+async def test_seed_demo_users_owner_in_both_staff_in_one(db_session: AsyncSession):
+    await seed_data(load_seed_data(ANGEETHI), db_session)
+    await seed_data(load_seed_data(KEHWA), db_session)
+    users = load_seed_data("data/seed/demo_users.json")
+    await seed_demo_users(users, db_session)
+    await seed_demo_users(users, db_session)  # second run changes nothing
+
+    rows = (
+        await db_session.execute(
+            select(User.email, Restaurant.slug, Membership.role)
+            .join(Membership, Membership.user_id == User.id)
+            .join(Restaurant, Restaurant.id == Membership.restaurant_id)
+            .order_by(User.email, Restaurant.slug)
+        )
+    ).all()
+    assert [tuple(r) for r in rows] == [
+        ("demo-owner@mise.demo", "angeethi-house", "owner"),
+        ("demo-owner@mise.demo", "kehwa-and-crumb", "owner"),
+        ("demo-staff+angeethi-house@mise.demo", "angeethi-house", "staff"),
+        ("demo-staff+kehwa-and-crumb@mise.demo", "kehwa-and-crumb", "staff"),
+    ]
+    assert (await db_session.execute(select(func.count()).select_from(User))).scalar_one() == 3
+
+
+def test_find_seed_for_slug_skips_demo_users_and_malformed_files(tmp_path, monkeypatch):
+    seed_dir = tmp_path / "data" / "seed"
+    seed_dir.mkdir(parents=True)
+    (seed_dir / "a_broken.json").write_text("{not json", encoding="utf-8")
+    (seed_dir / "b_wrong_shape.json").write_text('{"restaurant": "oops"}', encoding="utf-8")
+    (seed_dir / "c_list.json").write_text("[1, 2]", encoding="utf-8")
+    (seed_dir / "d_demo_users.json").write_text('{"owner": {}, "staff": []}', encoding="utf-8")
+    (seed_dir / "e_venue.json").write_text('{"restaurant": {"slug": "x"}}', encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    warnings: list[str] = []
+    monkeypatch.setattr(seed_module.logger, "warning", lambda msg, *a: warnings.append(msg % a))
+    assert find_seed_for_slug("x") == {"restaurant": {"slug": "x"}}
+    assert find_seed_for_slug("nope") is None
+    assert any("a_broken.json" in w for w in warnings)
+    assert any("b_wrong_shape.json" in w for w in warnings)
+    assert not any("d_demo_users.json" in w for w in warnings)

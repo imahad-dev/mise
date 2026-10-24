@@ -1,0 +1,22 @@
+{
+  "owner": {
+    "email": "demo-owner@mise.demo",
+    "name": "Demo owner",
+    "venues": [
+      "angeethi-house",
+      "kehwa-and-crumb"
+    ]
+  },
+  "staff": [
+    {
+      "email": "demo-staff+angeethi-house@mise.demo",
+      "name": "Demo staff (Angeethi)",
+      "venue": "angeethi-house"
+    },
+    {
+      "email": "demo-staff+kehwa-and-crumb@mise.demo",
+      "name": "Demo staff (Kehwa)",
+      "venue": "kehwa-and-crumb"
+    }
+  ]
+}

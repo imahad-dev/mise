@@ -15,7 +15,7 @@ export LLM_PROVIDER=mock DEMO_MODE=true
 export LLM_BASE_URL=http://inference:8080/v1 VLM_BASE_URL=http://inference:8080/v1 LLM_API_KEY=
 
 API="http://127.0.0.1:8000"
-SLUG="trattoria-da-mario"
+SLUG="angeethi-house"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 OWNER_JAR="$TMP/owner.jar"

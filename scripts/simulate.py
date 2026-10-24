@@ -1,7 +1,7 @@
 """Generate synthetic (source='simulated') demo orders for a restaurant.
 
 Usage:
-    docker compose exec -T api python scripts/simulate.py [--slug trattoria-da-mario]
+    docker compose exec -T api python scripts/simulate.py [--slug angeethi-house]
         [--days 56] [--seed 42] [--no-promo]
 
 Replaces any previously simulated orders for that restaurant. Live orders are untouched.
@@ -39,7 +39,7 @@ async def async_main(args: argparse.Namespace) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Generate simulated Mise orders")
-    parser.add_argument("--slug", default="trattoria-da-mario")
+    parser.add_argument("--slug", default="angeethi-house")
     parser.add_argument("--days", type=int, default=56)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--no-promo", action="store_true", default=False)

@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 from httpx import AsyncClient
-from scripts.seed import load_seed_data, seed_data
+from scripts.seed import load_seed_data, seed_data, seed_demo_users
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from tests.helpers import as_member, make_user
@@ -166,16 +166,57 @@ async def test_demo_info_404_when_demo_mode_false(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_demo_info_200_when_demo_mode_true(client: AsyncClient):
-    """GET /api/demo/info returns guest, owner, and kitchen URLs when DEMO_MODE is true."""
+async def test_demo_info_lists_both_venues_with_a_table_qr(
+    client: AsyncClient, db_session: AsyncSession
+):
+    """GET /api/demo/info returns owner/kitchen URLs and one first-table QR per demo venue."""
+    for path in ("angeethi_house", "kehwa_and_crumb"):
+        await seed_data(load_seed_data(f"data/seed/{path}.json"), db_session)
     with patch.object(settings, "demo_mode", True):
         resp = await client.get("/api/demo/info")
-        assert resp.status_code == 200
-        data = resp.json()
-        assert "guest_url" in data
-        assert "owner_url" in data
-        assert "kitchen_url" in data
-        assert data["kitchen_url"].endswith("/kitchen")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["kitchen_url"].endswith("/kitchen")
+    assert data["owner_url"]
+    venues = {v["slug"]: v for v in data["venues"]}
+    assert list(venues) == ["angeethi-house", "kehwa-and-crumb"]
+    assert venues["angeethi-house"]["city"] == "Lahore"
+    assert venues["kehwa-and-crumb"]["city"] == "Islamabad"
+    assert venues["angeethi-house"]["table_label"] == "F1"  # first by label
+    assert venues["kehwa-and-crumb"]["table_label"] == "T1"
+    for v in venues.values():
+        assert v["qr_token"] and v["guest_url"].endswith(f"/q/{v['qr_token']}")
+
+
+@pytest.mark.asyncio
+async def test_demo_info_skips_venues_that_are_not_seeded(
+    client: AsyncClient, db_session: AsyncSession
+):
+    with patch.object(settings, "demo_mode", True):
+        resp = await client.get("/api/demo/info")
+    assert resp.status_code == 200
+    assert resp.json()["venues"] == []
+
+
+@pytest.mark.asyncio
+async def test_demo_staff_is_confined_to_their_own_venue(
+    client: AsyncClient, db_session: AsyncSession
+):
+    """Demo-login staff for Kehwa reads Kehwa's kitchen and gets 404 on Angeethi's."""
+    for path in ("angeethi_house", "kehwa_and_crumb"):
+        await seed_data(load_seed_data(f"data/seed/{path}.json"), db_session)
+    await seed_demo_users(load_seed_data("data/seed/demo_users.json"), db_session)
+    with (
+        patch.object(settings, "demo_mode", True),
+        patch("src.routers.auth.redis_client.incr", new_callable=AsyncMock, return_value=1),
+        patch("src.routers.auth.redis_client.expire", new_callable=AsyncMock),
+    ):
+        login = await client.post(
+            "/api/auth/demo-login", json={"role": "staff", "venue": "kehwa-and-crumb"}
+        )
+    assert login.status_code == 200
+    assert (await client.get("/api/restaurants/kehwa-and-crumb/kitchen/orders")).status_code == 200
+    assert (await client.get("/api/restaurants/angeethi-house/kitchen/orders")).status_code == 404
 
 
 async def _menu_count(db: AsyncSession, restaurant_id) -> int:
@@ -186,9 +227,9 @@ async def _menu_count(db: AsyncSession, restaurant_id) -> int:
 @pytest.mark.asyncio
 async def test_demo_reset_reseeds_only_its_own_venue(client: AsyncClient, db_session: AsyncSession):
     """Reset loads the seed whose slug is this venue's; other venues are untouched."""
-    await seed_data(load_seed_data("data/seed/trattoria_da_mario.json"), db_session)
+    await seed_data(load_seed_data("data/seed/angeethi_house.json"), db_session)
     mine = (
-        await db_session.execute(select(Restaurant).where(Restaurant.slug == "trattoria-da-mario"))
+        await db_session.execute(select(Restaurant).where(Restaurant.slug == "angeethi-house"))
     ).scalar_one()
     other = Restaurant(
         name="Other venue",
@@ -214,12 +255,12 @@ async def test_demo_reset_reseeds_only_its_own_venue(client: AsyncClient, db_ses
 
     await as_member(client, db_session, mine.id, "owner")
     with patch.object(settings, "demo_mode", True):
-        resp = await client.post("/api/restaurants/trattoria-da-mario/demo/reset")
+        resp = await client.post("/api/restaurants/angeethi-house/demo/reset")
     assert resp.status_code == 200, resp.text
 
     await db_session.refresh(mine)
     await db_session.refresh(other)
-    assert mine.name == "Trattoria da Mario"
+    assert mine.name == "Angeethi House"
     assert (other.name, other.slug) == ("Other venue", "other-venue")
     assert await _menu_count(db_session, other.id) == other_items
 

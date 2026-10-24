@@ -10,7 +10,7 @@ from src.config import settings
 from src.database import get_db
 from src.models.dining_table import DiningTable
 from src.models.restaurant import Restaurant
-from src.schemas.auth import DemoInfoResponse
+from src.schemas.auth import DemoInfoResponse, DemoVenueInfo
 
 logger = logging.getLogger(__name__)
 
@@ -36,26 +36,31 @@ async def get_demo_info(
             detail="Demo mode is disabled",
         )
 
-    stmt = (
-        select(DiningTable)
-        .join(Restaurant)
-        .where(Restaurant.slug == settings.demo_restaurant_slugs[0])
-        .order_by(DiningTable.label)
-        .limit(1)
+    res = await db.execute(
+        select(Restaurant, DiningTable)
+        .join(DiningTable, DiningTable.restaurant_id == Restaurant.id)
+        .where(Restaurant.slug.in_(settings.demo_restaurant_slugs))
+        .order_by(Restaurant.slug, DiningTable.label)
     )
-    res = await db.execute(stmt)
-    table = res.scalar_one_or_none()
+    first_table: dict[str, tuple[Restaurant, DiningTable]] = {}
+    for restaurant, table in res.all():
+        first_table.setdefault(restaurant.slug, (restaurant, table))
 
-    guest_url = (
-        f"{settings.public_guest_url}/q/{table.qr_token}"
-        if table
-        else f"{settings.public_guest_url}/q/demo"
-    )
-
+    venues = [
+        DemoVenueInfo(
+            slug=restaurant.slug,
+            name=restaurant.name,
+            city=restaurant.city,
+            guest_url=f"{settings.public_guest_url}/q/{table.qr_token}",
+            qr_token=table.qr_token,
+            table_label=table.label,
+        )
+        for slug in settings.demo_restaurant_slugs
+        if (pair := first_table.get(slug)) is not None
+        for restaurant, table in [pair]
+    ]
     return DemoInfoResponse(
-        guest_url=guest_url,
         owner_url=settings.public_owner_url,
         kitchen_url=f"{settings.public_owner_url}/kitchen",
-        qr_token=table.qr_token if table else "demo",
-        table_label=table.label if table else "Table 1",
+        venues=venues,
     )
