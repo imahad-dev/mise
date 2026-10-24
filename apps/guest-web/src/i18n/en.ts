@@ -72,4 +72,9 @@ export const en: TranslationDict = {
     items: "Items",
     backToMenu: "Back to Menu",
   },
+  menu: {
+    taxNote: "Prices exclude sales tax, which is added to your bill.",
+    chooseSize: "Choose a size",
+    from: "from",
+  },
 };

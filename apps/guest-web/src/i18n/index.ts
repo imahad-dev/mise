@@ -74,5 +74,9 @@ export function getDictionary(locale: string | undefined | null): TranslationDic
       ...en.ui,
       ...(raw.ui || {}),
     },
+    menu: {
+      ...en.menu,
+      ...(raw.menu || {}),
+    },
   };
 }

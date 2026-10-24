@@ -12,8 +12,10 @@ import {
   clearCart,
   getCart,
   hasAllergenRisk,
+  lineKey,
   saveCart,
   setAllergenAcknowledged,
+  toOrderPayload,
   updateCartItemQuantity,
   type CartState,
 } from "../../../lib/cart";
@@ -34,6 +36,13 @@ interface MenuItem {
   is_vegan: boolean;
   is_gluten_free: boolean;
   available: boolean;
+  options?: MenuOption[];
+}
+
+interface MenuOption {
+  id: string;
+  label: string;
+  price: string;
 }
 
 interface MenuResponse {
@@ -61,6 +70,7 @@ export default function GuestMenuPage({
   const [error, setError] = useState<string | null>(null);
   const [cart, setCart] = useState<CartState>(getCart());
   const [cartOpen, setCartOpen] = useState(false);
+  const [sizePickerItem, setSizePickerItem] = useState<MenuItem | null>(null);
   const [submittingOrder, setSubmittingOrder] = useState(false);
   const [orderError, setOrderError] = useState<string | null>(null);
 
@@ -87,19 +97,28 @@ export default function GuestMenuPage({
     loadMenu();
   }, [router]);
 
-  const handleAddToCart = (item: MenuItem) => {
-    const updated = addToCart({
-      menuItemId: item.id,
-      name: item.name,
-      price: Number(item.price),
-      allergenStatus: item.allergen_status,
-      matchedAllergens: item.matched_allergens || [],
-    });
+  const handleAddToCart = (item: MenuItem, option?: MenuOption) => {
+    const updated = addToCart(
+      {
+        menuItemId: item.id,
+        name: item.name,
+        price: Number(item.price),
+        allergenStatus: item.allergen_status,
+        matchedAllergens: item.matched_allergens || [],
+      },
+      1,
+      option && { id: option.id, label: option.label, price: Number(option.price) },
+    );
     setCart({ ...updated });
   };
 
-  const handleUpdateQuantity = (menuItemId: string, qty: number, notes?: string) => {
-    const updated = updateCartItemQuantity(menuItemId, qty, notes);
+  const handleUpdateQuantity = (
+    menuItemId: string,
+    qty: number,
+    notes?: string,
+    optionId?: string,
+  ) => {
+    const updated = updateCartItemQuantity(menuItemId, qty, notes, optionId);
     setCart({ ...updated });
   };
 
@@ -121,15 +140,7 @@ export default function GuestMenuPage({
     setOrderError(null);
 
     try {
-      const payload = {
-        idempotency_key: cart.idempotencyKey,
-        items: cart.items.map((i) => ({
-          menu_item_id: i.menuItemId,
-          quantity: i.quantity,
-          notes: i.notes || null,
-        })),
-        acknowledge_allergen_risk: cart.acknowledged,
-      };
+      const payload = toOrderPayload(cart);
 
       const res = await fetch("/api/orders", {
         method: "POST",
@@ -223,6 +234,7 @@ export default function GuestMenuPage({
             </p>
           )}
           <h1 className="text-2xl text-ink">{menu.restaurant.name}</h1>
+          <p className="mt-0.5 text-xs text-ink-muted">{dict.menu.taxNote}</p>
           <nav aria-label={dict.ui.menuTitle} className="-mx-1 mt-3 flex gap-2 overflow-x-auto pb-3">
             {categories.map((cat) => (
               <a
@@ -248,6 +260,7 @@ export default function GuestMenuPage({
                 .filter((i) => i.category === cat)
                 .map((item) => {
                   const isAvailable = item.available !== false;
+                  const options = item.options ?? [];
                   return (
                     <li
                       key={item.id}
@@ -256,7 +269,9 @@ export default function GuestMenuPage({
                       <div className="flex items-baseline justify-between gap-3">
                         <h3 className="text-base font-semibold text-ink">{item.name}</h3>
                         <span className="whitespace-nowrap font-semibold tabular-nums text-ink">
-                          {formatPrice(Number(item.price))}
+                          {options.length > 0
+                            ? `${dict.menu.from} ${formatPrice(Math.min(...options.map((o) => Number(o.price))))}`
+                            : formatPrice(Number(item.price))}
                         </span>
                       </div>
                       {item.description && (
@@ -277,7 +292,9 @@ export default function GuestMenuPage({
                           <Button
                             size="icon"
                             aria-label={`${dict.ui.addToCart} ${item.name}`}
-                            onClick={() => handleAddToCart(item)}
+                            onClick={() =>
+                              options.length > 0 ? setSizePickerItem(item) : handleAddToCart(item)
+                            }
                           >
                             +
                           </Button>
@@ -340,9 +357,11 @@ export default function GuestMenuPage({
         ) : (
           <ul className="divide-y divide-line">
             {cart.items.map((item, idx) => (
-              <li key={`${item.menuItemId}-${idx}`} className="space-y-2 py-3">
+              <li key={`${lineKey(item)}-${idx}`} className="space-y-2 py-3">
                 <div className="flex items-center justify-between gap-3 text-sm">
-                  <span className="font-medium text-ink">{item.name}</span>
+                  <span className="font-medium text-ink">
+                    {item.optionLabel ? `${item.name} — ${item.optionLabel}` : item.name}
+                  </span>
                   <span className="font-semibold tabular-nums text-ink">
                     {formatPrice(item.price * item.quantity)}
                   </span>
@@ -357,8 +376,10 @@ export default function GuestMenuPage({
                     <Button
                       variant="outline"
                       size="icon"
-                      aria-label={`${dict.ui.decrease} ${item.name}`}
-                      onClick={() => handleUpdateQuantity(item.menuItemId, item.quantity - 1, item.notes)}
+                      aria-label={`${dict.ui.decrease} ${item.name}${item.optionLabel ? ` ${item.optionLabel}` : ""}`}
+                      onClick={() =>
+                        handleUpdateQuantity(item.menuItemId, item.quantity - 1, item.notes, item.optionId)
+                      }
                     >
                       −
                     </Button>
@@ -368,8 +389,10 @@ export default function GuestMenuPage({
                     <Button
                       variant="outline"
                       size="icon"
-                      aria-label={`${dict.ui.increase} ${item.name}`}
-                      onClick={() => handleUpdateQuantity(item.menuItemId, item.quantity + 1, item.notes)}
+                      aria-label={`${dict.ui.increase} ${item.name}${item.optionLabel ? ` ${item.optionLabel}` : ""}`}
+                      onClick={() =>
+                        handleUpdateQuantity(item.menuItemId, item.quantity + 1, item.notes, item.optionId)
+                      }
                     >
                       +
                     </Button>
@@ -397,6 +420,32 @@ export default function GuestMenuPage({
             </label>
           </div>
         )}
+      </Sheet>
+
+      <Sheet
+        open={sizePickerItem !== null}
+        onClose={() => setSizePickerItem(null)}
+        title={sizePickerItem?.name ?? ""}
+      >
+        <p className="text-sm text-ink-muted">{dict.menu.chooseSize}</p>
+        <ul className="space-y-2">
+          {(sizePickerItem?.options ?? []).map((option) => (
+            <li key={option.id}>
+              <Button
+                variant="outline"
+                className="w-full justify-between"
+                aria-label={`${dict.ui.addToCart} ${sizePickerItem?.name} ${option.label}`}
+                onClick={() => {
+                  if (sizePickerItem) handleAddToCart(sizePickerItem, option);
+                  setSizePickerItem(null);
+                }}
+              >
+                <span>{option.label}</span>
+                <span className="tabular-nums">{formatPrice(Number(option.price))}</span>
+              </Button>
+            </li>
+          ))}
+        </ul>
       </Sheet>
 
       <ChatPanel locale={lang} />

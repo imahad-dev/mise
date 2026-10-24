@@ -67,4 +67,9 @@ export interface TranslationDict {
     items: string;
     backToMenu: string;
   };
+  menu: {
+    taxNote: string;
+    chooseSize: string;
+    from: string;
+  };
 }

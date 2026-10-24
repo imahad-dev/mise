@@ -1,14 +1,16 @@
 "use client";
 
-import React, { use, useCallback } from "react";
+import React, { use, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { ChatPanel } from "../../../../components/chat-panel";
 import { useSse } from "../../../../hooks/use-sse";
 import { getDictionary } from "../../../../i18n";
+import { formatPrice } from "ui";
 
 interface OrderItem {
   id: string;
   item_name: string;
+  option_label?: string | null;
   quantity: number;
   unit_price: string | number;
   notes?: string | null;
@@ -32,6 +34,16 @@ export default function OrderStatusPage({
 }) {
   const { lang, id } = use(params);
   const dict = getDictionary(lang);
+
+  // The order response carries no currency; the guest's menu names the venue's.
+  const [currency, setCurrency] = useState<string | null>(null);
+  useEffect(() => {
+    fetch("/api/guest/menu")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((menu) => setCurrency(menu?.restaurant?.currency ?? "EUR"))
+      .catch(() => setCurrency("EUR"));
+  }, []);
+  const money = (amount: number) => (currency ? formatPrice(amount, currency, lang) : "");
 
   const fetchOrderState = useCallback(async (): Promise<OrderDetails> => {
     const res = await fetch(`/api/orders/${id}`);
@@ -138,13 +150,14 @@ export default function OrderStatusPage({
                     <div>
                       <div className="font-medium text-ink">
                         {item.quantity}x {item.item_name}
+                        {item.option_label && ` — ${item.option_label}`}
                       </div>
                       {item.notes && (
                         <p className="text-xs text-ink-muted italic mt-0.5">Note: {item.notes}</p>
                       )}
                     </div>
                     <span className="font-semibold text-ink-muted">
-                      €{(Number(item.unit_price) * item.quantity).toFixed(2)}
+                      {money(Number(item.unit_price) * item.quantity)}
                     </span>
                   </div>
                 ))}
@@ -153,7 +166,7 @@ export default function OrderStatusPage({
               <div className="pt-3 border-t border-line flex items-center justify-between font-bold text-sm">
                 <span className="text-ink-muted">{dict.ui.total}</span>
                 <span className="text-terracotta text-base">
-                  €{Number(order.total).toFixed(2)}
+                  {money(Number(order.total))}
                 </span>
               </div>
             </div>

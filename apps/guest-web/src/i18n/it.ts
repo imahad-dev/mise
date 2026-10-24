@@ -72,4 +72,9 @@ export const it: TranslationDict = {
     items: "Piatti",
     backToMenu: "Torna al Menù",
   },
+  menu: {
+    taxNote: "I prezzi non includono l'imposta, aggiunta al conto.",
+    chooseSize: "Scegli la porzione",
+    from: "da",
+  },
 };
