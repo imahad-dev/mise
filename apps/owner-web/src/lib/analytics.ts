@@ -36,6 +36,8 @@ export interface BacktestMetric {
 export interface BriefAction {
   rank: number;
   type: "promote_puzzle" | "reprice_plowhorse" | "review_dog" | "prep_target";
+  item_id: string | null;
+  option_id: string | null;
   item: string;
   title: string;
   evidence: Record<string, number | string>;

@@ -206,7 +206,8 @@ class ForecastSummary(BaseModel):
 class BriefAction(BaseModel):
     rank: int
     type: Literal["promote_puzzle", "reprice_plowhorse", "review_dog", "prep_target"]
-    item_id: str | None
+    item_id: str | None  # menu item id, like menu_engineering[].item_id
+    option_id: str | None = None  # set on a portion/size row
     item: str
     title: str
     evidence: dict[str, float | int | str]

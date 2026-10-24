@@ -10,7 +10,6 @@ from fastapi import HTTPException
 
 from src.services.analytics import classify_menu, item_totals
 from src.services.brief import (
-    baseline_for,
     build_actions,
     item_baselines,
     row_names,
@@ -131,7 +130,12 @@ def test_item_totals_one_row_per_option():
     t = item_totals(daily, weeks=1)
     assert set(t) == {"k:half", "k:full"}
     assert t["k:half"]["units"] == 3 and t["k:half"]["option_label"] == "½ kg"
-    assert row_names(t, {"k": "Karahi"}) == {"k:half": "Karahi — ½ kg", "k:full": "Karahi — 1 kg"}
+    # Bare item ids keep the dish name (forecast and prep look names up by item id)
+    assert row_names(t, {"k": "Karahi"}) == {
+        "k": "Karahi",
+        "k:half": "Karahi — ½ kg",
+        "k:full": "Karahi — 1 kg",
+    }
 
 
 def test_whatif_dish_with_options_equals_per_option_sum():
@@ -280,6 +284,8 @@ def test_build_actions_ranked_with_formulas():
             "contribution": 250.0,
         },
     }
+    for key, t in totals.items():  # shape of item_totals rows without options
+        t.update(item_id=key, option_id=None)
     classes, thresholds = classify_menu(totals)
     fc = {
         "points": [
@@ -329,8 +335,53 @@ def test_build_actions_ranked_with_formulas():
     assert by_type["reprice_plowhorse"]["estimated_impact_per_week"] == 9.0
     assert actions[-1]["type"] == "prep_target"
     assert actions[-1]["evidence"] == {"Star forecast / prep": "7.0 / 12"}
+    assert by_type["promote_puzzle"]["item_id"] == "puzzle"
+    assert by_type["promote_puzzle"]["option_id"] is None
     money = [a["estimated_impact_per_week"] for a in actions[:-1]]
     assert money == sorted(money, reverse=True)
+
+
+def test_actions_for_option_rows_carry_ids_and_prep_names_the_dish():
+    """Rows are keyed item:option, but forecast points (prep) use bare menu item ids."""
+
+    def row(item, option, label, units, margin):
+        return {
+            "item_id": item,
+            "option_id": option,
+            "option_label": label,
+            "units": units,
+            "weekly_units": units / 4,
+            "unit_margin": margin,
+            "revenue": 0.0,
+            "contribution": units * margin,
+        }
+
+    totals = {
+        "k:half": row("k", "half", "½ kg", 100, 10.0),
+        "k:full": row("k", "full", "1 kg", 5, 1.0),
+        "m:half": row("m", "half2", "½ kg", 90, 2.0),
+        "m:full": row("m", "full2", "1 kg", 10, 12.0),
+    }
+    classes, thresholds = classify_menu(totals)
+    names = row_names(totals, {"k": "Chicken Karahi", "m": "Mutton Karahi"})
+    prices = {key: (20.0, 10.0) for key in totals}
+    point = {"date": "2026-10-21", "daypart": "dinner", "forecast": 4.0, "lo": 2.0, "hi": 6.0}
+    fc = {"points": [{**point, "item_id": "k"}, {**point, "item_id": "m", "forecast": 3.0}]}
+
+    actions = build_actions(totals, classes, thresholds, fc, names, prices)
+
+    prep = actions[-1]
+    assert prep["type"] == "prep_target"
+    assert prep["item"] == "Chicken Karahi, Mutton Karahi"
+    assert prep["evidence"] == {
+        "Chicken Karahi forecast / prep": "4.0 / 6",
+        "Mutton Karahi forecast / prep": "3.0 / 6",
+    }
+    money = [a for a in actions if a["type"] != "prep_target"]
+    assert money
+    for a in money:
+        assert a["item_id"] in {"k", "m"} and a["option_id"] is not None
+        assert " — " in a["item"]
 
 
 # --- Narration: invented numbers and LLM-down template path ---
@@ -458,7 +509,10 @@ def test_template_summary_states_digital_share_and_saving():
 
 
 def test_brief_reprice_matches_whatif_at_current_menu_price():
-    """After a price change the brief and the what-if page give the same margin delta."""
+    """For a dish without options, the brief's reprice and the what-if page agree.
+
+    After a price change both use the current menu price, so the margin deltas match.
+    """
     totals = {
         "plow": {
             "units": 90,
@@ -482,6 +536,8 @@ def test_brief_reprice_matches_whatif_at_current_menu_price():
             "contribution": 5.0,
         },
     }
+    for key, t in totals.items():
+        t.update(item_id=key, option_id=None)
     classes = {"plow": "plowhorse", "star": "star", "dog": "dog"}
     thresholds = {"median_units": 90, "median_unit_margin": 2.0}
     names = {k: k.title() for k in totals}
@@ -491,8 +547,8 @@ def test_brief_reprice_matches_whatif_at_current_menu_price():
     actions = build_actions(totals, classes, thresholds, {"points": []}, names, prices)
     reprice = next(a for a in actions if a["type"] == "reprice_plowhorse")
 
-    # The what-if endpoint builds its baselines the same way, over the whole menu
-    baselines = [baseline_for(i, names[i], t, *prices[i]) for i, t in totals.items()]
+    # The what-if endpoint's baselines, over the whole menu
+    baselines = item_baselines(totals, names, prices)
     whatif = run_whatif("price_change", baselines, {"item_id": "plow", "change_pct": 5})
 
     assert reprice["estimated_impact_per_week"] == whatif["delta"]["margin"]

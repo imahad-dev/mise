@@ -58,8 +58,11 @@ def local_today(restaurant: Restaurant) -> date:
 
 
 def row_names(totals: dict[str, dict], names: dict[str, str]) -> dict[str, str]:
-    """Display name per menu-engineering row: "{dish} — {option label}" for an option row."""
-    out = {}
+    """Display names by menu item id (forecast, prep) plus one per row key.
+
+    An option row reads "{dish} — {option label}".
+    """
+    out = dict(names)
     for key, t in totals.items():
         dish = names.get(t["item_id"], "Unknown item")
         out[key] = f"{dish} — {t['option_label']}" if t["option_label"] else dish
@@ -198,7 +201,8 @@ def build_actions(
         money.append(
             {
                 "type": "promote_puzzle",
-                "item_id": i,
+                "item_id": t["item_id"],
+                "option_id": t["option_id"],
                 "item": name(i),
                 "title": f"Promote {name(i)}",
                 "evidence": {
@@ -222,7 +226,8 @@ def build_actions(
         money.append(
             {
                 "type": "reprice_plowhorse",
-                "item_id": i,
+                "item_id": t["item_id"],
+                "option_id": t["option_id"],
                 "item": name(i),
                 "title": f"Raise the price of {name(i)} by {REPRICE_PCT}%",
                 "evidence": {
@@ -247,7 +252,8 @@ def build_actions(
         money.append(
             {
                 "type": "review_dog",
-                "item_id": i,
+                "item_id": t["item_id"],
+                "option_id": t["option_id"],
                 "item": name(i),
                 "title": f"Review {name(i)} (rework, reprice or replace)",
                 "evidence": {
@@ -277,6 +283,7 @@ def build_actions(
                 {
                     "type": "prep_target",
                     "item_id": None,
+                    "option_id": None,
                     "item": ", ".join(name(i) for i, _ in top),
                     "title": f"Prep targets for {first_day}",
                     "evidence": {
@@ -445,13 +452,18 @@ async def compute_whatif(
     totals = analytics.item_totals(await analytics.daily_item_sales(db, w), w.days / 7)
     baselines = item_baselines(totals, names, await current_prices(db, restaurant))
     result = run_whatif(scenario, baselines, params, restaurant.currency)
+    item_id = params.get("item_id")
+    if item_id and any(t["item_id"] == str(item_id) and t["option_id"] for t in totals.values()):
+        result["assumptions"].append(
+            "Price change applies to every portion; current price shown is the "
+            "units-weighted average of portion prices."
+        )
     d = result["delta"]
     cur = restaurant.currency
     template = (
         f"Estimated weekly change: revenue {cur} {d['revenue']:+.2f}, contribution margin "
         f"{cur} {d['margin']:+.2f}, under the assumptions listed."
     )
-    item_id = params.get("item_id")
     # Ids are dropped: their digits would otherwise count as "allowed" numbers.
     llm_facts = {
         **{k: v for k, v in result.items() if k != "params"},

@@ -121,6 +121,12 @@ async def test_simulated_orders_feed_brief_and_forecast(
     assert classes <= {"star", "plowhorse", "puzzle", "dog"}
     assert "star" in classes and "dog" in classes
     assert 3 <= len(brief["actions"]) <= 5
+    # Actions name the menu item like menu_engineering rows do (never an item:option key)
+    row_ids = {(m["item_id"], m["option_id"]) for m in brief["menu_engineering"]}
+    for a in brief["actions"]:
+        if a["type"] != "prep_target":
+            assert (a["item_id"], a["option_id"]) in row_ids
+        assert "Unknown item" not in a["item"]
 
     # One menu-engineering row per (dish, option): the karahi portions are separate rows
     karahi_id = (
@@ -198,6 +204,7 @@ async def test_simulated_orders_feed_brief_and_forecast(
     assert resp.status_code == 200, resp.text
     assert resp.json()["item"] == "Chicken Karahi"
     assert resp.json()["delta"]["revenue"] != 0
+    assert any("every portion" in a for a in resp.json()["assumptions"])
 
 
 @pytest.mark.asyncio
