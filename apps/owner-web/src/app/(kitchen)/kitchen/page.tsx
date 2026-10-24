@@ -9,6 +9,7 @@ interface KitchenOrderItem {
   id: string;
   menu_item_id: string;
   kitchen_name: string;
+  option_label?: string | null;
   quantity: number;
   notes?: string | null;
   allergens: string[];
@@ -370,7 +371,10 @@ export default function KitchenDisplayPage() {
                     >
                       <div className="flex items-baseline justify-between text-base font-black">
                         <span className="text-xl text-kds-accent font-mono">{item.quantity}x</span>
-                        <span className="flex-1 text-right text-lg text-cream">{item.kitchen_name}</span>
+                        <span className="flex-1 text-right text-lg text-cream">
+                          {item.kitchen_name}
+                          {item.option_label && <span className="text-kds-accent"> — {item.option_label}</span>}
+                        </span>
                       </div>
 
                       {/* Prominent Solid Red Allergy Banner on Affected Items */}
