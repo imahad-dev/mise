@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { useVenue } from "../../../lib/venue";
+import { useSlugRef, useVenue } from "../../../lib/venue";
 import { eur, type DataSources } from "@/lib/analytics";
 
 type Scenario = "price_change" | "promotion" | "demand_surge";
@@ -41,6 +41,7 @@ const signed = (v: number) => `${v >= 0 ? "+" : "−"}${eur(Math.abs(v))}`;
 export default function WhatIfPage() {
   const { venue } = useVenue();
   const slug = venue?.slug;
+  const slugRef = useSlugRef(slug);
   const [items, setItems] = useState<MenuOption[]>([]);
   const [scenario, setScenario] = useState<Scenario>("price_change");
   const [itemId, setItemId] = useState("");
@@ -58,6 +59,7 @@ export default function WhatIfPage() {
     setItemId("");
     setResult(null);
     setError(null);
+    let cancelled = false;
     fetch(`/api/restaurants/${slug}/menu-items`)
       .then((r) => (r.ok ? r.json() : []))
       .then(
@@ -66,11 +68,17 @@ export default function WhatIfPage() {
             id: m.id,
             name: (m.translations.find((t) => t.language === "en") ?? m.translations[0])?.name ?? m.id,
           }));
+          if (cancelled) return;
           setItems(opts);
           if (opts.length) setItemId(opts[0].id);
         },
       )
-      .catch(() => setItems([]));
+      .catch(() => {
+        if (!cancelled) setItems([]);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [slug]);
 
   const submit = async (e: React.FormEvent) => {
@@ -96,9 +104,10 @@ export default function WhatIfPage() {
           typeof detail?.detail === "string" ? detail.detail : `What-if failed (${res.status})`,
         );
       }
-      setResult(await res.json());
+      const data: WhatIfResult = await res.json();
+      if (slugRef.current === slug) setResult(data);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : String(err));
+      if (slugRef.current === slug) setError(err instanceof Error ? err.message : String(err));
     } finally {
       setLoading(false);
     }

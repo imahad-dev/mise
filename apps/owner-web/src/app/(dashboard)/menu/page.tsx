@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useState } from "react";
-import { useVenue } from "../../../lib/venue";
+import { useSlugRef, useVenue } from "../../../lib/venue";
 
 interface MenuTranslation {
   language: string;
@@ -29,6 +29,7 @@ interface OwnerMenuItem {
 export default function MenuManagementPage() {
   const { venue } = useVenue();
   const slug = venue?.slug;
+  const slugRef = useSlugRef(slug);
   const [items, setItems] = useState<OwnerMenuItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -42,13 +43,13 @@ export default function MenuManagementPage() {
         throw new Error(`Failed to load menu items (${res.status})`);
       }
       const data: OwnerMenuItem[] = await res.json();
-      setItems(data);
+      if (slugRef.current === slug) setItems(data);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : String(err));
+      if (slugRef.current === slug) setError(err instanceof Error ? err.message : String(err));
     } finally {
-      setLoading(false);
+      if (slugRef.current === slug) setLoading(false);
     }
-  }, [slug]);
+  }, [slug, slugRef]);
 
   useEffect(() => {
     setItems([]);
@@ -69,6 +70,7 @@ export default function MenuManagementPage() {
         throw new Error(`Failed to update item availability (${res.status})`);
       }
       const updated: OwnerMenuItem = await res.json();
+      if (slugRef.current !== slug) return;
       setItems((prev) => prev.map((i) => (i.id === item.id ? updated : i)));
     } catch (err: unknown) {
       alert(err instanceof Error ? err.message : String(err));
@@ -87,6 +89,7 @@ export default function MenuManagementPage() {
         throw new Error(`Failed to verify item (${res.status})`);
       }
       const updated: OwnerMenuItem = await res.json();
+      if (slugRef.current !== slug) return;
       setItems((prev) => prev.map((i) => (i.id === item.id ? updated : i)));
     } catch (err: unknown) {
       alert(err instanceof Error ? err.message : String(err));

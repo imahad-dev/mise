@@ -31,10 +31,13 @@ describe("venue error state", () => {
   it("is no_venues when signed in with an empty list", () => {
     expect(venueError(200, [])).toBe("no_venues");
   });
-  it("is null with venues, on server errors, and on network failure", () => {
+  it("is null when signed in with venues", () => {
     expect(venueError(200, venues)).toBeNull();
-    expect(venueError(500, [])).toBeNull();
-    expect(venueError(null, [])).toBeNull();
+  });
+  it("is failed on server errors and network failure", () => {
+    expect(venueError(500, [])).toBe("failed");
+    expect(venueError(503, [])).toBe("failed");
+    expect(venueError(null, [])).toBe("failed");
   });
 });
 

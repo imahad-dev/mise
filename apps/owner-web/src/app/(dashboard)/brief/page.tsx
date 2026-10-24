@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useState } from "react";
-import { useVenue } from "../../../lib/venue";
+import { useSlugRef, useVenue } from "../../../lib/venue";
 import { StatTile } from "ui";
 import {
   CLASS_COLORS,
@@ -99,6 +99,7 @@ function BacktestBadge({ forecast }: { forecast: DailyBrief["forecast"] }) {
 export default function DailyBriefPage() {
   const { venue } = useVenue();
   const slug = venue?.slug;
+  const slugRef = useSlugRef(slug);
   const [brief, setBrief] = useState<DailyBrief | null>(null);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
@@ -113,22 +114,26 @@ export default function DailyBriefPage() {
     try {
       const res = await fetch(`/api/restaurants/${slug}/ai/brief`);
       if (!res.ok) throw new Error(`Failed to load brief (${res.status})`);
-      setBrief(await res.json());
+      const data: DailyBrief = await res.json();
+      if (slugRef.current === slug) setBrief(data);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : String(err));
+      if (slugRef.current === slug) setError(err instanceof Error ? err.message : String(err));
     } finally {
-      setLoading(false);
+      if (slugRef.current === slug) setLoading(false);
     }
-  }, [slug]);
+  }, [slug, slugRef]);
 
   useEffect(() => {
     setBrief(null);
     loadBrief();
+  }, [loadBrief]);
+
+  useEffect(() => {
     fetch("/api/auth/config")
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => setDemoMode(Boolean(d?.demo_mode)))
       .catch(() => setDemoMode(false));
-  }, [loadBrief]);
+  }, []);
 
   const generateDemoData = async () => {
     if (!slug) return;
@@ -141,9 +146,10 @@ export default function DailyBriefPage() {
         body: JSON.stringify({ days: 56 }),
       });
       if (!res.ok) throw new Error(`Failed to generate demo data (${res.status})`);
+      if (slugRef.current !== slug) return;
       await loadBrief();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : String(err));
+      if (slugRef.current === slug) setError(err instanceof Error ? err.message : String(err));
     } finally {
       setGenerating(false);
     }

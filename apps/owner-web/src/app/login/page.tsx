@@ -126,7 +126,7 @@ export default function LoginPage() {
         </div>
 
         {error && (
-          <div className="p-3.5 rounded-xl bg-danger-bg border border-danger-fg text-xs text-danger-fg font-medium text-center">
+          <div role="alert" className="p-3.5 rounded-xl bg-danger-bg border border-danger-fg text-xs text-danger-fg font-medium text-center">
             {error}
           </div>
         )}
@@ -185,6 +185,7 @@ export default function LoginPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
+                disabled={demoLoading !== null}
                 className="w-full min-h-[44px] px-3.5 py-2.5 rounded-xl bg-paper border border-line text-sm text-ink placeholder:text-ink-muted focus:outline-none focus:border-terracotta focus:ring-1 focus:ring-terracotta"
               />
             </div>
@@ -199,13 +200,14 @@ export default function LoginPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
+                disabled={demoLoading !== null}
                 className="w-full min-h-[44px] px-3.5 py-2.5 rounded-xl bg-paper border border-line text-sm text-ink placeholder:text-ink-muted focus:outline-none focus:border-terracotta focus:ring-1 focus:ring-terracotta"
               />
             </div>
 
             <button
               type="submit"
-              disabled={loading || !email.trim() || !password}
+              disabled={loading || demoLoading !== null || !email.trim() || !password}
               className="btn-ghost w-full disabled:opacity-40"
             >
               {loading ? "Signing in..." : "Sign in"}

@@ -25,6 +25,7 @@ export default function TablesPage() {
     setTables([]);
     setError(null);
     setLoading(true);
+    let cancelled = false;
     async function loadTables() {
       try {
         const res = await fetch(`/api/restaurants/${slug}/tables`);
@@ -52,14 +53,17 @@ export default function TablesPage() {
           })
         );
 
-        setTables(withQr);
+        if (!cancelled) setTables(withQr);
       } catch (err: unknown) {
-        setError(err instanceof Error ? err.message : String(err));
+        if (!cancelled) setError(err instanceof Error ? err.message : String(err));
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     }
     loadTables();
+    return () => {
+      cancelled = true;
+    };
   }, [slug]);
 
   const handlePrint = () => {

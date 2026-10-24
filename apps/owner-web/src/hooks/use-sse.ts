@@ -72,9 +72,9 @@ export function useSse<T>({
     fetchSeqRef.current++;
     setData(null);
     setError(null);
+    setIsConnected(false);
+    setIsReconnecting(false);
     if (!enabled || !url) {
-      setIsConnected(false);
-      setIsReconnecting(false);
       stopPolling();
       return;
     }

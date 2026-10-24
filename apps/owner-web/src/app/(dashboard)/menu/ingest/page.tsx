@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { formatPrice } from "ui";
-import { useVenue } from "../../../../lib/venue";
+import { useSlugRef, useVenue } from "../../../../lib/venue";
 
 interface IngestedTranslation {
   language: string;
@@ -23,6 +23,7 @@ interface IngestedItem {
 export default function MenuIngestPage() {
   const { venue } = useVenue();
   const slug = venue?.slug;
+  const slugRef = useSlugRef(slug);
   const [imageUrl, setImageUrl] = useState("https://example.com/menu.jpg");
   const [language, setLanguage] = useState("en");
   const [loading, setLoading] = useState(false);
@@ -60,6 +61,7 @@ export default function MenuIngestPage() {
       }
 
       const data = await res.json();
+      if (slugRef.current !== slug) return;
       setCreatedCount(data.created_count);
       setItems(data.items || []);
     } catch (err: unknown) {

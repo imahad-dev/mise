@@ -37,7 +37,7 @@ interface OrdersResponse {
 
 export default function KitchenDisplayPage() {
   const router = useRouter();
-  const { venue, loading, error: venueError } = useVenue();
+  const { venue, loading, error: venueError, retry } = useVenue();
   const slug = venue?.slug;
   const [actionError, setActionError] = useState<string | null>(null);
 
@@ -186,6 +186,22 @@ export default function KitchenDisplayPage() {
     return (
       <div className="min-h-screen bg-espresso text-cream flex items-center justify-center">
         <p className="text-xl font-bold">Initializing Kitchen System...</p>
+      </div>
+    );
+  }
+
+  if (venueError === "failed") {
+    return (
+      <div className="min-h-screen bg-espresso text-cream flex flex-col items-center justify-center gap-4 p-4">
+        <p role="alert" className="text-lg font-bold">
+          Couldn&apos;t load your restaurants. Try again.
+        </p>
+        <button
+          onClick={retry}
+          className="min-h-[48px] rounded-xl bg-kds-accent px-6 py-3 font-black uppercase text-espresso"
+        >
+          Retry
+        </button>
       </div>
     );
   }

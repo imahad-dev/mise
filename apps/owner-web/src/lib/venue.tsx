@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 export interface Venue {
@@ -33,13 +33,13 @@ export function pickVenue(venues: Venue[], stored: string | null): Venue | null 
   return venues.find((v) => v.slug === stored) ?? venues[0] ?? null;
 }
 
-export type VenueError = "unauthorized" | "no_venues" | null;
+export type VenueError = "unauthorized" | "no_venues" | "failed" | null;
 
 /** Decide the provider error from the /api/restaurants response (status null = network failure). */
 export function venueError(status: number | null, venues: Venue[]): VenueError {
   if (status === 401) return "unauthorized";
-  if (status !== null && status >= 200 && status < 300 && venues.length === 0) return "no_venues";
-  return null;
+  if (status === null || status < 200 || status >= 300) return "failed";
+  return venues.length === 0 ? "no_venues" : null;
 }
 
 /** Where to go after sign-in: staff-only accounts open the kitchen display. */
@@ -53,9 +53,10 @@ interface VenueState {
   loading: boolean;
   error: VenueError;
   select: (slug: string) => void;
+  retry: () => void;
 }
 
-const VenueContext = createContext<VenueState>({ venues: [], venue: null, loading: true, error: null, select: () => {} });
+const VenueContext = createContext<VenueState>({ venues: [], venue: null, loading: true, error: null, select: () => {}, retry: () => {} });
 
 export function VenueProvider({ children }: { children: React.ReactNode }) {
   const [venues, setVenues] = useState<Venue[]>([]);
@@ -64,7 +65,9 @@ export function VenueProvider({ children }: { children: React.ReactNode }) {
   const [error, setError] = useState<VenueError>(null);
   const router = useRouter();
 
-  useEffect(() => {
+  const load = useCallback(() => {
+    setLoading(true);
+    setError(null);
     fetch("/api/restaurants")
       .then(async (r) => {
         const list: Venue[] = r.ok ? ((await r.json()) as { restaurants: Venue[] }).restaurants : [];
@@ -74,9 +77,15 @@ export function VenueProvider({ children }: { children: React.ReactNode }) {
         setError(err);
         if (err === "unauthorized") router.push("/login");
       })
-      .catch(() => setVenues([]))
+      .catch(() => {
+        setVenues([]);
+        setVenue(null);
+        setError(venueError(null, []));
+      })
       .finally(() => setLoading(false));
   }, [router]);
+
+  useEffect(load, [load]);
 
   const select = (slug: string) => {
     const next = venues.find((v) => v.slug === slug);
@@ -86,7 +95,14 @@ export function VenueProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  return <VenueContext.Provider value={{ venues, venue, loading, error, select }}>{children}</VenueContext.Provider>;
+  return <VenueContext.Provider value={{ venues, venue, loading, error, select, retry: load }}>{children}</VenueContext.Provider>;
 }
 
 export const useVenue = () => useContext(VenueContext);
+
+/** Ref that always holds the current slug, so async work can drop results for a venue the user left. */
+export function useSlugRef(slug: string | undefined) {
+  const ref = useRef(slug);
+  ref.current = slug;
+  return ref;
+}

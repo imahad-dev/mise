@@ -42,7 +42,7 @@ function VenueSwitcher() {
         aria-label="Venue"
         value={venue.slug}
         onChange={(e) => select(e.target.value)}
-        className="mt-1 w-full rounded-lg border border-line bg-paper px-2 py-1 text-sm text-ink-muted"
+        className="mt-1 w-full rounded-lg border border-line bg-paper px-2 py-1 text-sm text-ink-muted focus:outline-none focus:border-terracotta focus:ring-1 focus:ring-terracotta"
       >
         {venues.map((v) => (
           <option key={v.slug} value={v.slug}>
@@ -56,7 +56,20 @@ function VenueSwitcher() {
 }
 
 function VenueGate({ children, onSignOut }: { children: React.ReactNode; onSignOut: () => void }) {
-  const { error } = useVenue();
+  const { error, retry } = useVenue();
+  if (error === "unauthorized") return null; // the provider is redirecting to /login
+  if (error === "failed") {
+    return (
+      <Card className="mx-auto mt-12 max-w-md space-y-4 p-6 text-center">
+        <p role="alert" className="text-sm text-ink">
+          Couldn&apos;t load your restaurants. Try again.
+        </p>
+        <button onClick={retry} className="btn-primary w-full">
+          Retry
+        </button>
+      </Card>
+    );
+  }
   if (error !== "no_venues") return <>{children}</>;
   return (
     <Card className="mx-auto mt-12 max-w-md space-y-4 p-6 text-center">
