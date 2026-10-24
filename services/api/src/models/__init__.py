@@ -8,16 +8,19 @@ from src.models.metrics import MetricsSample
 from src.models.order import Order, OrderItem
 from src.models.restaurant import Restaurant
 from src.models.session import GuestSession
+from src.models.user import Membership, User
 
 __all__ = [
     "AuditLog",
     "DiningTable",
     "ForecastRun",
     "GuestSession",
+    "Membership",
     "MenuItem",
     "MenuTranslation",
     "MetricsSample",
     "Order",
     "OrderItem",
     "Restaurant",
+    "User",
 ]

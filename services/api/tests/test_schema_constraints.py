@@ -587,3 +587,27 @@ async def test_orders_bumped_without_bumped_at_rejected(db_session: AsyncSession
         {"session_id": session_id, "restaurant_id": rest_id},
         "chk_orders_bumped_at_required",
     )
+
+
+async def test_user_email_unique(db_session):
+    from src.models.user import User
+
+    db_session.add(User(email="a@example.com", name="A", password_hash="x"))
+    await db_session.flush()
+    db_session.add(User(email="a@example.com", name="B", password_hash="y"))
+    with pytest.raises(IntegrityError):
+        await db_session.flush()
+
+
+async def test_membership_role_and_uniqueness(db_session):
+    from src.models.user import Membership, User
+
+    rid = await _create_test_restaurant(db_session)
+    user = User(email="m@example.com", name="M", password_hash="x")
+    db_session.add(user)
+    await db_session.flush()
+    db_session.add(Membership(user_id=user.id, restaurant_id=uuid.UUID(rid), role="owner"))
+    await db_session.flush()
+    db_session.add(Membership(user_id=user.id, restaurant_id=uuid.UUID(rid), role="staff"))
+    with pytest.raises(IntegrityError):
+        await db_session.flush()
