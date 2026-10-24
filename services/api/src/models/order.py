@@ -160,6 +160,12 @@ class OrderItem(Base):
         ForeignKey("menu_item.id", ondelete="RESTRICT"),
         nullable=False,
     )
+    option_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("menu_item_option.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    option_label: Mapped[str | None] = mapped_column(Text, nullable=True)
     quantity: Mapped[int] = mapped_column(Integer, nullable=False)
     unit_price: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     unit_cost: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)

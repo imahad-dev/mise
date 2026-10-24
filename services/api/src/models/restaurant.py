@@ -30,6 +30,8 @@ class Restaurant(Base):
         Text, nullable=False, server_default=text("'Europe/Rome'")
     )
     currency: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'EUR'"))
+    city: Mapped[str | None] = mapped_column(Text, nullable=True)
+    tax_jurisdiction: Mapped[str | None] = mapped_column(Text, nullable=True)
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"))
     languages: Mapped[list[str]] = mapped_column(
         ARRAY(Text),

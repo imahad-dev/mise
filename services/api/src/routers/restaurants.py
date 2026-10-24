@@ -35,8 +35,7 @@ async def list_my_restaurants(
             MyRestaurant(
                 slug=r.slug,
                 name=r.name,
-                # shortcut: Restaurant has no city column yet; Task 6 adds it and uses r.city.
-                city=getattr(r, "city", None),
+                city=r.city,
                 currency=r.currency,
                 role=role,
             )

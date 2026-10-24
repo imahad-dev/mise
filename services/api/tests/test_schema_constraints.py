@@ -611,3 +611,43 @@ async def test_membership_role_and_uniqueness(db_session):
     db_session.add(Membership(user_id=user.id, restaurant_id=uuid.UUID(rid), role="staff"))
     with pytest.raises(IntegrityError):
         await db_session.flush()
+
+
+@pytest.mark.asyncio
+async def test_option_price_and_cost_non_negative(db_session):
+    from decimal import Decimal
+
+    from sqlalchemy.exc import IntegrityError
+
+    from src.models.menu import MenuItemOption
+
+    rid = await _create_test_restaurant(db_session)
+    mid = await _create_test_menu_item(db_session, rid)
+    db_session.add(
+        MenuItemOption(
+            menu_item_id=uuid.UUID(mid), label="Half", price=Decimal("-1"), unit_cost=Decimal("0")
+        )
+    )
+    with pytest.raises(IntegrityError):
+        await db_session.flush()
+
+
+@pytest.mark.asyncio
+async def test_option_label_unique_per_item(db_session):
+    from decimal import Decimal
+
+    from sqlalchemy.exc import IntegrityError
+
+    from src.models.menu import MenuItemOption
+
+    rid = await _create_test_restaurant(db_session)
+    mid = uuid.UUID(await _create_test_menu_item(db_session, rid))
+    db_session.add(
+        MenuItemOption(menu_item_id=mid, label="Full", price=Decimal("10"), unit_cost=Decimal("4"))
+    )
+    await db_session.flush()
+    db_session.add(
+        MenuItemOption(menu_item_id=mid, label="Full", price=Decimal("11"), unit_cost=Decimal("4"))
+    )
+    with pytest.raises(IntegrityError):
+        await db_session.flush()

@@ -3,7 +3,7 @@
 from src.models.audit import AuditLog
 from src.models.dining_table import DiningTable
 from src.models.forecast import ForecastRun
-from src.models.menu import MenuItem, MenuTranslation
+from src.models.menu import MenuItem, MenuItemOption, MenuTranslation
 from src.models.metrics import MetricsSample
 from src.models.order import Order, OrderItem
 from src.models.restaurant import Restaurant
@@ -17,6 +17,7 @@ __all__ = [
     "GuestSession",
     "Membership",
     "MenuItem",
+    "MenuItemOption",
     "MenuTranslation",
     "MetricsSample",
     "Order",
