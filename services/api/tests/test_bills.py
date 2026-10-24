@@ -198,6 +198,8 @@ async def test_detail_groups_lines_and_previews_both_rates(client, db_session, v
     ]
     assert d["lines"][1]["line_total"] == "360.00"
     assert d["subtotal"] == "2460.00"
+    assert d["restaurant_timezone"] == "Asia/Karachi"
+    assert listing.json()["restaurant_timezone"] == "Asia/Karachi"
     assert d["preview_standard"] == {
         "payment_class": "standard",
         "tax_rate": "0.16",
@@ -554,3 +556,19 @@ async def test_settled_bill_shows_snapshot_subtotal(client, db_session, venue):
     assert detail["total"] == "2854.00"
     listed = (await client.get(bills_url(venue, "?status=settled"))).json()["bills"]
     assert [b["subtotal"] for b in listed] == ["2460.00"]
+
+
+async def test_base_price_edit_refused_on_dish_with_sizes(client, db_session, venue):
+    await as_member(client, db_session, venue.r.id, "owner")
+    url = f"/api/restaurants/{venue.r.slug}/menu-items"
+    for body in ({"price": "9.00"}, {"unit_cost": "9.00"}):
+        resp = await client.patch(f"{url}/{venue.karahi.id}", json=body)
+        assert resp.status_code == 422
+        assert resp.json()["detail"] == "Edit the size prices instead"
+    ok = await client.patch(f"{url}/{venue.karahi.id}", json={"available": False})
+    assert ok.status_code == 200
+    assert ok.json()["available"] is False
+    # A dish without sizes still takes a base price.
+    plain = await client.patch(f"{url}/{venue.naan.id}", json={"price": "70.00"})
+    assert plain.status_code == 200
+    assert Decimal(plain.json()["price"]) == Decimal("70.00")
