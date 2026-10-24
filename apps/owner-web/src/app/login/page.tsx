@@ -37,7 +37,7 @@ export default function LoginPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(
-          selectedRole === "staff" ? { role: "staff", venue: "angeethi-house" } : { role: "owner" },
+          selectedRole === "staff" ? { role: "staff" } : { role: "owner" },
         ),
       });
       if (!res.ok) {
