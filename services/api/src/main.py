@@ -17,10 +17,12 @@ from src.routers.metrics import router as metrics_router
 from src.routers.orders import router as orders_router
 from src.routers.owner import router as owner_router
 from src.routers.restaurants import router as restaurants_router
+from src.services.tax import default_rates
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+    default_rates()  # an invalid tax file stops startup with a TaxRateError
     # Startup: instantiate clients attached to current event loop on app.state
     llm_client = httpx.AsyncClient(
         base_url=settings.llm_base_url,

@@ -26,6 +26,9 @@ class Settings(BaseSettings):
     api_port: int = 8000
     api_secret_key: str = "change_me_in_production"
 
+    # Sales tax rates file (defaults to data/tax_rates.json)
+    tax_rates_path: str | None = None
+
     # URLs
     public_guest_url: str = "http://localhost:3000"
     public_owner_url: str = "http://localhost:3001"
