@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useState } from "react";
+import { useVenue } from "../../../lib/venue";
 import { StatTile } from "ui";
 import {
   CLASS_COLORS,
@@ -13,7 +14,6 @@ import {
   type MenuClass,
 } from "@/lib/analytics";
 
-const DEFAULT_SLUG = process.env.NEXT_PUBLIC_RESTAURANT_SLUG || "trattoria-da-mario";
 const W = 560;
 const H = 320;
 const PAD = 36;
@@ -97,7 +97,8 @@ function BacktestBadge({ forecast }: { forecast: DailyBrief["forecast"] }) {
 }
 
 export default function DailyBriefPage() {
-  const [slug] = useState(DEFAULT_SLUG);
+  const { venue } = useVenue();
+  const slug = venue?.slug;
   const [brief, setBrief] = useState<DailyBrief | null>(null);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
@@ -106,6 +107,7 @@ export default function DailyBriefPage() {
   const [error, setError] = useState<string | null>(null);
 
   const loadBrief = useCallback(async () => {
+    if (!slug) return;
     setLoading(true);
     setError(null);
     try {
@@ -128,6 +130,7 @@ export default function DailyBriefPage() {
   }, [loadBrief]);
 
   const generateDemoData = async () => {
+    if (!slug) return;
     setGenerating(true);
     setError(null);
     try {

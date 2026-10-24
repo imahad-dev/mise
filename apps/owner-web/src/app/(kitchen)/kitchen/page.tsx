@@ -1,7 +1,9 @@
 "use client";
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useSse } from "../../../hooks/use-sse";
+import { useVenue } from "../../../lib/venue";
 
 interface KitchenOrderItem {
   id: string;
@@ -33,14 +35,10 @@ interface OrdersResponse {
   orders: KitchenOrder[];
 }
 
-const DEFAULT_SLUG = process.env.NEXT_PUBLIC_RESTAURANT_SLUG || "trattoria-da-mario";
-
 export default function KitchenDisplayPage() {
-  const [slug] = useState(DEFAULT_SLUG);
-  const [pin, setPin] = useState("");
-  const [authChecking, setAuthChecking] = useState(true);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [loginError, setLoginError] = useState<string | null>(null);
+  const router = useRouter();
+  const { venue, loading } = useVenue();
+  const slug = venue?.slug;
   const [actionError, setActionError] = useState<string | null>(null);
 
   const [soundEnabled, setSoundEnabled] = useState(false);
@@ -55,29 +53,15 @@ export default function KitchenDisplayPage() {
     audioRef.current = new Audio("/alert.wav");
   }, []);
 
+  // No venue means the session is gone (or has no venue): sign in again.
+  useEffect(() => {
+    if (!loading && !venue) router.push("/login");
+  }, [loading, venue, router]);
+
   // Update clock every 5 seconds for age calculations
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(Date.now()), 5000);
     return () => clearInterval(timer);
-  }, []);
-
-  // Check initial authentication
-  useEffect(() => {
-    async function checkAuth() {
-      try {
-        const res = await fetch("/api/auth/me");
-        if (res.ok) {
-          setIsAuthenticated(true);
-        } else {
-          setIsAuthenticated(false);
-        }
-      } catch {
-        setIsAuthenticated(false);
-      } finally {
-        setAuthChecking(false);
-      }
-    }
-    checkAuth();
   }, []);
 
   // Screen Wake Lock API: request on load and on visibilitychange
@@ -92,7 +76,7 @@ export default function KitchenDisplayPage() {
       }
     }
 
-    if (isAuthenticated) {
+    if (slug) {
       void requestWakeLock();
       const onVisibilityChange = () => {
         if (document.visibilityState === "visible") {
@@ -105,14 +89,15 @@ export default function KitchenDisplayPage() {
         wakeLockRef.current?.release?.();
       };
     }
-  }, [isAuthenticated]);
+  }, [slug]);
 
   // Fetch kitchen orders with server time offset tracking
   const fetchOrders = useCallback(async (): Promise<OrdersResponse> => {
+    if (!slug) throw new Error("No venue selected");
     const res = await fetch(`/api/restaurants/${slug}/kitchen/orders`);
-    if (res.status === 401 || res.status === 403) {
-      setIsAuthenticated(false);
-      throw new Error("Staff PIN required");
+    if (res.status === 401) {
+      router.push("/login");
+      throw new Error("Sign in required");
     }
     if (!res.ok) {
       throw new Error(`Failed to load kitchen stream (${res.status})`);
@@ -127,7 +112,7 @@ export default function KitchenDisplayPage() {
 
     const data: OrdersResponse = await res.json();
     return data;
-  }, [slug]);
+  }, [slug, router]);
 
   // SSE hook with polling fallback
   const {
@@ -135,10 +120,10 @@ export default function KitchenDisplayPage() {
     isReconnecting,
     refetch,
   } = useSse<OrdersResponse>({
-    url: isAuthenticated ? `/api/restaurants/${slug}/kitchen/stream` : null,
+    url: slug ? `/api/restaurants/${slug}/kitchen/stream` : null,
     fetchState: fetchOrders,
     pollingIntervalMs: 4000,
-    enabled: isAuthenticated,
+    enabled: Boolean(slug),
   });
 
   // Check for new orders to trigger audible alert
@@ -161,32 +146,16 @@ export default function KitchenDisplayPage() {
     }
   }, [data, soundEnabled]);
 
-  // Staff PIN submission handler
-  const handlePinSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoginError(null);
-    try {
-      const res = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ role: "staff", secret: pin }),
-      });
-      if (!res.ok) {
-        throw new Error("Invalid Staff PIN");
-      }
-      setIsAuthenticated(true);
-      setPin("");
-    } catch (err: unknown) {
-      setLoginError(err instanceof Error ? err.message : String(err));
-    }
-  };
-
   const handleBump = async (orderId: string) => {
     setActionError(null);
     try {
       const res = await fetch(`/api/restaurants/${slug}/kitchen/orders/${orderId}/bump`, {
         method: "POST",
       });
+      if (res.status === 401) {
+        router.push("/login");
+        return;
+      }
       if (!res.ok) {
         throw new Error(`Failed to bump order (${res.status})`);
       }
@@ -202,6 +171,10 @@ export default function KitchenDisplayPage() {
       const res = await fetch(`/api/restaurants/${slug}/kitchen/orders/${orderId}/recall`, {
         method: "POST",
       });
+      if (res.status === 401) {
+        router.push("/login");
+        return;
+      }
       if (res.status === 409) {
         throw new Error("Recall window expired (must be within 60 seconds of bump).");
       }
@@ -214,49 +187,10 @@ export default function KitchenDisplayPage() {
     }
   };
 
-  if (authChecking) {
+  if (loading) {
     return (
       <div className="min-h-screen bg-espresso text-cream flex items-center justify-center">
         <p className="text-xl font-bold">Initializing Kitchen System...</p>
-      </div>
-    );
-  }
-
-  // Staff PIN Login Screen if unauthenticated
-  if (!isAuthenticated) {
-    return (
-      <div className="min-h-screen bg-espresso text-cream flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-kds-card border-2 border-cream/10 rounded-3xl p-8 space-y-6">
-          <div className="text-center space-y-2">
-            <h1 className="text-3xl font-black tracking-tight text-cream">KITCHEN DISPLAY</h1>
-            <p className="text-sm text-kds-muted">Enter Staff PIN to access kitchen orders</p>
-          </div>
-
-          {loginError && (
-            <div className="p-3 bg-kds-late/20 border border-kds-late text-cream text-sm font-bold text-center rounded-xl">
-              {loginError}
-            </div>
-          )}
-
-          <form onSubmit={handlePinSubmit} className="space-y-6">
-            <input
-              type="password"
-              inputMode="numeric"
-              maxLength={8}
-              autoFocus
-              placeholder="Enter PIN..."
-              value={pin}
-              onChange={(e) => setPin(e.target.value)}
-              className="w-full text-center text-4xl tracking-widest py-4 bg-kds-card border-2 border-cream/10 rounded-2xl text-cream font-mono focus:outline-none focus:border-kds-fresh"
-            />
-            <button
-              type="submit"
-              className="w-full py-4 rounded-2xl bg-kds-fresh hover:opacity-90 text-espresso font-black text-xl shadow-lg active:scale-95 transition-all"
-            >
-              ACCESS KITCHEN
-            </button>
-          </form>
-        </div>
       </div>
     );
   }

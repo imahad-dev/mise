@@ -1,6 +1,8 @@
 "use client";
 
 import React, { useState } from "react";
+import { formatPrice } from "ui";
+import { useVenue } from "../../../../lib/venue";
 
 interface IngestedTranslation {
   language: string;
@@ -18,12 +20,11 @@ interface IngestedItem {
   translations: IngestedTranslation[];
 }
 
-const DEFAULT_SLUG = process.env.NEXT_PUBLIC_RESTAURANT_SLUG || "trattoria-da-mario";
-
 export default function MenuIngestPage() {
-  const [slug] = useState(DEFAULT_SLUG);
-  const [imageUrl, setImageUrl] = useState("https://example.com/trattoria-menu.jpg");
-  const [language, setLanguage] = useState("it");
+  const { venue } = useVenue();
+  const slug = venue?.slug;
+  const [imageUrl, setImageUrl] = useState("https://example.com/menu.jpg");
+  const [language, setLanguage] = useState("en");
   const [loading, setLoading] = useState(false);
   const [createdCount, setCreatedCount] = useState<number | null>(null);
   const [items, setItems] = useState<IngestedItem[]>([]);
@@ -31,6 +32,7 @@ export default function MenuIngestPage() {
 
   const handleIngest = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!slug) return;
     setLoading(true);
     setError(null);
     setCreatedCount(null);
@@ -152,7 +154,7 @@ export default function MenuIngestPage() {
                       {item.category}
                     </span>
                     <span className="text-sm font-extrabold text-ink">
-                      €{item.price.toFixed(2)}
+                      {formatPrice(item.price, venue?.currency)}
                     </span>
                   </div>
                   <h3 className="text-base font-bold text-ink">

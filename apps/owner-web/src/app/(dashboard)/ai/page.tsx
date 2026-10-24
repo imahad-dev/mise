@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import { useVenue } from "../../../lib/venue";
 import { eur, type DataSources } from "@/lib/analytics";
 
 type Scenario = "price_change" | "promotion" | "demand_surge";
@@ -29,8 +30,6 @@ interface MenuOption {
   name: string;
 }
 
-const DEFAULT_SLUG = process.env.NEXT_PUBLIC_RESTAURANT_SLUG || "trattoria-da-mario";
-
 const SCENARIOS: { id: Scenario; label: string; desc: string }[] = [
   { id: "price_change", label: "Price change", desc: "Change one item's price; demand reacts via elasticity." },
   { id: "promotion", label: "Promotion", desc: "Discount one item; demand reacts via promotion elasticity." },
@@ -40,7 +39,8 @@ const SCENARIOS: { id: Scenario; label: string; desc: string }[] = [
 const signed = (v: number) => `${v >= 0 ? "+" : "−"}${eur(Math.abs(v))}`;
 
 export default function WhatIfPage() {
-  const [slug] = useState(DEFAULT_SLUG);
+  const { venue } = useVenue();
+  const slug = venue?.slug;
   const [items, setItems] = useState<MenuOption[]>([]);
   const [scenario, setScenario] = useState<Scenario>("price_change");
   const [itemId, setItemId] = useState("");
@@ -53,6 +53,7 @@ export default function WhatIfPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!slug) return;
     fetch(`/api/restaurants/${slug}/menu-items`)
       .then((r) => (r.ok ? r.json() : []))
       .then(
@@ -70,6 +71,7 @@ export default function WhatIfPage() {
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!slug) return;
     setLoading(true);
     setError(null);
     const body: Record<string, unknown> = { scenario };

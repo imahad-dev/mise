@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useState } from "react";
+import { useVenue } from "../../../lib/venue";
 
 interface MenuTranslation {
   language: string;
@@ -25,16 +26,16 @@ interface OwnerMenuItem {
   translations: MenuTranslation[];
 }
 
-const DEFAULT_SLUG = process.env.NEXT_PUBLIC_RESTAURANT_SLUG || "trattoria-da-mario";
-
 export default function MenuManagementPage() {
-  const [slug] = useState(DEFAULT_SLUG);
+  const { venue } = useVenue();
+  const slug = venue?.slug;
   const [items, setItems] = useState<OwnerMenuItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionInProgress, setActionInProgress] = useState<string | null>(null);
 
   const loadMenuItems = useCallback(async () => {
+    if (!slug) return;
     try {
       const res = await fetch(`/api/restaurants/${slug}/menu-items`);
       if (!res.ok) {

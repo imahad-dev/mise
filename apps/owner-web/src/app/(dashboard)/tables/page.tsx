@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import { useVenue } from "../../../lib/venue";
 import QRCode from "qrcode";
 
 interface TableItem {
@@ -12,15 +13,15 @@ interface TableItem {
   qrDataUrl?: string;
 }
 
-const DEFAULT_SLUG = process.env.NEXT_PUBLIC_RESTAURANT_SLUG || "trattoria-da-mario";
-
 export default function TablesPage() {
-  const [slug] = useState(DEFAULT_SLUG);
+  const { venue } = useVenue();
+  const slug = venue?.slug;
   const [tables, setTables] = useState<TableItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!slug) return;
     async function loadTables() {
       try {
         const res = await fetch(`/api/restaurants/${slug}/tables`);

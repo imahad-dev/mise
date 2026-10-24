@@ -7,8 +7,8 @@ import { useRouter } from "next/navigation";
 export default function LoginPage() {
   const router = useRouter();
   const [demoMode, setDemoMode] = useState(false);
-  const [role, setRole] = useState<"owner" | "staff">("owner");
-  const [secret, setSecret] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [demoLoading, setDemoLoading] = useState<"owner" | "staff" | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -35,7 +35,9 @@ export default function LoginPage() {
       const res = await fetch("/api/auth/demo-login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ role: selectedRole }),
+        body: JSON.stringify(
+          selectedRole === "staff" ? { role: "staff", venue: "angeethi-house" } : { role: "owner" },
+        ),
       });
       if (!res.ok) {
         if (res.status === 429) {
@@ -64,7 +66,7 @@ export default function LoginPage() {
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ role, secret }),
+        body: JSON.stringify({ email, password }),
       });
 
       if (!res.ok) {
@@ -78,11 +80,7 @@ export default function LoginPage() {
         throw new Error(data?.detail || `Login failed (${res.status})`);
       }
 
-      if (role === "staff") {
-        router.push("/kitchen");
-      } else {
-        router.push("/");
-      }
+      router.push("/");
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -163,55 +161,35 @@ export default function LoginPage() {
         <div className="mise-card p-6 sm:p-8 space-y-6">
           <div className="border-b border-line pb-3">
             <h3 className="text-xs font-bold uppercase tracking-wider text-ink-muted">
-              {demoMode ? "Admin sign-in" : "Sign In with Credentials"}
+              {demoMode ? "Sign in with your account" : "Sign in"}
             </h3>
-          </div>
-
-          {/* Role Toggle */}
-          <div className="grid grid-cols-2 gap-2 p-1 bg-paper rounded-xl border border-line">
-            <button
-              type="button"
-              onClick={() => {
-                setRole("owner");
-                setSecret("");
-                setError(null);
-              }}
-              className={`min-h-[44px] py-2 px-3 rounded-lg text-xs font-semibold transition-all ${
-                role === "owner"
-                  ? "bg-card text-terracotta border border-line shadow-sm"
-                  : "text-ink-muted hover:text-ink"
-              }`}
-            >
-              👑 Owner
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setRole("staff");
-                setSecret("");
-                setError(null);
-              }}
-              className={`min-h-[44px] py-2 px-3 rounded-lg text-xs font-semibold transition-all ${
-                role === "staff"
-                  ? "bg-card text-terracotta border border-line shadow-sm"
-                  : "text-ink-muted hover:text-ink"
-              }`}
-            >
-              👨‍🍳 Staff / Kitchen
-            </button>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-xs font-medium text-ink-muted mb-1.5">
-                {role === "owner" ? "Owner API Key" : "Staff PIN (4 digits)"}
+              <label htmlFor="email" className="block text-xs font-medium text-ink-muted mb-1.5">
+                Email
               </label>
               <input
+                id="email"
+                type="email"
+                autoComplete="username"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                className="w-full min-h-[44px] px-3.5 py-2.5 rounded-xl bg-paper border border-line text-sm text-ink placeholder:text-ink-muted focus:outline-none focus:border-terracotta focus:ring-1 focus:ring-terracotta"
+              />
+            </div>
+            <div>
+              <label htmlFor="password" className="block text-xs font-medium text-ink-muted mb-1.5">
+                Password
+              </label>
+              <input
+                id="password"
                 type="password"
-                maxLength={role === "staff" ? 8 : 128}
-                value={secret}
-                onChange={(e) => setSecret(e.target.value)}
-                placeholder={role === "owner" ? "Enter owner key..." : "e.g. 0000"}
+                autoComplete="current-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
                 required
                 className="w-full min-h-[44px] px-3.5 py-2.5 rounded-xl bg-paper border border-line text-sm text-ink placeholder:text-ink-muted focus:outline-none focus:border-terracotta focus:ring-1 focus:ring-terracotta"
               />
@@ -219,12 +197,10 @@ export default function LoginPage() {
 
             <button
               type="submit"
-              disabled={loading || !secret.trim()}
+              disabled={loading || !email.trim() || !password}
               className="btn-ghost w-full disabled:opacity-40"
             >
-              {loading
-                ? "Authenticating..."
-                : `Sign In as ${role === "owner" ? "Owner" : "Kitchen Staff"}`}
+              {loading ? "Signing in..." : "Sign in"}
             </button>
           </form>
         </div>

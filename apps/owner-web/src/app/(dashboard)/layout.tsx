@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { AppShell, type NavGroup } from "ui";
+import { VenueProvider, useVenue } from "../../lib/venue";
 
 const NAV: NavGroup[] = [
   {
@@ -31,6 +32,29 @@ const NAV: NavGroup[] = [
   { label: "Setup", items: [{ href: "/tables", label: "Tables & QR" }] },
 ];
 
+function VenueSwitcher() {
+  const { venues, venue, select } = useVenue();
+  if (!venue) return null;
+  const label = (v: { name: string; city: string | null }) => (v.city ? `${v.name} · ${v.city}` : v.name);
+  if (venues.length > 1) {
+    return (
+      <select
+        aria-label="Venue"
+        value={venue.slug}
+        onChange={(e) => select(e.target.value)}
+        className="mt-1 w-full rounded-lg border border-line bg-paper px-2 py-1 text-sm text-ink-muted"
+      >
+        {venues.map((v) => (
+          <option key={v.slug} value={v.slug}>
+            {label(v)}
+          </option>
+        ))}
+      </select>
+    );
+  }
+  return <span className="mt-1 block px-2 text-sm text-ink-muted">{label(venue)}</span>;
+}
+
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -52,32 +76,37 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   };
 
   return (
-    <AppShell
-      groups={NAV}
-      currentPath={pathname}
-      linkAs={Link}
-      banner={
-        demoMode && (
-          <div className="border-b border-warn-fg/30 bg-warn-bg px-4 py-1.5 text-center text-xs font-semibold text-warn-fg">
-            Demo environment: synthetic data
+    <VenueProvider>
+      <AppShell
+        groups={NAV}
+        currentPath={pathname}
+        linkAs={Link}
+        banner={
+          demoMode && (
+            <div className="border-b border-warn-fg/30 bg-warn-bg px-4 py-1.5 text-center text-xs font-semibold text-warn-fg">
+              Demo environment: synthetic data
+            </div>
+          )
+        }
+        brand={
+          <div>
+            <Link href="/" className="flex items-center gap-3 px-2">
+              <Image src="/brand/logo-mark.svg" alt="" width={32} height={32} priority />
+              <span>
+                <span className="block font-serif text-lg font-bold leading-tight">Mise</span>
+              </span>
+            </Link>
+            <VenueSwitcher />
           </div>
-        )
-      }
-      brand={
-        <Link href="/" className="flex items-center gap-3 px-2">
-          <Image src="/brand/logo-mark.svg" alt="" width={32} height={32} priority />
-          <span>
-            <span className="block font-serif text-lg font-bold leading-tight">Mise</span>
-          </span>
-        </Link>
-      }
-      sidebarFooter={
-        <button onClick={handleLogout} className="btn-ghost md:mt-4 md:w-full">
-          Sign out
-        </button>
-      }
-    >
-      {children}
-    </AppShell>
+        }
+        sidebarFooter={
+          <button onClick={handleLogout} className="btn-ghost md:mt-4 md:w-full">
+            Sign out
+          </button>
+        }
+      >
+        {children}
+      </AppShell>
+    </VenueProvider>
   );
 }
