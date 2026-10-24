@@ -42,6 +42,12 @@ def test_latest_rate_on_or_before_date_wins():
     assert tax_for("PB", "card", date(2026, 7, 1), Decimal("100"), rates)[0] == Decimal("0.08")
 
 
+def test_shipped_punjab_digital_rate_changes_on_1_july_2026():
+    assert tax_for("PB", "card", date(2026, 6, 30), Decimal("100"))[0] == Decimal("0.05")
+    assert tax_for("PB", "card", date(2026, 7, 1), Decimal("100"))[0] == Decimal("0.08")
+    assert tax_for("PB", "cash", date(2026, 6, 30), Decimal("100"))[0] == Decimal("0.16")
+
+
 def test_no_rate_for_date_raises():
     with pytest.raises(TaxRateError):
         tax_for("PB", "cash", date(2020, 1, 1), Decimal("100"))
@@ -72,7 +78,7 @@ def test_invalid_files_are_rejected(tmp_path, bad):
 
 def test_shipped_rates_file_loads():
     rates = load_rates()
-    assert len(rates) == 4
+    assert len(rates) == 6
     assert {(r.jurisdiction, r.payment_class) for r in rates} == {
         ("PB", "standard"),
         ("PB", "digital"),

@@ -34,7 +34,7 @@ def golden_input(days: int = 56, seed: int = 42):
     rows = []
     for o in generate_orders(SIM_ITEMS, START, a, TZ):
         local = o.placed_at.astimezone(TZ)
-        daypart = "lunch" if local.hour < 16 else "dinner"
+        daypart = "lunch" if local.hour < 18 else "dinner"
         rows.extend((str(item), local.date(), daypart, q) for (item, _), q in o.lines.items())
     window = promo_window(a, START)
     promo_item = str(popularity_ranking(SIM_ITEMS)[a.promo_item_rank])

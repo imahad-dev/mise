@@ -23,6 +23,8 @@ find them.
   - Clause (b) reads "Sixteen percent for others".
 - Before 1 July 2026 the reduced rate was 5%. A PRA notification of 19 February 2026 still quoted
   5%.
+- `data/tax_rates.json` dates the 16% / 5% Punjab entries from 2025-07-01. That start is a
+  conservative lower bound: the 5% rate was in force at least through FY2025-26.
 
 ## Islamabad Capital Territory (FBR) — used by Kehwa & Crumb, Islamabad
 

@@ -2,6 +2,7 @@
 
 import uuid
 from collections import Counter
+from dataclasses import replace
 from datetime import date, timedelta
 from decimal import Decimal
 from zoneinfo import ZoneInfo
@@ -188,6 +189,37 @@ async def test_persist_simulation_writes_one_settled_bill_per_party(db_session: 
     again = await persist_simulation(db_session, restaurant, a)
     assert again["orders_created"] == n
     assert await bill_counts() == (n, 0)
+
+
+@pytest.mark.asyncio
+@pytest.mark.timeout(240)
+async def test_longest_history_still_bills_every_order(db_session: AsyncSession):
+    """days=120 (the API maximum) reaches before 1 July 2026; the earlier Punjab rate applies."""
+    restaurant = await _seeded(db_session)
+    a = replace(SimAssumptions.from_profile(restaurant.onboarding["simulation"]), days=120)
+    summary = await persist_simulation(db_session, restaurant, a, today=date(2026, 10, 24))
+    assert summary["start_date"] < "2026-07-01"
+    counts = (
+        await db_session.execute(
+            select(func.count(Order.id), func.count(Order.bill_id)).where(
+                Order.restaurant_id == restaurant.id, Order.source == "simulated"
+            )
+        )
+    ).one()
+    assert counts[0] == summary["orders_created"] > 0
+    assert counts[1] == counts[0]
+    early = (
+        await db_session.execute(
+            select(func.count())
+            .select_from(Bill)
+            .where(
+                Bill.restaurant_id == restaurant.id,
+                Bill.payment_method != "cash",
+                Bill.tax_rate == Decimal("0.05"),
+            )
+        )
+    ).scalar_one()
+    assert early > 0  # digital bills settled before 1 July 2026 use 5%
 
 
 @pytest.mark.asyncio

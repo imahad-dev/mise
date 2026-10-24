@@ -13,7 +13,7 @@ Code: `services/api/src/services/` — `analytics.py`, `forecast.py`, `brief.py`
 - Source of truth is the immutable `order_item` snapshot (`quantity`, `unit_price`, `unit_cost`)
   taken when the order was placed. Later menu price or cost edits do not rewrite history.
 - Cancelled orders are excluded. Dates and hours use the restaurant's timezone.
-- **Daypart**: local hour before 16:00 is `lunch`, otherwise `dinner`.
+- **Daypart**: daytime before 18:00 local time is `lunch`, the evening after is `dinner`.
 - `orders.source` is `live` or `simulated`. Analytics include both; every response reports the
   count of each (`data_sources`) and the UI shows a "Simulated data" banner when any simulated
   orders are in the window.

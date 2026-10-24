@@ -1,4 +1,8 @@
 [
+  {"jurisdiction": "PB",  "payment_class": "standard", "rate": "0.16", "effective_from": "2025-07-01",
+   "source": "Punjab Sales Tax on Services Act 2012, Second Schedule Part III S/N 4(b), sixteen percent; in force through FY2025-26"},
+  {"jurisdiction": "PB",  "payment_class": "digital",  "rate": "0.05", "effective_from": "2025-07-01",
+   "source": "Same, S/N 4(a) before Punjab Finance Act 2026: five percent for card, mobile wallet or QR (PRA notification 19 Feb 2026 still quotes 5%)"},
   {"jurisdiction": "PB",  "payment_class": "standard", "rate": "0.16", "effective_from": "2026-07-01",
    "source": "Punjab Sales Tax on Services Act 2012, Second Schedule Part III S/N 4(b), as amended by Punjab Finance Act 2026 (L of 2026), in force 1 July 2026"},
   {"jurisdiction": "PB",  "payment_class": "digital",  "rate": "0.08", "effective_from": "2026-07-01",

@@ -1,7 +1,7 @@
 """Sales analytics from order_item snapshots. SQL aggregates plus pure post-processing; no LLM.
 
 All dates and hours are in the restaurant's local timezone. Cancelled orders are excluded.
-Daypart: local hour < 16 is lunch, otherwise dinner.
+Daypart: local hour < 18 is lunch (daytime), otherwise dinner (evening).
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 
     from sqlalchemy.ext.asyncio import AsyncSession
 
-LUNCH_END_HOUR = 16
+LUNCH_END_HOUR = 18
 MIN_PAIR_ORDERS = 5  # co-occurrences below this are too noisy to report
 
 _LOCAL = "(o.placed_at AT TIME ZONE :tz)"
