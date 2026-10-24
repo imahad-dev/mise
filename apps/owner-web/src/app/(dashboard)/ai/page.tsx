@@ -54,6 +54,10 @@ export default function WhatIfPage() {
 
   useEffect(() => {
     if (!slug) return;
+    setItems([]);
+    setItemId("");
+    setResult(null);
+    setError(null);
     fetch(`/api/restaurants/${slug}/menu-items`)
       .then((r) => (r.ok ? r.json() : []))
       .then(

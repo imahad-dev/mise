@@ -22,6 +22,9 @@ export default function TablesPage() {
 
   useEffect(() => {
     if (!slug) return;
+    setTables([]);
+    setError(null);
+    setLoading(true);
     async function loadTables() {
       try {
         const res = await fetch(`/api/restaurants/${slug}/tables`);

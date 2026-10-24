@@ -122,6 +122,7 @@ export default function DailyBriefPage() {
   }, [slug]);
 
   useEffect(() => {
+    setBrief(null);
     loadBrief();
     fetch("/api/auth/config")
       .then((r) => (r.ok ? r.json() : null))

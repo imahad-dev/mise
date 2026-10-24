@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { formatPrice } from "ui";
 import { useVenue } from "../../../../lib/venue";
 
@@ -29,6 +29,12 @@ export default function MenuIngestPage() {
   const [createdCount, setCreatedCount] = useState<number | null>(null);
   const [items, setItems] = useState<IngestedItem[]>([]);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setItems([]);
+    setCreatedCount(null);
+    setError(null);
+  }, [slug]);
 
   const handleIngest = async (e: React.FormEvent) => {
     e.preventDefault();

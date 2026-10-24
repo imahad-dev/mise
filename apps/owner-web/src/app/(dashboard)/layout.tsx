@@ -4,7 +4,7 @@ import React, { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { AppShell, type NavGroup } from "ui";
+import { AppShell, Card, type NavGroup } from "ui";
 import { VenueProvider, useVenue } from "../../lib/venue";
 
 const NAV: NavGroup[] = [
@@ -53,6 +53,19 @@ function VenueSwitcher() {
     );
   }
   return <span className="mt-1 block px-2 text-sm text-ink-muted">{label(venue)}</span>;
+}
+
+function VenueGate({ children, onSignOut }: { children: React.ReactNode; onSignOut: () => void }) {
+  const { error } = useVenue();
+  if (error !== "no_venues") return <>{children}</>;
+  return (
+    <Card className="mx-auto mt-12 max-w-md space-y-4 p-6 text-center">
+      <p className="text-sm text-ink">This account is not linked to a restaurant yet.</p>
+      <button onClick={onSignOut} className="btn-ghost w-full">
+        Sign out
+      </button>
+    </Card>
+  );
 }
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -105,7 +118,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </button>
         }
       >
-        {children}
+        <VenueGate onSignOut={handleLogout}>{children}</VenueGate>
       </AppShell>
     </VenueProvider>
   );

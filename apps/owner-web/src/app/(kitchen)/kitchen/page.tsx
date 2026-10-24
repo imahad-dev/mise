@@ -37,7 +37,7 @@ interface OrdersResponse {
 
 export default function KitchenDisplayPage() {
   const router = useRouter();
-  const { venue, loading } = useVenue();
+  const { venue, loading, error: venueError } = useVenue();
   const slug = venue?.slug;
   const [actionError, setActionError] = useState<string | null>(null);
 
@@ -52,11 +52,6 @@ export default function KitchenDisplayPage() {
   useEffect(() => {
     audioRef.current = new Audio("/alert.wav");
   }, []);
-
-  // No venue means the session is gone (or has no venue): sign in again.
-  useEffect(() => {
-    if (!loading && !venue) router.push("/login");
-  }, [loading, venue, router]);
 
   // Update clock every 5 seconds for age calculations
   useEffect(() => {
@@ -191,6 +186,14 @@ export default function KitchenDisplayPage() {
     return (
       <div className="min-h-screen bg-espresso text-cream flex items-center justify-center">
         <p className="text-xl font-bold">Initializing Kitchen System...</p>
+      </div>
+    );
+  }
+
+  if (venueError === "no_venues") {
+    return (
+      <div className="min-h-screen bg-espresso text-cream flex items-center justify-center p-4">
+        <p className="text-lg font-bold">This account is not linked to a restaurant yet.</p>
       </div>
     );
   }

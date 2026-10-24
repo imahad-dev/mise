@@ -51,6 +51,9 @@ export default function MenuManagementPage() {
   }, [slug]);
 
   useEffect(() => {
+    setItems([]);
+    setError(null);
+    setLoading(true);
     void loadMenuItems();
   }, [loadMenuItems]);
 

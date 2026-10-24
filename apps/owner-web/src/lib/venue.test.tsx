@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { pickVenue, readStoredSlug, storeSlug } from "./venue";
+import { landingPath, pickVenue, readStoredSlug, storeSlug, venueError } from "./venue";
 
 const venues = [
   { slug: "angeethi-house", name: "Angeethi House", city: "Lahore", currency: "PKR", role: "owner" as const },
@@ -8,6 +8,34 @@ const venues = [
 
 afterEach(() => {
   vi.unstubAllGlobals();
+});
+
+describe("landing path after sign-in", () => {
+  const staff = venues.map((v) => ({ ...v, role: "staff" as const }));
+  it("sends staff-only accounts to the kitchen", () => {
+    expect(landingPath(staff)).toBe("/kitchen");
+  });
+  it("sends anyone who owns a venue to the dashboard", () => {
+    expect(landingPath([staff[0], venues[1]])).toBe("/");
+    expect(landingPath(venues)).toBe("/");
+  });
+  it("sends accounts with no venues to the dashboard", () => {
+    expect(landingPath([])).toBe("/");
+  });
+});
+
+describe("venue error state", () => {
+  it("is unauthorized on 401", () => {
+    expect(venueError(401, [])).toBe("unauthorized");
+  });
+  it("is no_venues when signed in with an empty list", () => {
+    expect(venueError(200, [])).toBe("no_venues");
+  });
+  it("is null with venues, on server errors, and on network failure", () => {
+    expect(venueError(200, venues)).toBeNull();
+    expect(venueError(500, [])).toBeNull();
+    expect(venueError(null, [])).toBeNull();
+  });
 });
 
 describe("venue selection", () => {

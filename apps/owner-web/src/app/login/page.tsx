@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
+import { landingPath, type Venue } from "../../lib/venue";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -80,7 +81,14 @@ export default function LoginPage() {
         throw new Error(data?.detail || `Login failed (${res.status})`);
       }
 
-      router.push("/");
+      let venues: Venue[] = [];
+      try {
+        const r = await fetch("/api/restaurants");
+        if (r.ok) venues = ((await r.json()) as { restaurants: Venue[] }).restaurants;
+      } catch {
+        // Fall through to the dashboard, which handles a missing venue list.
+      }
+      router.push(landingPath(venues));
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
