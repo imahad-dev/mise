@@ -4290,6 +4290,10 @@
           "revenue_share": {
             "$ref": "#/components/schemas/PaymentClassShares"
           },
+          "digital_revenue_pct": {
+            "type": "number",
+            "title": "Digital Revenue Pct"
+          },
           "tax_by_rate": {
             "items": {
               "$ref": "#/components/schemas/TaxByRate"
@@ -4306,6 +4310,7 @@
         "required": [
           "bills",
           "revenue_share",
+          "digital_revenue_pct",
           "tax_by_rate",
           "digital_tax_saving"
         ],

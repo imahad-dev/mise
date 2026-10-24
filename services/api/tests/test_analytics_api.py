@@ -16,6 +16,7 @@ from src.models.menu import MenuItem, MenuTranslation
 from src.models.order import Order
 from src.models.restaurant import Restaurant
 from src.redis_client import redis_client
+from src.services.narrative import numbers_grounded
 
 
 @pytest.fixture
@@ -151,6 +152,9 @@ async def test_simulated_orders_feed_brief_and_forecast(
     assert pm["revenue_share"]["digital"] > 0
     assert "Digital payments were" in brief["summary"]
     assert f"PKR {pm['digital_tax_saving']} in tax" in brief["summary"]
+    assert f"Digital payments were {pm['digital_revenue_pct']}%" in brief["summary"]
+    # Every number the summary states can be traced to the response itself.
+    assert numbers_grounded(brief["summary"], {k: v for k, v in brief.items() if k != "summary"})
 
     fc = brief["forecast"]
     assert fc["low_confidence"] is False
@@ -249,6 +253,7 @@ async def test_brief_payment_mix_on_known_bills(
     assert resp.json()["payment_mix"] == {
         "bills": {"standard": 2, "digital": 2},
         "revenue_share": {"standard": 0.3333, "digital": 0.6667},
+        "digital_revenue_pct": 66.67,
         "tax_by_rate": [{"rate": "0.08", "tax": "240.00"}, {"rate": "0.16", "tax": "240.00"}],
         "digital_tax_saving": "240.00",
     }
@@ -265,6 +270,7 @@ async def test_brief_payment_mix_without_bills_is_zero(
     assert resp.json()["payment_mix"] == {
         "bills": {"standard": 0, "digital": 0},
         "revenue_share": {"standard": 0.0, "digital": 0.0},
+        "digital_revenue_pct": 0.0,
         "tax_by_rate": [],
         "digital_tax_saving": "0.00",
     }

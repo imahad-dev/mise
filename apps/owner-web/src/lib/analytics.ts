@@ -54,6 +54,7 @@ export interface DataSources {
 export interface PaymentMix {
   bills: { standard: number; digital: number };
   revenue_share: { standard: number; digital: number };
+  digital_revenue_pct: number;
   tax_by_rate: { rate: string; tax: string }[];
   digital_tax_saving: string;
 }

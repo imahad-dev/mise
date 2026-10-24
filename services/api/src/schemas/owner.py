@@ -172,6 +172,7 @@ class PaymentMix(BaseModel):
 
     bills: PaymentClassCounts
     revenue_share: PaymentClassShares
+    digital_revenue_pct: float  # revenue_share.digital as a percentage, as the summary states it
     tax_by_rate: list[TaxByRate]
     digital_tax_saving: Decimal
 

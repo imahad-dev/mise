@@ -160,11 +160,12 @@ async def payment_mix(db: AsyncSession, w: Window, restaurant: Restaurant) -> di
                 continue  # no standard rate on file for that date: no saving to claim
             saving += cash_tax - tax
     total = revenue["standard"] + revenue["digital"]
+    share = {c: float((v / total).quantize(_SHARE)) if total else 0.0 for c, v in revenue.items()}
     return {
         "bills": bills,
-        "revenue_share": {
-            c: float((v / total).quantize(_SHARE)) if total else 0.0 for c, v in revenue.items()
-        },
+        "revenue_share": share,
+        # The summary states this percentage, so the response carries it too.
+        "digital_revenue_pct": round(share["digital"] * 100, 2),
         "tax_by_rate": [
             {"rate": r.normalize(), "tax": t.quantize(_CENTS)}
             for r, t in sorted(tax_by_rate.items())

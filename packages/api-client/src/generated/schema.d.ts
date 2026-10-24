@@ -1618,6 +1618,8 @@ export interface components {
         PaymentMix: {
             bills: components["schemas"]["PaymentClassCounts"];
             revenue_share: components["schemas"]["PaymentClassShares"];
+            /** Digital Revenue Pct */
+            digital_revenue_pct: number;
             /** Tax By Rate */
             tax_by_rate: components["schemas"]["TaxByRate"][];
             /** Digital Tax Saving */

@@ -378,7 +378,7 @@ async def compute_brief(
         "payment_mix": {
             "bills": payments["bills"],
             "revenue_share": payments["revenue_share"],
-            "digital_revenue_pct": round(payments["revenue_share"]["digital"] * 100, 2),
+            "digital_revenue_pct": payments["digital_revenue_pct"],
             "tax_by_rate": [
                 {"rate": str(r["rate"]), "tax": str(r["tax"])} for r in payments["tax_by_rate"]
             ],
