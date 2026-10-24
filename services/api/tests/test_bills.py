@@ -496,3 +496,61 @@ async def test_parallel_settle_and_order(committed_venue):
     for bill in settled:
         assert bill.subtotal == sum(o.total for o in orders if o.bill_id == bill.id)
     assert sorted(b.bill_no for b in bills.values()) == list(range(1, len(bills) + 1))
+
+
+async def test_other_venue_bill_is_404_under_my_slug(client, db_session, venue):
+    other = Restaurant(
+        name="Other Venue",
+        slug=f"bills-other-{uuid.uuid4().hex[:8]}",
+        currency="PKR",
+        timezone="Asia/Karachi",
+        languages=["en"],
+        default_language="en",
+        tax_jurisdiction="PB",
+    )
+    db_session.add(other)
+    await db_session.flush()
+    table = DiningTable(restaurant_id=other.id, label="B1", qr_token=uuid.uuid4().hex)
+    bread = _item(other.id, "Roti", "40.00", 1)
+    db_session.add_all([table, bread])
+    await db_session.flush()
+    session = GuestSession(
+        restaurant_id=other.id,
+        table_id=table.id,
+        language="en",
+        expires_at=datetime.now(UTC) + timedelta(hours=2),
+    )
+    db_session.add(session)
+    await db_session.flush()
+    their_bill = await bill_id_of(db_session, await place(client, session, [(bread, 2)]))
+
+    await as_member(client, db_session, venue.r.id, "owner")
+    detail = await client.get(bills_url(venue, f"/{their_bill}"))
+    assert detail.status_code == 404
+    settle = await client.post(
+        bills_url(venue, f"/{their_bill}/settle"), json={"payment_method": "cash"}
+    )
+    assert settle.status_code == 404
+    stored = (await db_session.execute(select(Bill).where(Bill.id == their_bill))).scalar_one()
+    assert stored.status == "open"
+    assert stored.settled_at is None
+
+
+async def test_settled_bill_shows_snapshot_subtotal(client, db_session, venue):
+    o1 = await place(client, venue.session_t1, [(venue.karahi, 1, venue.full), (venue.naan, 6)])
+    bill_id = await bill_id_of(db_session, o1)
+    await as_member(client, db_session, venue.r.id, "staff")
+    resp = await client.post(
+        bills_url(venue, f"/{bill_id}/settle"), json={"payment_method": "cash"}
+    )
+    assert resp.status_code == 200, resp.text
+
+    order = (await db_session.execute(select(Order).where(Order.id == o1))).scalar_one()
+    order.status = "cancelled"
+    await db_session.flush()
+
+    detail = (await client.get(bills_url(venue, f"/{bill_id}"))).json()
+    assert detail["subtotal"] == "2460.00"
+    assert detail["total"] == "2854.00"
+    listed = (await client.get(bills_url(venue, "?status=settled"))).json()["bills"]
+    assert [b["subtotal"] for b in listed] == ["2460.00"]

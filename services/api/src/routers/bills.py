@@ -30,7 +30,9 @@ RESPONSES = {
 
 async def bill_detail(db: AsyncSession, restaurant: Restaurant, bill: Bill) -> BillDetail:
     orders = await active_orders(db, bill.id)
-    lines, subtotal = bill_lines(orders)
+    lines, live_subtotal = bill_lines(orders)
+    # A settled bill shows its snapshot; the running total applies only while open.
+    subtotal = bill.subtotal if bill.status == "settled" else live_subtotal
     label = (
         await db.scalar(select(DiningTable.label).where(DiningTable.id == bill.table_id))
         if bill.table_id
@@ -99,7 +101,11 @@ async def list_bills(
                 status=bill.status,
                 opened_at=bill.opened_at,
                 order_count=count,
-                subtotal=(subtotal or Decimal("0")).quantize(CENTS),
+                subtotal=(
+                    bill.subtotal
+                    if bill.status == "settled"
+                    else (subtotal or Decimal("0")).quantize(CENTS)
+                ),
                 bill_requested_at=bill.bill_requested_at,
             )
             for bill, label, count, subtotal in rows

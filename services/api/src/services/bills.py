@@ -2,7 +2,7 @@
 
 import logging
 import uuid
-from datetime import UTC, date, datetime
+from datetime import date, datetime
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
@@ -30,7 +30,13 @@ async def open_bill_for_table(
     await db.execute(select(func.pg_advisory_xact_lock(func.hashtext(f"bill:{restaurant_id}"))))
     bill = (
         await db.execute(
-            select(Bill).where(Bill.table_id == table_id, Bill.status == "open").with_for_update()
+            select(Bill)
+            .where(
+                Bill.restaurant_id == restaurant_id,
+                Bill.table_id == table_id,
+                Bill.status == "open",
+            )
+            .with_for_update()
         )
     ).scalar_one_or_none()
     if bill is not None:
@@ -139,8 +145,9 @@ async def settle_bill(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bill not found")
     if bill.status == "settled":
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Bill already settled")
-    # Taken after the lock, so every order that joined this bill was placed before it.
-    now = datetime.now(UTC)
+    # Database clock (same as orders.placed_at), read after the lock: every order on this
+    # bill committed before it.
+    now = (await db.execute(select(func.clock_timestamp()))).scalar_one()
     orders = await active_orders(db, bill.id)
     if not orders:
         raise HTTPException(
