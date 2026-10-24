@@ -130,26 +130,38 @@ unique-index clash on open is retried once. Cancelled orders are excluded from t
 
 ```json
 [
-  {"jurisdiction": "PB",  "payment_class": "cash",    "rate": "0.16", "effective_from": "2026-07-01", "source": "Punjab Finance Act 2026, per PRA statement"},
-  {"jurisdiction": "PB",  "payment_class": "digital", "rate": "0.08", "effective_from": "2026-07-01", "source": "Punjab Finance Act 2026, per PRA statement"},
-  {"jurisdiction": "ICT", "payment_class": "cash",    "rate": "0.15", "effective_from": "2025-07-01", "source": "Federal Finance Act; news reports"},
-  {"jurisdiction": "ICT", "payment_class": "digital", "rate": "0.05", "effective_from": "2025-07-01", "source": "Federal Finance Act; news reports"}
+  {"jurisdiction": "PB",  "payment_class": "standard", "rate": "0.16", "effective_from": "2026-07-01",
+   "source": "Punjab Sales Tax on Services Act 2012, Second Schedule Part III S/N 4(b), as amended by Punjab Finance Act 2026 (L of 2026), in force 1 July 2026"},
+  {"jurisdiction": "PB",  "payment_class": "digital",  "rate": "0.08", "effective_from": "2026-07-01",
+   "source": "Same, S/N 4(a): eight percent without input tax adjustment, payment by debit or credit card, mobile wallet or QR scanning (was five percent)"},
+  {"jurisdiction": "ICT", "payment_class": "standard", "rate": "0.15", "effective_from": "2023-07-01",
+   "source": "ICT (Tax on Services) Ordinance 2001, Schedule Table-1 S/N 1(ii)(b), as amended up to 30-06-2025 (FBR); entry substituted by Finance Act 2023; not changed by Finance Act 2026"},
+  {"jurisdiction": "ICT", "payment_class": "digital",  "rate": "0.05", "effective_from": "2023-07-01",
+   "source": "Same, S/N 1(ii)(a): five percent, payment by debit or credit card, mobile wallet or QR scanning, no input tax adjustment"}
 ]
 ```
 
-- `cash` → class `cash`; `card`, `wallet`, `raast`, `bank_transfer` → class `digital`.
+**Verified 2026-10-24 against official texts** (`docs/research/2026-10-24-tax-rate-verification.md`):
+the enacted Punjab Finance Act 2026 (punjablaws.gov.pk), PRA's 17th-edition consolidated Act
+2026-27, FBR's ICT Ordinance amended up to 30-06-2025, and the federal Finance Act 2026 (which
+does not amend the ICT Ordinance).
+
+- The reduced rate applies only to **debit or credit card, mobile wallet or QR scanning**. So
+  `card`, `wallet` and `raast` (Raast QR) → class `digital`; `cash` and `bank_transfer` → class
+  `standard`. Punjab's law says "sixteen percent for others", so bank transfer is 16% there. ICT's
+  text says "fifteen percent where payment received in cash" and is silent on bank transfer; we
+  apply the standard rate and label that as our assumption.
 - `tax_for(jurisdiction, payment_method, on_date, subtotal) -> (rate, amount)`: pure function; picks
   the latest entry with `effective_from <= on_date`; amount rounded half-up to whole rupees.
 - The file is validated at startup (rates in [0, 1], unique jurisdiction/class/date, known
-  classes); an invalid file stops the API from starting. These rates are marked "to verify against
-  primary notices" in the research and in `docs/analytics.md`.
+  classes); an invalid file stops the API from starting.
 
 **API** (all with `response_model`):
 - `GET /api/restaurants/{slug}/bills?status=open|settled` (staff or owner): table label, bill no.,
   opened time, order count, running subtotal, `bill_requested_at`.
 - `GET /api/restaurants/{slug}/bills/{id}`: lines grouped by dish and option (name, option, qty,
   unit price, line total), subtotal, and two server-computed previews: cash (rate, tax, total) and
-  digital (rate, tax, total). Settled bills also return the snapshot.
+  card, wallet or QR (rate, tax, total). Settled bills also return the snapshot.
 - `POST /api/restaurants/{slug}/bills/{id}/settle` `{payment_method, payment_reference?}`: 409 if
   already settled, 422 if no active orders or no tax rate for the date (bill stays open, error
   logged). Publishes a bill event on the venue's channel.
@@ -272,6 +284,15 @@ Existing tests move to the new accounts and venues; none are weakened, skipped o
 
 ## Open assumptions (verify with real owners)
 
-Payment mix, whether service charge is customary and taxed, how split payments are taxed, Sindh,
-ICT and KP current rates against primary notices, family-hall table labelling, café pickup by
-token, kitchen ticket language. Full list in the research report.
+Payment mix, whether service charge is customary and taxed, how split payments are taxed, the
+ICT rate for bank transfers, Sindh and KP rates (not used by the demo venues, unverified),
+family-hall table labelling, café pickup by token, kitchen ticket language. Full list in the
+research report.
+
+## Follow-up idea (not in this spec)
+
+**Floor view / table alerts** (inspired by a reel on camera-based table monitoring): a live table
+board — free, seated, ordered, waiting, bill requested, needs cleaning — with alerts such as
+"Table 2 seated 5 min, no order". Mise can derive this from data it already has (QR scan opens a
+guest session, orders, bill request, settle) with no cameras, which avoids video privacy issues,
+hardware cost and the free-only rule. Candidate for priority 2 alongside kitchen stations.
