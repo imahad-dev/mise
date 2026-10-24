@@ -5,6 +5,7 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.concurrency import run_in_threadpool
 
 from src.access import get_current_user
 from src.auth import clear_auth_cookie, set_auth_cookie
@@ -79,6 +80,8 @@ async def demo_login(
         detail="Too many demo login requests: rate limit is 20 per minute",
     )
 
+    if payload.venue is not None and payload.venue not in settings.demo_restaurant_slugs:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Demo user not found")
     if payload.role == "owner":
         email = settings.demo_owner_email
     else:
@@ -129,10 +132,10 @@ async def login(
     # 2. Verify password; an unknown email still costs one hash verification
     user = await _user_by_email(db, payload.email)
     if user is None:
-        verify_password(payload.password, _DUMMY_HASH)
+        await run_in_threadpool(verify_password, payload.password, _DUMMY_HASH)
         is_valid = False
     else:
-        is_valid = verify_password(payload.password, user.password_hash)
+        is_valid = await run_in_threadpool(verify_password, payload.password, user.password_hash)
 
     if not is_valid or user is None:
         # Increment failure count

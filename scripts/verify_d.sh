@@ -153,7 +153,7 @@ pass "guest chat"
 
 # ─── Metrics ─────────────────────────────────────────────────────────
 info "Step 13: GET /metrics/inference"
-METRICS_RESP=$(curl -sf --max-time 5 \
+METRICS_RESP=$(curl -sf --max-time 5 -b "$COOKIE_JAR" \
   "$API/api/metrics/inference" 2>/dev/null) || fail "metrics endpoint"
 echo "$METRICS_RESP" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['total_calls']>=0" \
   || fail "metrics response validation"

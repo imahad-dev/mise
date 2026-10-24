@@ -69,8 +69,10 @@ async def test_old_role_cookie_is_rejected(client):
 async def test_non_member_gets_404_and_staff_gets_403(client, db_session, two_restaurants):
     a, _ = two_restaurants
     await as_member(client, db_session, a.id, "staff")
-    assert (await client.get("/api/restaurants/venue-b/menu-items")).status_code == 404
-    assert (await client.get("/api/restaurants/no-such-venue/menu-items")).status_code == 404
+    other = await client.get("/api/restaurants/venue-b/menu-items")
+    unknown = await client.get("/api/restaurants/no-such-venue/menu-items")
+    assert other.status_code == unknown.status_code == 404
+    assert other.json() == unknown.json()  # a non-member cannot tell the venue exists
     assert (await client.get("/api/restaurants/venue-a/menu-items")).status_code == 403
     assert (await client.get("/api/restaurants/venue-a/kitchen/orders")).status_code == 200
 

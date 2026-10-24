@@ -48,6 +48,22 @@ def load_seed_data(file_path: str) -> dict[str, Any]:
     return data
 
 
+def find_seed_for_slug(slug: str) -> dict[str, Any] | None:
+    """Return the seed in data/seed/*.json whose restaurant.slug is slug, or None."""
+    for base in [Path.cwd(), *Path(__file__).resolve().parents]:
+        seed_dir = base / "data" / "seed"
+        if seed_dir.is_dir():
+            for path in sorted(seed_dir.glob("*.json")):
+                data = json.loads(path.read_text(encoding="utf-8"))
+                if (
+                    isinstance(data, dict)
+                    and data.get("restaurant", {}).get("slug") == slug
+                ):
+                    return data
+            return None
+    return None
+
+
 async def seed_data(
     data: dict[str, Any],
     session: AsyncSession,

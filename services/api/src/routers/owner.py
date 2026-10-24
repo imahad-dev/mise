@@ -524,10 +524,16 @@ async def reset_demo_data(
             detail="Demo mode is disabled",
         )
 
-    try:
-        from scripts.seed import load_seed_data, seed_data
+    from scripts.seed import find_seed_for_slug, seed_data
 
-        data = load_seed_data("data/seed/trattoria_da_mario.json")
+    # Only this venue's own seed: an owner can never re-seed another restaurant.
+    data = find_seed_for_slug(access.restaurant.slug)
+    if data is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="No demo seed for this restaurant"
+        )
+
+    try:
         await seed_data(data, db, rotate_qr=False)
         await db.commit()
     except Exception as e:

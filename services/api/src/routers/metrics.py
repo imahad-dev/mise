@@ -7,17 +7,24 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.access import get_current_user
 from src.config import settings
 from src.database import get_db
 from src.models.metrics import MetricsSample
+from src.models.user import User
 from src.schemas.metrics import InferenceMetricsResponse
 
 router = APIRouter(prefix="/api/metrics", tags=["metrics"])
 
 
-@router.get("/inference", response_model=InferenceMetricsResponse)
+@router.get(
+    "/inference",
+    response_model=InferenceMetricsResponse,
+    responses={401: {"description": "Unauthenticated"}},
+)
 async def inference_metrics(
     db: Annotated[AsyncSession, Depends(get_db)],
+    _user: Annotated[User, Depends(get_current_user)],
 ) -> InferenceMetricsResponse:
     """Aggregated inference metrics with cost tracking.
 
