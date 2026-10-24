@@ -122,9 +122,14 @@ your bill."
 | `source` | `live` or `simulated`, like orders. |
 | `opened_at`, `settled_at` | |
 
-**`orders`** gain `bill_id`. Placing a table order joins the table's open bill or opens one. Both
-order placement and settle lock the bill row; an order arriving after settle opens a new bill. A
-unique-index clash on open is retried once. Cancelled orders are excluded from the subtotal.
+**`orders`** gain `bill_id`. Placing a table order joins the table's open bill or opens one.
+Opening takes a per-restaurant transaction advisory lock (`pg_advisory_xact_lock`) so bill numbers
+never collide, then selects the table's open bill `FOR UPDATE`; settle locks the same row, so an
+order arriving after settle sees it settled and opens a new bill. The partial unique index stays
+as a guard. Simulated bills have `bill_no` NULL (they are never printed); a check constraint
+requires `bill_no` for live bills. Cancelled orders are excluded from the subtotal. Bill events
+(`bill_opened`, `bill_requested`, `bill_settled`) go on the existing `kitchen:{restaurant_id}`
+channel, so the Bills page reuses the kitchen SSE stream.
 
 **Tax rates** live in `data/tax_rates.json`, reviewed in git:
 
@@ -167,6 +172,9 @@ does not amend the ICT Ordinance).
   logged). Publishes a bill event on the venue's channel.
 - `POST /api/guest/bill-request` (guest cookie): 404 if the session's table has no open bill;
   idempotent. Publishes a bill event.
+- `GET /api/guest/bill` (guest cookie): the bill of the session's latest order — `bill_no`,
+  `status`, `bill_requested_at` — or 404 when the session has no billed order. The order status
+  page polls it to show "Bill requested" and "Paid".
 
 **Owner app — Bills page** (nav item, staff and owner):
 - Open bills for the current venue, live over SSE, "Bill requested" chip, requested bills first.
@@ -245,7 +253,7 @@ Italian seed are removed. The `it` code path stays until Urdu replaces it (prior
 | Not a member / unknown slug | 404 "Restaurant not found" |
 | Staff on owner-only route | 403 |
 | Unknown option, option of another dish, missing option on a dish with options | 422 |
-| Order during settle | Bill row lock; later request sees settled and opens a new bill |
+| Order during settle | Advisory lock plus bill row lock; later request sees settled and opens a new bill |
 | Settle settled bill | 409 |
 | Settle bill without active orders | 422 |
 | Reference over 64 chars | 422 |
