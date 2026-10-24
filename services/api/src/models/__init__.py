@@ -1,6 +1,7 @@
 """SQLAlchemy models — import all here for Alembic autogenerate."""
 
 from src.models.audit import AuditLog
+from src.models.bill import Bill
 from src.models.dining_table import DiningTable
 from src.models.forecast import ForecastRun
 from src.models.menu import MenuItem, MenuItemOption, MenuTranslation
@@ -12,6 +13,7 @@ from src.models.user import Membership, User
 
 __all__ = [
     "AuditLog",
+    "Bill",
     "DiningTable",
     "ForecastRun",
     "GuestSession",

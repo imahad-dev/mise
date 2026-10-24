@@ -50,6 +50,7 @@ class Order(Base):
         Index("idx_orders_table_id", "table_id"),
         Index("idx_orders_kitchen_query", "restaurant_id", "status", "placed_at"),
         Index("idx_orders_analytics", "restaurant_id", "source", "placed_at"),
+        Index("idx_orders_bill_id", "bill_id"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -70,6 +71,11 @@ class Order(Base):
     table_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("dining_table.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    bill_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("bills.id", ondelete="SET NULL"),
         nullable=True,
     )
     status: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'placed'"))

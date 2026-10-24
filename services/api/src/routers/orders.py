@@ -26,6 +26,7 @@ from src.models.session import GuestSession
 from src.redis_client import publish_event, redis_client
 from src.schemas.orders import CreateOrderRequest, OrderItemRequest, OrderResponse
 from src.services.allergen_service import compute_allergen_status
+from src.services.bills import open_bill_for_table
 from src.services.order_snapshot import line_total, snapshot_order_item
 
 logger = logging.getLogger(__name__)
@@ -229,10 +230,17 @@ async def create_order(
     has_conflict = bool(conflict_items)
     ack_recorded = has_conflict and bool(payload.acknowledge_allergen_risk)
 
+    bill, bill_created = (
+        await open_bill_for_table(db, session.restaurant_id, session.table_id)
+        if session.table_id
+        else (None, False)
+    )
+
     order = Order(
         guest_session_id=session.id,
         restaurant_id=session.restaurant_id,
         table_id=session.table_id,
+        bill_id=bill.id if bill else None,
         status="placed",
         total=total,
         idempotency_key=payload.idempotency_key,
@@ -294,6 +302,11 @@ async def create_order(
     order_event = json.dumps({"event": "order_placed", "order_id": str(final_order.id)})
     await publish_event(f"kitchen:{final_order.restaurant_id}", order_event)
     await publish_event(f"orders:{final_order.id}", order_event)
+    if bill_created:
+        await publish_event(
+            f"kitchen:{final_order.restaurant_id}",
+            json.dumps({"event": "bill_opened", "bill_id": str(final_order.bill_id)}),
+        )
 
     response.status_code = status.HTTP_201_CREATED
     return await order_response(db, final_order)
