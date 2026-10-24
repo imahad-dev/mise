@@ -1,5 +1,7 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { PAYMENT_METHODS, SAMPLE_BILL_FOOTER, billNo, sampleBillText } from "./bill";
+import { PAYMENT_METHODS, SAMPLE_BILL_FOOTER, billNo, sampleBillText, taxLabel } from "./bill";
 
 describe("sample bill", () => {
   const bill = {
@@ -25,5 +27,25 @@ describe("sample bill", () => {
   });
   it("offers the five payment methods", () => {
     expect(PAYMENT_METHODS.map((m) => m.value)).toEqual(["cash", "card", "wallet", "raast", "bank_transfer"]);
+  });
+});
+
+describe("bill helpers", () => {
+  it("names the tax class for cash and bank transfer", () => {
+    expect(taxLabel("0.16", "cash")).toBe("Sales tax (illustrative) 16% — cash");
+    expect(taxLabel("0.16", "bank_transfer")).toBe("Sales tax (illustrative) 16% — bank transfer");
+  });
+  it("keeps fractional rates", () => {
+    expect(taxLabel("0.165", "wallet")).toBe("Sales tax (illustrative) 16.5% — card, wallet or QR");
+  });
+  it("shows a dash when a bill has no number", () => {
+    expect(billNo(null)).toBe("Bill no. —");
+  });
+  it("keeps forbidden wording out of the Bills and print pages", () => {
+    const files = ["../app/(dashboard)/bills/page.tsx", "../app/bills/[id]/print/page.tsx", "./bill.ts"];
+    for (const file of files) {
+      const source = readFileSync(fileURLToPath(new URL(file, import.meta.url)), "utf8").replace(SAMPLE_BILL_FOOTER, "");
+      expect(source, file).not.toMatch(/invoice|FBR|compliant/i);
+    }
   });
 });

@@ -15,9 +15,10 @@ function Row({ row, strong }: { row: BillRow; strong?: boolean }) {
   );
 }
 
-function PrintBill({ id }: { id: string }) {
-  const { venue, error: venueError } = useVenue();
-  const slug = venue?.slug;
+function PrintBill({ id, venueParam }: { id: string; venueParam: string | undefined }) {
+  const { venues, venue, error: venueError } = useVenue();
+  // The link from the Bills page names the venue; fall back to the selected one if it is not ours.
+  const slug = venues.find((v) => v.slug === venueParam)?.slug ?? venue?.slug;
   const [bill, setBill] = useState<BillDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -79,11 +80,18 @@ function PrintBill({ id }: { id: string }) {
   );
 }
 
-export default function PrintBillPage({ params }: { params: Promise<{ id: string }> }) {
+export default function PrintBillPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ venue?: string | string[] }>;
+}) {
   const { id } = use(params);
+  const { venue } = use(searchParams);
   return (
     <VenueProvider>
-      <PrintBill id={id} />
+      <PrintBill id={id} venueParam={typeof venue === "string" ? venue : undefined} />
     </VenueProvider>
   );
 }

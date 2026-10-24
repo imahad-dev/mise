@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Badge, Button, Card, PageHeader, Sheet, formatPrice } from "ui";
 import { useVenue, useSlugRef } from "../../../lib/venue";
@@ -47,6 +48,9 @@ export default function BillsPage() {
   const [reference, setReference] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // The bill the sheet shows; late responses for any other bill are dropped.
+  const selectedId = useRef<string | null>(null);
+  const printHref = (id: string) => `/bills/${id}/print?venue=${encodeURIComponent(slug ?? "")}`;
 
   const fetchBills = useCallback(async (): Promise<{ bills: BillSummary[] }> => {
     const res = await fetch(`/api/restaurants/${slug}/bills?status=open`);
@@ -70,16 +74,24 @@ export default function BillsPage() {
 
   const loadDetail = async (id: string) => {
     const forSlug = slug;
-    const res = await fetch(`/api/restaurants/${forSlug}/bills/${id}`);
-    if (slugRef.current !== forSlug) return;
-    if (!res.ok) {
-      setError(await apiError(res));
-      return;
+    const stale = () => slugRef.current !== forSlug || selectedId.current !== id;
+    try {
+      const res = await fetch(`/api/restaurants/${forSlug}/bills/${id}`);
+      if (stale()) return;
+      if (!res.ok) {
+        const message = await apiError(res);
+        if (!stale()) setError(message);
+        return;
+      }
+      const body = (await res.json()) as BillDetail;
+      if (!stale()) setDetail(body);
+    } catch {
+      if (!stale()) setError("Couldn't load the bill. Try again.");
     }
-    setDetail((await res.json()) as BillDetail);
   };
 
   const select = (id: string) => {
+    selectedId.current = id;
     setDetail(null);
     setError(null);
     setMethod("cash");
@@ -91,10 +103,11 @@ export default function BillsPage() {
   const settle = async () => {
     if (!detail) return;
     const forSlug = slug;
+    const billId = detail.id;
     setBusy(true);
     setError(null);
     try {
-      const res = await fetch(`/api/restaurants/${forSlug}/bills/${detail.id}/settle`, {
+      const res = await fetch(`/api/restaurants/${forSlug}/bills/${billId}/settle`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -102,16 +115,17 @@ export default function BillsPage() {
           payment_reference: method === "cash" || !reference.trim() ? null : reference.trim(),
         }),
       });
-      if (slugRef.current !== forSlug) return;
+      if (slugRef.current !== forSlug || selectedId.current !== billId) return;
       if (res.ok) {
-        router.push(`/bills/${detail.id}/print`);
+        router.push(printHref(billId));
         return;
       }
-      setError(await apiError(res));
       if (res.status === 409) {
         void refetch();
-        void loadDetail(detail.id);
+        void loadDetail(billId);
+        return; // the reloaded detail shows "already settled" with its print link
       }
+      setError(await apiError(res));
     } catch {
       setError("Network error. Try again.");
     } finally {
@@ -162,16 +176,14 @@ export default function BillsPage() {
 
       <Sheet
         open={open}
-        onClose={() => setOpen(false)}
+        onClose={() => {
+          selectedId.current = null;
+          setOpen(false);
+        }}
         title={detail ? `${detail.table_label ? `Table ${detail.table_label}` : "Bill"} · ${billNo(detail.bill_no)}` : "Bill"}
         footer={
           detail?.status === "open" && (
             <>
-              {error && (
-                <p role="alert" className="text-sm text-danger-fg">
-                  {error}
-                </p>
-              )}
               <Button className="w-full" onClick={settle} disabled={busy}>
                 {busy ? "Saving…" : "Mark paid"}
               </Button>
@@ -179,14 +191,13 @@ export default function BillsPage() {
           )
         }
       >
+        {error && (
+          <p role="alert" className="text-sm text-danger-fg">
+            {error}
+          </p>
+        )}
         {!detail ? (
-          error ? (
-            <p role="alert" className="text-sm text-danger-fg">
-              {error}
-            </p>
-          ) : (
-            <p className="text-sm text-ink-muted">Loading…</p>
-          )
+          !error && <p className="text-sm text-ink-muted">Loading…</p>
         ) : (
           <>
             <ul className="divide-y divide-line text-sm">
@@ -206,7 +217,12 @@ export default function BillsPage() {
             </p>
 
             {detail.status !== "open" ? (
-              <p className="text-sm text-ink-muted">This bill is already settled.</p>
+              <p className="text-sm text-ink-muted">
+                This bill is already settled.{" "}
+                <Link href={printHref(detail.id)} className="font-semibold text-terracotta underline">
+                  Open sample bill
+                </Link>
+              </p>
             ) : (
               <>
                 <div className="grid grid-cols-2 gap-3">

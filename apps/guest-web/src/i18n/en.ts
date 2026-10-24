@@ -80,6 +80,7 @@ export const en: TranslationDict = {
   bill: {
     request: "Request bill",
     requested: "Bill requested — a waiter will bring it to your table.",
-    paid: "Paid · {billNo} · thank you",
+    paid: "Paid · Bill no. {billNo} · thank you",
+    requestFailed: "Couldn't request the bill. Please ask a waiter.",
   },
 };

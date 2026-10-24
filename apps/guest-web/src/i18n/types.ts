@@ -77,5 +77,6 @@ export interface TranslationDict {
     requested: string;
     /** Contains {billNo}. */
     paid: string;
+    requestFailed: string;
   };
 }

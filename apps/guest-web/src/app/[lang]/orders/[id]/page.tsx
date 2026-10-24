@@ -23,21 +23,26 @@ interface GuestBill {
   bill_requested_at: string | null;
 }
 
-/** The table bill for this guest session: polled every 10 s until it is settled. */
+/** The table bill for this guest session: polled every 10 s, every 30 s once paid (a new order opens a new bill). */
 function useGuestBill() {
   const [bill, setBill] = useState<GuestBill | null>(null);
+  const [requesting, setRequesting] = useState(false);
+  const [requestFailed, setRequestFailed] = useState(false);
   const settled = bill?.status === "settled";
 
   useEffect(() => {
-    if (settled) return;
     let cancelled = false;
     const load = () =>
       fetch("/api/guest/bill")
-        .then((r) => (r.ok ? (r.json() as Promise<GuestBill>) : null))
-        .then((b) => !cancelled && setBill(b))
+        .then(async (r) => {
+          if (cancelled) return;
+          if (r.status === 404) setBill(null);
+          else if (r.ok) setBill((await r.json()) as GuestBill);
+          // other errors: keep the last known bill
+        })
         .catch(() => {});
     void load();
-    const timer = setInterval(load, 10_000);
+    const timer = setInterval(load, settled ? 30_000 : 10_000);
     return () => {
       cancelled = true;
       clearInterval(timer);
@@ -45,11 +50,20 @@ function useGuestBill() {
   }, [settled]);
 
   const request = async () => {
-    const r = await fetch("/api/guest/bill-request", { method: "POST" });
-    if (r.ok) setBill((await r.json()) as GuestBill);
+    setRequesting(true);
+    setRequestFailed(false);
+    try {
+      const r = await fetch("/api/guest/bill-request", { method: "POST" });
+      if (r.ok) setBill((await r.json()) as GuestBill);
+      else setRequestFailed(true);
+    } catch {
+      setRequestFailed(true);
+    } finally {
+      setRequesting(false);
+    }
   };
 
-  return { bill, request };
+  return { bill, request, requesting, requestFailed };
 }
 
 interface OrderDetails {
@@ -70,7 +84,7 @@ export default function OrderStatusPage({
 }) {
   const { lang, id } = use(params);
   const dict = getDictionary(lang);
-  const { bill, request } = useGuestBill();
+  const { bill, request, requesting, requestFailed } = useGuestBill();
 
   const fetchOrderState = useCallback(async (): Promise<OrderDetails> => {
     const res = await fetch(`/api/orders/${id}`);
@@ -169,13 +183,20 @@ export default function OrderStatusPage({
             {bill && (
               <div className="p-5 rounded-2xl bg-card border border-line text-sm text-ink" aria-live="polite">
                 {bill.status === "settled" ? (
-                  <p>{dict.bill.paid.replace("{billNo}", `#${String(bill.bill_no ?? "").padStart(4, "0")}`)}</p>
+                  <p>{dict.bill.paid.replace("{billNo}", String(bill.bill_no ?? "").padStart(4, "0"))}</p>
                 ) : bill.bill_requested_at ? (
                   <p>{dict.bill.requested}</p>
                 ) : (
-                  <Button className="w-full" onClick={request}>
-                    {dict.bill.request}
-                  </Button>
+                  <>
+                    <Button className="w-full" onClick={request} disabled={requesting}>
+                      {dict.bill.request}
+                    </Button>
+                    {requestFailed && (
+                      <p role="alert" className="mt-2 text-xs text-danger-fg">
+                        {dict.bill.requestFailed}
+                      </p>
+                    )}
+                  </>
                 )}
               </div>
             )}
