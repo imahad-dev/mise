@@ -77,4 +77,9 @@ export const en: TranslationDict = {
     chooseSize: "Choose a size",
     from: "from",
   },
+  bill: {
+    request: "Request bill",
+    requested: "Bill requested — a waiter will bring it to your table.",
+    paid: "Paid · {billNo} · thank you",
+  },
 };

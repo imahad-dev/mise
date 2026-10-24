@@ -72,4 +72,10 @@ export interface TranslationDict {
     chooseSize: string;
     from: string;
   };
+  bill: {
+    request: string;
+    requested: string;
+    /** Contains {billNo}. */
+    paid: string;
+  };
 }

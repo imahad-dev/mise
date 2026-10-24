@@ -77,4 +77,9 @@ export const it: TranslationDict = {
     chooseSize: "Scegli la porzione",
     from: "da",
   },
+  bill: {
+    request: "Chiedi il conto",
+    requested: "Conto richiesto — un cameriere lo porterà al tavolo.",
+    paid: "Pagato · {billNo} · grazie",
+  },
 };

@@ -11,6 +11,7 @@ const NAV: NavGroup[] = [
   {
     label: "Service",
     items: [
+      { href: "/bills", label: "Bills" },
       { href: "/", label: "Live orders" },
       { href: "/kitchen", label: "Kitchen display ↗" },
     ],

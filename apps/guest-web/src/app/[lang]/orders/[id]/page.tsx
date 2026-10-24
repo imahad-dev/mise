@@ -1,11 +1,11 @@
 "use client";
 
-import React, { use, useCallback } from "react";
+import React, { use, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { ChatPanel } from "../../../../components/chat-panel";
 import { useSse } from "../../../../hooks/use-sse";
 import { getDictionary } from "../../../../i18n";
-import { formatPrice } from "ui";
+import { Button, formatPrice } from "ui";
 
 interface OrderItem {
   id: string;
@@ -15,6 +15,41 @@ interface OrderItem {
   unit_price: string | number;
   notes?: string | null;
   allergen_status: string;
+}
+
+interface GuestBill {
+  bill_no: number | null;
+  status: string;
+  bill_requested_at: string | null;
+}
+
+/** The table bill for this guest session: polled every 10 s until it is settled. */
+function useGuestBill() {
+  const [bill, setBill] = useState<GuestBill | null>(null);
+  const settled = bill?.status === "settled";
+
+  useEffect(() => {
+    if (settled) return;
+    let cancelled = false;
+    const load = () =>
+      fetch("/api/guest/bill")
+        .then((r) => (r.ok ? (r.json() as Promise<GuestBill>) : null))
+        .then((b) => !cancelled && setBill(b))
+        .catch(() => {});
+    void load();
+    const timer = setInterval(load, 10_000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [settled]);
+
+  const request = async () => {
+    const r = await fetch("/api/guest/bill-request", { method: "POST" });
+    if (r.ok) setBill((await r.json()) as GuestBill);
+  };
+
+  return { bill, request };
 }
 
 interface OrderDetails {
@@ -35,6 +70,7 @@ export default function OrderStatusPage({
 }) {
   const { lang, id } = use(params);
   const dict = getDictionary(lang);
+  const { bill, request } = useGuestBill();
 
   const fetchOrderState = useCallback(async (): Promise<OrderDetails> => {
     const res = await fetch(`/api/orders/${id}`);
@@ -129,6 +165,20 @@ export default function OrderStatusPage({
                 </span>
               </div>
             </div>
+
+            {bill && (
+              <div className="p-5 rounded-2xl bg-card border border-line text-sm text-ink" aria-live="polite">
+                {bill.status === "settled" ? (
+                  <p>{dict.bill.paid.replace("{billNo}", `#${String(bill.bill_no ?? "").padStart(4, "0")}`)}</p>
+                ) : bill.bill_requested_at ? (
+                  <p>{dict.bill.requested}</p>
+                ) : (
+                  <Button className="w-full" onClick={request}>
+                    {dict.bill.request}
+                  </Button>
+                )}
+              </div>
+            )}
 
             {/* Items List */}
             <div className="rounded-2xl bg-card border border-line p-5 space-y-3">
