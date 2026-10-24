@@ -19,7 +19,7 @@ from sqlalchemy.orm import selectinload
 from src.auth import get_current_guest_session
 from src.database import get_db
 from src.models.audit import AuditLog
-from src.models.menu import MenuItem
+from src.models.menu import MenuItem, MenuItemOption
 from src.models.order import Order, OrderItem
 from src.models.restaurant import Restaurant
 from src.models.session import GuestSession
@@ -155,7 +155,7 @@ async def create_order(
     restaurant = res_rest.scalar_one()
 
     # 4b. Resolve each line's option (422 before any allergen check)
-    line_options: list = []
+    line_options: list[MenuItemOption | None] = []
     for req in payload.items:
         item = found_items[req.menu_item_id]
         opts = {o.id: o for o in item.options}

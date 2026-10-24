@@ -60,7 +60,7 @@ async def karahi_setup(client: AsyncClient, db_session: AsyncSession) -> KarahiS
 
     table = DiningTable(restaurant_id=restaurant.id, label="T1", qr_token=uuid.uuid4().hex)
     karahi = _item(restaurant.id, "Chicken Karahi", "1100", "500", 1)
-    naan = _item(restaurant.id, "Naan", "60", "9", 2)
+    naan = _item(restaurant.id, "Naan", "60.00", "9.00", 2)
     other = _item(restaurant.id, "Mutton Karahi", "2300", "1060", 3)
     db_session.add_all([table, karahi, naan, other])
     await db_session.flush()
@@ -181,3 +181,38 @@ async def test_kitchen_ticket_shows_option(client, db_session, karahi_setup):
     assert [(i["kitchen_name"], i["option_label"]) for i in order["items"]] == [
         ("Chicken Karahi", "Full")
     ]
+
+
+async def test_two_sizes_of_one_dish_make_two_lines(client, karahi_setup):
+    s = karahi_setup
+    resp = await client.post(
+        "/api/orders",
+        json={
+            "idempotency_key": "two-sizes",
+            "acknowledge_allergen_risk": True,
+            "items": [
+                {"menu_item_id": str(s.karahi.id), "option_id": str(s.half.id), "quantity": 1},
+                {"menu_item_id": str(s.karahi.id), "option_id": str(s.full.id), "quantity": 1},
+            ],
+        },
+    )
+    assert resp.status_code == 201
+    body = resp.json()
+    assert body["total"] == "3200.00"
+    assert sorted((i["option_label"], i["unit_price"]) for i in body["items"]) == [
+        ("Full", "2100.00"),
+        ("Half", "1100.00"),
+    ]
+
+
+async def test_identical_replay_returns_same_order(client, karahi_setup):
+    s = karahi_setup
+    body = {
+        "idempotency_key": "replay",
+        "acknowledge_allergen_risk": True,
+        "items": [{"menu_item_id": str(s.karahi.id), "option_id": str(s.full.id), "quantity": 1}],
+    }
+    first = await client.post("/api/orders", json=body)
+    again = await client.post("/api/orders", json=body)
+    assert first.status_code == 201 and again.status_code == 200
+    assert again.json()["id"] == first.json()["id"]
