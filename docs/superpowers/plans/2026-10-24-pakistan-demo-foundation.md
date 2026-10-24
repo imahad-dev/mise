@@ -12,6 +12,8 @@
 
 ## Conventions for every task
 
+- Real table names are singular: `restaurant`, `menu_item`, `menu_translation`, `dining_table`, `guest_session`, `order_item`, `audit_log` (but `orders`). New tables in this plan: `users`, `memberships`, `menu_item_option`, `bills`. Foreign keys must target the real names.
+
 - Branch: `feat/pakistan-foundation` (already created). Never commit to `main`.
 - Shell: Git Bash on Windows. `make` and `python3` need the scratchpad wrappers:
   `export PATH="/c/Users/MSI/AppData/Local/Temp/claude/C--Users-MSI-Source-Code-Mise/e8eee3b8-2d67-4900-b83b-437f0a538543/scratchpad/bin:$PATH"`.
@@ -230,7 +232,7 @@ class Membership(Base):
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
     restaurant_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("restaurants.id", ondelete="CASCADE"), nullable=False
+        UUID(as_uuid=True), ForeignKey("restaurant.id", ondelete="CASCADE"), nullable=False
     )
     role: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
@@ -731,10 +733,10 @@ async def test_option_label_unique_per_item(db_session):
 
 - [ ] **Step 3: Models.**
   - `Restaurant`: `city: Mapped[str | None] = mapped_column(Text, nullable=True)`; `tax_jurisdiction: Mapped[str | None] = mapped_column(Text, nullable=True)`.
-  - `menu.py`: new `MenuItemOption` (`id`, `menu_item_id` FK `menu_items.id` ondelete CASCADE, `label` Text, `price` Numeric(10,2), `unit_cost` Numeric(10,2), `sort_order` Integer default 0, timestamps) with
+  - `menu.py`: new `MenuItemOption` (table `menu_item_option`; `id`, `menu_item_id` FK `menu_item.id` ondelete CASCADE, `label` Text, `price` Numeric(10,2), `unit_cost` Numeric(10,2), `sort_order` Integer default 0, timestamps) with
     `CheckConstraint("price >= 0", name="chk_menu_item_options_price")`, `CheckConstraint("unit_cost >= 0", name="chk_menu_item_options_cost")`, `UniqueConstraint("menu_item_id", "label", name="uq_menu_item_options_label")`, `Index("idx_menu_item_options_item", "menu_item_id")`.
     `MenuItem.options: Mapped[list["MenuItemOption"]] = relationship(lazy="raise", cascade="all, delete-orphan", order_by="MenuItemOption.sort_order")`.
-  - `OrderItem`: `option_id` (UUID FK `menu_item_options.id` ondelete SET NULL, nullable), `option_label: Mapped[str | None]` (Text, nullable).
+  - `OrderItem`: `option_id` (UUID FK `menu_item_option.id` ondelete SET NULL, nullable), `option_label: Mapped[str | None]` (Text, nullable).
   - Export `MenuItemOption` from `models/__init__.py`.
 
 - [ ] **Step 4: Migration `0009_venues_options.py`** (down_revision `0008_users_memberships`) adding exactly the above; downgrade reverses in reverse order.
@@ -1213,7 +1215,7 @@ async def test_live_bill_needs_a_number(db_session, venue):
 
 - [ ] **Step 2: Run → fail.**
 
-- [ ] **Step 3: Model `Bill`** (`bills`): `id`, `restaurant_id` (FK CASCADE), `table_id` (FK `dining_tables.id` SET NULL, nullable), `bill_no` Integer nullable, `status` Text default `'open'`, `source` Text default `'live'`, `bill_requested_at`, `payment_method` Text nullable, `payment_reference` Text nullable, `subtotal`/`tax_rate`/`tax_amount`/`total` Numeric nullable (`tax_rate` Numeric(5,4), others Numeric(10,2)), `tax_jurisdiction` Text nullable, `opened_at` (server now), `settled_at` nullable, `created_at`, `updated_at`. `__table_args__`:
+- [ ] **Step 3: Model `Bill`** (`bills`): `id`, `restaurant_id` (FK CASCADE), `table_id` (FK `dining_table.id` SET NULL, nullable), `bill_no` Integer nullable, `status` Text default `'open'`, `source` Text default `'live'`, `bill_requested_at`, `payment_method` Text nullable, `payment_reference` Text nullable, `subtotal`/`tax_rate`/`tax_amount`/`total` Numeric nullable (`tax_rate` Numeric(5,4), others Numeric(10,2)), `tax_jurisdiction` Text nullable, `opened_at` (server now), `settled_at` nullable, `created_at`, `updated_at`. `__table_args__`:
   - `CheckConstraint("status IN ('open', 'settled')", name="chk_bills_status")`
   - `CheckConstraint("source IN ('live', 'simulated')", name="chk_bills_source")`
   - `CheckConstraint("payment_method IS NULL OR payment_method IN ('cash','card','wallet','raast','bank_transfer')", name="chk_bills_payment_method")`
