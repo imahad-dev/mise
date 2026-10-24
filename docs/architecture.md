@@ -378,6 +378,6 @@ unreachable the limits fail open and log a warning.
 - `POST /api/restaurants/{slug}/menu-items/ingest` — VLM extraction of menu dish data from photograph URLs.
 - `GET /api/restaurants/{slug}/ai/brief` — Deterministic revenue brief: KPIs, menu engineering, pairings, peak hours, backtested 7-day forecast, ranked actions; LLM-written or template summary.
 - `POST /api/restaurants/{slug}/ai/simulate` — Deterministic what-if (price change, promotion, demand surge) with listed assumptions.
-- `POST /api/restaurants/{slug}/demo/simulate-orders` — Replaces simulated demo orders and bills with a seeded synthetic history from the venue's simulation profile; returns `bills_created` (`DEMO_MODE` only).
-- `POST /api/restaurants/{slug}/demo/reset` — Re-seeds the demo menu and tables (`DEMO_MODE` only).
-- `GET /api/metrics/inference` — Aggregated inference metrics, token counts, average latency, and active provider label.
+- `POST /api/restaurants/{slug}/demo/simulate-orders` — Replaces simulated demo orders and bills with a seeded synthetic history from the venue's simulation profile; returns `bills_created` (`DEMO_MODE` and a configured demo venue only; 404 otherwise).
+- `POST /api/restaurants/{slug}/demo/reset` — Re-seeds the demo menu and tables (`DEMO_MODE` and a configured demo venue only; 404 otherwise).
+- `GET /api/metrics/inference` — Aggregated inference metrics, token counts, average latency, and active provider label. Samples are not attributed to a restaurant, so this is an installation-wide operator diagnostic: it answers 404 unless `DEMO_MODE=true`, and is never available on a real multi-venue installation.
