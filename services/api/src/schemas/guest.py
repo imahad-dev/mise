@@ -53,6 +53,14 @@ class GuestSessionResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class GuestMenuOption(BaseModel):
+    id: uuid.UUID
+    label: str
+    price: Decimal
+
+    model_config = ConfigDict(from_attributes=True, extra="forbid")
+
+
 class GuestMenuItemResponse(BaseModel):
     id: uuid.UUID
     category: str
@@ -72,6 +80,7 @@ class GuestMenuItemResponse(BaseModel):
     image_url: str | None = None
     allergen_status: str
     matched_allergens: list[str]
+    options: list[GuestMenuOption] = []
 
     # Explicitly guarantee unit_cost is not in schema
     model_config = ConfigDict(from_attributes=True, extra="forbid")

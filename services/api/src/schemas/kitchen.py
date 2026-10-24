@@ -10,6 +10,7 @@ class KitchenOrderItemResponse(BaseModel):
     id: uuid.UUID
     menu_item_id: uuid.UUID
     kitchen_name: str
+    option_label: str | None = None
     quantity: int
     notes: str | None
     allergens: list[str]

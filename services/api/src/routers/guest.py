@@ -19,6 +19,7 @@ from src.schemas.guest import (
     ChatMessageResponse,
     CreateGuestSessionRequest,
     GuestMenuItemResponse,
+    GuestMenuOption,
     GuestMenuResponse,
     GuestMenuRestaurant,
     GuestSessionResponse,
@@ -135,7 +136,7 @@ async def get_guest_menu(
     # 2. Fetch active menu items with eager loaded translations
     stmt_items = (
         select(MenuItem)
-        .options(selectinload(MenuItem.translations))
+        .options(selectinload(MenuItem.translations), selectinload(MenuItem.options))
         .where(
             MenuItem.restaurant_id == session.restaurant_id,
             MenuItem.deleted_at.is_(None),
@@ -190,6 +191,9 @@ async def get_guest_menu(
                 image_url=item.image_url,
                 allergen_status=status_val,
                 matched_allergens=matched_allergens,
+                options=[
+                    GuestMenuOption(id=o.id, label=o.label, price=o.price) for o in item.options
+                ],
             )
         )
 

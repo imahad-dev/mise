@@ -38,12 +38,13 @@ def compute_payload_hash(items: list[OrderItemRequest]) -> str:
     canonical = [
         {
             "menu_item_id": str(i.menu_item_id),
+            "option_id": str(i.option_id or ""),
             "quantity": i.quantity,
             "notes": i.notes or "",
         }
         for i in sorted(
             items,
-            key=lambda x: (str(x.menu_item_id), x.quantity, x.notes or ""),
+            key=lambda x: (str(x.menu_item_id), str(x.option_id or ""), x.quantity, x.notes or ""),
         )
     ]
     raw = json.dumps(canonical, sort_keys=True)
@@ -117,7 +118,7 @@ async def create_order(
     item_ids = [item_req.menu_item_id for item_req in payload.items]
     stmt_items = (
         select(MenuItem)
-        .options(selectinload(MenuItem.translations))
+        .options(selectinload(MenuItem.translations), selectinload(MenuItem.options))
         .where(
             MenuItem.id.in_(item_ids),
             MenuItem.restaurant_id == session.restaurant_id,
@@ -152,6 +153,23 @@ async def create_order(
     stmt_rest = select(Restaurant).where(Restaurant.id == session.restaurant_id)
     res_rest = await db.execute(stmt_rest)
     restaurant = res_rest.scalar_one()
+
+    # 4b. Resolve each line's option (422 before any allergen check)
+    line_options: list = []
+    for req in payload.items:
+        item = found_items[req.menu_item_id]
+        opts = {o.id: o for o in item.options}
+        if opts and req.option_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=f"Choose a size for {item.id}",
+            )
+        if req.option_id is not None and req.option_id not in opts:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=f"Unknown option for {item.id}",
+            )
+        line_options.append(opts.get(req.option_id))
 
     # 5. Check allergen conflict against session's allergens_to_avoid
     conflict_items: list[dict] = []
@@ -191,8 +209,9 @@ async def create_order(
             guest_language=session.language,
             default_language=restaurant.default_language,
             guest_allergens_to_avoid=session.allergens_to_avoid,
+            option=opt,
         )
-        for req in payload.items
+        for req, opt in zip(payload.items, line_options, strict=True)
     ]
     total = sum((line_total(oi) for oi in order_items), Decimal("0.00"))
 

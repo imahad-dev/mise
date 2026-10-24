@@ -44,6 +44,7 @@ def _build_kitchen_order_response(
                 id=item.id,
                 menu_item_id=item.menu_item_id,
                 kitchen_name=item.kitchen_name,
+                option_label=item.option_label,
                 quantity=item.quantity,
                 notes=item.notes,
                 allergens=item.allergens,

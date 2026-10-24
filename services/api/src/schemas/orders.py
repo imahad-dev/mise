@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 class OrderItemRequest(BaseModel):
     menu_item_id: uuid.UUID
+    option_id: uuid.UUID | None = None
     quantity: int = Field(..., ge=1, le=20)
     notes: str | None = Field(default=None, max_length=500)
 
@@ -22,6 +23,8 @@ class CreateOrderRequest(BaseModel):
 class OrderItemResponse(BaseModel):
     id: uuid.UUID
     menu_item_id: uuid.UUID
+    option_id: uuid.UUID | None
+    option_label: str | None
     quantity: int
     unit_price: Decimal
     item_name: str
