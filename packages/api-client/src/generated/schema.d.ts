@@ -57,6 +57,9 @@ export interface paths {
          *
          *     - cost_usd comes from usage.cost in the inference provider response
          *     - daily_budget_remaining_usd from the most recent rate-limit header
+         *
+         *     Samples carry no restaurant, so this is an installation-wide operator diagnostic:
+         *     available only in DEMO_MODE, never on a real multi-venue installation.
          */
         get: operations["inference_metrics_api_metrics_inference_get"];
         put?: never;
@@ -799,6 +802,8 @@ export interface components {
             restaurant_name: string;
             /** Restaurant City */
             restaurant_city: string | null;
+            /** Restaurant Timezone */
+            restaurant_timezone: string;
             /** Currency */
             currency: string;
         };
@@ -819,6 +824,8 @@ export interface components {
         BillListResponse: {
             /** Bills */
             bills: components["schemas"]["BillSummary"][];
+            /** Restaurant Timezone */
+            restaurant_timezone: string;
         };
         /** BillSummary */
         BillSummary: {
@@ -1848,6 +1855,13 @@ export interface operations {
             };
             /** @description Unauthenticated */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demo mode disabled */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

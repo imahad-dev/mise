@@ -36,6 +36,7 @@ class BillSummary(BaseModel):
 
 class BillListResponse(BaseModel):
     bills: list[BillSummary]
+    restaurant_timezone: str
 
 
 class BillDetail(BillSummary):
@@ -51,6 +52,7 @@ class BillDetail(BillSummary):
     settled_at: datetime | None
     restaurant_name: str
     restaurant_city: str | None
+    restaurant_timezone: str
     currency: str
 
 

@@ -64,6 +64,7 @@ async def bill_detail(db: AsyncSession, restaurant: Restaurant, bill: Bill) -> B
         settled_at=bill.settled_at,
         restaurant_name=restaurant.name,
         restaurant_city=restaurant.city,
+        restaurant_timezone=restaurant.timezone,
         currency=restaurant.currency,
     )
 
@@ -93,6 +94,7 @@ async def list_bills(
         stmt = stmt.order_by(Bill.settled_at.desc()).limit(50)
     rows = (await db.execute(stmt)).all()
     return BillListResponse(
+        restaurant_timezone=access.restaurant.timezone,
         bills=[
             BillSummary(
                 id=bill.id,
@@ -109,7 +111,7 @@ async def list_bills(
                 bill_requested_at=bill.bill_requested_at,
             )
             for bill, label, count, subtotal in rows
-        ]
+        ],
     )
 
 

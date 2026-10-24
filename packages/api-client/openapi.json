@@ -58,7 +58,7 @@
           "metrics"
         ],
         "summary": "Inference Metrics",
-        "description": "Aggregated inference metrics with cost tracking.\n\n- cost_usd comes from usage.cost in the inference provider response\n- daily_budget_remaining_usd from the most recent rate-limit header",
+        "description": "Aggregated inference metrics with cost tracking.\n\n- cost_usd comes from usage.cost in the inference provider response\n- daily_budget_remaining_usd from the most recent rate-limit header\n\nSamples carry no restaurant, so this is an installation-wide operator diagnostic:\navailable only in DEMO_MODE, never on a real multi-venue installation.",
         "operationId": "inference_metrics_api_metrics_inference_get",
         "responses": {
           "200": {
@@ -73,6 +73,9 @@
           },
           "401": {
             "description": "Unauthenticated"
+          },
+          "404": {
+            "description": "Demo mode disabled"
           }
         }
       }
@@ -1929,6 +1932,10 @@
             ],
             "title": "Restaurant City"
           },
+          "restaurant_timezone": {
+            "type": "string",
+            "title": "Restaurant Timezone"
+          },
           "currency": {
             "type": "string",
             "title": "Currency"
@@ -1956,6 +1963,7 @@
           "settled_at",
           "restaurant_name",
           "restaurant_city",
+          "restaurant_timezone",
           "currency"
         ],
         "title": "BillDetail"
@@ -2008,11 +2016,16 @@
             },
             "type": "array",
             "title": "Bills"
+          },
+          "restaurant_timezone": {
+            "type": "string",
+            "title": "Restaurant Timezone"
           }
         },
         "type": "object",
         "required": [
-          "bills"
+          "bills",
+          "restaurant_timezone"
         ],
         "title": "BillListResponse"
       },

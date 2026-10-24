@@ -10,7 +10,7 @@ import {
   PAYMENT_METHODS,
   apiError,
   billNo,
-  karachiDateTime,
+  localDateTime,
   type BillDetail,
   type BillSummary,
   type PaymentMethod,
@@ -52,13 +52,13 @@ export default function BillsPage() {
   const selectedId = useRef<string | null>(null);
   const printHref = (id: string) => `/bills/${id}/print?venue=${encodeURIComponent(slug ?? "")}`;
 
-  const fetchBills = useCallback(async (): Promise<{ bills: BillSummary[] }> => {
+  const fetchBills = useCallback(async (): Promise<{ bills: BillSummary[]; restaurant_timezone: string }> => {
     const res = await fetch(`/api/restaurants/${slug}/bills?status=open`);
     if (!res.ok) throw new Error(await apiError(res));
     return res.json();
   }, [slug]);
 
-  const { data, error: listError, refetch } = useSse<{ bills: BillSummary[] }>({
+  const { data, error: listError, refetch } = useSse<{ bills: BillSummary[]; restaurant_timezone: string }>({
     url: slug ? `/api/restaurants/${slug}/kitchen/stream` : null,
     enabled: Boolean(slug),
     fetchState: fetchBills,
@@ -160,7 +160,7 @@ export default function BillsPage() {
                 <span>
                   <span className="block font-semibold text-ink">{b.table_label ? `Table ${b.table_label}` : "No table"}</span>
                   <span className="block text-xs text-ink-muted">
-                    {billNo(b.bill_no)} · opened {karachiDateTime(b.opened_at)} · {b.order_count}{" "}
+                    {billNo(b.bill_no)} · opened {localDateTime(b.opened_at, data?.restaurant_timezone ?? "UTC")} · {b.order_count}{" "}
                     {b.order_count === 1 ? "order" : "orders"}
                   </span>
                 </span>

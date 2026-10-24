@@ -40,6 +40,7 @@ export interface BillDetail extends BillSummary {
   settled_at: string | null;
   restaurant_name: string;
   restaurant_city: string | null;
+  restaurant_timezone: string;
   currency: string;
 }
 
@@ -68,18 +69,14 @@ export function taxLabel(rate: string, method: string | null): string {
   return `Sales tax (illustrative) ${pct}% — ${TAX_CLASS[method ?? ""] ?? "card, wallet or QR"}`;
 }
 
-const KARACHI = new Intl.DateTimeFormat("en-PK", {
-  timeZone: "Asia/Karachi",
-  dateStyle: "medium",
-  timeStyle: "short",
-});
-
-export const karachiDateTime = (iso: string) => KARACHI.format(new Date(iso));
+export const localDateTime = (iso: string, timeZone: string) =>
+  new Intl.DateTimeFormat("en-PK", { timeZone, dateStyle: "medium", timeStyle: "short" }).format(new Date(iso));
 
 type SampleBill = Pick<
   BillDetail,
   | "restaurant_name"
   | "restaurant_city"
+  | "restaurant_timezone"
   | "currency"
   | "bill_no"
   | "table_label"
@@ -105,7 +102,7 @@ export function sampleBillPieces(bill: SampleBill) {
       bill.restaurant_name,
       ...(bill.restaurant_city ? [bill.restaurant_city] : []),
       billNo(bill.bill_no),
-      ...(bill.settled_at ? [karachiDateTime(bill.settled_at)] : []),
+      ...(bill.settled_at ? [localDateTime(bill.settled_at, bill.restaurant_timezone)] : []),
       ...(bill.table_label ? [`Table ${bill.table_label}`] : []),
     ],
     lines: bill.lines.map<BillRow>((l) => ({

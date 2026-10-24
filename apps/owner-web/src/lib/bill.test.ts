@@ -5,7 +5,7 @@ import { PAYMENT_METHODS, SAMPLE_BILL_FOOTER, billNo, sampleBillText, taxLabel }
 
 describe("sample bill", () => {
   const bill = {
-    restaurant_name: "Angeethi House", restaurant_city: "Lahore", currency: "PKR", bill_no: 42,
+    restaurant_name: "Angeethi House", restaurant_city: "Lahore", restaurant_timezone: "Asia/Karachi", currency: "PKR", bill_no: 42,
     table_label: "T3", settled_at: "2026-10-24T15:30:00Z", status: "settled",
     lines: [{ name: "Chicken Karahi", option_label: "1 kg", quantity: 1, unit_price: "2100.00", line_total: "2100.00" }],
     subtotal: "2100.00", tax_rate: "0.08", tax_amount: "168.00", total: "2268.00", payment_method: "card",
