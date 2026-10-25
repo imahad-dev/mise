@@ -19,6 +19,15 @@ staff check their own banking app), refunds, split payments, service charge, ser
 sound or push alerts, SMS, a public "Now serving" screen, counter history in the simulator,
 channel-margin analytics, Urdu.
 
+## Build order (each slice demo-ready and green before the next)
+
+1. Call waiter + Floor view (schema for tables/calls, floor state, Floor page, guest button).
+2. Pay from the table + money safeguards (claims, expected-total settle, reused reference, device
+   labels, void, payment details and validation, confirm sheet).
+3. Counter pickup (counter tables, pickup numbers, awaiting_payment, expiry, collect/undo,
+   counter queue, kitchen pickup tickets).
+4. Pay-it-forward chai.
+
 ## 1. Guest flows
 
 ### At a table (both venues)
@@ -38,6 +47,8 @@ channel-margin analytics, Urdu.
   - Demo venues show the details inside a banner: "Sample payment details — demo only. Do not
     send money." Sample values are visibly invalid (`0000 SAMPLE`).
   - The guest may change method until staff confirm; the latest claim wins.
+  - If staff void one of the guest's orders, the order page shows "Removed by staff: {item} ×{qty}"
+    and the Pay sheet total excludes it.
   - Settled → "Paid · Bill no. 0042 · thank you." If the bill contained pay-it-forward chai:
     "You bought N chai for someone who needs it. Shukriya."
 
@@ -83,9 +94,11 @@ N waiting" with "Give one".
   "Check your JazzCash / bank app for ref … and Rs … before confirming", method pre-filled from
   the claim and changeable, warnings for amount mismatch and reused reference (§4), then
   "Confirm received".
-- Each order on a table bill shows "New device" when its guest session differs from the first
-  session on that bill; staff can **void** a `placed` or `bumped` order with a reason before the
-  bill is settled.
+- Each order on a table bill shows a neutral device label ("Phone 1", "Phone 2"… numbered by first
+  order per guest session on that bill), because family members each scan the QR. A red
+  **"Joined late"** flag appears only when a session places its first order on a bill that has
+  been open for more than 20 minutes (the stranger-with-a-photo case). Staff can **void** a
+  `placed` or `bumped` order with a reason before the bill is settled.
 - Counter tab: Awaiting payment (Confirm received / Cancel), Preparing, Ready (Collected, with
   60 s Undo).
 
@@ -166,8 +179,9 @@ existing `order_placed`, `bill_*`. Payloads carry ids only.
    last 7 days is flagged; confirming needs `acknowledge_reused_reference: true`.
 4. **No auto-settle**: nothing settles without a staff action; the confirm sheet tells staff to
    check their banking app.
-5. **New device + void**: orders from a session other than the bill's first session are marked;
-   staff can void with a reason; voids are audited.
+5. **Device labels + void**: orders carry "Phone n"; a session whose first order lands on a bill
+   open > 20 minutes is flagged "Joined late"; staff can void with a reason; voids are audited and
+   shown to the guest.
 6. **Accountability**: settle, void, cancel, collect, uncollect, clear, resolve and give record the
    user id (columns above and `audit_log`).
 7. **Expiry vs claims**: expiry skips claimed bills; cancelling a claimed bill requires a reason
@@ -231,7 +245,9 @@ existing `order_placed`, `bill_*`. Payloads carry ids only.
    4. Kehwa counter: K-001; barista sees nothing until cash is confirmed; kitchen → Ready on the
       phone → Collected → Undo → Collected.
    5. An unpaid counter order backdated 31 minutes disappears from the queue.
-   6. A second phone orders on T3: "New device" shown; staff void it with a reason.
+   6. Two family phones order on F1 within minutes: "Phone 1"/"Phone 2", no warning. A third phone
+      orders 25 minutes later: "Joined late" shown; staff void it with a reason; that phone sees
+      "Removed by staff".
    7. Two staff browsers confirm the same bill: one wins, the other sees "already settled".
    8. A guest buys a pay-it-forward chai; the tile shows 1 waiting; staff give one; the kitchen
       shows the PAY-IT-FORWARD ticket; the tile shows 0 and "Give one" is disabled.
