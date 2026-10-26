@@ -13,6 +13,7 @@ from sqlalchemy.orm import selectinload
 from src.auth import get_current_guest_session, set_guest_cookie
 from src.database import get_db
 from src.inference.client import InferenceClient, get_inference_client
+from src.models.audit import AuditLog
 from src.models.bill import Bill
 from src.models.dining_table import DiningTable
 from src.models.menu import MenuItem
@@ -39,7 +40,21 @@ from src.schemas.guest import (
     GuestSessionResponse,
     PatchGuestSessionRequest,
 )
+from src.schemas.payments import (
+    GuestBillDetail,
+    GuestPaymentRequest,
+    PaymentClaim,
+    PaymentDetails,
+    VoidedLine,
+)
 from src.services.allergen_service import compute_allergen_status
+from src.services.bills import (
+    active_orders,
+    bill_lines,
+    local_date,
+    method_preview,
+    method_previews,
+)
 from src.services.guest_chat import handle_guest_chat
 
 router = APIRouter(prefix="/api/guest", tags=["guest"])
@@ -317,9 +332,88 @@ async def request_bill(
     )
 
 
+async def _session_bill(
+    db: AsyncSession, session: GuestSession, *, lock: bool = False
+) -> Bill | None:
+    """The open bill of the session's table, else the bill of its latest billed order."""
+    if session.table_id is not None:
+        query = select(Bill).where(
+            Bill.restaurant_id == session.restaurant_id,
+            Bill.table_id == session.table_id,
+            Bill.status == "open",
+        )
+        bill = (await db.execute(query.with_for_update() if lock else query)).scalar_one_or_none()
+        if bill is not None:
+            return bill
+    return (
+        await db.execute(
+            select(Bill)
+            .join(Order, Order.bill_id == Bill.id)
+            .where(Order.guest_session_id == session.id)
+            .order_by(Order.placed_at.desc(), Bill.opened_at.desc())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+
+
+async def _bill_detail(
+    db: AsyncSession, session: GuestSession, bill: Bill, restaurant: Restaurant
+) -> GuestBillDetail:
+    now = await db.scalar(select(func.clock_timestamp()))
+    lines, subtotal = bill_lines(await active_orders(db, bill.id))
+    voided_orders = list(
+        (
+            await db.execute(
+                select(Order)
+                .options(selectinload(Order.items))
+                .where(Order.bill_id == bill.id, Order.voided_at.is_not(None))
+                .order_by(Order.placed_at, Order.id)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    voided, _ = bill_lines(voided_orders)
+    order_status = await db.scalar(
+        select(Order.status)
+        .where(Order.bill_id == bill.id, Order.guest_session_id == session.id)
+        .order_by(Order.placed_at.desc(), Order.id.desc())
+        .limit(1)
+    )
+    is_open = bill.status == "open"
+    claim = None
+    if bill.claimed_method is not None and bill.claimed_total is not None:
+        claim = PaymentClaim(
+            method=bill.claimed_method,
+            reference=bill.claimed_reference,
+            total=bill.claimed_total,
+            claimed_at=bill.claimed_at,
+        )
+    return GuestBillDetail(
+        bill_no=bill.bill_no,
+        status=bill.status,
+        bill_requested_at=bill.bill_requested_at,
+        lines=lines,
+        subtotal=subtotal if is_open or bill.subtotal is None else bill.subtotal,
+        currency=restaurant.currency,
+        methods=(
+            method_previews(restaurant.tax_jurisdiction, subtotal, local_date(restaurant, now))
+            if is_open
+            else []
+        ),
+        payment_details=PaymentDetails(**restaurant.payment_details),
+        claim=claim,
+        voided=[
+            VoidedLine(name=v.name, option_label=v.option_label, quantity=v.quantity)
+            for v in voided
+        ],
+        order_status=order_status,
+    )
+
+
 @router.get(
     "/bill",
-    response_model=GuestBillResponse,
+    response_model=GuestBillDetail,
     status_code=status.HTTP_200_OK,
     responses={
         401: {"description": "Unauthenticated or expired session"},
@@ -329,22 +423,81 @@ async def request_bill(
 async def get_guest_bill(
     session: GuestSession = Depends(get_current_guest_session),
     db: AsyncSession = Depends(get_db),
-) -> GuestBillResponse:
-    """The bill of the session's latest billed order."""
-    bill = (
-        await db.execute(
-            select(Bill)
-            .join(Order, Order.bill_id == Bill.id)
-            .where(Order.guest_session_id == session.id)
-            .order_by(Order.placed_at.desc(), Bill.opened_at.desc())
-            .limit(1)
-        )
-    ).scalar_one_or_none()
+) -> GuestBillDetail:
+    """The table's open bill (else the session's latest bill): lines, per-method totals, claim."""
+    bill = await _session_bill(db, session)
     if bill is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No bill")
-    return GuestBillResponse(
-        bill_no=bill.bill_no, status=bill.status, bill_requested_at=bill.bill_requested_at
-    )
+    restaurant = await db.get(Restaurant, session.restaurant_id)
+    return await _bill_detail(db, session, bill, restaurant)
+
+
+@router.post(
+    "/bill/payment",
+    response_model=GuestBillDetail,
+    status_code=status.HTTP_200_OK,
+    responses={
+        401: {"description": "Unauthenticated or expired session"},
+        404: {"description": "No bill for this session"},
+        409: {"description": "Bill is no longer open"},
+        422: {"description": "Invalid method or reference, no active orders, or no tax rate"},
+    },
+)
+async def claim_payment(
+    payload: GuestPaymentRequest,
+    session: GuestSession = Depends(get_current_guest_session),
+    db: AsyncSession = Depends(get_db),
+) -> GuestBillDetail:
+    """Record how the guest pays (counts as requesting the bill). Never settles; latest wins."""
+    # Locked: concurrent taps serialise here, so an identical repeat sees the stored claim.
+    bill = await _session_bill(db, session, lock=True)
+    if bill is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No bill")
+    if bill.status != "open":
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Bill is not open")
+    restaurant = await db.get(Restaurant, session.restaurant_id)
+    changed = (bill.claimed_method, bill.claimed_reference) != (payload.method, payload.reference)
+    if changed:
+        now = await db.scalar(select(func.clock_timestamp()))
+        orders = await active_orders(db, bill.id)
+        if not orders:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="No active orders"
+            )
+        _, subtotal = bill_lines(orders)
+        preview = method_preview(
+            restaurant.tax_jurisdiction, payload.method, subtotal, local_date(restaurant, now)
+        )
+        if preview is None:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="No tax rate configured"
+            )
+        bill.claimed_method = payload.method
+        bill.claimed_reference = payload.reference
+        bill.claimed_total = preview.total
+        bill.claimed_at = now
+        if bill.bill_requested_at is None:
+            bill.bill_requested_at = now
+        db.add(
+            AuditLog(
+                restaurant_id=session.restaurant_id,
+                event_type="payment_claimed",
+                actor=f"guest:{session.id}",
+                payload={
+                    "bill_id": str(bill.id),
+                    "method": payload.method,
+                    "reference_last4": payload.reference[-4:] if payload.reference else None,
+                    "total": str(preview.total),
+                },
+            )
+        )
+    await db.commit()
+    if changed:
+        await publish_event(
+            f"kitchen:{session.restaurant_id}",
+            json.dumps({"event": "payment_claimed", "bill_id": str(bill.id)}),
+        )
+    return await _bill_detail(db, session, bill, restaurant)
 
 
 # --- Call waiter ---

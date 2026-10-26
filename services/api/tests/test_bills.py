@@ -335,7 +335,8 @@ async def test_guest_request_bill_and_status(client, db_session, venue):
 
     status_resp = await client.get("/api/guest/bill")
     assert status_resp.status_code == 200
-    assert status_resp.json() == {
+    body = status_resp.json()
+    assert {k: body[k] for k in ("bill_no", "status", "bill_requested_at")} == {
         "bill_no": await bill_no_of(db_session, bill_id),
         "status": "open",
         "bill_requested_at": requested_at,

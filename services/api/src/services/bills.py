@@ -15,7 +15,8 @@ from src.models.bill import Bill
 from src.models.order import Order
 from src.models.restaurant import Restaurant
 from src.schemas.bills import BillLine, TaxPreview
-from src.services.tax import TaxRateError, default_rates, payment_class, tax_for
+from src.schemas.payments import MethodPreview
+from src.services.tax import PAYMENT_METHODS, TaxRateError, default_rates, payment_class, tax_for
 
 logger = logging.getLogger(__name__)
 CENTS = Decimal("0.01")
@@ -120,6 +121,34 @@ def previews(
         _preview(jurisdiction, "cash", subtotal, on_date),
         _preview(jurisdiction, "card", subtotal, on_date),
     )
+
+
+METHOD_LABELS = {
+    "cash": "Cash",
+    "card": "Card",
+    "wallet": "JazzCash / Easypaisa",
+    "raast": "Raast QR",
+    "bank_transfer": "Bank transfer",
+}
+
+
+def method_preview(
+    jurisdiction: str | None, method: str, subtotal: Decimal, on_date: date
+) -> MethodPreview | None:
+    p = _preview(jurisdiction, method, subtotal, on_date)
+    return (
+        None
+        if p is None
+        else MethodPreview(method=method, label=METHOD_LABELS[method], **p.model_dump())
+    )
+
+
+def method_previews(
+    jurisdiction: str | None, subtotal: Decimal, on_date: date
+) -> list[MethodPreview]:
+    """Tax and total for each of the five methods; methods without a rate are left out."""
+    out = [method_preview(jurisdiction, m, subtotal, on_date) for m in PAYMENT_METHODS]
+    return [p for p in out if p is not None]
 
 
 def local_date(restaurant: Restaurant, at: datetime) -> date:
