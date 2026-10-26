@@ -154,6 +154,11 @@ async def test_both_venues_seed_idempotently_with_stable_ids(db_session: AsyncSe
     await seed_data(kehwa, db_session)
     assert await _counts(db_session) == first
     assert first[0] == 2
+    labels = dict(
+        (await db_session.execute(select(Restaurant.slug, Restaurant.service_extra_label))).all()
+    )
+    assert labels["angeethi-house"] == "More naan / roti"
+    assert labels["kehwa-and-crumb"] == "More napkins / cutlery"
 
     karahi_id = uuid.uuid5(SEED_ITEM_NAMESPACE, "angeethi-house:chicken_karahi")
     karahi = (

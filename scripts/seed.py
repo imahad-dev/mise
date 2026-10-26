@@ -125,6 +125,7 @@ async def seed_data(
             slug=rest_data["slug"],
             city=rest_data.get("city"),
             tax_jurisdiction=rest_data.get("tax_jurisdiction"),
+            service_extra_label=rest_data.get("service_extra_label"),
             timezone=rest_data.get("timezone", "Asia/Karachi"),
             currency=rest_data.get("currency", "PKR"),
             languages=rest_data.get("languages", ["en"]),
@@ -139,6 +140,7 @@ async def seed_data(
         restaurant.name = rest_data["name"]
         restaurant.city = rest_data.get("city")
         restaurant.tax_jurisdiction = rest_data.get("tax_jurisdiction")
+        restaurant.service_extra_label = rest_data.get("service_extra_label")
         restaurant.timezone = rest_data.get("timezone", "Asia/Karachi")
         restaurant.currency = rest_data.get("currency", "PKR")
         restaurant.languages = rest_data.get("languages", ["en"])

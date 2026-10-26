@@ -8,6 +8,8 @@ from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.models.dining_table import DiningTable
+
 
 async def _create_test_restaurant(db: AsyncSession, slug: str | None = None) -> str:
     rest_id = str(uuid.uuid4())
@@ -649,5 +651,38 @@ async def test_option_label_unique_per_item(db_session):
     db_session.add(
         MenuItemOption(menu_item_id=mid, label="Full", price=Decimal("11"), unit_cost=Decimal("4"))
     )
+    with pytest.raises(IntegrityError):
+        await db_session.flush()
+
+
+async def test_service_call_one_open_per_table(db_session):
+    from src.models.service_call import ServiceCall
+
+    rid = uuid.UUID(await _create_test_restaurant(db_session))
+    table = DiningTable(restaurant_id=rid, label="T9", qr_token=f"qr-{uuid.uuid4().hex}")
+    db_session.add(table)
+    await db_session.flush()
+    db_session.add(ServiceCall(restaurant_id=rid, table_id=table.id, reason="water"))
+    await db_session.flush()
+    db_session.add(ServiceCall(restaurant_id=rid, table_id=table.id, reason="help"))
+    with pytest.raises(IntegrityError):
+        await db_session.flush()
+
+
+async def test_service_call_reason_checked(db_session):
+    from src.models.service_call import ServiceCall
+
+    rid = uuid.UUID(await _create_test_restaurant(db_session))
+    table = DiningTable(restaurant_id=rid, label="T8", qr_token=f"qr-{uuid.uuid4().hex}")
+    db_session.add(table)
+    await db_session.flush()
+    db_session.add(ServiceCall(restaurant_id=rid, table_id=table.id, reason="pizza"))
+    with pytest.raises(IntegrityError):
+        await db_session.flush()
+
+
+async def test_table_kind_checked(db_session):
+    rid = uuid.UUID(await _create_test_restaurant(db_session))
+    db_session.add(DiningTable(restaurant_id=rid, label="X", qr_token="qr-x-kind", kind="bar"))
     with pytest.raises(IntegrityError):
         await db_session.flush()

@@ -8,6 +8,7 @@ from src.models.menu import MenuItem, MenuItemOption, MenuTranslation
 from src.models.metrics import MetricsSample
 from src.models.order import Order, OrderItem
 from src.models.restaurant import Restaurant
+from src.models.service_call import ServiceCall
 from src.models.session import GuestSession
 from src.models.user import Membership, User
 
@@ -25,5 +26,6 @@ __all__ = [
     "Order",
     "OrderItem",
     "Restaurant",
+    "ServiceCall",
     "User",
 ]
