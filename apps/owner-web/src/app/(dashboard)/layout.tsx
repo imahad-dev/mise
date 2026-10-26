@@ -4,7 +4,7 @@ import React, { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { AppShell, Badge, Card, type AppShellProps, type NavGroup } from "ui";
+import { AppShell, Card, type AppShellProps, type NavGroup } from "ui";
 import { VenueProvider, useVenue, useSlugRef } from "../../lib/venue";
 import type { FloorResponse } from "../../lib/floor";
 
@@ -75,9 +75,10 @@ function DashboardShell(props: Omit<AppShellProps, "groups">) {
     <span className="flex items-center justify-between gap-2">
       Floor
       {count ? (
-        <Badge className="bg-danger-bg text-danger-fg" aria-label={`${count} tables need attention`}>
-          {count}
-        </Badge>
+        <span className="chip chip-contains">
+          <span aria-hidden="true">{count}</span>
+          <span className="sr-only">{count} tables need attention</span>
+        </span>
       ) : null}
     </span>
   );

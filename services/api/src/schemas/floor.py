@@ -53,6 +53,9 @@ class ServiceCallResponse(BaseModel):
 
 class CurrentCallResponse(BaseModel):
     call: ServiceCallResponse | None
+    available: bool  # the session sits at a normal table, so a waiter can be called
+    extra_label: str | None
+    server_time: datetime
 
 
 def call_response(call: ServiceCall, extra_label: str | None) -> ServiceCallResponse:

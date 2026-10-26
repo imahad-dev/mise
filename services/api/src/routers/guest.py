@@ -440,16 +440,22 @@ async def current_service_call(
     session: GuestSession = Depends(get_current_guest_session),
     db: AsyncSession = Depends(get_db),
 ) -> CurrentCallResponse:
-    """The table's open call, or null."""
-    if session.table_id is None:
-        return CurrentCallResponse(call=None)
-    call = (
-        await db.execute(
-            select(ServiceCall).where(
-                ServiceCall.table_id == session.table_id, ServiceCall.resolved_at.is_(None)
+    """The table's open call or null, whether calling is possible here, and the server clock."""
+    now = await db.scalar(select(func.clock_timestamp()))
+    extra = await _extra_label(db, session)
+    kind = call = None
+    if session.table_id is not None:
+        kind = await db.scalar(select(DiningTable.kind).where(DiningTable.id == session.table_id))
+        call = (
+            await db.execute(
+                select(ServiceCall).where(
+                    ServiceCall.table_id == session.table_id, ServiceCall.resolved_at.is_(None)
+                )
             )
-        )
-    ).scalar_one_or_none()
-    if call is None:
-        return CurrentCallResponse(call=None)
-    return CurrentCallResponse(call=call_response(call, await _extra_label(db, session)))
+        ).scalar_one_or_none()
+    return CurrentCallResponse(
+        call=call_response(call, extra) if call else None,
+        available=kind == "table",
+        extra_label=extra,
+        server_time=now,
+    )

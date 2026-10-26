@@ -85,8 +85,8 @@ export interface TranslationDict {
     water: string;
     /** Used when the venue has no service_extra_label. */
     extra: string;
-    /** Contains {time}. */
     called: string;
+    resolved: string;
     /** Contains {seconds}. */
     wait: string;
     already: string;

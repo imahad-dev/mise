@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { elapsed, formatElapsed, levelClass, sortTiles, stateLabel, type FloorTile } from "./floor";
+import { elapsed, formatElapsed, isStale, levelClass, sortTiles, stateLabel, type FloorTile } from "./floor";
 
 const tile = (label: string, level: FloorTile["level"]): FloorTile => ({
   table_id: label, label, state: "seated", level, since: null, reason: null, reason_label: null,
@@ -27,6 +27,10 @@ describe("floor helpers", () => {
   it("keeps red, amber, none order and the label order inside a level", () => {
     const sorted = sortTiles([tile("T1", "none"), tile("T2", "amber"), tile("T3", "red"), tile("T4", "amber")]);
     expect(sorted.map((t) => t.label)).toEqual(["T3", "T2", "T4", "T1"]);
+  });
+  it("warns only after 45 s without a successful load", () => {
+    expect(isStale(45_000)).toBe(false);
+    expect(isStale(45_001)).toBe(true);
   });
   it("maps levels to the existing danger and warn tokens", () => {
     expect(levelClass("red")).toContain("bg-danger-bg");

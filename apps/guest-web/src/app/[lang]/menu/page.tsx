@@ -54,8 +54,6 @@ interface MenuResponse {
   };
   table_id?: string | null;
   table_label?: string | null;
-  table_kind?: string | null;
-  service_extra_label?: string | null;
   items: MenuItem[];
 }
 
@@ -244,9 +242,7 @@ export default function GuestMenuPage({
               )}
               <h1 className="text-2xl text-ink">{menu.restaurant.name}</h1>
             </div>
-            {menu.table_kind === "table" && (
-              <CallWaiter lang={lang} extraLabel={menu.service_extra_label ?? null} />
-            )}
+            <CallWaiter lang={lang} />
           </div>
           <p className="mt-0.5 text-xs text-ink-muted">{dict.menu.taxNote}</p>
           <nav aria-label={dict.ui.menuTitle} className="-mx-1 mt-3 flex gap-2 overflow-x-auto pb-3">

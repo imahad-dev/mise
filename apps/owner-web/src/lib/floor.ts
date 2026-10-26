@@ -59,5 +59,10 @@ export function levelClass(level: FloorLevel): string {
   return "";
 }
 
+export const STALE_MS = 45_000;
+
+/** The last successful load is old enough to warn that the view may be out of date. */
+export const isStale = (ageMs: number) => ageMs > STALE_MS;
+
 /** Text twin of the colour, so the level never relies on colour alone. */
 export const levelText = (level: FloorLevel) => (level === "red" ? "Urgent" : level === "amber" ? "Due soon" : null);

@@ -67,23 +67,6 @@ function useGuestBill() {
   return { bill, request, requesting, requestFailed };
 }
 
-/** Call waiter needs the session's table kind and the venue's extra reason, both on the menu response. */
-function useTableMeta() {
-  const [meta, setMeta] = useState<{ table_kind: string | null; service_extra_label: string | null } | null>(null);
-  useEffect(() => {
-    let cancelled = false;
-    fetch("/api/guest/menu")
-      .then(async (r) => {
-        if (r.ok && !cancelled) setMeta(await r.json());
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-  return meta;
-}
-
 interface OrderDetails {
   id: string;
   table_label?: string | null;
@@ -103,7 +86,6 @@ export default function OrderStatusPage({
   const { lang, id } = use(params);
   const dict = getDictionary(lang);
   const { bill, request, requesting, requestFailed } = useGuestBill();
-  const tableMeta = useTableMeta();
 
   const fetchOrderState = useCallback(async (): Promise<OrderDetails> => {
     const res = await fetch(`/api/orders/${id}`);
@@ -173,9 +155,7 @@ export default function OrderStatusPage({
             <p className="text-xs text-ink-muted font-mono mt-0.5">ID: {id}</p>
           </div>
           <div className="flex items-center gap-2">
-            {tableMeta?.table_kind === "table" && (
-              <CallWaiter lang={lang} extraLabel={tableMeta.service_extra_label} />
-            )}
+            <CallWaiter lang={lang} />
             {order && getStatusBadge(order.status)}
           </div>
         </header>

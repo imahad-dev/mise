@@ -33,13 +33,23 @@ fv = test_floor_api.fv  # shared fixture
 CALLS = "/api/guest/service-calls"
 
 
+async def current(client) -> dict:
+    resp = await client.get(f"{CALLS}/current")
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert {"call", "available", "extra_label", "server_time"} == body.keys()
+    return body
+
+
 async def test_call_resolve_and_cooldown(client, db_session, fv, monkeypatch):
     events = record_events(
         monkeypatch, "src.routers.guest.publish_event", "src.routers.floor.publish_event"
     )
     s1 = await seat(db_session, fv, fv.t1)
     guest(client, s1)
-    assert (await client.get(f"{CALLS}/current")).json() == {"call": None}
+    now = await current(client)
+    assert (now["call"], now["available"], now["extra_label"]) == (None, True, "More naan / roti")
+    assert now["server_time"]
 
     first = await client.post(CALLS, json={"reason": "water"})
     assert first.status_code == 201, first.text
@@ -54,7 +64,7 @@ async def test_call_resolve_and_cooldown(client, db_session, fv, monkeypatch):
     again = await client.post(CALLS, json={"reason": "help"})
     assert again.status_code == 409
     assert again.json()["detail"] == "A waiter is already on the way"
-    assert (await client.get(f"{CALLS}/current")).json()["call"]["id"] == call["id"]
+    assert (await current(client))["call"]["id"] == call["id"]
 
     await as_member(client, db_session, fv.r.id, "staff")
     t1 = tile(await floor(client, fv), "T1")
@@ -74,7 +84,7 @@ async def test_call_resolve_and_cooldown(client, db_session, fv, monkeypatch):
     stored = await db_session.get(ServiceCall, uuid.UUID(call["id"]))
     assert stored.resolved_by is not None
 
-    assert (await client.get(f"{CALLS}/current")).json() == {"call": None}
+    assert (await current(client))["call"] is None
     cooling = await client.post(CALLS, json={"reason": "extra"})
     assert cooling.status_code == 429
     assert 1 <= int(cooling.headers["Retry-After"]) <= 60
@@ -104,7 +114,8 @@ async def test_call_refusals(client, db_session, fv):
     counter_session = await seat(db_session, fv, fv.counter)
     guest(client, counter_session)
     assert (await client.post(CALLS, json={"reason": "help"})).status_code == 422
-    assert (await client.get(f"{CALLS}/current")).json() == {"call": None}
+    counter_now = await current(client)
+    assert (counter_now["call"], counter_now["available"]) == (None, False)
 
     s2 = await seat(db_session, fv, fv.t2)
     guest(client, s2)

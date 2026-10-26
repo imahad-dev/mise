@@ -9,6 +9,7 @@ import { apiError } from "../../../lib/bill";
 import {
   elapsed,
   formatElapsed,
+  isStale,
   levelClass,
   levelText,
   sortTiles,
@@ -17,8 +18,6 @@ import {
   type FloorResponse,
   type FloorTile,
 } from "../../../lib/floor";
-
-const STALE_MS = 45_000;
 
 interface Loaded {
   floor: FloorResponse;
@@ -66,7 +65,8 @@ export default function FloorPage() {
     try {
       const res = await fetch(`/api/restaurants/${forSlug}${path}`, { method: "POST" });
       if (slugRef.current !== forSlug) return;
-      if (!res.ok) setActionError(await apiError(res));
+      // 409: someone else already resolved or cleared it, which is what this tap wanted.
+      if (!res.ok && res.status !== 409) setActionError(await apiError(res));
       void refetch();
     } catch {
       if (slugRef.current === forSlug) setActionError("Network error. Try again.");
@@ -86,9 +86,10 @@ export default function FloorPage() {
     <div className="space-y-6">
       <PageHeader title="Floor" subtitle="Every table at a glance. Red first, then amber." />
 
-      {data && ageMs > STALE_MS && (
+      {data && isStale(ageMs) && (
         <p role="status" className="rounded-xl border border-warn-fg bg-warn-bg p-3 text-xs font-semibold text-warn-fg">
-          Reconnecting — last updated {Math.round(ageMs / 1000)} s ago
+          Reconnecting — last updated over 45 s ago
+          <span aria-hidden="true"> ({Math.round(ageMs / 1000)} s)</span>
         </p>
       )}
       {error && !data && (
@@ -128,6 +129,7 @@ export default function FloorPage() {
                   <div className="mt-auto flex flex-wrap gap-2 pt-1">
                     {t.state === "called" && t.call_id && (
                       <Button
+                        aria-label={`Done, ${t.label}`}
                         disabled={busy !== null}
                         onClick={() => act(t.table_id, `/service-calls/${t.call_id}/resolve`)}
                       >
@@ -135,12 +137,16 @@ export default function FloorPage() {
                       </Button>
                     )}
                     {t.state === "needs_clearing" && (
-                      <Button disabled={busy !== null} onClick={() => act(t.table_id, `/tables/${t.table_id}/clear`)}>
+                      <Button
+                        aria-label={`Mark cleared, ${t.label}`}
+                        disabled={busy !== null}
+                        onClick={() => act(t.table_id, `/tables/${t.table_id}/clear`)}
+                      >
                         Mark cleared
                       </Button>
                     )}
                     {t.bill_id && (
-                      <Link href={`/bills?bill=${t.bill_id}`} className="btn-ghost">
+                      <Link href={`/bills?bill=${t.bill_id}`} aria-label={`Open bill, ${t.label}`} className="btn-ghost">
                         Open bill
                       </Link>
                     )}
