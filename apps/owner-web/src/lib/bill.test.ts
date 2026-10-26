@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { formatPrice } from "ui";
 import {
-  PAYMENT_METHODS, SAMPLE_BILL_FOOTER, amountDueText, billNo, claimChip, claimWarning, previewFor, sampleBillPieces, sampleBillText,
+  PAYMENT_METHODS, SAMPLE_BILL_FOOTER, amountDueText, billNo, claimChip, claimSummary, claimWarning, previewFor, sampleBillPieces, sampleBillText,
   nextFormState, settlePayload, taxLabel, voidReason, warningKey,
 } from "./bill";
 
@@ -105,6 +105,9 @@ describe("confirm sheet helpers", () => {
     expect(claimChip(claim("wallet", "TX1234567890"))).toBe("Guest paying: JazzCash / Easypaisa · ref TX123456…");
     expect(claimChip(claim("cash"))).toBe("Guest paying: cash");
     expect(claimChip(claim("card"))).toBe("Card machine requested");
+    // The sheet shows the full reference and no chip prefix.
+    expect(claimSummary(claim("wallet", "TX1234567890"))).toBe("JazzCash / Easypaisa · ref TX1234567890");
+    expect(claimSummary(claim("cash"))).toBe("Cash");
   });
   it("builds settle from the selected method's preview, never from the claim", () => {
     const methods = [
@@ -135,7 +138,7 @@ describe("confirm sheet helpers", () => {
     expect(nextFormState(null, raast, false)).toEqual({ apply: { method: "raast", reference: "TX1" }, notice: null });
     expect(nextFormState(raast, claim("raast", "TX9"), true)).toEqual({
       apply: null,
-      notice: "The guest changed their payment to Guest paying: Raast QR · ref TX9 — check before confirming",
+      notice: "The guest changed their payment to Raast QR · ref TX9 — check before confirming",
     });
   });
   it("builds the void reason", () => {

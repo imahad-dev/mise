@@ -8,7 +8,7 @@ import { ChatPanel } from "../../../../components/chat-panel";
 import { useSse } from "../../../../hooks/use-sse";
 import { getDictionary } from "../../../../i18n";
 import { Button, formatPrice } from "ui";
-import { VISIT_ENDED, billState, claimMessage, type GuestBill } from "../../../../lib/pay";
+import { VISIT_ENDED, billState, claimMessage, paidText, type GuestBill } from "../../../../lib/pay";
 
 interface OrderItem {
   id: string;
@@ -68,6 +68,11 @@ export default function OrderStatusPage({
   const { bill, setBill, ended, setEnded, reload } = useGuestBill();
   const [paying, setPaying] = useState(false);
   const state = billState(bill, ended);
+  const paid = bill ? paidText(bill, dict, lang) : null;
+  // Settled or cancelled while the sheet is open: nothing left to pay, so close it.
+  useEffect(() => {
+    if (bill && bill.status !== "open") setPaying(false);
+  }, [bill]);
 
   const fetchOrderState = useCallback(async (): Promise<OrderDetails> => {
     const res = await fetch(`/api/orders/${id}`);
@@ -131,15 +136,15 @@ export default function OrderStatusPage({
 
       {/* Main Content */}
       <main className="max-w-xl w-full mx-auto p-4 sm:p-6 space-y-6">
-        <header className="flex items-center justify-between border-b border-line pb-4">
-          <div>
-            <h1 className="text-xl font-bold text-ink">{dict.ui.orderStatus}</h1>
-            <p className="text-xs text-ink-muted font-mono mt-0.5">ID: {id}</p>
-          </div>
-          <div className="flex items-center gap-2">
+        <header className="border-b border-line pb-4 space-y-2">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h1 className="text-xl font-bold text-ink">{dict.ui.orderStatus}</h1>
+              <p className="text-xs text-ink-muted font-mono mt-0.5 break-all">ID: {id}</p>
+            </div>
             <CallWaiter lang={lang} />
-            {order && getStatusBadge(order.status)}
           </div>
+          {order && <div>{getStatusBadge(order.status)}</div>}
         </header>
 
         {error && !order && (
@@ -171,6 +176,7 @@ export default function OrderStatusPage({
               <p aria-live="polite" className={state === "cancelled" || state === "ended" ? "font-semibold text-danger-fg" : ""}>
                 {state === "none" && dict.pay.noBill}
                 {state === "paid" && dict.bill.paid.replace("{billNo}", String(bill?.bill_no ?? "").padStart(4, "0"))}
+                {state === "paid" && paid && <span className="block mt-1 font-semibold">{paid}</span>}
                 {state === "cancelled" && dict.pay.cancelled}
                 {state === "ended" && dict.pay.visitEnded}
                 {state === "claimed" && bill?.claim && claimMessage(bill.claim, dict, lang, bill.currency)}
@@ -228,7 +234,7 @@ export default function OrderStatusPage({
               </div>
 
               <div className="pt-3 border-t border-line flex items-center justify-between font-bold text-sm">
-                <span className="text-ink-muted">{dict.ui.total}</span>
+                <span className="text-ink-muted">{paid ? dict.pay.subtotal : dict.ui.total}</span>
                 <span className="text-terracotta text-base">
                   {formatPrice(Number(order.total), order.currency, lang)}
                 </span>

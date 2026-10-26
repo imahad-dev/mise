@@ -106,8 +106,13 @@ export const claimWarning = (claim: PaymentClaim, currency: string) =>
 export function claimChip(claim: PaymentClaim): string {
   if (claim.method === "card") return "Card machine requested";
   if (claim.method === "cash") return "Guest paying: cash";
+  return `Guest paying: ${claimSummary(claim, 8)}`;
+}
+
+/** "Raast QR · ref RAAST4471": the full reference unless maxRef cuts it (list chips only). */
+export function claimSummary(claim: PaymentClaim, maxRef = Infinity): string {
   const ref = claim.reference ?? "";
-  return `Guest paying: ${paymentLabel(claim.method)}${ref ? ` · ref ${ref.length > 8 ? `${ref.slice(0, 8)}…` : ref}` : ""}`;
+  return `${paymentLabel(claim.method)}${ref ? ` · ref ${ref.length > maxRef ? `${ref.slice(0, maxRef)}…` : ref}` : ""}`;
 }
 
 /** amount_due_after_claim as words: positive is still due, negative overpaid, zero nothing. */
@@ -151,7 +156,7 @@ export function nextFormState(
   touched: boolean,
 ): { apply: { method: PaymentMethod; reference: string } | null; notice: string | null } {
   if (!next || sameClaim(prev, next)) return { apply: null, notice: null };
-  if (touched) return { apply: null, notice: `The guest changed their payment to ${claimChip(next)} — check before confirming` };
+  if (touched) return { apply: null, notice: `The guest changed their payment to ${claimSummary(next)} — check before confirming` };
   const method = PAYMENT_METHODS.find((m) => m.value === next.method)?.value ?? "cash";
   return { apply: { method, reference: next.reference ?? "" }, notice: null };
 }

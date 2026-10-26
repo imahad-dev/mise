@@ -102,6 +102,8 @@ export interface TranslationDict {
     sending: string;
     networkError: string;
     noBill: string;
+    /** Contains {total}, {rate} and {method}. */
+    paidAmount: string;
     cancelled: string;
     visitEnded: string;
   };

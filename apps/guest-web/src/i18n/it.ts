@@ -114,6 +114,7 @@ export const it: TranslationDict = {
     sending: "Invio…",
     networkError: "Impossibile raggiungere il ristorante — tocca di nuovo",
     noBill: "Il conto appare qui dopo il primo ordine.",
+    paidAmount: "Pagato {total} (imposta {rate}% inclusa) con {method}",
     cancelled: "Il personale ha annullato questo conto — chiedi a un cameriere",
     visitEnded: "La visita è terminata — scansiona di nuovo il QR del tavolo",
   },

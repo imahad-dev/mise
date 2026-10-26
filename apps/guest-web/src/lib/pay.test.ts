@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { formatPrice } from "ui";
 import { getDictionary } from "../i18n";
-import { billState, claimMessage, referenceFor, copyText, detailsFor, isValidReference, needsReference, percent, type GuestBill } from "./pay";
+import { billState, claimMessage, paidText, referenceFor, copyText, detailsFor, isValidReference, needsReference, percent, type GuestBill } from "./pay";
 
 const en = getDictionary("en");
 const claim = (method: "cash" | "card" | "wallet" | "raast" | "bank_transfer") => ({
@@ -67,6 +67,21 @@ describe("bill states", () => {
     expect(billState(null, true)).toBe("ended");
     // the guest's own settled bill stays readable after the visit ends
     expect(billState(bill({ status: "settled" }), true)).toBe("paid");
+  });
+});
+
+describe("paid text", () => {
+  const settled = {
+    status: "settled", currency: "PKR", payment_method: "raast", tax_rate: "0.0800", total: "130.00",
+  } as GuestBill;
+  it("says what was paid, with rate and method", () => {
+    expect(paidText(settled, en, "en")).toBe(`Paid ${formatPrice(130, "PKR")} (incl. 8% sales tax) by Raast QR`);
+    expect(paidText({ ...settled, payment_method: "bank_transfer" }, getDictionary("it"), "it")).toBe(
+      `Pagato ${formatPrice(130, "PKR", "it")} (imposta 8% inclusa) con Bonifico`,
+    );
+  });
+  it("is empty until the bill is settled", () => {
+    expect(paidText({ ...settled, status: "open", total: null, tax_rate: null, payment_method: null }, en, "en")).toBeNull();
   });
 });
 

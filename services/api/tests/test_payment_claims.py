@@ -112,6 +112,7 @@ async def test_bill_shows_lines_and_per_method_totals(client, pv):
     assert b["payment_details"]["sample"] is True
     assert b["payment_details"]["raast_id"] == "0000 SAMPLE"
     assert b["claim"] is None
+    assert (b["payment_method"], b["tax_rate"], b["total"]) == (None, None, None)
     assert b["voided"] == []
     assert b["order_status"] == "placed"
 
@@ -203,6 +204,9 @@ async def test_no_bill_is_404_and_settled_bill_is_409(client, db_session, pv):
     assert (await client.post(PAY, json={"method": "cash"})).status_code == 409
     after = (await client.get("/api/guest/bill")).json()
     assert (after["status"], after["subtotal"], after["methods"]) == ("settled", "2340.00", [])
+    # What was paid, from the settled snapshot (cash at 16%).
+    paid = (after["payment_method"], after["tax_rate"], after["total"])
+    assert paid == ("cash", "0.1600", "2714.00")
 
 
 async def test_other_table_and_other_venue_are_isolated(client, db_session, pv):

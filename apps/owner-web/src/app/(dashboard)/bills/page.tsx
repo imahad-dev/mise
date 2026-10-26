@@ -13,6 +13,7 @@ import {
   apiError,
   billNo,
   claimChip,
+  claimSummary,
   claimWarning,
   localDateTime,
   nextFormState,
@@ -392,7 +393,7 @@ export default function BillsPage() {
             )}
 
             {detail.status === "open" && detail.claim && (
-              <p className="text-sm font-semibold text-ink">Guest claims: {claimChip(detail.claim)}</p>
+              <p className="text-sm font-semibold text-ink">Guest claims: {claimSummary(detail.claim)}</p>
             )}
 
             {detail.status === "open" && NEEDS_REFERENCE.has(method) && selected && (

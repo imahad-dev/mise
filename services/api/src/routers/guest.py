@@ -407,6 +407,9 @@ async def _bill_detail(
             for v in voided
         ],
         order_status=order_status,
+        payment_method=bill.payment_method if bill.status == "settled" else None,
+        tax_rate=bill.tax_rate if bill.status == "settled" else None,
+        total=bill.total if bill.status == "settled" else None,
     )
 
 

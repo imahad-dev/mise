@@ -41,6 +41,10 @@ export interface GuestBill {
   claim: PaymentClaim | null;
   voided: { name: string; option_label: string | null; quantity: number }[];
   order_status: string | null;
+  /** Set only on a settled bill. */
+  payment_method: Method | null;
+  tax_rate: string | null;
+  total: string | null;
 }
 
 /** The API's 409 detail for a stale guest session (services/api/src/services/bills.py). */
@@ -92,6 +96,15 @@ export async function copyText(text: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+/** "Paid Rs 2,714 (incl. 16% sales tax) by Cash" for a settled bill, else null. */
+export function paidText(bill: GuestBill, dict: TranslationDict, lang: string): string | null {
+  if (bill.status !== "settled" || bill.total === null || bill.tax_rate === null || !bill.payment_method) return null;
+  return dict.pay.paidAmount
+    .replace("{total}", formatPrice(Number(bill.total), bill.currency, lang))
+    .replace("{rate}", percent(bill.tax_rate))
+    .replace("{method}", dict.pay.methods[bill.payment_method] ?? bill.payment_method);
 }
 
 export const percent = (rate: string) => String(Number((Number(rate) * 100).toFixed(2)));
