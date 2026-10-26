@@ -186,6 +186,7 @@ async def stream_kitchen_orders(
         401: {"description": "Unauthenticated"},
         403: {"description": "Unauthorized"},
         404: {"description": "Order not found"},
+        409: {"description": "Order was cancelled"},
     },
 )
 async def bump_order(
@@ -196,10 +197,13 @@ async def bump_order(
     """Mark an order as bumped. Idempotent: already bumped order returns existing bumped_at."""
     restaurant = access.restaurant
 
+    # Locked: a concurrent void commits first or waits, and the status checks below see it.
     stmt = (
         select(Order)
         .options(selectinload(Order.items))
         .where(Order.id == id, Order.restaurant_id == restaurant.id)
+        .with_for_update(of=Order)
+        .execution_options(populate_existing=True)
     )
     res = await db.execute(stmt)
     order = res.scalar_one_or_none()
@@ -218,6 +222,8 @@ async def bump_order(
     if order.status == "bumped":
         # Already bumped: idempotent return
         return _build_kitchen_order_response(order, table_labels)
+    if order.status != "placed":
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Order was cancelled")
 
     now = datetime.now(UTC)
     order.status = "bumped"
@@ -263,10 +269,13 @@ async def recall_order(
     """Recall an order if within 60s of bump. Sets status back to placed."""
     restaurant = access.restaurant
 
+    # Locked: a concurrent void commits first or waits, and the status checks below see it.
     stmt = (
         select(Order)
         .options(selectinload(Order.items))
         .where(Order.id == id, Order.restaurant_id == restaurant.id)
+        .with_for_update(of=Order)
+        .execution_options(populate_existing=True)
     )
     res = await db.execute(stmt)
     order = res.scalar_one_or_none()

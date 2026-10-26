@@ -185,7 +185,8 @@ async def clear_table(
     if open_bill is not None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Settle the bill first")
     now = await db.scalar(select(func.clock_timestamp()))
-    if not (payload and payload.force):
+    force = bool(payload and payload.force)
+    if not force:
         # A live phone scanned after the last reset: clearing would end the new party's visit.
         last_settled = await db.scalar(
             select(func.max(Bill.settled_at)).where(
@@ -208,7 +209,7 @@ async def clear_table(
             restaurant_id=rid,
             event_type="table_cleared",
             actor=f"user:{access.user.id}",
-            payload={"table_id": str(table.id)},
+            payload={"table_id": str(table.id), "force": force},
         )
     )
     await db.commit()

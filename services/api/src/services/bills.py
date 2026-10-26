@@ -17,8 +17,7 @@ from src.models.dining_table import DiningTable
 from src.models.order import Order
 from src.models.restaurant import Restaurant
 from src.models.session import GuestSession
-from src.schemas.bills import BillLine, PaymentClaim, TaxPreview
-from src.schemas.payments import MethodPreview
+from src.schemas.bills import BillLine, MethodPreview, PaymentClaim, TaxPreview
 from src.services.tax import PAYMENT_METHODS, TaxRateError, default_rates, payment_class, tax_for
 
 logger = logging.getLogger(__name__)
@@ -212,12 +211,25 @@ def claim_of(bill: Bill) -> PaymentClaim | None:
     )
 
 
+# One key for a payment reference, everywhere: "TX 1", "tx-1" and "TX1" are the same payment.
+_REF_SEPARATORS = " -./#"
+
+
+def reference_key(reference: str | None) -> str:
+    return "".join(c for c in (reference or "") if c not in _REF_SEPARATORS).upper()
+
+
+def _reference_key_sql(column):
+    """reference_key() in SQL: translate() drops the separator characters."""
+    return func.upper(func.translate(column, _REF_SEPARATORS, ""))
+
+
 async def reused_reference_bill_no(
-    db: AsyncSession, restaurant_id: uuid.UUID, bill_id: uuid.UUID, reference: str | None
+    db: AsyncSession, restaurant_id: uuid.UUID, bill_id: uuid.UUID, keys: list[str]
 ) -> int | None:
-    """Number of another settled bill of this venue (last 7 days) that used the reference."""
-    ref = (reference or "").strip().upper()
-    if not ref:
+    """Another settled bill of this venue (last 7 days) whose reference or claim has a key."""
+    keys = [k for k in keys if k]
+    if not keys:
         return None
     return await db.scalar(
         select(Bill.bill_no)
@@ -226,10 +238,29 @@ async def reused_reference_bill_no(
             Bill.id != bill_id,
             Bill.status == "settled",
             Bill.settled_at > func.clock_timestamp() - REUSE_WINDOW,
-            (func.upper(func.trim(Bill.payment_reference)) == ref)
-            | (func.upper(func.trim(Bill.claimed_reference)) == ref),
+            _reference_key_sql(Bill.payment_reference).in_(keys)
+            | _reference_key_sql(Bill.claimed_reference).in_(keys),
         )
         .order_by(Bill.settled_at.desc())
+        .limit(1)
+    )
+
+
+async def open_bill_with_claimed_key(
+    db: AsyncSession, restaurant_id: uuid.UUID, bill_id: uuid.UUID, key: str
+) -> int | None:
+    """Another open bill of this venue whose guest claimed the same reference."""
+    if not key:
+        return None
+    return await db.scalar(
+        select(Bill.bill_no)
+        .where(
+            Bill.restaurant_id == restaurant_id,
+            Bill.id != bill_id,
+            Bill.status == "open",
+            _reference_key_sql(Bill.claimed_reference) == key,
+        )
+        .order_by(Bill.opened_at)
         .limit(1)
     )
 
@@ -290,7 +321,16 @@ async def settle_bill(
     tax = tax.quantize(CENTS)
     if subtotal + tax != expected_total:
         raise BillChanged
-    reused = await reused_reference_bill_no(db, restaurant.id, bill.id, reference)
+    # Both the staff's reference and the guest's claimed one. Per-reference locks (sorted, so
+    # no cycle) serialise two bills settling with the same reference: the second sees the first.
+    keys = sorted(
+        {k for k in (reference_key(reference), reference_key(bill.claimed_reference)) if k}
+    )
+    for key in keys:
+        await db.execute(
+            select(func.pg_advisory_xact_lock(func.hashtext(f"ref:{restaurant.id}:{key}")))
+        )
+    reused = await reused_reference_bill_no(db, restaurant.id, bill.id, keys)
     if reused is not None and not acknowledge_reused:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,

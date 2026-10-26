@@ -2,7 +2,7 @@
 
 import json
 import uuid
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Literal
 
@@ -32,11 +32,14 @@ from src.schemas.bills import (
 from src.services.bills import (
     CENTS,
     BillChanged,
+    active_orders,
     bill_lines,
     claim_of,
     local_date,
-    method_preview,
+    method_previews,
+    open_bill_with_claimed_key,
     previews,
+    reference_key,
     reused_reference_bill_no,
     settle_bill,
 )
@@ -49,6 +52,7 @@ RESPONSES = {
     404: {"description": "Restaurant or bill not found"},
 }
 JOINED_LATE = timedelta(minutes=20)
+ALL_VOIDED = "All orders voided"
 
 
 def bill_orders(bill: Bill, orders: list[Order]) -> list[BillOrder]:
@@ -99,14 +103,19 @@ async def bill_detail(db: AsyncSession, restaurant: Restaurant, bill: Bill) -> B
         if bill.table_id
         else None
     )
-    on_date = local_date(restaurant, bill.settled_at or datetime.now(UTC))
+    # Database clock, as settle uses: the preview date is the date settle would tax at.
+    at = bill.settled_at or await db.scalar(select(func.clock_timestamp()))
+    on_date = local_date(restaurant, at)
     standard, digital = previews(restaurant.tax_jurisdiction, subtotal, on_date)
+    methods = method_previews(restaurant.tax_jurisdiction, subtotal, on_date)
     claim = claim_of(bill)
-    due = reused = None
+    due = reused = reused_open = None
     if claim is not None and bill.status == "open":
-        current = method_preview(restaurant.tax_jurisdiction, claim.method, subtotal, on_date)
+        current = next((m for m in methods if m.method == claim.method), None)
         due = None if current is None else current.total - claim.total
-        reused = await reused_reference_bill_no(db, restaurant.id, bill.id, claim.reference)
+        key = reference_key(claim.reference)
+        reused = await reused_reference_bill_no(db, restaurant.id, bill.id, [key])
+        reused_open = await open_bill_with_claimed_key(db, restaurant.id, bill.id, key)
     settled_by_name = (
         await db.scalar(select(User.name).where(User.id == bill.settled_by))
         if bill.settled_by
@@ -135,9 +144,11 @@ async def bill_detail(db: AsyncSession, restaurant: Restaurant, bill: Bill) -> B
         restaurant_city=restaurant.city,
         restaurant_timezone=restaurant.timezone,
         currency=restaurant.currency,
+        methods=methods,
         claim=claim,
         amount_due_after_claim=due,
         reused_reference_bill_no=reused,
+        reused_reference_open_bill_no=reused_open,
         orders=bill_orders(bill, every),
         settled_by_name=settled_by_name,
     )
@@ -259,6 +270,7 @@ async def settle(
         401: {"description": "Unauthenticated"},
         404: {"description": "Restaurant or order not found"},
         409: {"description": "Bill not open, or the order is already cancelled"},
+        # A void that empties the bill cancels it ("All orders voided").
         422: {"description": "Reason must be 1-200 characters"},
     },
 )
@@ -268,40 +280,76 @@ async def void_order(
     access: RestaurantAccess = Depends(member_access),
     db: AsyncSession = Depends(get_db),
 ) -> BillDetail:
-    """Take a placed or bumped order off its open bill: it leaves the kitchen and the totals."""
+    """Take a placed or bumped order off its open bill: it leaves the kitchen and the totals.
+
+    Voiding the last active order cancels the bill, so the table's next order opens a new one.
+    """
     rid = access.restaurant.id
-    # Order, then bill. Settle and order placement lock only the bill, so no lock cycle.
+    # Every path locks the bill before its orders: read the bill id unlocked, lock the bill,
+    # then lock the order and check it is still on that bill.
+    row = (
+        await db.execute(
+            select(Order.bill_id).where(Order.id == order_id, Order.restaurant_id == rid)
+        )
+    ).one_or_none()
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
+    bill_id = row.bill_id
+    bill = (
+        (
+            await db.execute(
+                select(Bill)
+                .where(Bill.id == bill_id)
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            )
+        ).scalar_one_or_none()
+        if bill_id is not None
+        else None
+    )
     order = (
         await db.execute(
-            select(Order).where(Order.id == order_id, Order.restaurant_id == rid).with_for_update()
+            select(Order)
+            .where(Order.id == order_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
         )
-    ).scalar_one_or_none()
-    if order is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
-    bill = None
-    if order.bill_id is not None:
-        bill = (
-            await db.execute(select(Bill).where(Bill.id == order.bill_id).with_for_update())
-        ).scalar_one()
-    if bill is None or bill.status != "open":
+    ).scalar_one()
+    if bill is None or bill.status != "open" or order.bill_id != bill.id:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Bill is not open")
     if order.status not in ("placed", "bumped"):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Order already cancelled")
+    now = await db.scalar(select(func.clock_timestamp()))
+    actor = f"user:{access.user.id}"
     order.status = "cancelled"
-    order.voided_at = await db.scalar(select(func.clock_timestamp()))
+    order.voided_at = now
     order.voided_by = access.user.id
     order.void_reason = payload.reason
     db.add(
         AuditLog(
             restaurant_id=rid,
             event_type="order_voided",
-            actor=f"user:{access.user.id}",
+            actor=actor,
             payload={"order_id": str(order.id), "bill_id": str(bill.id), "reason": payload.reason},
         )
     )
+    await db.flush()
+    events = [{"event": "order_voided", "order_id": str(order.id), "bill_id": str(bill.id)}]
+    if not await active_orders(db, bill.id):
+        bill.status = "cancelled"
+        bill.cancelled_at = now
+        bill.cancelled_by = access.user.id
+        bill.cancel_reason = ALL_VOIDED
+        db.add(
+            AuditLog(
+                restaurant_id=rid,
+                event_type="bill_cancelled",
+                actor=actor,
+                payload={"bill_id": str(bill.id), "reason": ALL_VOIDED},
+            )
+        )
+        events.append({"event": "bill_cancelled", "bill_id": str(bill.id)})
     await db.commit()
-    await publish_event(
-        f"kitchen:{rid}",
-        json.dumps({"event": "order_voided", "order_id": str(order.id), "bill_id": str(bill.id)}),
-    )
+    for event in events:
+        await publish_event(f"kitchen:{rid}", json.dumps(event))
     return await bill_detail(db, access.restaurant, bill)

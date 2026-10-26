@@ -42,9 +42,6 @@ async def as_member(
     return user
 
 
-DIGITAL = {"card", "wallet", "raast"}
-
-
 async def settle(
     client: AsyncClient, slug: str, bill_id: uuid.UUID | str, method: str = "cash", **extra
 ):
@@ -53,7 +50,7 @@ async def settle(
     detail = await client.get(base)
     preview = None
     if detail.status_code == 200:
-        preview = detail.json()["preview_digital" if method in DIGITAL else "preview_standard"]
+        preview = next((m for m in detail.json()["methods"] if m["method"] == method), None)
     body = {
         "payment_method": method,
         "expected_method": method,

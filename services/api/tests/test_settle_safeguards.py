@@ -25,10 +25,11 @@ from src.database import async_session_factory, get_db
 from src.main import app
 from src.models.audit import AuditLog
 from src.models.bill import Bill
+from src.models.dining_table import DiningTable
 from src.models.order import Order
 from src.models.restaurant import Restaurant
 from src.models.session import GuestSession
-from src.services.bills import VISIT_ENDED, local_date
+from src.services.bills import VISIT_ENDED, local_date, reference_key
 from src.services.tax import tax_for
 
 
@@ -299,12 +300,11 @@ async def test_void_refusals(client, db_session, pv):
         await client.post(url(pv, f"/orders/{uuid.uuid4()}/void"), json={"reason": "x"})
     ).status_code == 404
 
-    # Voiding the last active order leaves nothing to settle.
-    assert (
-        await client.post(url(pv, f"/orders/{only}/void"), json={"reason": "Walked out"})
-    ).status_code == 200
+    # Voiding the last active order cancels the bill: nothing is left to settle.
+    last = await client.post(url(pv, f"/orders/{only}/void"), json={"reason": "Walked out"})
+    assert (last.status_code, last.json()["status"]) == (200, "cancelled")
     empty = await settle(client, pv.r.slug, bill_id)
-    assert (empty.status_code, empty.json()["detail"]) == (422, "No active orders")
+    assert (empty.status_code, empty.json()["detail"]) == (409, "Bill is not open")
 
     second = await bill_id_of(db_session, await place(client, pv.session_t2, [(pv.naan, 1)]))
     assert (await settle(client, pv.r.slug, second)).status_code == 200
@@ -369,6 +369,14 @@ async def test_clear_refuses_when_new_guests_are_seated(client, db_session, pv):
     assert forced.status_code == 200, forced.text
     # Everyone seated before that clear: a second clear needs no force.
     assert (await client.post(clear_url)).status_code == 200
+    audits = (
+        await db_session.scalars(
+            select(AuditLog.payload).where(
+                AuditLog.restaurant_id == pv.r.id, AuditLog.event_type == "table_cleared"
+            )
+        )
+    ).all()
+    assert sorted(a["force"] for a in audits) == [False, True]
 
 
 async def test_clear_ignores_expired_scans(client, db_session, pv):
@@ -556,12 +564,18 @@ async def test_void_racing_settle(committed_venue):  # noqa: F811 - the imported
             bill_id = await _bill_of(first.json()["id"])
             base = f"/api/restaurants/{slug}"
             body = {"payment_method": "cash", "expected_method": "cash", "expected_total": "139.00"}
-            # Stagger the settle by 0-30 ms so both orders of arrival occur.
+            # Both requests in flight together; alternate which one starts 50 ms late so
+            # both orders of arrival are exercised.
             void, settled = await asyncio.gather(
-                c.staff.post(
-                    f"{base}/orders/{second.json()['id']}/void", json={"reason": "Duplicate"}
+                _after(
+                    0.05 * (n % 2),
+                    c.staff.post(
+                        f"{base}/orders/{second.json()['id']}/void", json={"reason": "Duplicate"}
+                    ),
                 ),
-                _after((n % 4) * 0.01, c.staff.post(f"{base}/bills/{bill_id}/settle", json=body)),
+                _after(
+                    0.05 * (1 - n % 2), c.staff.post(f"{base}/bills/{bill_id}/settle", json=body)
+                ),
             )
             if void.status_code == 200:
                 # Void first: the stale total is refused; the fresh one settles without it.
@@ -584,9 +598,183 @@ async def test_void_racing_settle(committed_venue):  # noqa: F811 - the imported
         orders = list(
             (await s.scalars(select(Order).where(Order.restaurant_id == restaurant_id))).all()
         )
-    assert outcomes  # at least one path observed; both are valid
+    assert outcomes == {"voided", "settled"}
     for bill in bills:
         mine = [o for o in orders if o.bill_id == bill.id]
         assert bill.status == "settled"
         assert bill.subtotal == sum(o.total for o in mine if o.voided_at is None)
         assert bill.subtotal == sum(o.total for o in mine if o.status != "cancelled")
+
+
+# --- Review follow-ups: claimed references, reference keys, emptied bills, kitchen races ---
+
+
+async def test_claimed_reference_is_checked_without_a_staff_reference(client, db_session, pv):
+    a_bill = await bill_id_of(db_session, await order_2340(client, pv))
+    b_bill = await bill_id_of(db_session, await place(client, pv.session_t2, [(pv.naan, 2)]))
+    await as_member(client, db_session, pv.r.id, "staff")
+    a = await settle(client, pv.r.slug, a_bill, "raast", payment_reference="TX-77")
+    assert a.status_code == 200, a.text
+    guest(client, pv.session_t2)
+    assert (await client.post(PAY, json={"method": "raast", "reference": "tx 77"})).is_success
+    refused = await settle(client, pv.r.slug, b_bill, "raast")  # staff type no reference
+    assert refused.status_code == 409
+    a_no = a.json()["bill_no"]
+    assert refused.json()["detail"] == f"Reference already used on Bill {a_no:04d}"
+    ok = await settle(client, pv.r.slug, b_bill, "raast", acknowledge_reused_reference=True)
+    assert ok.status_code == 200, ok.text
+
+
+def test_reference_key_is_one_normal_form():
+    assert reference_key("TX 1") == reference_key("tx-1") == reference_key("t.x/1#") == "TX1"
+    assert reference_key(None) == reference_key("  - ") == ""
+
+
+async def test_staff_reference_follows_the_guest_rule(client, db_session, pv):
+    bill_id = await bill_id_of(db_session, await order_2340(client, pv))
+    await as_member(client, db_session, pv.r.id, "staff")
+    for bad in ("TX\u00a01", "TX\u200b1", "TX\uff11", "TX\t1", "TX\n1", "<b>", "x" * 65):
+        resp = await settle(client, pv.r.slug, bill_id, "raast", payment_reference=bad)
+        assert resp.status_code == 422, bad
+    ok = await settle(client, pv.r.slug, bill_id, "raast", payment_reference="  TX 9  ")
+    assert ok.status_code == 200, ok.text
+    assert ok.json()["payment_reference"] == "TX 9"
+
+
+async def test_same_claim_on_two_open_bills_is_flagged(client, db_session, pv):
+    a_bill = await bill_id_of(db_session, await order_2340(client, pv))
+    b_bill = await bill_id_of(db_session, await place(client, pv.session_t2, [(pv.naan, 2)]))
+    for session, ref in ((pv.session_t1, "R-5"), (pv.session_t2, "r 5")):
+        guest(client, session)
+        assert (await client.post(PAY, json={"method": "raast", "reference": ref})).is_success
+    await as_member(client, db_session, pv.r.id, "staff")
+    a, b = await detail(client, pv, a_bill), await detail(client, pv, b_bill)
+    assert a["reused_reference_open_bill_no"] == b["bill_no"]
+    assert b["reused_reference_open_bill_no"] == a["bill_no"]
+    assert a["reused_reference_bill_no"] is None
+    assert {m["method"]: m["total"] for m in a["methods"]} == {
+        "cash": "2714.00",
+        "card": "2527.00",
+        "wallet": "2527.00",
+        "raast": "2527.00",
+        "bank_transfer": "2714.00",
+    }
+
+
+async def test_void_of_the_last_order_cancels_the_bill(client, db_session, pv):
+    only = await place(client, pv.session_t1, [(pv.naan, 2)])
+    old_bill = await bill_id_of(db_session, only)
+    old_no = await db_session.scalar(select(Bill.bill_no).where(Bill.id == old_bill))
+    staff = await as_member(client, db_session, pv.r.id, "staff")
+    resp = await client.post(url(pv, f"/orders/{only}/void"), json={"reason": "Wrong table"})
+    assert resp.status_code == 200, resp.text
+    stored = (await db_session.execute(select(Bill).where(Bill.id == old_bill))).scalar_one()
+    assert (stored.status, stored.cancelled_by, stored.cancel_reason) == (
+        "cancelled",
+        staff.id,
+        "All orders voided",
+    )
+    assert stored.cancelled_at is not None
+    assert await db_session.scalar(
+        select(func.count())
+        .select_from(AuditLog)
+        .where(AuditLog.restaurant_id == pv.r.id, AuditLog.event_type == "bill_cancelled")
+    )
+    tiles = (await client.get(url(pv, "/floor"))).json()["tiles"]
+    t1 = next(t for t in tiles if t["label"] == "T1")
+    assert t1["state"] not in ("paying", "ordered")
+    assert t1["bill_id"] is None
+
+    # The next party never sees the old bill or its removed lines, and gets a new bill.
+    nxt = await new_party(db_session, pv, pv.t1)
+    guest(client, nxt)
+    assert (await client.get("/api/guest/bill")).status_code == 404
+    new_bill = await bill_id_of(db_session, await place(client, nxt, [(pv.naan, 1)]))
+    assert new_bill != old_bill
+    assert await db_session.scalar(select(Bill.bill_no).where(Bill.id == new_bill)) == old_no + 1
+    guest(client, nxt)
+    mine = (await client.get("/api/guest/bill")).json()
+    assert (mine["status"], mine["subtotal"], mine["voided"]) == ("open", "60.00", [])
+
+
+async def test_kitchen_cannot_bump_or_recall_a_voided_order(client, db_session, pv):
+    keep = await order_2340(client, pv)
+    gone = await place(client, pv.session_t1, [(pv.naan, 1)])
+    await as_member(client, db_session, pv.r.id, "staff")
+    kitchen = url(pv, "/kitchen/orders")
+    assert (await client.post(f"{kitchen}/{keep}/bump")).status_code == 200
+    assert (await client.post(url(pv, f"/orders/{gone}/void"), json={"reason": "x"})).is_success
+    bump = await client.post(f"{kitchen}/{gone}/bump")
+    assert (bump.status_code, bump.json()["detail"]) == (409, "Order was cancelled")
+    assert (await client.post(f"{kitchen}/{gone}/recall")).status_code == 409
+
+
+@pytest.mark.timeout(120)
+async def test_bump_and_recall_racing_a_void(committed_venue):  # noqa: F811 - the imported fixture
+    restaurant_id, slug, item_id, session_id, staff = committed_venue
+    table_id = await _table_of(session_id)
+    base = f"/api/restaurants/{slug}"
+    async with _Clients(staff) as c:
+        for n in range(6):
+            party = await _new_committed_party(restaurant_id, table_id)
+            c.guest.cookies.set(GUEST_COOKIE_NAME, sign_value(str(party)))
+            first = await c.guest.post("/api/orders", json=_order_body(item_id))
+            second = (await c.guest.post("/api/orders", json=_order_body(item_id))).json()["id"]
+            if n % 2:  # recall race: bumped first
+                assert (await c.staff.post(f"{base}/kitchen/orders/{second}/bump")).is_success
+                kitchen = f"{base}/kitchen/orders/{second}/recall"
+            else:
+                kitchen = f"{base}/kitchen/orders/{second}/bump"
+            k, v = await asyncio.gather(
+                c.staff.post(kitchen),
+                c.staff.post(f"{base}/orders/{second}/void", json={"reason": "x"}),
+            )
+            assert k.status_code in (200, 409), k.text
+            assert v.status_code == 200, v.text
+            async with async_session_factory() as s:
+                order = await s.get(Order, uuid.UUID(second))
+                assert (order.status, order.voided_at is not None) == ("cancelled", True)
+            bill_id = await _bill_of(first.json()["id"])
+            assert (await settle(c.staff, slug, bill_id)).status_code == 200
+
+
+@pytest.mark.timeout(120)
+async def test_same_reference_settled_on_two_bills_at_once(committed_venue):  # noqa: F811
+    restaurant_id, slug, item_id, session_id, staff = committed_venue
+    first_table = await _table_of(session_id)
+    async with async_session_factory() as s:
+        second = DiningTable(restaurant_id=restaurant_id, label="P2", qr_token=uuid.uuid4().hex)
+        s.add(second)
+        await s.commit()
+        second_table = second.id
+    async with _Clients(staff) as c:
+        for n in range(4):
+            bills = []
+            for table, ref in ((first_table, f"SAME-{n}"), (second_table, f"same {n}")):
+                party = await _new_committed_party(restaurant_id, table)
+                c.guest.cookies.set(GUEST_COOKIE_NAME, sign_value(str(party)))
+                placed = await c.guest.post("/api/orders", json=_order_body(item_id))
+                assert placed.status_code == 201, placed.text
+                claim = await c.guest.post(PAY, json={"method": "raast", "reference": ref})
+                assert claim.status_code == 200, claim.text
+                bills.append(await _bill_of(placed.json()["id"]))
+            body = {
+                "payment_method": "raast",
+                "expected_method": "raast",
+                "expected_total": "65.00",
+            }
+            results = await asyncio.gather(
+                *(
+                    c.staff.post(f"/api/restaurants/{slug}/bills/{b}/settle", json=body)
+                    for b in bills
+                )
+            )
+            codes = [r.status_code for r in results]
+            assert sorted(codes) == [200, 409], [r.text for r in results]
+            refused = results[codes.index(409)]
+            assert refused.json()["detail"].startswith("Reference already used on Bill ")
+            ok = await c.staff.post(
+                f"/api/restaurants/{slug}/bills/{bills[codes.index(409)]}/settle",
+                json={**body, "acknowledge_reused_reference": True},
+            )
+            assert ok.status_code == 200, ok.text
