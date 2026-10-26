@@ -63,7 +63,8 @@ def validate_payment_details(raw: dict[str, Any], *, allow_sample: bool) -> dict
         if key == "account_title":
             if BIDI.search(value):
                 raise PaymentDetailsError(key, "Account title contains invalid characters")
-            value = "".join(c for c in value if unicodedata.category(c) != "Cc").strip()
+            # Cc = control, Cf = invisible format chars (zero-width, direction marks).
+            value = "".join(c for c in value if unicodedata.category(c) not in ("Cc", "Cf")).strip()
             if not 2 <= len(value) <= 80:
                 raise PaymentDetailsError(key, "Account title must be 2 to 80 characters")
         elif not sample:

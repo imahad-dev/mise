@@ -203,3 +203,12 @@ async def test_non_demo_venue_rejects_sample(client: AsyncClient, db_session: As
     assert resp.json()["detail"]["field"] == "sample"
     got = await client.get(f"/api/restaurants/{r.slug}/settings")
     assert got.json()["payment_details"] == {}
+
+
+@pytest.mark.parametrize("title", ["​​", "‎‏", "​A"])
+def test_invisible_only_title_rejected(title):
+    with pytest.raises(PaymentDetailsError) as e:
+        validate_payment_details(
+            {"jazzcash": "03001234567", "account_title": title}, allow_sample=False
+        )
+    assert e.value.field == "account_title"
