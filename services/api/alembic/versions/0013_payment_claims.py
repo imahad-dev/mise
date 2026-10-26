@@ -89,8 +89,13 @@ def downgrade() -> None:
     op.drop_column("orders", "voided_by")
     op.drop_column("orders", "voided_at")
 
-    # Cancelled bills cannot satisfy the old status check.
-    op.execute("DELETE FROM bills WHERE status = 'cancelled'")
+    # Cancelled bills cannot satisfy the old status check; never delete financial rows silently.
+    if (
+        op.get_bind()
+        .execute(sa.text("SELECT 1 FROM bills WHERE status = 'cancelled' LIMIT 1"))
+        .first()
+    ):
+        raise RuntimeError("Cancelled bills exist; run make reset before downgrading")
     op.drop_constraint("chk_bills_claimed_reference_len", "bills", type_="check")
     op.drop_constraint("chk_bills_claimed_method", "bills", type_="check")
     op.drop_constraint("chk_bills_cancelled_complete", "bills", type_="check")

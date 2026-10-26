@@ -396,14 +396,18 @@ async def patch_settings(
     access: RestaurantAccess = Depends(owner_access),
     db: AsyncSession = Depends(get_db),
 ) -> SettingsResponse:
-    """Update payment details and the extra call reason. Omitted fields stay as they are."""
+    """Update payment details and the extra call reason.
+
+    Omitted fields stay as they are; a given `payment_details` replaces the whole object.
+    """
     restaurant = access.restaurant
     if payload.payment_details is not None:
         raw = dict(payload.payment_details)
-        if settings.demo_mode and restaurant.slug in settings.demo_restaurant_slugs:
+        is_demo = settings.demo_mode and restaurant.slug in settings.demo_restaurant_slugs
+        if is_demo:
             raw["sample"] = True  # demo venues can never show real-looking payment details
         try:
-            cleaned = validate_payment_details(raw)
+            cleaned = validate_payment_details(raw, allow_sample=is_demo)
         except PaymentDetailsError as e:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,

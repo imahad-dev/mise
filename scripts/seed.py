@@ -115,7 +115,10 @@ async def seed_data(
     items_data = data.get("items", [])
     profile = simulation_profile(data)
 
-    payment_details = validate_payment_details(rest_data.get("payment_details", {}))
+    payment_details = validate_payment_details(
+        rest_data.get("payment_details", {}),
+        allow_sample=rest_data["slug"] in settings.demo_restaurant_slugs,
+    )
 
     # 1. Upsert Restaurant
     stmt_rest = select(Restaurant).where(Restaurant.slug == rest_data["slug"])
