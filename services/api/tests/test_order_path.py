@@ -133,7 +133,9 @@ async def test_guest_session_flow_and_no_unit_cost(
     """Create guest session, fetch menu and session, and verify unit_cost is NEVER exposed."""
     # Get a valid table QR token
     res_t = await db_session.execute(
-        select(DiningTable).where(DiningTable.restaurant_id == seeded_restaurant.id)
+        select(DiningTable).where(
+            DiningTable.restaurant_id == seeded_restaurant.id, DiningTable.kind == "table"
+        )
     )
     table = res_t.scalars().first()
     assert table is not None

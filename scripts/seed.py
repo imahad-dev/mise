@@ -132,6 +132,7 @@ async def seed_data(
             city=rest_data.get("city"),
             tax_jurisdiction=rest_data.get("tax_jurisdiction"),
             service_extra_label=rest_data.get("service_extra_label"),
+            pickup_prefix=rest_data.get("pickup_prefix"),
             payment_details=payment_details,
             timezone=rest_data.get("timezone", "Asia/Karachi"),
             currency=rest_data.get("currency", "PKR"),
@@ -148,6 +149,7 @@ async def seed_data(
         restaurant.city = rest_data.get("city")
         restaurant.tax_jurisdiction = rest_data.get("tax_jurisdiction")
         restaurant.service_extra_label = rest_data.get("service_extra_label")
+        restaurant.pickup_prefix = rest_data.get("pickup_prefix")
         if "payment_details" in rest_data:
             restaurant.payment_details = payment_details
         restaurant.timezone = rest_data.get("timezone", "Asia/Karachi")
@@ -172,12 +174,14 @@ async def seed_data(
         label = t_info["label"]
         if label in existing_tables_by_label:
             target_table = existing_tables_by_label[label]
+            target_table.kind = t_info.get("kind", "table")
             if rotate_qr or not target_table.qr_token:
                 target_table.qr_token = secrets.token_urlsafe(12)
         else:
             new_table = DiningTable(
                 restaurant_id=restaurant.id,
                 label=label,
+                kind=t_info.get("kind", "table"),
                 qr_token=secrets.token_urlsafe(12),
             )
             session.add(new_table)

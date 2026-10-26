@@ -26,7 +26,10 @@ from src.database import Base
 class Order(Base):
     __tablename__ = "orders"
     __table_args__ = (
-        CheckConstraint("status IN ('placed', 'bumped', 'cancelled')", name="chk_orders_status"),
+        CheckConstraint(
+            "status IN ('awaiting_payment', 'placed', 'bumped', 'cancelled')",
+            name="chk_orders_status",
+        ),
         CheckConstraint("total >= 0", name="chk_orders_total"),
         CheckConstraint(
             "allergens_to_avoid <@ ARRAY['gluten','milk','eggs','fish','crustaceans','molluscs',"
@@ -43,6 +46,7 @@ class Order(Base):
         ),
         CheckConstraint("source IN ('live', 'simulated')", name="chk_orders_source"),
         CheckConstraint("voided_at IS NULL OR status = 'cancelled'", name="chk_orders_void"),
+        CheckConstraint("collected_at IS NULL OR status = 'bumped'", name="chk_orders_collected"),
         UniqueConstraint(
             "guest_session_id", "idempotency_key", name="orders_guest_idempotency_key"
         ),
@@ -110,6 +114,10 @@ class Order(Base):
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     void_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    collected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    collected_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

@@ -5,6 +5,7 @@
     "slug": "angeethi-house",
     "city": "Lahore",
     "tax_jurisdiction": "PB",
+    "pickup_prefix": "P",
     "service_extra_label": "More naan / roti",
     "payment_details": {
       "sample": true,
@@ -23,6 +24,10 @@
     "active": true
   },
   "tables": [
+    {
+      "label": "Takeaway",
+      "kind": "counter"
+    },
     {
       "label": "T1"
     },

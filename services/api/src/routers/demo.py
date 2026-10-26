@@ -39,7 +39,7 @@ async def get_demo_info(
     res = await db.execute(
         select(Restaurant, DiningTable)
         .join(DiningTable, DiningTable.restaurant_id == Restaurant.id)
-        .where(Restaurant.slug.in_(settings.demo_restaurant_slugs))
+        .where(Restaurant.slug.in_(settings.demo_restaurant_slugs), DiningTable.kind == "table")
         .order_by(Restaurant.slug, DiningTable.label)
     )
     first_table: dict[str, tuple[Restaurant, DiningTable]] = {}

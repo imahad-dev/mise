@@ -15,8 +15,8 @@ Seed data files for Mise. Each venue file represents one restaurant's complete m
 
 ## Files
 
-- `angeethi_house.json` — Angeethi House, Lahore (`PB`): 26 dishes, 20 portion options, 12 tables (T1-T8, F1-F4).
-- `kehwa_and_crumb.json` — Kehwa & Crumb, Islamabad (`ICT`): 22 items, 15 size options, 8 tables (T1-T8).
+- `angeethi_house.json` — Angeethi House, Lahore (`PB`): 26 dishes, 20 portion options, 12 tables (T1-T8, F1-F4) and a "Takeaway" counter QR (pickup prefix `P`).
+- `kehwa_and_crumb.json` — Kehwa & Crumb, Islamabad (`ICT`): 22 items, 15 size options, 8 tables (T1-T8) and a "Counter" counter QR (pickup prefix `K`).
 - `demo_users.json` — not a venue: the demo owner (both venues) and one staff user per venue. They have random unusable passwords and sign in only through `/api/auth/demo-login`.
 
 Venue files are English only, in PKR, with allergens marked `allergen_verified: false`. `sim_weight`, `option_weights` and the top-level `simulation` block describe simulated demand; the seeder ignores them.

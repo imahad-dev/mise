@@ -1,6 +1,7 @@
 """Tests verifying that all database CHECK constraints and FK RESTRICT rules reject invalid data."""
 
 import uuid
+from datetime import date
 from typing import Any
 
 import pytest
@@ -753,3 +754,55 @@ async def test_order_void_requires_cancelled_status(db_session: AsyncSession):
         db_session, sql, {"sid": sid, "rid": rid, "status": "placed"}, "chk_orders_void"
     )
     await db_session.execute(text(sql), {"sid": sid, "rid": rid, "status": "cancelled"})
+
+
+@pytest.mark.asyncio
+async def test_order_awaiting_payment_accepted_and_collected_needs_bumped(
+    db_session: AsyncSession,
+):
+    rid = await _create_test_restaurant(db_session)
+    sid = await _create_test_session(db_session, rid)
+    sql = (
+        "INSERT INTO orders (guest_session_id, restaurant_id, status, total, idempotency_key, "
+        "payload_hash, bumped_at, collected_at) "
+        "VALUES (:sid, :rid, :status, 1.00, :key, 'h', now(), :collected)"
+    )
+    await db_session.execute(
+        text(sql),
+        {"sid": sid, "rid": rid, "status": "awaiting_payment", "key": "k1", "collected": None},
+    )
+    for i, bad in enumerate(("placed", "awaiting_payment", "cancelled")):
+        await assert_violates(
+            db_session,
+            sql.replace(":collected", "now()"),
+            {"sid": sid, "rid": rid, "status": bad, "key": f"bad{i}"},
+            "chk_orders_collected",
+        )
+    await db_session.execute(
+        text(sql.replace(":collected", "now()")),
+        {"sid": sid, "rid": rid, "status": "bumped", "key": "k2"},
+    )
+
+
+@pytest.mark.asyncio
+async def test_bill_pickup_number_unique_per_day_and_paired(db_session: AsyncSession):
+    rid = await _create_test_restaurant(db_session)
+    sql = (
+        "INSERT INTO bills (restaurant_id, source, pickup_day, pickup_no) "
+        "VALUES (:rid, 'simulated', :day, :no)"
+    )
+    await db_session.execute(text(sql), {"rid": rid, "day": date(2026, 10, 27), "no": 1})
+    # The same number on another day is fine.
+    await db_session.execute(text(sql), {"rid": rid, "day": date(2026, 10, 28), "no": 1})
+    await assert_violates(
+        db_session, sql, {"rid": rid, "day": date(2026, 10, 27), "no": 1}, "uq_bills_pickup_no"
+    )
+    await assert_violates(
+        db_session, sql, {"rid": rid, "day": None, "no": 2}, "chk_bills_pickup_pair"
+    )
+    await assert_violates(
+        db_session,
+        sql,
+        {"rid": rid, "day": date(2026, 10, 27), "no": None},
+        "chk_bills_pickup_pair",
+    )

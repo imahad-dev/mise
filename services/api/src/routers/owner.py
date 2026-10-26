@@ -376,7 +376,9 @@ async def list_tables(
 async def get_settings(access: RestaurantAccess = Depends(owner_access)) -> SettingsResponse:
     r = access.restaurant
     return SettingsResponse(
-        payment_details=r.payment_details, service_extra_label=r.service_extra_label
+        payment_details=r.payment_details,
+        service_extra_label=r.service_extra_label,
+        pickup_prefix=r.pickup_prefix,
     )
 
 
@@ -396,7 +398,7 @@ async def patch_settings(
     access: RestaurantAccess = Depends(owner_access),
     db: AsyncSession = Depends(get_db),
 ) -> SettingsResponse:
-    """Update payment details and the extra call reason.
+    """Update payment details, the extra call reason and the pickup prefix.
 
     Omitted fields stay as they are; a given `payment_details` replaces the whole object.
     """
@@ -424,10 +426,13 @@ async def patch_settings(
         restaurant.payment_details = cleaned
     if payload.service_extra_label is not None:
         restaurant.service_extra_label = payload.service_extra_label
+    if payload.pickup_prefix is not None:
+        restaurant.pickup_prefix = payload.pickup_prefix
     await db.commit()
     return SettingsResponse(
         payment_details=restaurant.payment_details,
         service_extra_label=restaurant.service_extra_label,
+        pickup_prefix=restaurant.pickup_prefix,
     )
 
 

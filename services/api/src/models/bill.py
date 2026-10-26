@@ -1,11 +1,12 @@
 """Table bill: the orders of one table sitting, settled once with a tax snapshot."""
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 
 from sqlalchemy import (
     CheckConstraint,
+    Date,
     DateTime,
     ForeignKey,
     Index,
@@ -57,7 +58,9 @@ class Bill(Base):
             "payment_reference IS NULL OR length(payment_reference) <= 64",
             name="chk_bills_reference_len",
         ),
+        CheckConstraint("(pickup_no IS NULL) = (pickup_day IS NULL)", name="chk_bills_pickup_pair"),
         UniqueConstraint("restaurant_id", "bill_no", name="uq_bills_restaurant_bill_no"),
+        UniqueConstraint("restaurant_id", "pickup_day", "pickup_no", name="uq_bills_pickup_no"),
         Index(
             "uq_bills_one_open_per_table",
             "table_id",
@@ -78,6 +81,9 @@ class Bill(Base):
         UUID(as_uuid=True), ForeignKey("dining_table.id", ondelete="SET NULL"), nullable=True
     )
     bill_no: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Counter bills only: the guest's pickup number, per venue per local day.
+    pickup_day: Mapped[date | None] = mapped_column(Date, nullable=True)
+    pickup_no: Mapped[int | None] = mapped_column(Integer, nullable=True)
     status: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'open'"))
     source: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'live'"))
     bill_requested_at: Mapped[datetime | None] = mapped_column(

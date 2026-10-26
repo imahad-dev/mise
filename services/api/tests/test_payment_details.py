@@ -138,12 +138,14 @@ async def test_owner_saves_and_reads_settings(client: AsyncClient, db_session: A
         json={
             "payment_details": {"iban": GOOD_IBAN.lower(), "account_title": "Venue"},
             "service_extra_label": "  More naan  ",
+            "pickup_prefix": "P",
         },
     )
     assert resp.status_code == 200
     assert resp.json() == {
         "payment_details": {"iban": GOOD_IBAN, "account_title": "Venue"},
         "service_extra_label": "More naan",
+        "pickup_prefix": "P",
     }
     got = await client.get(f"/api/restaurants/{r.slug}/settings")
     assert got.json() == resp.json()
@@ -165,6 +167,11 @@ async def test_invalid_details_name_the_field(client: AsyncClient, db_session: A
         f"/api/restaurants/{r.slug}/settings", json={"service_extra_label": "x" * 41}
     )
     assert resp.status_code == 422
+    for bad in ("", "p", "ABCD", "K1", "É"):
+        resp = await client.patch(
+            f"/api/restaurants/{r.slug}/settings", json={"pickup_prefix": bad}
+        )
+        assert resp.status_code == 422, bad
 
 
 async def test_staff_cannot_patch_settings(client: AsyncClient, db_session: AsyncSession):

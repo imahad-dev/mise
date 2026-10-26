@@ -46,7 +46,7 @@ async def test_seed_data_idempotent_and_stable_tokens(db_session: AsyncSession):
     tokens_run_1 = {t.label: t.qr_token for t in tables_1}
 
     # Verify initial table tokens are valid non-empty strings
-    assert len(tokens_run_1) == 12
+    assert len(tokens_run_1) == 13
     assert all(bool(token) for token in tokens_run_1.values())
 
     # --- Run 2 (idempotency verification) ---
@@ -58,13 +58,13 @@ async def test_seed_data_idempotent_and_stable_tokens(db_session: AsyncSession):
     )
     assert res_rest.scalar() == 1
 
-    # 2. Assert exactly 12 dining tables (T1-T8, F1-F4) for this restaurant
+    # 2. Assert exactly 13 dining tables (T1-T8, F1-F4, Takeaway) for this restaurant
     res_tables = await db_session.execute(
         select(func.count())
         .select_from(DiningTable)
         .where(DiningTable.restaurant_id == restaurant.id)
     )
-    assert res_tables.scalar() == 12
+    assert res_tables.scalar() == 13
 
     # 3. Assert exactly 26 menu items for this restaurant
     res_items = await db_session.execute(
@@ -130,7 +130,7 @@ async def test_seed_data_rotate_qr(db_session: AsyncSession):
     )
     tokens_2 = {t.label: t.qr_token for t in res_2.scalars().all()}
 
-    assert len(tokens_2) == 12
+    assert len(tokens_2) == 13
     # Each token should have changed
     for label, token in tokens_1.items():
         assert tokens_2[label] != token
@@ -164,6 +164,18 @@ async def test_both_venues_seed_idempotently_with_stable_ids(db_session: AsyncSe
     )
     assert details["angeethi-house"]["sample"] is True
     assert details["kehwa-and-crumb"]["raast_id"] == "0000 SAMPLE"
+    prefixes = dict(
+        (await db_session.execute(select(Restaurant.slug, Restaurant.pickup_prefix))).all()
+    )
+    assert prefixes == {"angeethi-house": "P", "kehwa-and-crumb": "K"}
+    counters = (
+        await db_session.execute(
+            select(Restaurant.slug, DiningTable.label)
+            .join(DiningTable, DiningTable.restaurant_id == Restaurant.id)
+            .where(DiningTable.kind == "counter")
+        )
+    ).all()
+    assert sorted(counters) == [("angeethi-house", "Takeaway"), ("kehwa-and-crumb", "Counter")]
 
     karahi_id = uuid.uuid5(SEED_ITEM_NAMESPACE, "angeethi-house:chicken_karahi")
     karahi = (

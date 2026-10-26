@@ -5,6 +5,7 @@
     "slug": "kehwa-and-crumb",
     "city": "Islamabad",
     "tax_jurisdiction": "ICT",
+    "pickup_prefix": "K",
     "service_extra_label": "More napkins / cutlery",
     "payment_details": {
       "sample": true,
@@ -23,6 +24,10 @@
     "active": true
   },
   "tables": [
+    {
+      "label": "Counter",
+      "kind": "counter"
+    },
     {
       "label": "T1"
     },
