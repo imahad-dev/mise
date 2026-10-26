@@ -207,7 +207,12 @@ existing `order_placed`, `bill_*`. Payloads carry ids only.
 | Clear a table with an open bill | 409 "Settle the bill first" |
 | Collect an order that isn't bumped, or uncollect after 60 s | 409 |
 | Cancel a paid bill, or a claimed bill without reason | 409 / 422 |
-| Void on a settled bill, or void the last active order then settle | 409 / settle 422 "No active orders" |
+| Void on a settled bill | 409 |
+| Void the last active order | the bill is cancelled ("All orders voided"); settle then 409 "Bill is not open" |
+| Void that would cancel a bill the guest says they paid | 409 with the claim unless `acknowledge_claim` |
+| Stale guest session (table settled, cleared or its bill cancelled since the scan) orders, calls or pays | 409 "Your visit has ended — scan the table QR again" (own settled bill stays readable) |
+| Clear while new guests are seated | 409 "New guests are already seated" unless `force` (audited) |
+| Reused reference (staff-typed or claimed) or same reference on another open bill | 409 unless `acknowledge_reused_reference` |
 | Service call from a counter session | 422 |
 | Second open call / call within 60 s | 409 / 429 |
 | Pay-forward give with balance 0 | 409 "None waiting" |
