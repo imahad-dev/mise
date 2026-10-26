@@ -11,7 +11,7 @@ Mise is an ordering, kitchen and revenue analytics platform for independent rest
   - English and Italian (only these two languages are supported).
   - Deterministic EU-14 allergen cross-referencing with explicit acknowledgment guards.
   - Size picker for dishes with sizes; prices in PKR (`Rs 2,100`) with the note "Prices exclude sales tax, which is added to your bill."
-  - "Request bill" on the order page, then "Bill requested" and "Paid · Bill no. 0042" states.
+  - "Pay bill" on the order page: lines, subtotal and the total for each of the five payment methods; cash or card calls a waiter, wallet / Raast / bank transfer show the venue's payment details (under a demo banner for sample details) and take a transaction id. Staff always confirm; the page then shows "Paid · Bill no. 0042".
   - Cart persistence with server-verified idempotency tokens.
   - Live order status tracking powered by Server-Sent Events (SSE).
   - AI menu chat assistant (sees the menu only, never the guest's allergen or dietary profile).
@@ -31,8 +31,8 @@ Mise is an ordering, kitchen and revenue analytics platform for independent rest
   - Two demo venues: **Angeethi House** (Lahore, Punjab; BBQ, karahi, handi, tandoor) and **Kehwa & Crumb** (Islamabad; coffee, chai, bakery). Prices and costs are illustrative.
 
 - **Bills and sample bill (`owner-web`, staff and owner)**
-  - Bills page: open table bills live over SSE, "Bill requested" first, lines grouped by dish and size, and side-by-side totals for cash or bank transfer vs card, wallet or QR.
-  - Payment methods: Cash, Card, JazzCash / Easypaisa, Raast QR, Bank transfer, with an optional reference. Settling snapshots subtotal, tax rate, tax and total on the bill.
+  - Bills page: open table bills live over SSE, requested first, with the guest's claim on each row ("Guest paying: Raast QR · ref …", "Guest paying: cash", "Card machine requested"); a Cancelled tab.
+  - Confirm sheet: each order with its device label ("Phone 1", "Phone 2") and a red "Joined late" flag, the total per payment method (Cash, Card, JazzCash / Easypaisa, Raast QR, Bank transfer), the method pre-selected from the claim, the amount and reference in large type with "Check your JazzCash / bank app for ref … and Rs … before confirming.", warnings for an amount still due or overpaid and for a reused reference (confirm only after "I've checked — confirm anyway"). "Confirm received" sends the total shown; if the bill changed meanwhile the sheet reloads with "The bill changed — check the new total". Staff can void an order with a reason; voiding the last order of a bill the guest says they paid asks before cancelling the bill. Settling snapshots subtotal, tax rate, tax and total on the bill.
   - Printable 80 mm sample bill with "Sales tax (illustrative)" and the fixed footer "Sample bill — not a tax invoice. Not connected to FBR or any provincial revenue authority."
   - Sales tax rates live in `data/tax_rates.json`, one row per jurisdiction, payment class and start date, each with its legal source: Punjab 16% (cash, bank transfer) / 8% (card, wallet, QR) from 1 July 2026 under the Punjab Sales Tax on Services Act 2012 as amended by the Punjab Finance Act 2026 (16% / 5% before); Islamabad 15% / 5% under the ICT (Tax on Services) Ordinance 2001. Verification notes: [docs/research/2026-10-24-tax-rate-verification.md](docs/research/2026-10-24-tax-rate-verification.md).
 

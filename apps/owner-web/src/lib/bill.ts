@@ -102,6 +102,47 @@ export const paymentLabel = (method: string | null) =>
 export const claimWarning = (claim: PaymentClaim, currency: string) =>
   `Guest said they paid by ${paymentLabel(claim.method)} (${formatPrice(Number(claim.total), currency)}) — any refund happens outside Mise.`;
 
+/** Row chip for an open bill's claim: "Guest paying: Raast QR · ref TX4471…", "Guest paying: cash", "Card machine requested". */
+export function claimChip(claim: PaymentClaim): string {
+  if (claim.method === "card") return "Card machine requested";
+  if (claim.method === "cash") return "Guest paying: cash";
+  const ref = claim.reference ?? "";
+  return `Guest paying: ${paymentLabel(claim.method)}${ref ? ` · ref ${ref.length > 8 ? `${ref.slice(0, 8)}…` : ref}` : ""}`;
+}
+
+/** amount_due_after_claim as words: positive is still due, negative overpaid, zero nothing. */
+export function amountDueText(due: string | null, currency: string): string | null {
+  const n = Number(due ?? 0);
+  if (!n) return null;
+  return `${formatPrice(Math.abs(n), currency)} ${n > 0 ? "still due" : "overpaid"}`;
+}
+
+/**
+ * The settle body. expected_total comes from the server's preview for the selected method,
+ * never from the claim; null when that method has no preview (no tax rate).
+ */
+export function settlePayload(bill: Pick<BillDetail, "methods">, method: PaymentMethod, reference: string, acknowledgeReused: boolean) {
+  const preview = previewFor(bill, method);
+  if (!preview) return null;
+  const ref = method === "cash" ? "" : reference.trim();
+  return {
+    payment_method: method,
+    payment_reference: ref || null,
+    expected_total: preview.total,
+    expected_method: method,
+    acknowledge_reused_reference: acknowledgeReused,
+  };
+}
+
+export const VOID_REASONS = ["Wrong table", "Guest changed mind", "Duplicate", "Other"] as const;
+
+/** The reason sent with a void: the picked one, or the typed text for Other (1-200 characters). */
+export function voidReason(choice: (typeof VOID_REASONS)[number], other: string): string | null {
+  if (choice !== "Other") return choice;
+  const text = other.trim();
+  return text && text.length <= 200 ? text : null;
+}
+
 export const billNo = (n: number | null) => (n === null ? "Bill no. —" : `Bill no. ${String(n).padStart(4, "0")}`);
 
 const TAX_CLASS: Record<string, string> = { cash: "cash", bank_transfer: "bank transfer" };

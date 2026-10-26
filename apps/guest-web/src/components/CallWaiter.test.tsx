@@ -15,6 +15,7 @@ describe("CallWaiter", () => {
   it("maps the API answers to what the guest sees", () => {
     expect(callOutcome(201, null)).toBe("called");
     expect(callOutcome(409, null)).toBe("already");
+    expect(callOutcome(409, null, "Your visit has ended — scan the table QR again")).toBe("ended");
     expect(callOutcome(422, null)).toBe("unavailable");
     expect(callOutcome(429, "37")).toEqual({ wait: 37 });
     expect(callOutcome(429, null)).toEqual({ wait: 60 });

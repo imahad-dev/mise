@@ -73,11 +73,37 @@ export interface TranslationDict {
     from: string;
   };
   bill: {
-    request: string;
-    requested: string;
     /** Contains {billNo}. */
     paid: string;
-    requestFailed: string;
+  };
+  pay: {
+    button: string;
+    subtotal: string;
+    choose: string;
+    /** Contains {rate}. */
+    taxRate: string;
+    methods: Record<"cash" | "card" | "wallet" | "raast" | "bank_transfer", string>;
+    labels: Record<"raast_id" | "jazzcash" | "easypaisa" | "iban" | "account_title", string>;
+    /** Contains {name} and {qty}. */
+    removed: string;
+    /** Contains {total}. */
+    cash: string;
+    card: string;
+    sent: string;
+    /** Contains {total}. */
+    payTo: string;
+    sampleBanner: string;
+    copy: string;
+    copied: string;
+    copyFailed: string;
+    reference: string;
+    invalidReference: string;
+    paid: string;
+    sending: string;
+    networkError: string;
+    noBill: string;
+    cancelled: string;
+    visitEnded: string;
   };
   call: {
     button: string;

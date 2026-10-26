@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Button, Sheet } from "ui";
 import { getDictionary } from "../i18n";
+import { VISIT_ENDED } from "../lib/pay";
 
 /** Mirrors ServiceCallResponse in services/api/src/schemas/floor.py. */
 export interface ServiceCall {
@@ -25,12 +26,12 @@ const REASONS = ["help", "water", "extra"] as const;
 type Reason = (typeof REASONS)[number];
 const RESOLVED_MS = 10_000;
 
-export type CallOutcome = "called" | "already" | "unavailable" | "failed" | { wait: number };
+export type CallOutcome = "called" | "already" | "ended" | "unavailable" | "failed" | { wait: number };
 
-/** What a POST /api/guest/service-calls status means for the guest. */
-export function callOutcome(status: number, retryAfter: string | null): CallOutcome {
+/** What a POST /api/guest/service-calls status (and 409 detail) means for the guest. */
+export function callOutcome(status: number, retryAfter: string | null, detail: unknown = null): CallOutcome {
   if (status === 201) return "called";
-  if (status === 409) return "already";
+  if (status === 409) return detail === VISIT_ENDED ? "ended" : "already";
   if (status === 422) return "unavailable"; // counter or no-table session: no waiter to call
   if (status === 429) {
     const seconds = Math.ceil(Number(retryAfter));
@@ -160,7 +161,8 @@ export function CallWaiter({ lang }: { lang: string }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ reason }),
       });
-      const outcome = callOutcome(r.status, r.headers.get("Retry-After"));
+      const detail = r.status === 409 ? ((await r.json().catch(() => null)) as { detail?: unknown } | null)?.detail : null;
+      const outcome = callOutcome(r.status, r.headers.get("Retry-After"), detail);
       if (outcome === "called") {
         setOpen(false);
         setResolved(false);
@@ -168,6 +170,8 @@ export function CallWaiter({ lang }: { lang: string }) {
       } else if (outcome === "already") {
         setMessage(dict.call.already);
         void loadCurrent();
+      } else if (outcome === "ended") {
+        setMessage(dict.pay.visitEnded);
       } else if (outcome === "unavailable") {
         setOpen(false);
         setCurrent((c) => (c ? { ...c, available: false } : c));

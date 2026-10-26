@@ -6,6 +6,7 @@ import { AllergenChip } from "../../../components/allergen-chip";
 import { CallWaiter } from "../../../components/CallWaiter";
 import { ChatPanel } from "../../../components/chat-panel";
 import { getDictionary } from "../../../i18n";
+import { VISIT_ENDED } from "../../../lib/pay";
 import { Badge, Button, Sheet, formatPrice as formatAmount } from "ui";
 import {
   addToCart,
@@ -165,7 +166,11 @@ export default function GuestMenuPage({
           return;
         }
         const conflictMsg =
-          typeof errJson?.detail === "string" ? errJson.detail : "Order conflict. Please retry.";
+          errJson?.detail === VISIT_ENDED
+            ? dict.pay.visitEnded
+            : typeof errJson?.detail === "string"
+              ? errJson.detail
+              : "Order conflict. Please retry.";
         throw new Error(conflictMsg);
       }
 

@@ -99,8 +99,13 @@ test.describe.serial("two venues: guest, kitchen, bills, owner", () => {
     await page.screenshot({ path: "test-results/screens/order-sheet-phone.png" });
 
     orderId = await confirmOrder(page);
-    await page.getByRole("button", { name: "Request bill" }).click();
-    await expect(page.getByText("Bill requested — a waiter will bring it to your table.")).toBeVisible();
+    await page.getByRole("button", { name: "Pay bill" }).click();
+    const pay = page.getByRole("dialog", { name: "Pay bill" });
+    await expect(pay.getByText("Raast QR")).toBeVisible();
+    await pay.getByRole("button", { name: /^Card/ }).click();
+    await expect(pay.getByRole("status").filter({ hasText: "A waiter is bringing the card machine." })).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(page.getByText("A waiter is bringing the card machine.")).toBeVisible();
     guestState = await page.context().storageState();
   });
 
@@ -126,16 +131,16 @@ test.describe.serial("two venues: guest, kitchen, bills, owner", () => {
   test("staff settle the requested bill by card and print the sample bill", async ({ page, browser }) => {
     await staffPage(page, ANGEETHI);
     await page.goto(`${OWNER}/bills`);
-    await page.getByRole("button", { name: /Bill requested/ }).click();
+    await page.getByRole("button", { name: /Card machine requested/ }).click();
 
-    const dialog = page.getByRole("dialog");
-    await expect(dialog.getByText("Cash or bank transfer")).toBeVisible();
-    await expect(dialog.getByText("Card, wallet or QR")).toBeVisible();
-    await expect(dialog.getByText(/Tax 16% ·/)).toBeVisible();
-    await expect(dialog.getByText(/Tax 8% ·/)).toBeVisible();
-    await dialog.getByLabel("Card", { exact: true }).check();
+    const dialog = page.getByRole("dialog", { name: /^Table / });
+    await expect(dialog.getByText("Phone 1")).toBeVisible();
+    await expect(dialog.getByText("tax 16%").first()).toBeVisible();
+    await expect(dialog.getByText("tax 8%").first()).toBeVisible();
+    // Method pre-selected from the guest's claim.
+    await expect(dialog.getByRole("radio", { name: /^Card/ })).toBeChecked();
     await dialog.getByLabel("Reference (optional)").fill("AUTH1");
-    await dialog.getByRole("button", { name: "Mark paid" }).click();
+    await dialog.getByRole("button", { name: "Confirm received" }).click();
 
     await expect(page).toHaveURL(/\/bills\/[0-9a-f-]{36}\/print\?venue=angeethi-house$/);
     await expect(page.getByText(/^Bill no\. \d{4}$/)).toBeVisible();

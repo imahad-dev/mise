@@ -2,7 +2,10 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { formatPrice } from "ui";
-import { PAYMENT_METHODS, SAMPLE_BILL_FOOTER, billNo, claimWarning, previewFor, sampleBillPieces, sampleBillText, taxLabel } from "./bill";
+import {
+  PAYMENT_METHODS, SAMPLE_BILL_FOOTER, amountDueText, billNo, claimChip, claimWarning, previewFor, sampleBillPieces, sampleBillText,
+  settlePayload, taxLabel, voidReason,
+} from "./bill";
 
 describe("sample bill", () => {
   const bill = {
@@ -85,5 +88,41 @@ describe("the UI shows the API's tax numbers verbatim", () => {
     }));
     expect(previewFor({ methods }, v.method)?.total).toBe(v.total);
     expect(previewFor({ methods: methods.filter((m) => m.method !== v.method) }, v.method)).toBeNull();
+  });
+});
+
+describe("confirm sheet helpers", () => {
+  const claim = (method: string, reference: string | null = null) => ({ method, reference, total: "2527.00", claimed_at: "2026-10-27T10:00:00Z" });
+  it("words the amount still due or overpaid", () => {
+    // ICU puts a no-break space after "Rs"
+    expect(amountDueText("60.00", "PKR")?.replace(/\s/g, " ")).toBe("Rs 60 still due");
+    expect(amountDueText("-60.00", "PKR")).toBe(`${formatPrice(60, "PKR")} overpaid`);
+    expect(amountDueText("0.00", "PKR")).toBeNull();
+    expect(amountDueText(null, "PKR")).toBeNull();
+  });
+  it("shows the claim on the row", () => {
+    expect(claimChip(claim("raast", "4471"))).toBe("Guest paying: Raast QR · ref 4471");
+    expect(claimChip(claim("wallet", "TX1234567890"))).toBe("Guest paying: JazzCash / Easypaisa · ref TX123456…");
+    expect(claimChip(claim("cash"))).toBe("Guest paying: cash");
+    expect(claimChip(claim("card"))).toBe("Card machine requested");
+  });
+  it("builds settle from the selected method's preview, never from the claim", () => {
+    const methods = [
+      { method: "cash", label: "Cash", payment_class: "standard" as const, tax_rate: "0.16", tax_amount: "374.00", total: "2714.00" },
+      { method: "raast", label: "Raast QR", payment_class: "digital" as const, tax_rate: "0.08", tax_amount: "187.00", total: "2527.00" },
+    ];
+    expect(settlePayload({ methods }, "cash", "TX1", false)).toEqual({
+      payment_method: "cash", payment_reference: null, expected_total: "2714.00", expected_method: "cash", acknowledge_reused_reference: false,
+    });
+    expect(settlePayload({ methods }, "raast", "  TX1 ", true)).toEqual({
+      payment_method: "raast", payment_reference: "TX1", expected_total: "2527.00", expected_method: "raast", acknowledge_reused_reference: true,
+    });
+    expect(settlePayload({ methods }, "card", "", false)).toBeNull();
+  });
+  it("builds the void reason", () => {
+    expect(voidReason("Wrong table", "ignored")).toBe("Wrong table");
+    expect(voidReason("Other", "  Spilled  ")).toBe("Spilled");
+    expect(voidReason("Other", "  ")).toBeNull();
+    expect(voidReason("Other", "x".repeat(201))).toBeNull();
   });
 });

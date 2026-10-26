@@ -3,10 +3,12 @@
 import React, { use, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { CallWaiter } from "../../../../components/CallWaiter";
+import { PaySheet } from "../../../../components/PaySheet";
 import { ChatPanel } from "../../../../components/chat-panel";
 import { useSse } from "../../../../hooks/use-sse";
 import { getDictionary } from "../../../../i18n";
 import { Button, formatPrice } from "ui";
+import { VISIT_ENDED, billState, claimMessage, type GuestBill } from "../../../../lib/pay";
 
 interface OrderItem {
   id: string;
@@ -18,53 +20,31 @@ interface OrderItem {
   allergen_status: string;
 }
 
-interface GuestBill {
-  bill_no: number | null;
-  status: string;
-  bill_requested_at: string | null;
-}
-
-/** The table bill for this guest session: polled every 10 s, every 30 s once paid (a new order opens a new bill). */
+/** The table bill for this guest session: polled every 10 s while open, every 30 s otherwise (a new order opens a new bill). */
 function useGuestBill() {
   const [bill, setBill] = useState<GuestBill | null>(null);
-  const [requesting, setRequesting] = useState(false);
-  const [requestFailed, setRequestFailed] = useState(false);
-  const settled = bill?.status === "settled";
+  const [ended, setEnded] = useState(false);
+  const slow = Boolean(bill && bill.status !== "open");
 
-  useEffect(() => {
-    let cancelled = false;
-    const load = () =>
+  const load = useCallback(
+    () =>
       fetch("/api/guest/bill")
         .then(async (r) => {
-          if (cancelled) return;
           if (r.status === 404) setBill(null);
           else if (r.ok) setBill((await r.json()) as GuestBill);
           // other errors: keep the last known bill
         })
-        .catch(() => {});
+        .catch(() => {}),
+    [],
+  );
+
+  useEffect(() => {
     void load();
-    const timer = setInterval(load, settled ? 30_000 : 10_000);
-    return () => {
-      cancelled = true;
-      clearInterval(timer);
-    };
-  }, [settled]);
+    const timer = setInterval(load, slow ? 30_000 : 10_000);
+    return () => clearInterval(timer);
+  }, [slow, load]);
 
-  const request = async () => {
-    setRequesting(true);
-    setRequestFailed(false);
-    try {
-      const r = await fetch("/api/guest/bill-request", { method: "POST" });
-      if (r.ok) setBill((await r.json()) as GuestBill);
-      else setRequestFailed(true);
-    } catch {
-      setRequestFailed(true);
-    } finally {
-      setRequesting(false);
-    }
-  };
-
-  return { bill, request, requesting, requestFailed };
+  return { bill, setBill, ended, setEnded, reload: load };
 }
 
 interface OrderDetails {
@@ -85,7 +65,9 @@ export default function OrderStatusPage({
 }) {
   const { lang, id } = use(params);
   const dict = getDictionary(lang);
-  const { bill, request, requesting, requestFailed } = useGuestBill();
+  const { bill, setBill, ended, setEnded, reload } = useGuestBill();
+  const [paying, setPaying] = useState(false);
+  const state = billState(bill, ended);
 
   const fetchOrderState = useCallback(async (): Promise<OrderDetails> => {
     const res = await fetch(`/api/orders/${id}`);
@@ -184,25 +166,41 @@ export default function OrderStatusPage({
               </div>
             </div>
 
+            <div className="p-5 rounded-2xl bg-card border border-line text-sm text-ink space-y-3">
+              {/* One polite region: the text changes only when the bill's state does. */}
+              <p aria-live="polite" className={state === "cancelled" || state === "ended" ? "font-semibold text-danger-fg" : ""}>
+                {state === "none" && dict.pay.noBill}
+                {state === "paid" && dict.bill.paid.replace("{billNo}", String(bill?.bill_no ?? "").padStart(4, "0"))}
+                {state === "cancelled" && dict.pay.cancelled}
+                {state === "ended" && dict.pay.visitEnded}
+                {state === "claimed" && bill?.claim && claimMessage(bill.claim, dict, lang, bill.currency)}
+              </p>
+              {bill?.voided.map((v, i) => (
+                <p key={i} className="text-danger-fg">
+                  {dict.pay.removed
+                    .replace("{name}", v.option_label ? `${v.name} — ${v.option_label}` : v.name)
+                    .replace("{qty}", String(v.quantity))}
+                </p>
+              ))}
+              {(state === "open" || state === "claimed") && (
+                <Button className="w-full" onClick={() => setPaying(true)}>
+                  {dict.pay.button}
+                </Button>
+              )}
+            </div>
             {bill && (
-              <div className="p-5 rounded-2xl bg-card border border-line text-sm text-ink" aria-live="polite">
-                {bill.status === "settled" ? (
-                  <p>{dict.bill.paid.replace("{billNo}", String(bill.bill_no ?? "").padStart(4, "0"))}</p>
-                ) : bill.bill_requested_at ? (
-                  <p>{dict.bill.requested}</p>
-                ) : (
-                  <>
-                    <Button className="w-full" onClick={request} disabled={requesting}>
-                      {dict.bill.request}
-                    </Button>
-                    {requestFailed && (
-                      <p role="alert" className="mt-2 text-xs text-danger-fg">
-                        {dict.bill.requestFailed}
-                      </p>
-                    )}
-                  </>
-                )}
-              </div>
+              <PaySheet
+                lang={lang}
+                bill={bill}
+                open={paying}
+                onClose={() => setPaying(false)}
+                onUpdated={setBill}
+                onConflict={(detail) => {
+                  if (detail === VISIT_ENDED) setEnded(true);
+                  setPaying(false);
+                  void reload();
+                }}
+              />
             )}
 
             {/* Items List */}
