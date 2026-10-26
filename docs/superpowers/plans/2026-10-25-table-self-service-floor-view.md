@@ -24,7 +24,7 @@
 
 ## File map (new)
 
-- API: `src/models/service_call.py`, `src/models/pay_forward.py`, `src/services/floor.py`, `src/services/payment_details.py`, `src/services/counter.py`, `src/services/pay_forward.py`, `src/routers/floor.py`, `src/schemas/floor.py`, `src/schemas/payments.py`; migrations `0011_service_calls`, `0012_payment_claims`, `0013_counter_pickup`, `0014_pay_forward`; tests `test_floor_state.py`, `test_floor_api.py`, `test_service_calls.py`, `test_payment_details.py`, `test_payment_claims.py`, `test_settle_safeguards.py`, `test_counter.py`, `test_pay_forward.py`, `test_money_agreement.py`.
+- API: `src/models/service_call.py`, `src/models/pay_forward.py`, `src/services/floor.py`, `src/services/payment_details.py`, `src/services/counter.py`, `src/services/pay_forward.py`, `src/routers/floor.py`, `src/schemas/floor.py`, `src/schemas/payments.py`; migrations `0011_service_calls`, `0013_payment_claims`, `0014_counter_pickup`, `0015_pay_forward`; tests `test_floor_state.py`, `test_floor_api.py`, `test_service_calls.py`, `test_payment_details.py`, `test_payment_claims.py`, `test_settle_safeguards.py`, `test_counter.py`, `test_pay_forward.py`, `test_money_agreement.py`.
 - Web: `apps/owner-web/src/app/(dashboard)/floor/page.tsx`, `apps/owner-web/src/lib/floor.ts` (+test), `apps/guest-web/src/components/CallWaiter.tsx`, `apps/guest-web/src/components/PaySheet.tsx`, `apps/guest-web/src/lib/pay.ts` (+test).
 
 ---
@@ -257,7 +257,7 @@ def table_state(f: TableFacts, now: datetime) -> TileState | None:
 
 ### Task 5: Schema for claims, voids, settle accountability, payment details
 
-**Files:** Create `alembic/versions/0012_payment_claims.py`. Modify `src/models/bill.py`, `src/models/order.py`, `src/models/restaurant.py`. Test: `tests/test_schema_constraints.py`.
+**Files:** Create `alembic/versions/0013_payment_claims.py`. Modify `src/models/bill.py`, `src/models/order.py`, `src/models/restaurant.py`. Test: `tests/test_schema_constraints.py`.
 
 - [ ] **Step 1: Failing tests**: bill with `claimed_reference` of 65 chars → IntegrityError; bill `status='cancelled'` without `cancelled_at` → IntegrityError; settled bill still requires payment fields (existing test stays green); order with `voided_at` but status not `cancelled` → IntegrityError.
 - [ ] **Step 2: Implement.**
@@ -364,7 +364,7 @@ def test_sample_values_allowed_only_when_sample():
 
 ### Task 10: Schema for counter orders and pickup numbers
 
-**Files:** Create `alembic/versions/0013_counter_pickup.py`. Modify `src/models/order.py`, `src/models/bill.py`, `src/models/restaurant.py`, seeds, `scripts/seed.py`, `src/schemas/owner.py` + settings route (add `pickup_prefix`).
+**Files:** Create `alembic/versions/0014_counter_pickup.py`. Modify `src/models/order.py`, `src/models/bill.py`, `src/models/restaurant.py`, seeds, `scripts/seed.py`, `src/schemas/owner.py` + settings route (add `pickup_prefix`).
 
 - [ ] **Step 1: Failing tests**: order status `awaiting_payment` accepted; `collected_at` set while status is `placed` → IntegrityError (`chk_orders_collected`: `collected_at IS NULL OR status = 'bumped'`); duplicate (`restaurant_id`, `pickup_day`, `pickup_no`) → IntegrityError; `pickup_no` without `pickup_day` → IntegrityError; seed: each venue has exactly one `kind='counter'` table labelled "Counter" (Kehwa) / "Takeaway" (Angeethi) and `pickup_prefix` "K" / "P".
 - [ ] **Step 2: Implement.** `orders`: status check adds `awaiting_payment`; `collected_at`, `collected_by` (FK users SET NULL). `bills`: `pickup_day` Date null, `pickup_no` Integer null, `UniqueConstraint("restaurant_id","pickup_day","pickup_no", name="uq_bills_pickup_no")`, check `(pickup_no IS NULL) = (pickup_day IS NULL)`. `restaurant.pickup_prefix` Text null (1–3 uppercase letters, validated in settings). Seeds: add `{"label": "Counter", "kind": "counter"}` / `{"label": "Takeaway", "kind": "counter"}` and `"pickup_prefix"`; seeder supports `kind`.
@@ -409,7 +409,7 @@ def test_sample_values_allowed_only_when_sample():
 
 ### Task 13: Pay-it-forward ledger and handouts
 
-**Files:** Create `src/models/pay_forward.py`, `alembic/versions/0014_pay_forward.py`, `src/services/pay_forward.py`, `tests/test_pay_forward.py`. Modify seeds (`pay_forward_chai` item, Rs 250 / cost 45, category "Drinks" at Angeethi and "Chai & Kehwa" at Kehwa, `sim_weight` 0), `src/services/bills.py` (settle writes `bought`), `src/routers/floor.py` (balance + give route), `src/models/order.py` (source adds `pay_forward`), `src/services/analytics.py`, `src/services/brief.py`, `src/schemas/owner.py`, guest bill response.
+**Files:** Create `src/models/pay_forward.py`, `alembic/versions/0015_pay_forward.py`, `src/services/pay_forward.py`, `tests/test_pay_forward.py`. Modify seeds (`pay_forward_chai` item, Rs 250 / cost 45, category "Drinks" at Angeethi and "Chai & Kehwa" at Kehwa, `sim_weight` 0), `src/services/bills.py` (settle writes `bought`), `src/routers/floor.py` (balance + give route), `src/models/order.py` (source adds `pay_forward`), `src/services/analytics.py`, `src/services/brief.py`, `src/schemas/owner.py`, guest bill response.
 
 - [ ] **Step 1: Failing tests**
   - Settling a bill with 2 × pay-forward chai writes `pay_forward(kind="bought", quantity=2, order_id=…)`; balance 2; guest bill `pay_forward_count == 2`.
