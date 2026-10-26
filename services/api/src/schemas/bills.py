@@ -5,7 +5,9 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator, model_validator
+
+Method = Literal["cash", "card", "wallet", "raast", "bank_transfer"]
 
 
 class BillLine(BaseModel):
@@ -39,6 +41,24 @@ class BillListResponse(BaseModel):
     restaurant_timezone: str
 
 
+class PaymentClaim(BaseModel):
+    method: str
+    reference: str | None
+    total: Decimal
+    claimed_at: datetime
+
+
+class BillOrder(BaseModel):
+    order_id: uuid.UUID
+    placed_at: datetime
+    status: str
+    device_label: str
+    joined_late: bool
+    voided: bool
+    void_reason: str | None
+    lines: list[BillLine]
+
+
 class BillDetail(BillSummary):
     lines: list[BillLine]
     preview_standard: TaxPreview | None
@@ -54,11 +74,39 @@ class BillDetail(BillSummary):
     restaurant_city: str | None
     restaurant_timezone: str
     currency: str
+    claim: PaymentClaim | None
+    # Bill total for the claimed method now, minus what the guest said they sent; >0 still due.
+    amount_due_after_claim: Decimal | None
+    reused_reference_bill_no: int | None
+    orders: list[BillOrder]
+    settled_by_name: str | None
 
 
 class SettleBillRequest(BaseModel):
-    payment_method: Literal["cash", "card", "wallet", "raast", "bank_transfer"]
+    payment_method: Method
     payment_reference: str | None = Field(default=None, max_length=64)
+    # What the staff member saw: the server refuses with 409 if its recomputation differs.
+    expected_total: Decimal
+    expected_method: Method
+    acknowledge_reused_reference: bool = False
+
+    @model_validator(mode="after")
+    def _same_method(self) -> "SettleBillRequest":
+        if self.expected_method != self.payment_method:
+            raise ValueError("expected_method must equal payment_method")
+        return self
+
+
+class VoidOrderRequest(BaseModel):
+    reason: str
+
+    @field_validator("reason")
+    @classmethod
+    def _reason(cls, v: str) -> str:
+        v = v.strip()
+        if not 1 <= len(v) <= 200:
+            raise ValueError("Reason: 1-200 characters")
+        return v
 
 
 class GuestBillResponse(BaseModel):

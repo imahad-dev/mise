@@ -34,6 +34,11 @@ class FloorResponse(BaseModel):
     service_extra_label: str | None
 
 
+class ClearTableRequest(BaseModel):
+    # Clear even though a phone scanned the table after its last settle or clear.
+    force: bool = False
+
+
 class TableClearedResponse(BaseModel):
     table_id: uuid.UUID
     cleared_at: datetime

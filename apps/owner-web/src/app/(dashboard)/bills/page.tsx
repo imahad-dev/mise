@@ -11,13 +11,21 @@ import {
   apiError,
   billNo,
   localDateTime,
+  previewFor,
   type BillDetail,
   type BillSummary,
   type PaymentMethod,
   type TaxPreview,
 } from "../../../lib/bill";
 
-const RELOAD_EVENTS = new Set(["bill_opened", "bill_requested", "bill_settled", "order_placed"]);
+const RELOAD_EVENTS = new Set([
+  "bill_opened",
+  "bill_requested",
+  "bill_settled",
+  "order_placed",
+  "order_voided",
+  "payment_claimed",
+]);
 
 function PreviewCard({ title, preview, currency }: { title: string; preview: TaxPreview | null; currency: string }) {
   return (
@@ -112,7 +120,8 @@ export default function BillsPage() {
   }, [slug]);
 
   const settle = async () => {
-    if (!detail) return;
+    const expected = detail && previewFor(detail, method);
+    if (!detail || !expected) return;
     const forSlug = slug;
     const billId = detail.id;
     setBusy(true);
@@ -124,6 +133,9 @@ export default function BillsPage() {
         body: JSON.stringify({
           payment_method: method,
           payment_reference: method === "cash" || !reference.trim() ? null : reference.trim(),
+          // The total shown for this method: the server refuses (409) if the bill changed since.
+          expected_total: expected.total,
+          expected_method: method,
         }),
       });
       if (slugRef.current !== forSlug || selectedId.current !== billId) return;
@@ -132,9 +144,10 @@ export default function BillsPage() {
         return;
       }
       if (res.status === 409) {
+        setError(await apiError(res));
         void refetch();
         void loadDetail(billId);
-        return; // the reloaded detail shows "already settled" with its print link
+        return; // the reloaded detail shows the new total, or "already settled" with its print link
       }
       setError(await apiError(res));
     } catch {

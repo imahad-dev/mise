@@ -10,7 +10,7 @@ import pytest_asyncio
 from httpx import AsyncClient
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
-from tests.helpers import as_member
+from tests.helpers import as_member, settle
 
 from src.auth import GUEST_COOKIE_NAME, sign_value
 from src.models.bill import Bill
@@ -171,10 +171,8 @@ async def test_floor_follows_a_table(client, db_session, fv, monkeypatch):
     assert (await client.post("/api/guest/bill-request")).status_code == 200
     assert tile(await floor(client, fv), "T1")["state"] == "paying"
 
-    settle = await client.post(
-        f"/api/restaurants/{fv.r.slug}/bills/{bill_id}/settle", json={"payment_method": "cash"}
-    )
-    assert settle.status_code == 200, settle.text
+    settled = await settle(client, fv.r.slug, bill_id)
+    assert settled.status_code == 200, settled.text
     t1 = tile(await floor(client, fv), "T1")
     assert (t1["state"], t1["running_total"], t1["bill_id"]) == ("needs_clearing", None, None)
 

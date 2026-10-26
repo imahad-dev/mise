@@ -191,8 +191,12 @@ print(json.dumps(line))") || return 1
   order_id=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['id'])" "$TMP/order.json")
   local bill_id; bill_id=$(sql "SELECT bill_id FROM orders WHERE id = '$order_id'")
   [ -n "$bill_id" ] || { echo "live order $order_id has no bill"; return 1; }
+  local expected # settle confirms the cash total the bill shows
+  expected=$(curl -sf -b "$OWNER_JAR" "$API/api/restaurants/$SLUG/bills/$bill_id" |
+    python3 -c "import json,sys; print(json.load(sys.stdin)['preview_standard']['total'])") || return 1
   curl -sf -b "$OWNER_JAR" -H "Content-Type: application/json" \
-    -X POST "$API/api/restaurants/$SLUG/bills/$bill_id/settle" -d '{"payment_method": "cash"}' \
+    -X POST "$API/api/restaurants/$SLUG/bills/$bill_id/settle" \
+    -d "{\"payment_method\": \"cash\", \"expected_method\": \"cash\", \"expected_total\": \"$expected\"}" \
     -o "$TMP/bill.json" || return 1
   json_check "$TMP/bill.json" \
     "d['status'] == 'settled' and d['bill_no'] and float(d['total']) > float(d['subtotal'])" \

@@ -43,7 +43,6 @@ from src.schemas.guest import (
 from src.schemas.payments import (
     GuestBillDetail,
     GuestPaymentRequest,
-    PaymentClaim,
     PaymentDetails,
     VoidedLine,
 )
@@ -52,6 +51,7 @@ from src.services.bills import (
     VISIT_ENDED,
     active_orders,
     bill_lines,
+    claim_of,
     local_date,
     method_preview,
     method_previews,
@@ -388,14 +388,6 @@ async def _bill_detail(
         .limit(1)
     )
     is_open = bill.status == "open"
-    claim = None
-    if bill.claimed_method is not None and bill.claimed_total is not None:
-        claim = PaymentClaim(
-            method=bill.claimed_method,
-            reference=bill.claimed_reference,
-            total=bill.claimed_total,
-            claimed_at=bill.claimed_at,
-        )
     return GuestBillDetail(
         bill_no=bill.bill_no,
         status=bill.status,
@@ -409,7 +401,7 @@ async def _bill_detail(
             else []
         ),
         payment_details=PaymentDetails(**restaurant.payment_details),
-        claim=claim,
+        claim=claim_of(bill),
         voided=[
             VoidedLine(name=v.name, option_label=v.option_label, quantity=v.quantity)
             for v in voided

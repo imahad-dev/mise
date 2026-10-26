@@ -2,7 +2,7 @@
 
 import logging
 import uuid
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
@@ -11,18 +11,24 @@ from sqlalchemy import exists, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from src.models.audit import AuditLog
 from src.models.bill import Bill
 from src.models.dining_table import DiningTable
 from src.models.order import Order
 from src.models.restaurant import Restaurant
 from src.models.session import GuestSession
-from src.schemas.bills import BillLine, TaxPreview
+from src.schemas.bills import BillLine, PaymentClaim, TaxPreview
 from src.schemas.payments import MethodPreview
 from src.services.tax import PAYMENT_METHODS, TaxRateError, default_rates, payment_class, tax_for
 
 logger = logging.getLogger(__name__)
 CENTS = Decimal("0.01")
 VISIT_ENDED = "Your visit has ended — scan the table QR again"
+REUSE_WINDOW = timedelta(days=7)
+
+
+class BillChanged(Exception):  # noqa: N818 - a signal, not an error
+    """The staff member's expected total no longer matches the server's recomputation."""
 
 
 async def session_is_current(db: AsyncSession, session: GuestSession) -> bool:
@@ -195,14 +201,57 @@ def local_date(restaurant: Restaurant, at: datetime) -> date:
     return at.astimezone(ZoneInfo(restaurant.timezone)).date()
 
 
+def claim_of(bill: Bill) -> PaymentClaim | None:
+    if bill.claimed_method is None or bill.claimed_total is None:
+        return None
+    return PaymentClaim(
+        method=bill.claimed_method,
+        reference=bill.claimed_reference,
+        total=bill.claimed_total,
+        claimed_at=bill.claimed_at,
+    )
+
+
+async def reused_reference_bill_no(
+    db: AsyncSession, restaurant_id: uuid.UUID, bill_id: uuid.UUID, reference: str | None
+) -> int | None:
+    """Number of another settled bill of this venue (last 7 days) that used the reference."""
+    ref = (reference or "").strip().upper()
+    if not ref:
+        return None
+    return await db.scalar(
+        select(Bill.bill_no)
+        .where(
+            Bill.restaurant_id == restaurant_id,
+            Bill.id != bill_id,
+            Bill.status == "settled",
+            Bill.settled_at > func.clock_timestamp() - REUSE_WINDOW,
+            (func.upper(func.trim(Bill.payment_reference)) == ref)
+            | (func.upper(func.trim(Bill.claimed_reference)) == ref),
+        )
+        .order_by(Bill.settled_at.desc())
+        .limit(1)
+    )
+
+
+def bill_no_label(n: int | None) -> str:
+    return "Bill —" if n is None else f"Bill {n:04d}"
+
+
 async def settle_bill(
     db: AsyncSession,
     bill_id: uuid.UUID,
     restaurant: Restaurant,
     method: str,
     reference: str | None,
+    expected_total: Decimal,
+    user_id: uuid.UUID,
+    acknowledge_reused: bool = False,
 ) -> Bill:
-    """Lock the bill, snapshot tax and mark it settled. Caller commits."""
+    """Lock the bill, recompute, check the staff's expectation, snapshot tax. Caller commits.
+
+    Raises BillChanged (bill still locked, nothing modified) when expected_total differs.
+    """
     bill = (
         await db.execute(
             select(Bill)
@@ -214,6 +263,8 @@ async def settle_bill(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bill not found")
     if bill.status == "settled":
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Bill already settled")
+    if bill.status != "open":
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Bill is not open")
     # Database clock (same as orders.placed_at), read after the lock: every order on this
     # bill committed before it.
     now = (await db.execute(select(func.clock_timestamp()))).scalar_one()
@@ -237,6 +288,14 @@ async def settle_bill(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="No tax rate configured"
         ) from e
     tax = tax.quantize(CENTS)
+    if subtotal + tax != expected_total:
+        raise BillChanged
+    reused = await reused_reference_bill_no(db, restaurant.id, bill.id, reference)
+    if reused is not None and not acknowledge_reused:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Reference already used on {bill_no_label(reused)}",
+        )
     bill.status = "settled"
     bill.payment_method = method
     bill.payment_reference = reference
@@ -246,5 +305,19 @@ async def settle_bill(
     bill.tax_amount = tax
     bill.total = subtotal + tax
     bill.settled_at = now
+    bill.settled_by = user_id
+    db.add(
+        AuditLog(
+            restaurant_id=restaurant.id,
+            event_type="bill_settled",
+            actor=f"user:{user_id}",
+            payload={
+                "bill_id": str(bill.id),
+                "method": method,
+                "total": str(bill.total),
+                "reused_reference_bill_no": reused,
+            },
+        )
+    )
     await db.flush()
     return bill

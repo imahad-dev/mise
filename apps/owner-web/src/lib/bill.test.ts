@@ -1,7 +1,8 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { PAYMENT_METHODS, SAMPLE_BILL_FOOTER, billNo, sampleBillText, taxLabel } from "./bill";
+import { formatPrice } from "ui";
+import { PAYMENT_METHODS, SAMPLE_BILL_FOOTER, billNo, previewFor, sampleBillPieces, sampleBillText, taxLabel } from "./bill";
 
 describe("sample bill", () => {
   const bill = {
@@ -47,5 +48,36 @@ describe("bill helpers", () => {
       const source = readFileSync(fileURLToPath(new URL(file, import.meta.url)), "utf8").replace(SAMPLE_BILL_FOOTER, "");
       expect(source, file).not.toMatch(/invoice|FBR|compliant/i);
     }
+  });
+});
+
+// Shared with services/api/tests/test_money_agreement.py (scripts/gen_tax_vectors.py writes it).
+const vectorsUrl = new URL("../../../../data/test-vectors/tax_vectors.json", import.meta.url);
+const { vectors } = JSON.parse(readFileSync(fileURLToPath(vectorsUrl), "utf8")) as {
+  vectors: { method: string; payment_class: string; subtotal: string; tax_rate: string; tax_amount: string; total: string; currency: string }[];
+};
+
+describe("the UI shows the API's tax numbers verbatim", () => {
+  it("has the 50 shared vectors", () => {
+    expect(vectors).toHaveLength(50);
+  });
+  it.each(vectors)("$method $subtotal at $tax_rate", (v) => {
+    const pieces = sampleBillPieces({
+      restaurant_name: "Venue", restaurant_city: null, restaurant_timezone: "Asia/Karachi", currency: v.currency,
+      bill_no: 1, table_label: null, settled_at: null, lines: [],
+      subtotal: v.subtotal, tax_rate: v.tax_rate, tax_amount: v.tax_amount, total: v.total, payment_method: v.method,
+    });
+    expect(pieces.totals).toEqual([
+      { label: "Subtotal", amount: formatPrice(Number(v.subtotal), v.currency) },
+      { label: taxLabel(v.tax_rate, v.method), amount: formatPrice(Number(v.tax_amount), v.currency) },
+      { label: "Total", amount: formatPrice(Number(v.total), v.currency) },
+    ]);
+    // Settle confirms the preview of the method's class, never a total computed here.
+    const preview = { payment_class: v.payment_class, tax_rate: v.tax_rate, tax_amount: v.tax_amount, total: v.total } as const;
+    const other = { ...preview, total: "-1" };
+    const bill = v.payment_class === "digital"
+      ? { preview_digital: preview, preview_standard: other }
+      : { preview_standard: preview, preview_digital: other };
+    expect(previewFor(bill as Parameters<typeof previewFor>[0], v.method)?.total).toBe(v.total);
   });
 });

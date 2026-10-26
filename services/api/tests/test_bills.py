@@ -12,7 +12,7 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy import delete, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
-from tests.helpers import as_member, make_user, sign_in
+from tests.helpers import as_member, make_user, settle, sign_in
 
 from src.auth import GUEST_COOKIE_NAME, sign_value
 from src.database import async_session_factory, get_db
@@ -229,9 +229,7 @@ async def test_settle_by_card_snapshots_tax_and_next_order_opens_new_bill(
     bill_id = await bill_id_of(db_session, o1)
     bill_no = await bill_no_of(db_session, bill_id)
     await as_member(client, db_session, venue.r.id, "staff")
-    url = bills_url(venue, f"/{bill_id}/settle")
-
-    resp = await client.post(url, json={"payment_method": "card", "payment_reference": "AUTH123"})
+    resp = await settle(client, venue.r.slug, bill_id, "card", payment_reference="AUTH123")
     assert resp.status_code == 200, resp.text
     d = resp.json()
     assert d["status"] == "settled"
@@ -247,7 +245,7 @@ async def test_settle_by_card_snapshots_tax_and_next_order_opens_new_bill(
     assert stored.status == "settled"
     assert stored.total == Decimal("2657.00")
 
-    again = await client.post(url, json={"payment_method": "cash"})
+    again = await settle(client, venue.r.slug, bill_id, "cash")
     assert again.status_code == 409
 
     settled = (await client.get(bills_url(venue, "?status=settled"))).json()["bills"]
@@ -287,28 +285,22 @@ async def test_settle_validation(client, db_session, venue):
     bill_t2 = await bill_id_of(db_session, o2)
     await as_member(client, db_session, venue.r.id, "staff")
 
-    too_long = await client.post(
-        bills_url(venue, f"/{bill_t1}/settle"),
-        json={"payment_method": "cash", "payment_reference": "x" * 65},
-    )
+    too_long = await settle(client, venue.r.slug, bill_t1, payment_reference="x" * 65)
     assert too_long.status_code == 422
     unknown = await client.post(
-        bills_url(venue, f"/{bill_t1}/settle"), json={"payment_method": "bitcoin"}
+        bills_url(venue, f"/{bill_t1}/settle"),
+        json={"payment_method": "bitcoin", "expected_method": "bitcoin", "expected_total": "70"},
     )
     assert unknown.status_code == 422
 
     order = (await db_session.execute(select(Order).where(Order.id == o2))).scalar_one()
     order.status = "cancelled"
     await db_session.flush()
-    empty = await client.post(
-        bills_url(venue, f"/{bill_t2}/settle"), json={"payment_method": "cash"}
-    )
+    empty = await settle(client, venue.r.slug, bill_t2)
     assert empty.status_code == 422
     assert empty.json()["detail"] == "No active orders"
 
-    missing = await client.post(
-        bills_url(venue, f"/{uuid.uuid4()}/settle"), json={"payment_method": "cash"}
-    )
+    missing = await settle(client, venue.r.slug, uuid.uuid4())
     assert missing.status_code == 404
 
     for bid in (bill_t1, bill_t2):
@@ -321,9 +313,7 @@ async def test_no_tax_rate_keeps_bill_open(client, db_session, venue, monkeypatc
     await as_member(client, db_session, venue.r.id, "staff")
     monkeypatch.setattr("src.services.bills.default_rates", lambda: ())
 
-    resp = await client.post(
-        bills_url(venue, f"/{bill_id}/settle"), json={"payment_method": "card"}
-    )
+    resp = await settle(client, venue.r.slug, bill_id, "card")
     assert resp.status_code == 422
     assert resp.json()["detail"] == "No tax rate configured"
 
@@ -369,9 +359,7 @@ async def test_guest_request_bill_and_status(client, db_session, venue):
         ("T2", None),
     ]
 
-    settled = await client.post(
-        bills_url(venue, f"/{bill_id}/settle"), json={"payment_method": "cash"}
-    )
+    settled = await settle(client, venue.r.slug, bill_id)
     assert settled.status_code == 200, settled.text
     guest(client, venue.session_t1)
     assert (await client.get("/api/guest/bill")).json()["status"] == "settled"
@@ -495,18 +483,28 @@ async def test_parallel_settle_and_order(committed_venue):
                 first = await guest_client.post("/api/orders", json=order_body())
                 assert first.status_code == 201, first.text
                 bill_id = await committed_bill_of(first.json()["id"])
+                # Staff saw the bill with the first order only (60 + 16% = 70).
                 settle_req = staff_client.post(
                     f"/api/restaurants/{slug}/bills/{bill_id}/settle",
-                    json={"payment_method": "cash"},
+                    json={
+                        "payment_method": "cash",
+                        "expected_method": "cash",
+                        "expected_total": "70.00",
+                    },
                 )
                 order_req = guest_client.post("/api/orders", json=order_body())
                 # Alternate who starts first so both lock orders (order then settle, and
                 # settle then order) are exercised.
                 if n % 2:
-                    racing, settle = await asyncio.gather(order_req, settle_req)
+                    racing, settled = await asyncio.gather(order_req, settle_req)
                 else:
-                    settle, racing = await asyncio.gather(settle_req, order_req)
-                assert settle.status_code == 200, settle.text
+                    settled, racing = await asyncio.gather(settle_req, order_req)
+                if settled.status_code == 409:
+                    # The order joined first: staff confirm the fresh total instead.
+                    assert settled.json()["detail"] == "Bill changed", settled.text
+                    assert racing.status_code == 201
+                    settled = await settle(staff_client, slug, bill_id)
+                assert settled.status_code == 200, settled.text
                 # Before the settle it joins the bill; after it, the visit has ended.
                 assert racing.status_code in (201, 409), racing.text
                 if racing.status_code == 409:
@@ -570,10 +568,8 @@ async def test_other_venue_bill_is_404_under_my_slug(client, db_session, venue):
     await as_member(client, db_session, venue.r.id, "owner")
     detail = await client.get(bills_url(venue, f"/{their_bill}"))
     assert detail.status_code == 404
-    settle = await client.post(
-        bills_url(venue, f"/{their_bill}/settle"), json={"payment_method": "cash"}
-    )
-    assert settle.status_code == 404
+    refused = await settle(client, venue.r.slug, their_bill)
+    assert refused.status_code == 404
     stored = (await db_session.execute(select(Bill).where(Bill.id == their_bill))).scalar_one()
     assert stored.status == "open"
     assert stored.settled_at is None
@@ -583,9 +579,7 @@ async def test_settled_bill_shows_snapshot_subtotal(client, db_session, venue):
     o1 = await place(client, venue.session_t1, [(venue.karahi, 1, venue.full), (venue.naan, 6)])
     bill_id = await bill_id_of(db_session, o1)
     await as_member(client, db_session, venue.r.id, "staff")
-    resp = await client.post(
-        bills_url(venue, f"/{bill_id}/settle"), json={"payment_method": "cash"}
-    )
+    resp = await settle(client, venue.r.slug, bill_id)
     assert resp.status_code == 200, resp.text
 
     order = (await db_session.execute(select(Order).where(Order.id == o1))).scalar_one()

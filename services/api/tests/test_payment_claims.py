@@ -11,7 +11,7 @@ import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
-from tests.helpers import as_member
+from tests.helpers import as_member, settle
 from tests.test_bills import Venue, _item, bill_id_of, guest, place
 
 from src.auth import GUEST_COOKIE_NAME, sign_value
@@ -197,9 +197,7 @@ async def test_no_bill_is_404_and_settled_bill_is_409(client, db_session, pv):
 
     bill_id = await bill_id_of(db_session, await order_2340(client, pv))
     await as_member(client, db_session, pv.r.id, "staff")
-    settled = await client.post(
-        f"/api/restaurants/{pv.r.slug}/bills/{bill_id}/settle", json={"payment_method": "cash"}
-    )
+    settled = await settle(client, pv.r.slug, bill_id)
     assert settled.status_code == 200, settled.text
     guest(client, pv.session_t1)
     assert (await client.post(PAY, json={"method": "cash"})).status_code == 409
@@ -234,9 +232,7 @@ async def test_brief_facts_never_contain_a_claimed_reference(client, db_session,
     ref = "SECRETREF9876"
     assert (await client.post(PAY, json={"method": "raast", "reference": ref})).status_code == 200
     await as_member(client, db_session, pv.r.id, "staff")
-    settled = await client.post(
-        f"/api/restaurants/{pv.r.slug}/bills/{bill_id}/settle", json={"payment_method": "raast"}
-    )
+    settled = await settle(client, pv.r.slug, bill_id, "raast")
     assert settled.status_code == 200, settled.text
     # Yesterday, so the bill falls inside the brief window (which ends before today).
     day = timedelta(days=1)
@@ -321,9 +317,7 @@ async def test_stale_phone_cannot_touch_the_next_partys_bill(client, db_session,
     a_bill = await bill_id_of(db_session, await order_2340(client, pv))
     await as_member(client, db_session, pv.r.id, "staff")
     base = f"/api/restaurants/{pv.r.slug}"
-    assert (
-        await client.post(f"{base}/bills/{a_bill}/settle", json={"payment_method": "cash"})
-    ).status_code == 200
+    assert (await settle(client, pv.r.slug, a_bill)).status_code == 200
     assert (await client.post(f"{base}/tables/{pv.t1.id}/clear")).status_code == 200
 
     b = await new_session(db_session, pv)

@@ -1,13 +1,12 @@
 """Guest payment: per-method totals, the guest's claim and the guest bill."""
 
 import re
-from datetime import datetime
 from decimal import Decimal
 from typing import Literal
 
 from pydantic import BaseModel, Field, model_validator
 
-from src.schemas.bills import BillLine, GuestBillResponse, TaxPreview
+from src.schemas.bills import BillLine, GuestBillResponse, PaymentClaim, TaxPreview
 
 # ASCII only: Unicode digits, control characters and markup are refused.
 REFERENCE = re.compile(r"[A-Za-z0-9 _\-./#]{1,64}", re.ASCII)
@@ -17,13 +16,6 @@ NEEDS_REFERENCE = {"wallet", "raast", "bank_transfer"}
 class MethodPreview(TaxPreview):
     method: str
     label: str
-
-
-class PaymentClaim(BaseModel):
-    method: str
-    reference: str | None
-    total: Decimal
-    claimed_at: datetime
 
 
 class PaymentDetails(BaseModel):

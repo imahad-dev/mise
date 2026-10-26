@@ -42,6 +42,29 @@ export interface BillDetail extends BillSummary {
   restaurant_city: string | null;
   restaurant_timezone: string;
   currency: string;
+  claim: PaymentClaim | null;
+  amount_due_after_claim: string | null;
+  reused_reference_bill_no: number | null;
+  orders: BillOrder[];
+  settled_by_name: string | null;
+}
+
+export interface PaymentClaim {
+  method: string;
+  reference: string | null;
+  total: string;
+  claimed_at: string;
+}
+
+export interface BillOrder {
+  order_id: string;
+  placed_at: string;
+  status: string;
+  device_label: string;
+  joined_late: boolean;
+  voided: boolean;
+  void_reason: string | null;
+  lines: BillLine[];
 }
 
 export const SAMPLE_BILL_FOOTER =
@@ -56,6 +79,12 @@ export const PAYMENT_METHODS = [
 ] as const;
 
 export type PaymentMethod = (typeof PAYMENT_METHODS)[number]["value"];
+
+const DIGITAL = new Set(["card", "wallet", "raast"]);
+
+/** The server's preview for this method; settle sends its total back as expected_total. */
+export const previewFor = (bill: Pick<BillDetail, "preview_standard" | "preview_digital">, method: string) =>
+  DIGITAL.has(method) ? bill.preview_digital : bill.preview_standard;
 
 export const paymentLabel = (method: string | null) =>
   PAYMENT_METHODS.find((m) => m.value === method)?.label ?? method ?? "";

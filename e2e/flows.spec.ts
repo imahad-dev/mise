@@ -60,8 +60,9 @@ test.describe.serial("two venues: guest, kitchen, bills, owner", () => {
       }
       const bills = await (await staff.get(`/api/restaurants/${slug}/bills?status=open`)).json();
       for (const b of bills.bills) {
+        const bill = await (await staff.get(`/api/restaurants/${slug}/bills/${b.id}`)).json();
         const res = await staff.post(`/api/restaurants/${slug}/bills/${b.id}/settle`, {
-          data: { payment_method: "cash" },
+          data: { payment_method: "cash", expected_method: "cash", expected_total: bill.preview_standard.total },
         });
         expect(res.ok(), `settle open bill ${b.id}`).toBeTruthy();
       }

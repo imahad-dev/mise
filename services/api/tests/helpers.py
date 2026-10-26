@@ -40,3 +40,24 @@ async def as_member(
     user = await make_user(db, [(restaurant_id, role)])
     sign_in(client, user)
     return user
+
+
+DIGITAL = {"card", "wallet", "raast"}
+
+
+async def settle(
+    client: AsyncClient, slug: str, bill_id: uuid.UUID | str, method: str = "cash", **extra
+):
+    """Settle as staff do: read the bill, then confirm the total shown for the method."""
+    base = f"/api/restaurants/{slug}/bills/{bill_id}"
+    detail = await client.get(base)
+    preview = None
+    if detail.status_code == 200:
+        preview = detail.json()["preview_digital" if method in DIGITAL else "preview_standard"]
+    body = {
+        "payment_method": method,
+        "expected_method": method,
+        "expected_total": preview["total"] if preview else "0",
+        **extra,
+    }
+    return await client.post(f"{base}/settle", json=body)

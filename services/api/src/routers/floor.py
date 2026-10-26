@@ -19,6 +19,7 @@ from src.models.service_call import ServiceCall
 from src.models.session import GuestSession
 from src.redis_client import publish_event
 from src.schemas.floor import (
+    ClearTableRequest,
     FloorResponse,
     FloorTile,
     ServiceCallResponse,
@@ -157,10 +158,14 @@ async def get_floor(
 @router.post(
     "/tables/{table_id}/clear",
     response_model=TableClearedResponse,
-    responses={**RESPONSES, 409: {"description": "Settle the bill first"}},
+    responses={
+        **RESPONSES,
+        409: {"description": "Settle the bill first, or new guests are already seated"},
+    },
 )
 async def clear_table(
     table_id: uuid.UUID,
+    payload: ClearTableRequest | None = None,
     access: RestaurantAccess = Depends(member_access),
     db: AsyncSession = Depends(get_db),
 ) -> TableClearedResponse:
@@ -179,7 +184,25 @@ async def clear_table(
     )
     if open_bill is not None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Settle the bill first")
-    table.cleared_at = await db.scalar(select(func.clock_timestamp()))
+    now = await db.scalar(select(func.clock_timestamp()))
+    if not (payload and payload.force):
+        # A live phone scanned after the last reset: clearing would end the new party's visit.
+        last_settled = await db.scalar(
+            select(func.max(Bill.settled_at)).where(
+                Bill.table_id == table.id, Bill.status == "settled"
+            )
+        )
+        resets = [t for t in (table.cleared_at, last_settled) if t is not None]
+        seated = select(GuestSession.id).where(
+            GuestSession.table_id == table.id, GuestSession.expires_at > now
+        )
+        if resets:
+            seated = seated.where(GuestSession.created_at > max(resets))
+        if await db.scalar(seated.limit(1)) is not None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT, detail="New guests are already seated"
+            )
+    table.cleared_at = now
     db.add(
         AuditLog(
             restaurant_id=rid,
