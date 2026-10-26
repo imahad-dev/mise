@@ -211,11 +211,17 @@ async def get_guest_menu(
             )
         )
 
-    table_label = None
+    table_label = table_kind = None
     if session.table_id is not None:
-        table_label = (
-            await db.execute(select(DiningTable.label).where(DiningTable.id == session.table_id))
-        ).scalar_one_or_none()
+        row = (
+            await db.execute(
+                select(DiningTable.label, DiningTable.kind).where(
+                    DiningTable.id == session.table_id
+                )
+            )
+        ).one_or_none()
+        if row is not None:
+            table_label, table_kind = row
 
     return GuestMenuResponse(
         restaurant=GuestMenuRestaurant(
@@ -223,6 +229,8 @@ async def get_guest_menu(
         ),
         table_id=session.table_id,
         table_label=table_label,
+        table_kind=table_kind,
+        service_extra_label=restaurant.service_extra_label,
         items=menu_responses,
     )
 

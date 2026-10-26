@@ -4,13 +4,15 @@ import React, { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { AppShell, Card, type NavGroup } from "ui";
-import { VenueProvider, useVenue } from "../../lib/venue";
+import { AppShell, Badge, Card, type AppShellProps, type NavGroup } from "ui";
+import { VenueProvider, useVenue, useSlugRef } from "../../lib/venue";
+import type { FloorResponse } from "../../lib/floor";
 
-const NAV: NavGroup[] = [
+const navGroups = (floorLabel: React.ReactNode): NavGroup[] => [
   {
     label: "Service",
     items: [
+      { href: "/floor", label: floorLabel },
       { href: "/bills", label: "Bills" },
       { href: "/", label: "Live orders" },
       { href: "/kitchen", label: "Kitchen display ↗" },
@@ -32,6 +34,55 @@ const NAV: NavGroup[] = [
   },
   { label: "Setup", items: [{ href: "/tables", label: "Tables & QR" }] },
 ];
+
+/** Red + amber floor tiles for the current venue, polled every 30 s; null until known. */
+function useFloorCount(): number | null {
+  const { venue } = useVenue();
+  const slug = venue?.slug;
+  const slugRef = useSlugRef(slug);
+  const [count, setCount] = useState<number | null>(null);
+
+  useEffect(() => {
+    setCount(null);
+    if (!slug) return;
+    let seq = 0;
+    const load = async () => {
+      const mine = ++seq;
+      try {
+        const res = await fetch(`/api/restaurants/${slug}/floor`);
+        if (!res.ok) return;
+        const body = (await res.json()) as FloorResponse;
+        if (mine === seq && slugRef.current === slug) setCount(body.counts.red + body.counts.amber);
+      } catch {
+        // keep the last count; the next poll retries
+      }
+    };
+    void load();
+    const timer = setInterval(load, 30_000);
+    return () => {
+      seq++; // drop responses still in flight for this venue
+      clearInterval(timer);
+    };
+  }, [slug, slugRef]);
+
+  return count;
+}
+
+/** AppShell with the "Floor (n)" badge; polls once for both the sidebar and the phone tab bar. */
+function DashboardShell(props: Omit<AppShellProps, "groups">) {
+  const count = useFloorCount();
+  const floor = (
+    <span className="flex items-center justify-between gap-2">
+      Floor
+      {count ? (
+        <Badge className="bg-danger-bg text-danger-fg" aria-label={`${count} tables need attention`}>
+          {count}
+        </Badge>
+      ) : null}
+    </span>
+  );
+  return <AppShell groups={navGroups(floor)} {...props} />;
+}
 
 function VenueSwitcher() {
   const { venues, venue, select } = useVenue();
@@ -104,8 +155,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   return (
     <VenueProvider>
-      <AppShell
-        groups={NAV}
+      <DashboardShell
         currentPath={pathname}
         linkAs={Link}
         banner={
@@ -133,7 +183,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         }
       >
         <VenueGate onSignOut={handleLogout}>{children}</VenueGate>
-      </AppShell>
+      </DashboardShell>
     </VenueProvider>
   );
 }

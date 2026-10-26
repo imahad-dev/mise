@@ -79,4 +79,17 @@ export interface TranslationDict {
     paid: string;
     requestFailed: string;
   };
+  call: {
+    button: string;
+    help: string;
+    water: string;
+    /** Used when the venue has no service_extra_label. */
+    extra: string;
+    /** Contains {time}. */
+    called: string;
+    /** Contains {seconds}. */
+    wait: string;
+    already: string;
+    failed: string;
+  };
 }

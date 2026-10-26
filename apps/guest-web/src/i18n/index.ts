@@ -82,5 +82,9 @@ export function getDictionary(locale: string | undefined | null): TranslationDic
       ...en.bill,
       ...(raw.bill || {}),
     },
+    call: {
+      ...en.call,
+      ...(raw.call || {}),
+    },
   };
 }

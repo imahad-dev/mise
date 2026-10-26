@@ -2,7 +2,7 @@ import React from "react";
 
 export interface NavItem {
   href: string;
-  label: string;
+  label: React.ReactNode;
 }
 
 export interface NavGroup {

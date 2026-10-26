@@ -3,6 +3,7 @@
 import React, { use, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AllergenChip } from "../../../components/allergen-chip";
+import { CallWaiter } from "../../../components/CallWaiter";
 import { ChatPanel } from "../../../components/chat-panel";
 import { getDictionary } from "../../../i18n";
 import { Badge, Button, Sheet, formatPrice as formatAmount } from "ui";
@@ -53,6 +54,8 @@ interface MenuResponse {
   };
   table_id?: string | null;
   table_label?: string | null;
+  table_kind?: string | null;
+  service_extra_label?: string | null;
   items: MenuItem[];
 }
 
@@ -232,12 +235,19 @@ export default function GuestMenuPage({
     <div className="min-h-screen bg-paper pb-28 text-ink">
       <header className="sticky top-0 z-30 border-b border-line bg-paper/95 px-4 pt-4 backdrop-blur sm:px-6">
         <div className="mx-auto max-w-3xl">
-          {menu.table_label && (
-            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-muted">
-              {dict.ui.table}: {menu.table_label}
-            </p>
-          )}
-          <h1 className="text-2xl text-ink">{menu.restaurant.name}</h1>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              {menu.table_label && (
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-muted">
+                  {dict.ui.table}: {menu.table_label}
+                </p>
+              )}
+              <h1 className="text-2xl text-ink">{menu.restaurant.name}</h1>
+            </div>
+            {menu.table_kind === "table" && (
+              <CallWaiter lang={lang} extraLabel={menu.service_extra_label ?? null} />
+            )}
+          </div>
           <p className="mt-0.5 text-xs text-ink-muted">{dict.menu.taxNote}</p>
           <nav aria-label={dict.ui.menuTitle} className="-mx-1 mt-3 flex gap-2 overflow-x-auto pb-3">
             {categories.map((cat) => (

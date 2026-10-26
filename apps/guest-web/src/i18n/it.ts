@@ -83,4 +83,14 @@ export const it: TranslationDict = {
     paid: "Pagato · Conto n. {billNo} · grazie",
     requestFailed: "Impossibile chiedere il conto. Chiedi a un cameriere.",
   },
+  call: {
+    button: "Chiama il cameriere",
+    help: "Ho bisogno di aiuto",
+    water: "Acqua, per favore",
+    extra: "Altro",
+    called: "Cameriere chiamato · {time}",
+    wait: "Puoi chiamare di nuovo tra {seconds} s",
+    already: "Un cameriere sta già arrivando",
+    failed: "Impossibile chiamare un cameriere. Fai un cenno al personale.",
+  },
 };

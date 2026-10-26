@@ -83,4 +83,14 @@ export const en: TranslationDict = {
     paid: "Paid · Bill no. {billNo} · thank you",
     requestFailed: "Couldn't request the bill. Please ask a waiter.",
   },
+  call: {
+    button: "Call waiter",
+    help: "Need help",
+    water: "Water, please",
+    extra: "Something else",
+    called: "Waiter called · {time}",
+    wait: "You can call again in {seconds} s",
+    already: "A waiter is already on the way",
+    failed: "Couldn't call a waiter. Please wave to staff.",
+  },
 };

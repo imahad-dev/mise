@@ -96,6 +96,8 @@ class GuestMenuResponse(BaseModel):
     restaurant: GuestMenuRestaurant
     table_id: uuid.UUID | None = None
     table_label: str | None = None
+    table_kind: str | None = None
+    service_extra_label: str | None = None
     items: list[GuestMenuItemResponse]
 
 

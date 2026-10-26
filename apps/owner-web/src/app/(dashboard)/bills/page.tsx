@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Badge, Button, Card, PageHeader, Sheet, formatPrice } from "ui";
@@ -99,6 +99,17 @@ export default function BillsPage() {
     setOpen(true);
     void loadDetail(id);
   };
+
+  // "Open bill" on the Floor links here as /bills?bill={id}: open that bill's sheet once the venue is known.
+  // window.location instead of useSearchParams, which would need a Suspense boundary for the build.
+  const linkedBill = useRef(false);
+  useEffect(() => {
+    if (!slug || linkedBill.current) return;
+    linkedBill.current = true;
+    const id = new URLSearchParams(window.location.search).get("bill");
+    if (id) select(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per page load
+  }, [slug]);
 
   const settle = async () => {
     if (!detail) return;

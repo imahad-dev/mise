@@ -171,6 +171,9 @@ async def test_guest_session_flow_and_no_unit_cost(
     assert resp_patch_sess.json()["language"] == "it"
     assert_no_unit_cost(resp_patch_sess.json())
 
+    seeded_restaurant.service_extra_label = "More napkins / cutlery"
+    await db_session.flush()
+
     # 4. GET /api/guest/menu
     resp_menu = await client.get("/api/guest/menu")
     assert resp_menu.status_code == 200
@@ -185,6 +188,8 @@ async def test_guest_session_flow_and_no_unit_cost(
     }
     assert menu_data["table_id"] == str(table.id)
     assert menu_data["table_label"] == table.label
+    assert menu_data["table_kind"] == "table"
+    assert menu_data["service_extra_label"] == "More napkins / cutlery"
 
 
 @pytest.mark.asyncio
