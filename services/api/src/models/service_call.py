@@ -21,6 +21,7 @@ class ServiceCall(Base):
             postgresql_where=text("resolved_at IS NULL"),
         ),
         Index("idx_service_call_restaurant", "restaurant_id", "created_at"),
+        Index("idx_service_call_table_created", "table_id", "created_at"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(

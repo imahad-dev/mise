@@ -52,6 +52,7 @@ class Bill(Base):
             postgresql_where=text("status = 'open'"),
         ),
         Index("idx_bills_restaurant_status", "restaurant_id", "status", "opened_at"),
+        Index("idx_bills_table_settled", "table_id", "settled_at"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(

@@ -1,6 +1,7 @@
 """Guest session management, guest menu, AI chat and bill endpoints."""
 
 import json
+import math
 from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
@@ -297,7 +298,7 @@ async def request_bill(
     if bill is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No open bill")
     if bill.bill_requested_at is None:
-        bill.bill_requested_at = datetime.now(UTC)
+        bill.bill_requested_at = await db.scalar(select(func.clock_timestamp()))
     await db.commit()
     await publish_event(
         f"kitchen:{session.restaurant_id}",
@@ -390,10 +391,11 @@ async def create_service_call(
     ).scalar_one_or_none()
     if latest is not None and latest.resolved_at is None:
         raise on_the_way
-    if latest is not None and now - latest.created_at < CALL_COOLDOWN:
+    if latest is not None and (wait := CALL_COOLDOWN - (now - latest.created_at)) > timedelta(0):
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="Please wait a minute before calling again",
+            headers={"Retry-After": str(math.ceil(wait.total_seconds()))},
         )
     call = ServiceCall(
         restaurant_id=session.restaurant_id,

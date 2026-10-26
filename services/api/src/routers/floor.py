@@ -39,8 +39,10 @@ LEVEL_ORDER = {"red": 0, "amber": 1, "none": 2}
 
 def _natural(label: str) -> list:
     """T2 sorts before T10."""
+    # Odd pieces of the split are the [0-9] runs, so int() never sees "²" or other digits.
     return [
-        (0, int(p), "") if p.isdigit() else (1, 0, p.lower()) for p in re.split(r"(\d+)", label)
+        (0, int(p), "") if i % 2 else (1, 0, p.lower())
+        for i, p in enumerate(re.split(r"([0-9]+)", label))
     ]
 
 

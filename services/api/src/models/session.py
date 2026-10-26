@@ -25,6 +25,7 @@ class GuestSession(Base):
         Index("idx_guest_session_restaurant_id", "restaurant_id"),
         Index("idx_guest_session_table_id", "table_id"),
         Index("idx_guest_session_cleanup", "restaurant_id", "expires_at"),
+        Index("idx_guest_session_table_created", "table_id", "created_at"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(

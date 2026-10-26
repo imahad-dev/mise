@@ -8,7 +8,7 @@ from decimal import Decimal
 
 import pytest_asyncio
 from httpx import AsyncClient
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from tests.helpers import as_member
 
@@ -132,6 +132,8 @@ def tile(data: dict, label: str) -> dict:
 
 def test_natural_label_order():
     assert sorted(["T10", "T2", "F1", "T1"], key=_natural) == ["F1", "T1", "T2", "T10"]
+    # "²" is a digit to str.isdigit() but not a [0-9] run: it sorts, never crashes int().
+    assert sorted(["T²", "T2", "T1"], key=_natural) == ["T1", "T2", "T²"]
 
 
 async def test_floor_follows_a_table(client, db_session, fv, monkeypatch):
@@ -210,3 +212,47 @@ async def test_clear_refuses_open_bill_and_other_venues(client, db_session, fv):
     assert resp.status_code == 404
     resp = await client.post(f"/api/restaurants/{fv.r.slug}/tables/{uuid.uuid4()}/clear")
     assert resp.status_code == 404
+
+
+async def test_cancelled_orders_do_not_drive_the_tile(client, db_session, fv):
+    s1 = await seat(db_session, fv, fv.t1)
+    cancelled = await order(client, s1, fv.naan)
+    kept = await order(client, s1, fv.naan)
+    await db_session.execute(
+        update(Order)
+        .where(Order.id == cancelled)
+        .values(status="cancelled", placed_at=func.now() - timedelta(minutes=30))
+    )
+    await as_member(client, db_session, fv.r.id, "staff")
+    t1 = tile(await floor(client, fv), "T1")
+    assert (t1["state"], t1["level"], t1["running_total"]) == ("ordered", "none", "60.00")
+
+    bump = await client.post(f"/api/restaurants/{fv.r.slug}/kitchen/orders/{kept}/bump")
+    assert bump.status_code == 200, bump.text
+    assert tile(await floor(client, fv), "T1")["state"] == "served"
+
+
+async def test_simulated_bills_without_table_do_not_affect_tiles(client, db_session, fv):
+    db_session.add_all(
+        [
+            Bill(
+                restaurant_id=fv.r.id,
+                table_id=None,
+                source="simulated",
+                status="settled",
+                payment_method="cash",
+                subtotal=Decimal("60.00"),
+                total=Decimal("60.00"),
+                settled_at=func.now(),
+            ),
+            Bill(restaurant_id=fv.r.id, table_id=None, source="simulated", status="open"),
+        ]
+    )
+    await db_session.flush()
+    await as_member(client, db_session, fv.r.id, "staff")
+    d = await floor(client, fv)
+    assert [(t["label"], t["state"]) for t in d["tiles"]] == [
+        ("T1", "free"),
+        ("T2", "free"),
+        ("T3", "free"),
+    ]
