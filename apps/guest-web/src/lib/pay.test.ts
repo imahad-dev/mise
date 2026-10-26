@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { formatPrice } from "ui";
 import { getDictionary } from "../i18n";
-import { billState, claimMessage, copyText, detailsFor, isValidReference, needsReference, percent, type GuestBill } from "./pay";
+import { billState, claimMessage, referenceFor, copyText, detailsFor, isValidReference, needsReference, percent, type GuestBill } from "./pay";
 
 const en = getDictionary("en");
 const claim = (method: "cash" | "card" | "wallet" | "raast" | "bank_transfer") => ({
@@ -40,6 +40,13 @@ describe("pay helpers", () => {
     expect(detailsFor("raast", d).map((x) => x.key)).toEqual(["raast_id", "account_title"]);
     expect(detailsFor("bank_transfer", d).map((x) => x.key)).toEqual(["iban", "account_title"]);
     expect(detailsFor("cash", d)).toEqual([]);
+  });
+
+  it("clears the reference on a method switch, restoring the claim's own", () => {
+    const raast = claim("raast");
+    expect(referenceFor("wallet", raast)).toBe("");
+    expect(referenceFor("raast", raast)).toBe("TX123");
+    expect(referenceFor("raast", null)).toBe("");
   });
 
   it("formats tax rates as percentages", () => {

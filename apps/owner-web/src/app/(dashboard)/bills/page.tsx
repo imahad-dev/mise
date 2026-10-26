@@ -15,10 +15,12 @@ import {
   claimChip,
   claimWarning,
   localDateTime,
+  nextFormState,
   paymentLabel,
   previewFor,
   settlePayload,
   voidReason,
+  warningKey,
   type BillDetail,
   type BillOrder,
   type BillSummary,
@@ -61,8 +63,9 @@ export default function BillsPage() {
   const [voidBusy, setVoidBusy] = useState(false);
   // The bill the sheet shows; late responses for any other bill are dropped.
   const selectedId = useRef<string | null>(null);
-  // The bill whose method and reference were pre-filled from the claim (once per opening).
-  const prefilled = useRef<string | null>(null);
+  // The bill the sheet last showed, and whether staff edited method or reference since opening it.
+  const shown = useRef<BillDetail | null>(null);
+  const touched = useRef(false);
   const printHref = (id: string) => `/bills/${id}/print?venue=${encodeURIComponent(slug ?? "")}`;
 
   const fetchBills = useCallback(async (): Promise<{ bills: BillSummary[]; restaurant_timezone: string }> => {
@@ -91,15 +94,35 @@ export default function BillsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reload only when the tab changes
   }, [view]);
 
-  const show = (body: BillDetail) => {
+  /** Show a (re)loaded bill; changed is true when the server said the bill changed (settle 409). */
+  const show = (body: BillDetail, changed = false) => {
+    const prev = shown.current?.id === body.id ? shown.current : null;
+    shown.current = body;
     setDetail(body);
-    if (prefilled.current !== body.id) {
+    if (warningKey(prev) !== warningKey(body)) {
+      // New warnings need a new check: an earlier tick never carries over.
+      setAcknowledged(false);
+      setRefusedReference(false);
+    }
+    if (!prev) {
       // Method pre-selected from the guest's claim; staff can change it.
-      prefilled.current = body.id;
+      touched.current = false;
       const claimed = PAYMENT_METHODS.find((m) => m.value === body.claim?.method)?.value;
       setMethod(claimed ?? "cash");
       setReference(body.claim?.reference ?? "");
+      return;
     }
+    const next = nextFormState(prev.claim, body.claim, touched.current);
+    if (next.apply) {
+      setMethod(next.apply.method);
+      setReference(next.apply.reference);
+    }
+    const totals = (d: BillDetail) => d.methods.map((m) => `${m.method}:${m.total}`).join();
+    const notices = [
+      ...(next.notice ? [next.notice] : []),
+      ...(changed || totals(prev) !== totals(body) ? [BILL_CHANGED] : []),
+    ];
+    if (notices.length) setNotice(notices.join(" · "));
   };
 
   const loadDetail = async (id: string) => {
@@ -122,7 +145,8 @@ export default function BillsPage() {
 
   const select = (id: string) => {
     selectedId.current = id;
-    prefilled.current = null;
+    shown.current = null;
+    touched.current = false;
     setDetail(null);
     setError(null);
     setNotice(null);
@@ -173,8 +197,7 @@ export default function BillsPage() {
         void refetch();
         if (conflict?.detail === "Bill changed" && conflict.bill) {
           // The server's fresh bill replaces what staff saw; they confirm again against the new total.
-          show(conflict.bill);
-          setNotice(BILL_CHANGED);
+          show(conflict.bill, true);
           return;
         }
         const message = typeof conflict?.detail === "string" ? conflict.detail : "The bill changed. Check it again.";
@@ -368,6 +391,10 @@ export default function BillsPage() {
               </div>
             )}
 
+            {detail.status === "open" && detail.claim && (
+              <p className="text-sm font-semibold text-ink">Guest claims: {claimChip(detail.claim)}</p>
+            )}
+
             {detail.status === "open" && NEEDS_REFERENCE.has(method) && selected && (
               <p className="text-sm font-semibold text-ink">
                 Check your JazzCash / bank app for ref {ref || "…"} and {formatPrice(Number(selected.total), detail.currency)} before
@@ -471,6 +498,7 @@ export default function BillsPage() {
                             value={m.value}
                             checked={method === m.value}
                             onChange={() => {
+                              touched.current = true;
                               setMethod(m.value);
                               setNotice(null);
                             }}
@@ -495,6 +523,7 @@ export default function BillsPage() {
                       value={reference}
                       maxLength={64}
                       onChange={(e) => {
+                        touched.current = true;
                         setReference(e.target.value);
                         setRefusedReference(false);
                         setAcknowledged(false);

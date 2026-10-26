@@ -134,6 +134,28 @@ export function settlePayload(bill: Pick<BillDetail, "methods">, method: Payment
   };
 }
 
+/** Changes whenever the reused-reference warnings could change: an acknowledgement never outlives it. */
+export const warningKey = (d: Pick<BillDetail, "reused_reference_bill_no" | "reused_reference_open_bill_no" | "claim"> | null) =>
+  d ? `${d.reused_reference_bill_no ?? ""}|${d.reused_reference_open_bill_no ?? ""}|${d.claim?.reference ?? ""}` : "";
+
+const sameClaim = (a: PaymentClaim | null, b: PaymentClaim | null) =>
+  (a?.method ?? null) === (b?.method ?? null) && (a?.reference ?? null) === (b?.reference ?? null);
+
+/**
+ * A live refresh brought a claim: follow it while staff haven't edited method or reference,
+ * otherwise keep their choice and tell them.
+ */
+export function nextFormState(
+  prev: PaymentClaim | null,
+  next: PaymentClaim | null,
+  touched: boolean,
+): { apply: { method: PaymentMethod; reference: string } | null; notice: string | null } {
+  if (!next || sameClaim(prev, next)) return { apply: null, notice: null };
+  if (touched) return { apply: null, notice: `The guest changed their payment to ${claimChip(next)} — check before confirming` };
+  const method = PAYMENT_METHODS.find((m) => m.value === next.method)?.value ?? "cash";
+  return { apply: { method, reference: next.reference ?? "" }, notice: null };
+}
+
 export const VOID_REASONS = ["Wrong table", "Guest changed mind", "Duplicate", "Other"] as const;
 
 /** The reason sent with a void: the picked one, or the typed text for Other (1-200 characters). */

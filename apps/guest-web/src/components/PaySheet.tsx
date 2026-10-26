@@ -10,6 +10,7 @@ import {
   isValidReference,
   needsReference,
   percent,
+  referenceFor,
   type GuestBill,
   type Method,
 } from "../lib/pay";
@@ -71,6 +72,10 @@ export function PaySheet({ lang, bill, open, onClose, onUpdated, onConflict }: P
   };
 
   const choose = (method: Method) => {
+    if (method !== selected) {
+      setCopied(null);
+      setReference(referenceFor(method, bill.claim));
+    }
     setSelected(method);
     setError(null);
     if (!needsReference(method)) void claim(method, null);
@@ -90,7 +95,6 @@ export function PaySheet({ lang, bill, open, onClose, onUpdated, onConflict }: P
   const isOpen = bill.status === "open";
   const preview = bill.methods.find((m) => m.method === selected) ?? null;
   const details = selected ? detailsFor(selected, bill.payment_details) : [];
-  const claimed = bill.claim && bill.claim.method === selected ? bill.claim : null;
 
   return (
     <Sheet open={open} onClose={onClose} title={dict.pay.button}>
@@ -190,7 +194,8 @@ export function PaySheet({ lang, bill, open, onClose, onUpdated, onConflict }: P
         </p>
       )}
       <p role="status" className="text-sm font-semibold text-ink">
-        {isOpen && claimed && !posting ? claimMessage(claimed, dict, lang, bill.currency) : ""}
+        {/* The table's latest claim, from any phone: polling keeps it current. */}
+        {isOpen && bill.claim && !posting ? claimMessage(bill.claim, dict, lang, bill.currency) : ""}
       </p>
     </Sheet>
   );

@@ -79,6 +79,10 @@ export function detailsFor(method: Method, d: PaymentDetails): { key: keyof Tran
   return keys.flatMap((key) => (d[key] ? [{ key, value: d[key] as string }] : []));
 }
 
+/** The reference field after switching to a method: the claim's own reference for its method, else empty. */
+export const referenceFor = (method: Method, claim: PaymentClaim | null) =>
+  claim && claim.method === method ? (claim.reference ?? "") : "";
+
 /** Copy to the clipboard; false (never a throw) when the browser has no clipboard or refuses. */
 export async function copyText(text: string): Promise<boolean> {
   try {

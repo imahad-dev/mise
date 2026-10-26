@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { formatPrice } from "ui";
 import {
   PAYMENT_METHODS, SAMPLE_BILL_FOOTER, amountDueText, billNo, claimChip, claimWarning, previewFor, sampleBillPieces, sampleBillText,
-  settlePayload, taxLabel, voidReason,
+  nextFormState, settlePayload, taxLabel, voidReason, warningKey,
 } from "./bill";
 
 describe("sample bill", () => {
@@ -118,6 +118,25 @@ describe("confirm sheet helpers", () => {
       payment_method: "raast", payment_reference: "TX1", expected_total: "2527.00", expected_method: "raast", acknowledge_reused_reference: true,
     });
     expect(settlePayload({ methods }, "card", "", false)).toBeNull();
+  });
+  it("keys the reused-reference warnings so an acknowledgement resets when they change", () => {
+    const d = { reused_reference_bill_no: 1, reused_reference_open_bill_no: null, claim: claim("raast", "TX1") };
+    expect(warningKey(d)).toBe(warningKey({ ...d }));
+    expect(warningKey(d)).not.toBe(warningKey({ ...d, reused_reference_bill_no: 2 }));
+    expect(warningKey(d)).not.toBe(warningKey({ ...d, reused_reference_open_bill_no: 3 }));
+    expect(warningKey(d)).not.toBe(warningKey({ ...d, claim: claim("raast", "TX2") }));
+    expect(warningKey(null)).toBe("");
+  });
+  it("follows a live claim unless staff edited the form", () => {
+    const raast = claim("raast", "TX1");
+    expect(nextFormState(raast, { ...raast, claimed_at: "later" }, false)).toEqual({ apply: null, notice: null });
+    expect(nextFormState(null, null, false)).toEqual({ apply: null, notice: null });
+    expect(nextFormState(raast, claim("cash"), false)).toEqual({ apply: { method: "cash", reference: "" }, notice: null });
+    expect(nextFormState(null, raast, false)).toEqual({ apply: { method: "raast", reference: "TX1" }, notice: null });
+    expect(nextFormState(raast, claim("raast", "TX9"), true)).toEqual({
+      apply: null,
+      notice: "The guest changed their payment to Guest paying: Raast QR · ref TX9 — check before confirming",
+    });
   });
   it("builds the void reason", () => {
     expect(voidReason("Wrong table", "ignored")).toBe("Wrong table");
