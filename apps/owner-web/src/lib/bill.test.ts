@@ -72,12 +72,12 @@ describe("the UI shows the API's tax numbers verbatim", () => {
       { label: taxLabel(v.tax_rate, v.method), amount: formatPrice(Number(v.tax_amount), v.currency) },
       { label: "Total", amount: formatPrice(Number(v.total), v.currency) },
     ]);
-    // Settle confirms the preview of the method's class, never a total computed here.
-    const preview = { payment_class: v.payment_class, tax_rate: v.tax_rate, tax_amount: v.tax_amount, total: v.total } as const;
-    const other = { ...preview, total: "-1" };
-    const bill = v.payment_class === "digital"
-      ? { preview_digital: preview, preview_standard: other }
-      : { preview_standard: preview, preview_digital: other };
-    expect(previewFor(bill as Parameters<typeof previewFor>[0], v.method)?.total).toBe(v.total);
+    // Settle confirms the server's preview for the method, never a total computed here.
+    const methods = PAYMENT_METHODS.map((m) => ({
+      method: m.value, label: m.label, payment_class: "standard" as const, tax_rate: "0", tax_amount: "0",
+      total: m.value === v.method ? v.total : "-1",
+    }));
+    expect(previewFor({ methods }, v.method)?.total).toBe(v.total);
+    expect(previewFor({ methods: methods.filter((m) => m.method !== v.method) }, v.method)).toBeNull();
   });
 });

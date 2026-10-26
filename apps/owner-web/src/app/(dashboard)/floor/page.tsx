@@ -19,6 +19,9 @@ import {
   type FloorTile,
 } from "../../../lib/floor";
 
+// The one refusal that clearing anyway (force) may override; an open bill must be settled first.
+const NEW_GUESTS = "New guests are already seated";
+
 interface Loaded {
   floor: FloorResponse;
   loadedAt: number;
@@ -31,6 +34,8 @@ export default function FloorPage() {
   const [now, setNow] = useState(() => Date.now());
   const [busy, setBusy] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  // A refused "Mark cleared": the server's reason, and whether clearing anyway is allowed.
+  const [refusedClear, setRefusedClear] = useState<{ table: FloorTile; message: string } | null>(null);
 
   const fetchFloor = useCallback(async (): Promise<Loaded> => {
     const res = await fetch(`/api/restaurants/${slug}/floor`);
@@ -56,23 +61,44 @@ export default function FloorPage() {
     return () => clearInterval(tick);
   }, []);
 
-  useEffect(() => setActionError(null), [slug]);
+  useEffect(() => {
+    setActionError(null);
+    setRefusedClear(null);
+  }, [slug]);
 
-  const act = async (key: string, path: string) => {
+  /** POST and reload; null when the venue changed meanwhile or the network failed. */
+  const post = async (key: string, path: string, body?: object): Promise<Response | null> => {
     const forSlug = slug;
     setBusy(key);
     setActionError(null);
+    setRefusedClear(null);
     try {
-      const res = await fetch(`/api/restaurants/${forSlug}${path}`, { method: "POST" });
-      if (slugRef.current !== forSlug) return;
-      // 409: someone else already resolved or cleared it, which is what this tap wanted.
-      if (!res.ok && res.status !== 409) setActionError(await apiError(res));
+      const res = await fetch(`/api/restaurants/${forSlug}${path}`, {
+        method: "POST",
+        ...(body ? { headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) } : {}),
+      });
+      if (slugRef.current !== forSlug) return null;
       void refetch();
+      return res;
     } catch {
       if (slugRef.current === forSlug) setActionError("Network error. Try again.");
+      return null;
     } finally {
       setBusy(null);
     }
+  };
+
+  const resolve = async (t: FloorTile) => {
+    const res = await post(t.table_id, `/service-calls/${t.call_id}/resolve`);
+    // 409: someone else already resolved it, which is what this tap wanted.
+    if (res && !res.ok && res.status !== 409) setActionError(await apiError(res));
+  };
+
+  const clear = async (t: FloorTile, force = false) => {
+    const res = await post(t.table_id, `/tables/${t.table_id}/clear`, force ? { force: true } : undefined);
+    if (!res || res.ok) return;
+    if (res.status === 409) setRefusedClear({ table: t, message: await apiError(res) });
+    else setActionError(await apiError(res));
   };
 
   const currency = venue?.currency ?? "PKR";
@@ -101,6 +127,21 @@ export default function FloorPage() {
         <p role="alert" className="rounded-xl border border-danger-fg bg-danger-bg p-3 text-xs text-danger-fg">
           {actionError}
         </p>
+      )}
+      {refusedClear && (
+        <div role="alert" className="flex flex-wrap items-center gap-3 rounded-xl border border-warn-fg bg-warn-bg p-3 text-sm text-warn-fg">
+          <span className="font-semibold">
+            {refusedClear.table.label}: {refusedClear.message}
+          </span>
+          {refusedClear.message === NEW_GUESTS && (
+            <Button disabled={busy !== null} onClick={() => clear(refusedClear.table, true)}>
+              Clear anyway
+            </Button>
+          )}
+          <button type="button" className="btn-ghost" onClick={() => setRefusedClear(null)}>
+            Dismiss
+          </button>
+        </div>
       )}
 
       {data && tiles.length === 0 ? (
@@ -131,7 +172,7 @@ export default function FloorPage() {
                       <Button
                         aria-label={`Done, ${t.label}`}
                         disabled={busy !== null}
-                        onClick={() => act(t.table_id, `/service-calls/${t.call_id}/resolve`)}
+                        onClick={() => resolve(t)}
                       >
                         Done
                       </Button>
@@ -140,7 +181,7 @@ export default function FloorPage() {
                       <Button
                         aria-label={`Mark cleared, ${t.label}`}
                         disabled={busy !== null}
-                        onClick={() => act(t.table_id, `/tables/${t.table_id}/clear`)}
+                        onClick={() => clear(t)}
                       >
                         Mark cleared
                       </Button>

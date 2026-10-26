@@ -120,8 +120,12 @@ export default function BillsPage() {
   }, [slug]);
 
   const settle = async () => {
-    const expected = detail && previewFor(detail, method);
-    if (!detail || !expected) return;
+    if (!detail) return;
+    const expected = previewFor(detail, method);
+    if (!expected) {
+      setError("No tax rate configured");
+      return;
+    }
     const forSlug = slug;
     const billId = detail.id;
     setBusy(true);
