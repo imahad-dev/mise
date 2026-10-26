@@ -24,6 +24,7 @@ from src.models.menu import MenuItem, MenuItemOption, MenuTranslation
 from src.models.restaurant import Restaurant
 from src.models.user import Membership, User
 from src.passwords import hash_password
+from src.services.payment_details import validate_payment_details
 from src.services.simulator import SEED_ITEM_NAMESPACE, SimAssumptions
 
 logger = logging.getLogger(__name__)
@@ -114,6 +115,8 @@ async def seed_data(
     items_data = data.get("items", [])
     profile = simulation_profile(data)
 
+    payment_details = validate_payment_details(rest_data.get("payment_details", {}))
+
     # 1. Upsert Restaurant
     stmt_rest = select(Restaurant).where(Restaurant.slug == rest_data["slug"])
     res_rest = await session.execute(stmt_rest)
@@ -126,6 +129,7 @@ async def seed_data(
             city=rest_data.get("city"),
             tax_jurisdiction=rest_data.get("tax_jurisdiction"),
             service_extra_label=rest_data.get("service_extra_label"),
+            payment_details=payment_details,
             timezone=rest_data.get("timezone", "Asia/Karachi"),
             currency=rest_data.get("currency", "PKR"),
             languages=rest_data.get("languages", ["en"]),
@@ -141,6 +145,8 @@ async def seed_data(
         restaurant.city = rest_data.get("city")
         restaurant.tax_jurisdiction = rest_data.get("tax_jurisdiction")
         restaurant.service_extra_label = rest_data.get("service_extra_label")
+        if "payment_details" in rest_data:
+            restaurant.payment_details = payment_details
         restaurant.timezone = rest_data.get("timezone", "Asia/Karachi")
         restaurant.currency = rest_data.get("currency", "PKR")
         restaurant.languages = rest_data.get("languages", ["en"])

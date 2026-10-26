@@ -6,6 +6,14 @@
     "city": "Islamabad",
     "tax_jurisdiction": "ICT",
     "service_extra_label": "More napkins / cutlery",
+    "payment_details": {
+      "sample": true,
+      "raast_id": "0000 SAMPLE",
+      "jazzcash": "0000 SAMPLE",
+      "easypaisa": "0000 SAMPLE",
+      "iban": "PK00 SAMPLE 0000 0000 0000",
+      "account_title": "Sample account — demo only"
+    },
     "timezone": "Asia/Karachi",
     "currency": "PKR",
     "languages": [

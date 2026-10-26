@@ -29,6 +29,8 @@ from src.schemas.owner import (
     OwnerMenuTranslation,
     OwnerTableResponse,
     PatchMenuItemRequest,
+    PatchSettingsRequest,
+    SettingsResponse,
     SimulateOrdersRequest,
     SimulateOrdersResponse,
     StatusOkResponse,
@@ -37,6 +39,7 @@ from src.schemas.owner import (
 )
 from src.services.brief import compute_brief, compute_whatif
 from src.services.menu_ingest import ingest_menu_from_image
+from src.services.payment_details import PaymentDetailsError, validate_payment_details
 from src.services.simulator import SimAssumptions, persist_simulation
 
 router = APIRouter(prefix="/api/restaurants/{slug}", tags=["owner"])
@@ -358,6 +361,70 @@ async def list_tables(
         )
         for t in tables
     ]
+
+
+@router.get(
+    "/settings",
+    response_model=SettingsResponse,
+    status_code=status.HTTP_200_OK,
+    responses={
+        401: {"description": "Unauthenticated"},
+        403: {"description": "Unauthorized (Owner only)"},
+        404: {"description": "Restaurant not found"},
+    },
+)
+async def get_settings(access: RestaurantAccess = Depends(owner_access)) -> SettingsResponse:
+    r = access.restaurant
+    return SettingsResponse(
+        payment_details=r.payment_details, service_extra_label=r.service_extra_label
+    )
+
+
+@router.patch(
+    "/settings",
+    response_model=SettingsResponse,
+    status_code=status.HTTP_200_OK,
+    responses={
+        401: {"description": "Unauthenticated"},
+        403: {"description": "Unauthorized (Owner only)"},
+        404: {"description": "Restaurant not found"},
+        422: {"description": "Invalid setting; detail.field names it"},
+    },
+)
+async def patch_settings(
+    payload: PatchSettingsRequest,
+    access: RestaurantAccess = Depends(owner_access),
+    db: AsyncSession = Depends(get_db),
+) -> SettingsResponse:
+    """Update payment details and the extra call reason. Omitted fields stay as they are."""
+    restaurant = access.restaurant
+    if payload.payment_details is not None:
+        raw = dict(payload.payment_details)
+        if settings.demo_mode and restaurant.slug in settings.demo_restaurant_slugs:
+            raw["sample"] = True  # demo venues can never show real-looking payment details
+        try:
+            cleaned = validate_payment_details(raw)
+        except PaymentDetailsError as e:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail={"field": e.field, "message": e.message},
+            ) from e
+        db.add(
+            AuditLog(
+                restaurant_id=restaurant.id,
+                event_type="owner_payment_details_edit",
+                actor=f"user:{access.user.id}",
+                payload={"before": restaurant.payment_details, "after": cleaned},
+            )
+        )
+        restaurant.payment_details = cleaned
+    if payload.service_extra_label is not None:
+        restaurant.service_extra_label = payload.service_extra_label
+    await db.commit()
+    return SettingsResponse(
+        payment_details=restaurant.payment_details,
+        service_extra_label=restaurant.service_extra_label,
+    )
 
 
 # --- Checkpoint D: AI endpoints ---

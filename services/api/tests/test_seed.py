@@ -159,6 +159,11 @@ async def test_both_venues_seed_idempotently_with_stable_ids(db_session: AsyncSe
     )
     assert labels["angeethi-house"] == "More naan / roti"
     assert labels["kehwa-and-crumb"] == "More napkins / cutlery"
+    details = dict(
+        (await db_session.execute(select(Restaurant.slug, Restaurant.payment_details))).all()
+    )
+    assert details["angeethi-house"]["sample"] is True
+    assert details["kehwa-and-crumb"]["raast_id"] == "0000 SAMPLE"
 
     karahi_id = uuid.uuid5(SEED_ITEM_NAMESPACE, "angeethi-house:chicken_karahi")
     karahi = (

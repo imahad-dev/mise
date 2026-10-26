@@ -3,9 +3,9 @@
 import uuid
 from datetime import datetime
 from decimal import Decimal
-from typing import Literal
+from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
 
 class OwnerMenuTranslation(BaseModel):
@@ -60,6 +60,18 @@ class OwnerTableResponse(BaseModel):
     guest_url: str
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class PatchSettingsRequest(BaseModel):
+    payment_details: dict[str, Any] | None = None
+    service_extra_label: (
+        Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=40)] | None
+    ) = None
+
+
+class SettingsResponse(BaseModel):
+    payment_details: dict[str, Any]
+    service_extra_label: str | None
 
 
 class StatusOkResponse(BaseModel):
