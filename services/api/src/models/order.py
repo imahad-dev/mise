@@ -42,6 +42,7 @@ class Order(Base):
             name="chk_orders_bumped_at_required",
         ),
         CheckConstraint("source IN ('live', 'simulated')", name="chk_orders_source"),
+        CheckConstraint("voided_at IS NULL OR status = 'cancelled'", name="chk_orders_void"),
         UniqueConstraint(
             "guest_session_id", "idempotency_key", name="orders_guest_idempotency_key"
         ),
@@ -104,6 +105,11 @@ class Order(Base):
         server_default=func.now(),
     )
     bumped_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    voided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    voided_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    void_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

@@ -46,6 +46,11 @@ class Restaurant(Base):
         nullable=False,
         server_default=text("'{}'::jsonb"),
     )
+    payment_details: Mapped[dict[str, Any]] = mapped_column(
+        JSONB,
+        nullable=False,
+        server_default=text("'{}'::jsonb"),
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

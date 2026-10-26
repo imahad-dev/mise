@@ -686,3 +686,70 @@ async def test_table_kind_checked(db_session):
     db_session.add(DiningTable(restaurant_id=rid, label="X", qr_token="qr-x-kind", kind="bar"))
     with pytest.raises(IntegrityError):
         await db_session.flush()
+
+
+@pytest.mark.asyncio
+async def test_bill_claimed_reference_over_64_rejected(db_session: AsyncSession):
+    rid = await _create_test_restaurant(db_session)
+    await assert_violates(
+        db_session,
+        "INSERT INTO bills (restaurant_id, source, claimed_reference) "
+        "VALUES (:rid, 'simulated', :ref)",
+        {"rid": rid, "ref": "x" * 65},
+        "chk_bills_claimed_reference_len",
+    )
+
+
+@pytest.mark.asyncio
+async def test_bill_claimed_method_checked(db_session: AsyncSession):
+    rid = await _create_test_restaurant(db_session)
+    await assert_violates(
+        db_session,
+        "INSERT INTO bills (restaurant_id, source, claimed_method) "
+        "VALUES (:rid, 'simulated', 'btc')",
+        {"rid": rid},
+        "chk_bills_claimed_method",
+    )
+
+
+@pytest.mark.asyncio
+async def test_bill_cancelled_requires_cancelled_at(db_session: AsyncSession):
+    rid = await _create_test_restaurant(db_session)
+    await assert_violates(
+        db_session,
+        "INSERT INTO bills (restaurant_id, source, status) VALUES (:rid, 'simulated', 'cancelled')",
+        {"rid": rid},
+        "chk_bills_cancelled_complete",
+    )
+    await db_session.execute(
+        text(
+            "INSERT INTO bills (restaurant_id, source, status, cancelled_at) "
+            "VALUES (:rid, 'simulated', 'cancelled', now())"
+        ),
+        {"rid": rid},
+    )
+
+
+@pytest.mark.asyncio
+async def test_bill_settled_still_requires_payment_fields(db_session: AsyncSession):
+    rid = await _create_test_restaurant(db_session)
+    await assert_violates(
+        db_session,
+        "INSERT INTO bills (restaurant_id, source, status) VALUES (:rid, 'simulated', 'settled')",
+        {"rid": rid},
+        "chk_bills_settled_complete",
+    )
+
+
+@pytest.mark.asyncio
+async def test_order_void_requires_cancelled_status(db_session: AsyncSession):
+    rid = await _create_test_restaurant(db_session)
+    sid = await _create_test_session(db_session, rid)
+    sql = (
+        "INSERT INTO orders (guest_session_id, restaurant_id, status, total, idempotency_key, "
+        "payload_hash, voided_at) VALUES (:sid, :rid, :status, 1.00, 'void-k', 'h', now())"
+    )
+    await assert_violates(
+        db_session, sql, {"sid": sid, "rid": rid, "status": "placed"}, "chk_orders_void"
+    )
+    await db_session.execute(text(sql), {"sid": sid, "rid": rid, "status": "cancelled"})

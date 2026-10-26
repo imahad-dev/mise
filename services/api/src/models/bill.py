@@ -25,7 +25,7 @@ from src.database import Base
 class Bill(Base):
     __tablename__ = "bills"
     __table_args__ = (
-        CheckConstraint("status IN ('open', 'settled')", name="chk_bills_status"),
+        CheckConstraint("status IN ('open', 'settled', 'cancelled')", name="chk_bills_status"),
         CheckConstraint("source IN ('live', 'simulated')", name="chk_bills_source"),
         CheckConstraint(
             "payment_method IS NULL OR payment_method IN "
@@ -36,9 +36,22 @@ class Bill(Base):
             "source = 'simulated' OR bill_no IS NOT NULL", name="chk_bills_live_number"
         ),
         CheckConstraint(
-            "status = 'open' OR (payment_method IS NOT NULL AND total IS NOT NULL "
+            "status <> 'settled' OR (payment_method IS NOT NULL AND total IS NOT NULL "
             "AND settled_at IS NOT NULL)",
             name="chk_bills_settled_complete",
+        ),
+        CheckConstraint(
+            "status <> 'cancelled' OR cancelled_at IS NOT NULL",
+            name="chk_bills_cancelled_complete",
+        ),
+        CheckConstraint(
+            "claimed_method IS NULL OR claimed_method IN "
+            "('cash','card','wallet','raast','bank_transfer')",
+            name="chk_bills_claimed_method",
+        ),
+        CheckConstraint(
+            "claimed_reference IS NULL OR length(claimed_reference) <= 64",
+            name="chk_bills_claimed_reference_len",
         ),
         CheckConstraint(
             "payment_reference IS NULL OR length(payment_reference) <= 64",
@@ -77,6 +90,18 @@ class Bill(Base):
     tax_rate: Mapped[Decimal | None] = mapped_column(Numeric(5, 4), nullable=True)
     tax_amount: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
     total: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
+    claimed_method: Mapped[str | None] = mapped_column(Text, nullable=True)
+    claimed_reference: Mapped[str | None] = mapped_column(Text, nullable=True)
+    claimed_total: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
+    claimed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    settled_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    cancelled_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    cancel_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     opened_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
