@@ -91,3 +91,20 @@ def test_counter_tables_are_not_tiles():
 def test_open_bill_with_no_active_orders_falls_through_to_seated():
     f = facts(open_bill=True, has_active_orders=False, last_session_at=m(0))
     assert table_state(f, m(1)).state == "seated"
+
+
+def test_open_bill_is_never_free_even_after_clear():
+    f = facts(open_bill=True, has_active_orders=False, cleared_at=m(5), last_session_at=m(0))
+    assert table_state(f, m(6)).state == "seated"
+
+
+def test_paying_stays_paying_when_all_orders_voided():
+    f = facts(open_bill=True, has_active_orders=False, paying_since=m(0))
+    assert table_state(f, m(1)).state == "paying"
+
+
+def test_paying_and_clearing_thresholds_are_inclusive():
+    paying = facts(open_bill=True, has_active_orders=True, paying_since=m(0))
+    assert [table_state(paying, m(n)).level for n in (2, 3, 5)] == ["none", "amber", "red"]
+    clearing = facts(last_settled_at=m(0))
+    assert [table_state(clearing, m(n)).level for n in (1, 2, 5)] == ["none", "amber", "red"]

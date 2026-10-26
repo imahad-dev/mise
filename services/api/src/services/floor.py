@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from decimal import Decimal
 from typing import Literal
 
 State = Literal["free", "seated", "ordered", "served", "paying", "needs_clearing", "called"]
@@ -31,7 +32,7 @@ class TableFacts:
     last_settled_at: datetime | None
     call_reason: str | None
     call_since: datetime | None
-    running_total: object | None
+    running_total: Decimal | None
 
 
 @dataclass(frozen=True)
@@ -69,7 +70,8 @@ def table_state(f: TableFacts, now: datetime) -> TileState | None:
         if f.has_active_orders:
             return TileState("served", None, "none")
     reset = max((t for t in (f.cleared_at, f.last_settled_at) if t is not None), default=None)
-    if _after(f.last_session_at, reset):
+    # An open bill (e.g. every order voided) is never Free.
+    if f.open_bill or _after(f.last_session_at, reset):
         return TileState("seated", f.last_session_at, _level("seated", f.last_session_at, now))
     if _after(f.last_settled_at, f.cleared_at):
         return TileState(
