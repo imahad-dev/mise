@@ -9,7 +9,7 @@ from decimal import Decimal
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from tests.helpers import as_member
 from tests.test_bills import Venue, _item, bill_id_of, guest, place
@@ -24,6 +24,7 @@ from src.models.menu import MenuItem, MenuItemOption, MenuTranslation
 from src.models.order import Order
 from src.models.restaurant import Restaurant
 from src.models.session import GuestSession
+from src.services.bills import VISIT_ENDED, session_is_current
 
 SAMPLE = {"sample": True, "raast_id": "0000 SAMPLE", "account_title": "Sample account"}
 PAY = "/api/guest/bill/payment"
@@ -237,6 +238,21 @@ async def test_brief_facts_never_contain_a_claimed_reference(client, db_session,
         f"/api/restaurants/{pv.r.slug}/bills/{bill_id}/settle", json={"payment_method": "raast"}
     )
     assert settled.status_code == 200, settled.text
+    # Yesterday, so the bill falls inside the brief window (which ends before today).
+    day = timedelta(days=1)
+    await db_session.execute(
+        update(Bill)
+        .where(Bill.id == bill_id)
+        .values(
+            opened_at=Bill.opened_at - day,
+            claimed_at=Bill.claimed_at - day,
+            settled_at=Bill.settled_at - day,
+        )
+    )
+    await db_session.execute(
+        update(Order).where(Order.bill_id == bill_id).values(placed_at=Order.placed_at - day)
+    )
+    await db_session.flush()
 
     seen: list = []
 
@@ -247,10 +263,122 @@ async def test_brief_facts_never_contain_a_claimed_reference(client, db_session,
     monkeypatch.setattr(brief, "narrate", capture)
     result = await brief.compute_brief(db_session, pv.r, None)
     assert seen
+    assert sum(seen[0]["payment_mix"]["bills"].values()) >= 1
     dumped = json.dumps([seen, result], default=str)
     assert ref not in dumped
     assert "9876" not in dumped
     assert "0000 SAMPLE" not in dumped
+
+
+# --- A visit ends when the table is settled or cleared ---
+
+
+async def new_session(db: AsyncSession, v: Venue) -> GuestSession:
+    """A phone scanning table 1 now (clock time: the test runs in one transaction)."""
+    s = GuestSession(
+        restaurant_id=v.r.id,
+        table_id=v.t1.id,
+        language="en",
+        expires_at=datetime.now(UTC) + timedelta(hours=2),
+        created_at=await db.scalar(select(func.clock_timestamp())),
+    )
+    db.add(s)
+    await db.flush()
+    return s
+
+
+async def test_session_is_current_rule(client, db_session, pv):
+    a = pv.session_t1
+    assert await session_is_current(db_session, a)  # table never reset
+    order_id = await order_2340(client, pv)
+    bill_id = await bill_id_of(db_session, order_id)
+    pv.t1.cleared_at = await db_session.scalar(select(func.clock_timestamp()))
+    await db_session.flush()
+    # Reset after the session began, but it has an active order on the open bill.
+    assert await session_is_current(db_session, a)
+    await db_session.execute(update(Order).where(Order.id == order_id).values(status="cancelled"))
+    await db_session.flush()
+    assert not await session_is_current(db_session, a)  # only a cancelled order left
+    await db_session.execute(update(Order).where(Order.id == order_id).values(status="placed"))
+    await db_session.execute(
+        update(Bill)
+        .where(Bill.id == bill_id)
+        .values(
+            status="settled",
+            payment_method="cash",
+            total=Decimal("2714.00"),
+            settled_at=func.clock_timestamp(),
+        )
+    )
+    await db_session.flush()
+    assert not await session_is_current(db_session, a)  # its bill was settled
+    assert await session_is_current(db_session, await new_session(db_session, pv))
+    assert await session_is_current(db_session, pv.session_t2)  # other table untouched
+
+
+async def test_stale_phone_cannot_touch_the_next_partys_bill(client, db_session, pv):
+    a = pv.session_t1
+    a_bill = await bill_id_of(db_session, await order_2340(client, pv))
+    await as_member(client, db_session, pv.r.id, "staff")
+    base = f"/api/restaurants/{pv.r.slug}"
+    assert (
+        await client.post(f"{base}/bills/{a_bill}/settle", json={"payment_method": "cash"})
+    ).status_code == 200
+    assert (await client.post(f"{base}/tables/{pv.t1.id}/clear")).status_code == 200
+
+    b = await new_session(db_session, pv)
+    b_bill = await bill_id_of(db_session, await place(client, b, [(pv.naan, 2)]))
+    guest(client, b)
+    b_claim = await client.post(PAY, json={"method": "raast", "reference": "B-1"})
+    assert b_claim.status_code == 200, b_claim.text
+
+    guest(client, a)
+    seen = await client.get("/api/guest/bill")
+    # A still sees its own paid bill, never B's.
+    assert seen.status_code == 200
+    assert (seen.json()["status"], seen.json()["subtotal"]) == ("settled", "2340.00")
+    assert (await client.post(PAY, json={"method": "cash"})).status_code == 409
+    assert (await client.post("/api/guest/bill-request")).status_code == 404
+    order = await client.post(
+        "/api/orders",
+        json={
+            "idempotency_key": uuid.uuid4().hex,
+            "items": [{"menu_item_id": str(pv.naan.id), "quantity": 1}],
+        },
+    )
+    assert (order.status_code, order.json()["detail"]) == (409, VISIT_ENDED)
+    call = await client.post("/api/guest/service-calls", json={"reason": "help"})
+    assert (call.status_code, call.json()["detail"]) == (409, VISIT_ENDED)
+
+    bill = (await db_session.execute(select(Bill).where(Bill.id == b_bill))).scalar_one()
+    assert (bill.claimed_method, bill.claimed_reference, bill.status) == ("raast", "B-1", "open")
+    assert (
+        await db_session.scalar(
+            select(func.count()).select_from(Order).where(Order.bill_id == b_bill)
+        )
+        == 1
+    )
+
+    # B's family member scanned after the clear and has not ordered: sees and pays B's bill.
+    c = await new_session(db_session, pv)
+    guest(client, c)
+    mine = (await client.get("/api/guest/bill")).json()
+    assert (mine["subtotal"], mine["claim"]["reference"]) == ("120.00", "B-1")
+    paid = await client.post(PAY, json={"method": "card"})
+    assert paid.status_code == 200, paid.text
+    assert paid.json()["claim"]["total"] == "130.00"
+
+
+async def test_session_with_order_on_open_bill_stays_current(client, db_session, pv):
+    a = pv.session_t1
+    await order_2340(client, pv)
+    # A reset older than the open bill (e.g. a previous party's settle) does not end A's visit.
+    pv.t1.cleared_at = await db_session.scalar(select(func.clock_timestamp()))
+    await db_session.flush()
+    guest(client, a)
+    assert (await client.get("/api/guest/bill")).json()["status"] == "open"
+    assert (await client.post(PAY, json={"method": "cash"})).status_code == 200
+    await place(client, a, [(pv.naan, 1)])
 
 
 # --- Concurrency: committed data, two parallel identical taps ---

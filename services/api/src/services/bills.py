@@ -7,19 +7,59 @@ from decimal import Decimal
 from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException, status
-from sqlalchemy import func, select
+from sqlalchemy import exists, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from src.models.bill import Bill
+from src.models.dining_table import DiningTable
 from src.models.order import Order
 from src.models.restaurant import Restaurant
+from src.models.session import GuestSession
 from src.schemas.bills import BillLine, TaxPreview
 from src.schemas.payments import MethodPreview
 from src.services.tax import PAYMENT_METHODS, TaxRateError, default_rates, payment_class, tax_for
 
 logger = logging.getLogger(__name__)
 CENTS = Decimal("0.01")
+VISIT_ENDED = "Your visit has ended — scan the table QR again"
+
+
+async def session_is_current(db: AsyncSession, session: GuestSession) -> bool:
+    """Whether a table session still belongs to the party at the table.
+
+    The table resets when it is cleared or one of its bills is settled. A session is current if
+    it began after the last reset, or it has an active order on the table's open bill.
+    """
+    if session.table_id is None:
+        return True
+    reset = await db.scalar(
+        select(
+            func.greatest(
+                select(DiningTable.cleared_at)
+                .where(DiningTable.id == session.table_id)
+                .scalar_subquery(),
+                select(func.max(Bill.settled_at))
+                .where(Bill.table_id == session.table_id, Bill.status == "settled")
+                .scalar_subquery(),
+            )
+        )
+    )
+    if reset is None or session.created_at > reset:
+        return True
+    return bool(
+        await db.scalar(
+            select(
+                exists().where(
+                    Order.guest_session_id == session.id,
+                    Order.status != "cancelled",
+                    Order.bill_id == Bill.id,
+                    Bill.table_id == session.table_id,
+                    Bill.status == "open",
+                )
+            )
+        )
+    )
 
 
 async def open_bill_for_table(

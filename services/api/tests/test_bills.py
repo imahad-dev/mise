@@ -9,7 +9,7 @@ from decimal import Decimal
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from tests.helpers import as_member, make_user, sign_in
@@ -25,6 +25,7 @@ from src.models.order import Order
 from src.models.restaurant import Restaurant
 from src.models.session import GuestSession
 from src.models.user import User
+from src.services.bills import VISIT_ENDED
 
 
 @dataclass
@@ -253,7 +254,26 @@ async def test_settle_by_card_snapshots_tax_and_next_order_opens_new_bill(
     assert [b["id"] for b in settled] == [str(bill_id)]
     assert (await client.get(bills_url(venue, "?status=open"))).json()["bills"] == []
 
-    o2 = await place(client, venue.session_t1, [(venue.naan, 1)])
+    # The settled party's phone cannot start the next bill; a new scan can.
+    guest(client, venue.session_t1)
+    stale = await client.post(
+        "/api/orders",
+        json={
+            "idempotency_key": uuid.uuid4().hex,
+            "items": [{"menu_item_id": str(venue.naan.id), "quantity": 1}],
+        },
+    )
+    assert stale.status_code == 409, stale.text
+    next_party = GuestSession(
+        restaurant_id=venue.r.id,
+        table_id=venue.t1.id,
+        language="en",
+        expires_at=datetime.now(UTC) + timedelta(hours=2),
+        created_at=await db_session.scalar(select(func.clock_timestamp())),
+    )
+    db_session.add(next_party)
+    await db_session.flush()
+    o2 = await place(client, next_party, [(venue.naan, 1)])
     new_bill = await bill_id_of(db_session, o2)
     assert new_bill is not None
     assert new_bill != bill_id
@@ -430,6 +450,10 @@ async def committed_venue():
 @pytest.mark.timeout(120)
 async def test_parallel_settle_and_order(committed_venue):
     restaurant_id, slug, item_id, session_id, staff = committed_venue
+    async with async_session_factory() as s:
+        table_id_of_session = await s.scalar(
+            select(GuestSession.table_id).where(GuestSession.id == session_id)
+        )
 
     def order_body() -> dict:
         return {
@@ -455,7 +479,19 @@ async def test_parallel_settle_and_order(committed_venue):
             AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as staff_client,
         ):
             sign_in(staff_client, staff)
+            accepted = 0
             for n in range(ROUNDS):
+                # Each round is a new party: settling ended the previous session's visit.
+                async with async_session_factory() as s:
+                    party = GuestSession(
+                        restaurant_id=restaurant_id,
+                        table_id=table_id_of_session,
+                        language="en",
+                        expires_at=datetime.now(UTC) + timedelta(hours=2),
+                    )
+                    s.add(party)
+                    await s.commit()
+                guest_client.cookies.set(GUEST_COOKIE_NAME, sign_value(str(party.id)))
                 first = await guest_client.post("/api/orders", json=order_body())
                 assert first.status_code == 201, first.text
                 bill_id = await committed_bill_of(first.json()["id"])
@@ -471,7 +507,11 @@ async def test_parallel_settle_and_order(committed_venue):
                 else:
                     settle, racing = await asyncio.gather(settle_req, order_req)
                 assert settle.status_code == 200, settle.text
-                assert racing.status_code == 201, racing.text
+                # Before the settle it joins the bill; after it, the visit has ended.
+                assert racing.status_code in (201, 409), racing.text
+                if racing.status_code == 409:
+                    assert racing.json()["detail"] == VISIT_ENDED
+                accepted += racing.status_code == 201
     finally:
         if saved_override is not None:
             app.dependency_overrides[get_db] = saved_override
@@ -486,15 +526,15 @@ async def test_parallel_settle_and_order(committed_venue):
                 await s.execute(select(Bill).where(Bill.restaurant_id == restaurant_id))
             ).scalars()
         }
-    assert len(orders) == 2 * ROUNDS
+    assert len(orders) == ROUNDS + accepted
     assert all(o.bill_id in bills for o in orders)
     settled = [b for b in bills.values() if b.status == "settled"]
     assert len(settled) == ROUNDS
-    assert sum(b.status == "open" for b in bills.values()) <= 1
+    # A refused order never opened a bill for the next party.
+    assert len(bills) == ROUNDS
     for o in orders:
         bill = bills[o.bill_id]
-        if bill.status == "settled":
-            assert o.placed_at <= bill.settled_at
+        assert o.placed_at <= bill.settled_at
     # Each settle snapshot covers exactly the orders on its bill: none joined after settle.
     for bill in settled:
         assert bill.subtotal == sum(o.total for o in orders if o.bill_id == bill.id)

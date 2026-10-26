@@ -5,7 +5,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Literal
 
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, Field, model_validator
 
 from src.schemas.bills import BillLine, GuestBillResponse, TaxPreview
 
@@ -43,7 +43,7 @@ class VoidedLine(BaseModel):
 
 class GuestPaymentRequest(BaseModel):
     method: Literal["cash", "card", "wallet", "raast", "bank_transfer"]
-    reference: str | None = None
+    reference: str | None = Field(None, max_length=64)
 
     @model_validator(mode="after")
     def _reference_rule(self) -> "GuestPaymentRequest":

@@ -26,7 +26,7 @@ from src.models.session import GuestSession
 from src.redis_client import publish_event, redis_client
 from src.schemas.orders import CreateOrderRequest, OrderItemRequest, OrderResponse
 from src.services.allergen_service import compute_allergen_status
-from src.services.bills import open_bill_for_table
+from src.services.bills import VISIT_ENDED, open_bill_for_table, session_is_current
 from src.services.order_snapshot import line_total, snapshot_order_item
 
 logger = logging.getLogger(__name__)
@@ -235,6 +235,9 @@ async def create_order(
         if session.table_id
         else (None, False)
     )
+    # After the bill lock: a settle racing this order is committed by now.
+    if bill is not None and not await session_is_current(db, session):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=VISIT_ENDED)
 
     order = Order(
         guest_session_id=session.id,

@@ -49,11 +49,13 @@ from src.schemas.payments import (
 )
 from src.services.allergen_service import compute_allergen_status
 from src.services.bills import (
+    VISIT_ENDED,
     active_orders,
     bill_lines,
     local_date,
     method_preview,
     method_previews,
+    session_is_current,
 )
 from src.services.guest_chat import handle_guest_chat
 
@@ -306,7 +308,7 @@ async def request_bill(
 ) -> GuestBillResponse:
     """Ask for the table's open bill. Idempotent: the first request time is kept."""
     bill = None
-    if session.table_id is not None:
+    if session.table_id is not None and await session_is_current(db, session):
         bill = (
             await db.execute(
                 select(Bill)
@@ -336,24 +338,29 @@ async def _session_bill(
     db: AsyncSession, session: GuestSession, *, lock: bool = False
 ) -> Bill | None:
     """The open bill of the session's table, else the bill of its latest billed order."""
-    if session.table_id is not None:
+    if session.table_id is not None and await session_is_current(db, session):
         query = select(Bill).where(
             Bill.restaurant_id == session.restaurant_id,
             Bill.table_id == session.table_id,
             Bill.status == "open",
         )
-        bill = (await db.execute(query.with_for_update() if lock else query)).scalar_one_or_none()
+        if lock:
+            query = query.with_for_update().execution_options(populate_existing=True)
+        bill = (await db.execute(query)).scalar_one_or_none()
         if bill is not None:
             return bill
-    return (
-        await db.execute(
-            select(Bill)
-            .join(Order, Order.bill_id == Bill.id)
-            .where(Order.guest_session_id == session.id)
-            .order_by(Order.placed_at.desc(), Bill.opened_at.desc())
-            .limit(1)
-        )
-    ).scalar_one_or_none()
+    # A stale session still sees its own (settled) bill, never the next party's.
+    query = (
+        select(Bill)
+        .join(Order, Order.bill_id == Bill.id)
+        .where(Order.guest_session_id == session.id)
+        .order_by(Order.placed_at.desc(), Bill.opened_at.desc())
+        .limit(1)
+    )
+    if lock:
+        # Re-read after the lock so the caller's status check sees a concurrent settle.
+        query = query.with_for_update(of=Bill).execution_options(populate_existing=True)
+    return (await db.execute(query)).scalar_one_or_none()
 
 
 async def _bill_detail(
@@ -538,6 +545,8 @@ async def create_service_call(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Calling a waiter works only at a table",
         )
+    if not await session_is_current(db, session):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=VISIT_ENDED)
     on_the_way = HTTPException(
         status_code=status.HTTP_409_CONFLICT, detail="A waiter is already on the way"
     )
