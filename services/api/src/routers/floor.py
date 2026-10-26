@@ -188,12 +188,16 @@ async def clear_table(
     force = bool(payload and payload.force)
     if not force:
         # A live phone scanned after the last reset: clearing would end the new party's visit.
-        last_settled = await db.scalar(
-            select(func.max(Bill.settled_at)).where(
-                Bill.table_id == table.id, Bill.status == "settled"
+        # Same resets as session_is_current: clear, settle, or a bill cancelled by voids.
+        last_closed = (
+            await db.execute(
+                select(
+                    func.max(Bill.settled_at).filter(Bill.status == "settled"),
+                    func.max(Bill.cancelled_at).filter(Bill.status == "cancelled"),
+                ).where(Bill.table_id == table.id)
             )
-        )
-        resets = [t for t in (table.cleared_at, last_settled) if t is not None]
+        ).one()
+        resets = [t for t in (table.cleared_at, *last_closed) if t is not None]
         seated = select(GuestSession.id).where(
             GuestSession.table_id == table.id, GuestSession.expires_at > now
         )

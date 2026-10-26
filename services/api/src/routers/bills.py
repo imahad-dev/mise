@@ -31,6 +31,7 @@ from src.schemas.bills import (
 )
 from src.services.bills import (
     CENTS,
+    METHOD_LABELS,
     BillChanged,
     active_orders,
     bill_lines,
@@ -116,10 +117,12 @@ async def bill_detail(db: AsyncSession, restaurant: Restaurant, bill: Bill) -> B
         key = reference_key(claim.reference)
         reused = await reused_reference_bill_no(db, restaurant.id, bill.id, [key])
         reused_open = await open_bill_with_claimed_key(db, restaurant.id, bill.id, key)
-    settled_by_name = (
-        await db.scalar(select(User.name).where(User.id == bill.settled_by))
-        if bill.settled_by
-        else None
+    names = dict(
+        (
+            await db.execute(
+                select(User.id, User.name).where(User.id.in_([bill.settled_by, bill.cancelled_by]))
+            )
+        ).all()
     )
     return BillDetail(
         id=bill.id,
@@ -150,17 +153,20 @@ async def bill_detail(db: AsyncSession, restaurant: Restaurant, bill: Bill) -> B
         reused_reference_bill_no=reused,
         reused_reference_open_bill_no=reused_open,
         orders=bill_orders(bill, every),
-        settled_by_name=settled_by_name,
+        settled_by_name=names.get(bill.settled_by),
+        cancelled_by_name=names.get(bill.cancelled_by),
+        cancelled_at=bill.cancelled_at,
+        cancel_reason=bill.cancel_reason,
     )
 
 
 @router.get("/bills", response_model=BillListResponse, responses=RESPONSES)
 async def list_bills(
-    status_filter: Literal["open", "settled"] = Query("open", alias="status"),
+    status_filter: Literal["open", "settled", "cancelled"] = Query("open", alias="status"),
     access: RestaurantAccess = Depends(member_access),
     db: AsyncSession = Depends(get_db),
 ) -> BillListResponse:
-    """Open bills (requested first, then oldest) or the 50 latest settled bills."""
+    """Open bills (requested first, then oldest), or the 50 latest settled or cancelled."""
     stmt = (
         select(
             Bill,
@@ -175,8 +181,10 @@ async def list_bills(
     )
     if status_filter == "open":
         stmt = stmt.order_by(Bill.bill_requested_at.is_(None), Bill.opened_at)
-    else:
+    elif status_filter == "settled":
         stmt = stmt.order_by(Bill.settled_at.desc()).limit(50)
+    else:
+        stmt = stmt.order_by(Bill.cancelled_at.desc()).limit(50)
     rows = (await db.execute(stmt)).all()
     return BillListResponse(
         restaurant_timezone=access.restaurant.timezone,
@@ -194,6 +202,9 @@ async def list_bills(
                     else (subtotal or Decimal("0")).quantize(CENTS)
                 ),
                 bill_requested_at=bill.bill_requested_at,
+                claim=claim_of(bill),
+                cancelled_at=bill.cancelled_at,
+                cancel_reason=bill.cancel_reason,
             )
             for bill, label, count, subtotal in rows
         ],
@@ -269,7 +280,10 @@ async def settle(
     responses={
         401: {"description": "Unauthenticated"},
         404: {"description": "Restaurant or order not found"},
-        409: {"description": "Bill not open, or the order is already cancelled"},
+        409: {
+            "description": "Bill not open, order already cancelled, or the void would cancel a "
+            'bill the guest says they paid ({"detail", "claim"}; resend with acknowledge_claim)'
+        },
         # A void that empties the bill cancels it ("All orders voided").
         422: {"description": "Reason must be 1-200 characters"},
     },
@@ -279,7 +293,7 @@ async def void_order(
     payload: VoidOrderRequest,
     access: RestaurantAccess = Depends(member_access),
     db: AsyncSession = Depends(get_db),
-) -> BillDetail:
+) -> BillDetail | JSONResponse:
     """Take a placed or bumped order off its open bill: it leaves the kitchen and the totals.
 
     Voiding the last active order cancels the bill, so the table's next order opens a new one.
@@ -319,6 +333,20 @@ async def void_order(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Bill is not open")
     if order.status not in ("placed", "bumped"):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Order already cancelled")
+    empties = all(o.id == order.id for o in await active_orders(db, bill.id))
+    claim = claim_of(bill)
+    if empties and claim is not None and not payload.acknowledge_claim:
+        # Checked before any change; commit only ends the transaction and frees the locks.
+        await db.commit()
+        label = METHOD_LABELS.get(claim.method, claim.method)
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={
+                "detail": f"Guest says they paid by {label} (Rs {claim.total}) — any refund "
+                "happens outside Mise. Confirm to void and cancel the bill.",
+                "claim": claim.model_dump(mode="json"),
+            },
+        )
     now = await db.scalar(select(func.clock_timestamp()))
     actor = f"user:{access.user.id}"
     order.status = "cancelled"
@@ -333,9 +361,8 @@ async def void_order(
             payload={"order_id": str(order.id), "bill_id": str(bill.id), "reason": payload.reason},
         )
     )
-    await db.flush()
     events = [{"event": "order_voided", "order_id": str(order.id), "bill_id": str(bill.id)}]
-    if not await active_orders(db, bill.id):
+    if empties:
         bill.status = "cancelled"
         bill.cancelled_at = now
         bill.cancelled_by = access.user.id
@@ -345,7 +372,19 @@ async def void_order(
                 restaurant_id=rid,
                 event_type="bill_cancelled",
                 actor=actor,
-                payload={"bill_id": str(bill.id), "reason": ALL_VOIDED},
+                payload={
+                    "bill_id": str(bill.id),
+                    "reason": ALL_VOIDED,
+                    **(
+                        {
+                            "claimed_method": claim.method,
+                            "claimed_total": str(claim.total),
+                            "claimed_reference_last4": (claim.reference or "")[-4:] or None,
+                        }
+                        if claim
+                        else {}
+                    ),
+                },
             )
         )
         events.append({"event": "bill_cancelled", "bill_id": str(bill.id)})

@@ -10,6 +10,7 @@ import {
   PAYMENT_METHODS,
   apiError,
   billNo,
+  claimWarning,
   localDateTime,
   previewFor,
   type BillDetail,
@@ -56,15 +57,16 @@ export default function BillsPage() {
   const [reference, setReference] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [view, setView] = useState<"open" | "cancelled">("open");
   // The bill the sheet shows; late responses for any other bill are dropped.
   const selectedId = useRef<string | null>(null);
   const printHref = (id: string) => `/bills/${id}/print?venue=${encodeURIComponent(slug ?? "")}`;
 
   const fetchBills = useCallback(async (): Promise<{ bills: BillSummary[]; restaurant_timezone: string }> => {
-    const res = await fetch(`/api/restaurants/${slug}/bills?status=open`);
+    const res = await fetch(`/api/restaurants/${slug}/bills?status=${view}`);
     if (!res.ok) throw new Error(await apiError(res));
     return res.json();
-  }, [slug]);
+  }, [slug, view]);
 
   const { data, error: listError, refetch } = useSse<{ bills: BillSummary[]; restaurant_timezone: string }>({
     url: slug ? `/api/restaurants/${slug}/kitchen/stream` : null,
@@ -79,6 +81,12 @@ export default function BillsPage() {
       }
     },
   });
+
+  // useSse keeps the latest fetchState in a ref; switching tabs reloads with the new filter.
+  useEffect(() => {
+    if (slug) void refetch();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reload only when the tab changes
+  }, [view]);
 
   const loadDetail = async (id: string) => {
     const forSlug = slug;
@@ -168,6 +176,21 @@ export default function BillsPage() {
     <div className="space-y-6">
       <PageHeader title="Bills" subtitle="Open table bills. Mark one paid to print a sample bill." />
 
+      <div role="tablist" aria-label="Bills" className="flex gap-2">
+        {(["open", "cancelled"] as const).map((v) => (
+          <button
+            key={v}
+            type="button"
+            role="tab"
+            aria-selected={view === v}
+            onClick={() => setView(v)}
+            className={view === v ? "btn-primary" : "btn-ghost"}
+          >
+            {v === "open" ? "Open" : "Cancelled"}
+          </button>
+        ))}
+      </div>
+
       {listError && !data && (
         <p role="alert" className="rounded-xl border border-danger-fg bg-danger-bg p-3 text-xs text-danger-fg">
           {listError.message}
@@ -175,7 +198,9 @@ export default function BillsPage() {
       )}
 
       {data && bills.length === 0 ? (
-        <Card className="p-12 text-center text-sm text-ink-muted">No open bills right now.</Card>
+        <Card className="p-12 text-center text-sm text-ink-muted">
+          {view === "open" ? "No open bills right now." : "No cancelled bills."}
+        </Card>
       ) : (
         <ul className="space-y-2">
           {bills.map((b) => (
@@ -191,6 +216,12 @@ export default function BillsPage() {
                     {billNo(b.bill_no)} · opened {localDateTime(b.opened_at, data?.restaurant_timezone ?? "UTC")} · {b.order_count}{" "}
                     {b.order_count === 1 ? "order" : "orders"}
                   </span>
+                  {b.status === "cancelled" && (
+                    <span className="block text-xs text-ink-muted">Cancelled: {b.cancel_reason ?? "—"}</span>
+                  )}
+                  {b.status === "cancelled" && b.claim && (
+                    <span className="block text-xs font-semibold text-danger-fg">{claimWarning(b.claim, currency)}</span>
+                  )}
                 </span>
                 <span className="flex items-center gap-3">
                   {b.bill_requested_at && <Badge className="bg-terracotta text-cream">Bill requested</Badge>}
@@ -244,7 +275,16 @@ export default function BillsPage() {
               <span>{formatPrice(Number(detail.subtotal), detail.currency)}</span>
             </p>
 
-            {detail.status !== "open" ? (
+            {detail.status === "cancelled" ? (
+              <div className="space-y-1 text-sm">
+                <p className="text-ink-muted">
+                  Cancelled: {detail.cancel_reason ?? "—"}
+                  {detail.cancelled_by_name && ` · by ${detail.cancelled_by_name}`}
+                  {detail.cancelled_at && ` · ${localDateTime(detail.cancelled_at, detail.restaurant_timezone)}`}
+                </p>
+                {detail.claim && <p className="font-semibold text-danger-fg">{claimWarning(detail.claim, detail.currency)}</p>}
+              </div>
+            ) : detail.status !== "open" ? (
               <p className="text-sm text-ink-muted">
                 This bill is already settled.{" "}
                 <Link href={printHref(detail.id)} className="font-semibold text-terracotta underline">

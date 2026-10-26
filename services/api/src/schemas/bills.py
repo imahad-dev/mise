@@ -34,6 +34,13 @@ class MethodPreview(TaxPreview):
     label: str
 
 
+class PaymentClaim(BaseModel):
+    method: str
+    reference: str | None
+    total: Decimal
+    claimed_at: datetime
+
+
 class BillSummary(BaseModel):
     id: uuid.UUID
     bill_no: int | None
@@ -43,18 +50,14 @@ class BillSummary(BaseModel):
     order_count: int
     subtotal: Decimal
     bill_requested_at: datetime | None
+    claim: PaymentClaim | None
+    cancelled_at: datetime | None
+    cancel_reason: str | None
 
 
 class BillListResponse(BaseModel):
     bills: list[BillSummary]
     restaurant_timezone: str
-
-
-class PaymentClaim(BaseModel):
-    method: str
-    reference: str | None
-    total: Decimal
-    claimed_at: datetime
 
 
 class BillOrder(BaseModel):
@@ -93,6 +96,7 @@ class BillDetail(BillSummary):
     reused_reference_open_bill_no: int | None
     orders: list[BillOrder]
     settled_by_name: str | None
+    cancelled_by_name: str | None
 
 
 class SettleBillRequest(BaseModel):
@@ -122,6 +126,8 @@ class SettleBillRequest(BaseModel):
 
 class VoidOrderRequest(BaseModel):
     reason: str
+    # Needed when the void would cancel a bill the guest says they already paid.
+    acknowledge_claim: bool = False
 
     @field_validator("reason")
     @classmethod

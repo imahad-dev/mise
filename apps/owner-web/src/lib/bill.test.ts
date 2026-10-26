@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { formatPrice } from "ui";
-import { PAYMENT_METHODS, SAMPLE_BILL_FOOTER, billNo, previewFor, sampleBillPieces, sampleBillText, taxLabel } from "./bill";
+import { PAYMENT_METHODS, SAMPLE_BILL_FOOTER, billNo, claimWarning, previewFor, sampleBillPieces, sampleBillText, taxLabel } from "./bill";
 
 describe("sample bill", () => {
   const bill = {
@@ -32,6 +32,12 @@ describe("sample bill", () => {
 });
 
 describe("bill helpers", () => {
+  it("warns that a cancelled bill was claimed as paid", () => {
+    const claim = { method: "raast", reference: "TX1", total: "2527.00", claimed_at: "2026-10-24T15:30:00Z" };
+    expect(claimWarning(claim, "PKR")).toBe(
+      `Guest said they paid by Raast QR (${formatPrice(2527, "PKR")}) — any refund happens outside Mise.`,
+    );
+  });
   it("names the tax class for cash and bank transfer", () => {
     expect(taxLabel("0.16", "cash")).toBe("Sales tax (illustrative) 16% — cash");
     expect(taxLabel("0.16", "bank_transfer")).toBe("Sales tax (illustrative) 16% — bank transfer");

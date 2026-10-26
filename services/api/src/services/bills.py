@@ -33,7 +33,8 @@ class BillChanged(Exception):  # noqa: N818 - a signal, not an error
 async def session_is_current(db: AsyncSession, session: GuestSession) -> bool:
     """Whether a table session still belongs to the party at the table.
 
-    The table resets when it is cleared or one of its bills is settled. A session is current if
+    The table resets when it is cleared or one of its bills is settled or cancelled (every order
+    voided). A session is current if
     it began after the last reset, or it has an active order on the table's open bill.
     """
     if session.table_id is None:
@@ -46,6 +47,9 @@ async def session_is_current(db: AsyncSession, session: GuestSession) -> bool:
                 .scalar_subquery(),
                 select(func.max(Bill.settled_at))
                 .where(Bill.table_id == session.table_id, Bill.status == "settled")
+                .scalar_subquery(),
+                select(func.max(Bill.cancelled_at))
+                .where(Bill.table_id == session.table_id, Bill.status == "cancelled")
                 .scalar_subquery(),
             )
         )
@@ -211,8 +215,8 @@ def claim_of(bill: Bill) -> PaymentClaim | None:
     )
 
 
-# One key for a payment reference, everywhere: "TX 1", "tx-1" and "TX1" are the same payment.
-_REF_SEPARATORS = " -./#"
+# One key for a payment reference, everywhere: "TX 1", "tx-1", "TX_1" and "TX1" are one payment.
+_REF_SEPARATORS = " -./#_"
 
 
 def reference_key(reference: str | None) -> str:

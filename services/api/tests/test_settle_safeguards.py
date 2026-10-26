@@ -29,7 +29,7 @@ from src.models.dining_table import DiningTable
 from src.models.order import Order
 from src.models.restaurant import Restaurant
 from src.models.session import GuestSession
-from src.services.bills import VISIT_ENDED, local_date, reference_key
+from src.services.bills import VISIT_ENDED, local_date, reference_key, session_is_current
 from src.services.tax import tax_for
 
 
@@ -613,7 +613,7 @@ async def test_claimed_reference_is_checked_without_a_staff_reference(client, db
     a_bill = await bill_id_of(db_session, await order_2340(client, pv))
     b_bill = await bill_id_of(db_session, await place(client, pv.session_t2, [(pv.naan, 2)]))
     await as_member(client, db_session, pv.r.id, "staff")
-    a = await settle(client, pv.r.slug, a_bill, "raast", payment_reference="TX-77")
+    a = await settle(client, pv.r.slug, a_bill, "raast", payment_reference="TX_77")
     assert a.status_code == 200, a.text
     guest(client, pv.session_t2)
     assert (await client.post(PAY, json={"method": "raast", "reference": "tx 77"})).is_success
@@ -627,6 +627,7 @@ async def test_claimed_reference_is_checked_without_a_staff_reference(client, db
 
 def test_reference_key_is_one_normal_form():
     assert reference_key("TX 1") == reference_key("tx-1") == reference_key("t.x/1#") == "TX1"
+    assert reference_key("TX_1") == "TX1"
     assert reference_key(None) == reference_key("  - ") == ""
 
 
@@ -778,3 +779,108 @@ async def test_same_reference_settled_on_two_bills_at_once(committed_venue):  # 
                 json={**body, "acknowledge_reused_reference": True},
             )
             assert ok.status_code == 200, ok.text
+
+
+# --- Voiding a bill the guest says they paid; cancelled bills stay visible ---
+
+
+async def test_void_emptying_a_claimed_bill_needs_confirmation(client, db_session, pv):
+    only = await order_2340(client, pv)
+    bill_id = await bill_id_of(db_session, only)
+    guest(client, pv.session_t1)
+    assert (await client.post(PAY, json={"method": "raast", "reference": "TX-4471"})).is_success
+    staff = await as_member(client, db_session, pv.r.id, "staff")
+    void_url = url(pv, f"/orders/{only}/void")
+
+    refused = await client.post(void_url, json={"reason": "Walked out"})
+    assert refused.status_code == 409, refused.text
+    body = refused.json()
+    assert body["detail"] == (
+        "Guest says they paid by Raast QR (Rs 2527.00) — any refund happens outside Mise. "
+        "Confirm to void and cancel the bill."
+    )
+    assert (body["claim"]["method"], body["claim"]["total"]) == ("raast", "2527.00")
+    stored = (await db_session.execute(select(Bill).where(Bill.id == bill_id))).scalar_one()
+    order = (await db_session.execute(select(Order).where(Order.id == only))).scalar_one()
+    assert (stored.status, order.status, order.voided_at) == ("open", "placed", None)
+
+    ok = await client.post(void_url, json={"reason": "Walked out", "acknowledge_claim": True})
+    assert (ok.status_code, ok.json()["status"]) == (200, "cancelled")
+    audit = (
+        await db_session.execute(
+            select(AuditLog).where(
+                AuditLog.restaurant_id == pv.r.id, AuditLog.event_type == "bill_cancelled"
+            )
+        )
+    ).scalar_one()
+    assert audit.actor == f"user:{staff.id}"
+    assert {k: audit.payload[k] for k in ("claimed_method", "claimed_total")} == {
+        "claimed_method": "raast",
+        "claimed_total": "2527.00",
+    }
+    assert audit.payload["claimed_reference_last4"] == "4471"
+
+
+async def test_void_of_one_of_several_orders_needs_no_confirmation(client, db_session, pv):
+    await order_2340(client, pv)
+    extra = await place(client, pv.session_t1, [(pv.naan, 1)])
+    guest(client, pv.session_t1)
+    assert (await client.post(PAY, json={"method": "cash"})).is_success
+    await as_member(client, db_session, pv.r.id, "staff")
+    resp = await client.post(url(pv, f"/orders/{extra}/void"), json={"reason": "Duplicate"})
+    assert (resp.status_code, resp.json()["status"]) == (200, "open")
+
+
+async def test_cancelled_bills_are_listed_and_readable(client, db_session, pv):
+    only = await order_2340(client, pv)
+    bill_id = await bill_id_of(db_session, only)
+    guest(client, pv.session_t1)
+    assert (await client.post(PAY, json={"method": "cash"})).is_success
+    await as_member(client, db_session, pv.r.id, "owner")
+    resp = await client.post(
+        url(pv, f"/orders/{only}/void"), json={"reason": "Wrong table", "acknowledge_claim": True}
+    )
+    assert resp.status_code == 200, resp.text
+
+    listed = await client.get(url(pv, "/bills?status=cancelled"))
+    assert listed.status_code == 200, listed.text
+    [row] = listed.json()["bills"]
+    assert (row["id"], row["status"], row["cancel_reason"]) == (
+        str(bill_id),
+        "cancelled",
+        "All orders voided",
+    )
+    assert row["cancelled_at"] is not None
+    assert (row["claim"]["method"], row["claim"]["total"]) == ("cash", "2714.00")
+    assert (await client.get(url(pv, "/bills?status=open"))).json()["bills"] == []
+
+    d = await detail(client, pv, bill_id)
+    assert (d["status"], d["cancel_reason"], d["cancelled_by_name"]) == (
+        "cancelled",
+        "All orders voided",
+        "Test user",
+    )
+    assert d["claim"]["method"] == "cash"
+    assert d["orders"][0]["voided"] is True
+
+
+async def test_cancelled_bill_resets_the_table(client, db_session, pv):
+    only = await place(client, pv.session_t1, [(pv.naan, 1)])
+    await as_member(client, db_session, pv.r.id, "staff")
+    assert (await client.post(url(pv, f"/orders/{only}/void"), json={"reason": "x"})).is_success
+    # The cancel alone ends the voided party's visit, before any clear.
+    assert not await session_is_current(db_session, pv.session_t1)
+    # Nobody scanned since the cancel, so clearing needs no force.
+    cleared = await client.post(url(pv, f"/tables/{pv.t1.id}/clear"))
+    assert cleared.status_code == 200, cleared.text
+
+    # Its phone cannot start a new bill.
+    guest(client, pv.session_t1)
+    again = await client.post(
+        "/api/orders",
+        json={
+            "idempotency_key": uuid.uuid4().hex,
+            "items": [{"menu_item_id": str(pv.naan.id), "quantity": 1}],
+        },
+    )
+    assert (again.status_code, again.json()["detail"]) == (409, VISIT_ENDED)

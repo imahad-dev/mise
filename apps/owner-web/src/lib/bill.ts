@@ -30,6 +30,9 @@ export interface BillSummary {
   order_count: number;
   subtotal: string;
   bill_requested_at: string | null;
+  claim: PaymentClaim | null;
+  cancelled_at: string | null;
+  cancel_reason: string | null;
 }
 
 export interface BillDetail extends BillSummary {
@@ -54,6 +57,7 @@ export interface BillDetail extends BillSummary {
   reused_reference_open_bill_no: number | null;
   orders: BillOrder[];
   settled_by_name: string | null;
+  cancelled_by_name: string | null;
 }
 
 export interface PaymentClaim {
@@ -93,6 +97,10 @@ export const previewFor = (bill: Pick<BillDetail, "methods">, method: string) =>
 
 export const paymentLabel = (method: string | null) =>
   PAYMENT_METHODS.find((m) => m.value === method)?.label ?? method ?? "";
+
+/** "Guest said they paid by Raast QR (Rs 2,527.00)": shown on bills cancelled after a claim. */
+export const claimWarning = (claim: PaymentClaim, currency: string) =>
+  `Guest said they paid by ${paymentLabel(claim.method)} (${formatPrice(Number(claim.total), currency)}) — any refund happens outside Mise.`;
 
 export const billNo = (n: number | null) => (n === null ? "Bill no. —" : `Bill no. ${String(n).padStart(4, "0")}`);
 
