@@ -78,3 +78,12 @@ def table_state(f: TableFacts, now: datetime) -> TileState | None:
             "needs_clearing", f.last_settled_at, _level("needs_clearing", f.last_settled_at, now)
         )
     return TileState("free", None, "none")
+
+
+REASON_LABELS = {"help": "Need help", "water": "Water, please"}
+
+
+def reason_label(reason: str | None, extra_label: str | None) -> str | None:
+    if reason is None:
+        return None
+    return REASON_LABELS.get(reason) or extra_label or "Something else"

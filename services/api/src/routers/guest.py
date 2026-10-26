@@ -4,7 +4,8 @@ import json
 from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
-from sqlalchemy import select
+from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -16,9 +17,16 @@ from src.models.dining_table import DiningTable
 from src.models.menu import MenuItem
 from src.models.order import Order
 from src.models.restaurant import Restaurant
+from src.models.service_call import ServiceCall
 from src.models.session import GuestSession
 from src.redis_client import publish_event
 from src.schemas.bills import GuestBillResponse
+from src.schemas.floor import (
+    CurrentCallResponse,
+    ServiceCallRequest,
+    ServiceCallResponse,
+    call_response,
+)
 from src.schemas.guest import (
     ChatMessageRequest,
     ChatMessageResponse,
@@ -328,3 +336,110 @@ async def get_guest_bill(
     return GuestBillResponse(
         bill_no=bill.bill_no, status=bill.status, bill_requested_at=bill.bill_requested_at
     )
+
+
+# --- Call waiter ---
+
+CALL_COOLDOWN = timedelta(seconds=60)
+
+
+async def _extra_label(db: AsyncSession, session: GuestSession) -> str | None:
+    return await db.scalar(
+        select(Restaurant.service_extra_label).where(Restaurant.id == session.restaurant_id)
+    )
+
+
+@router.post(
+    "/service-calls",
+    response_model=ServiceCallResponse,
+    status_code=status.HTTP_201_CREATED,
+    responses={
+        401: {"description": "Unauthenticated or expired session"},
+        409: {"description": "A waiter is already on the way"},
+        422: {"description": "Not a table session"},
+        429: {"description": "Called less than 60 seconds ago"},
+    },
+)
+async def create_service_call(
+    payload: ServiceCallRequest,
+    session: GuestSession = Depends(get_current_guest_session),
+    db: AsyncSession = Depends(get_db),
+) -> ServiceCallResponse:
+    """Call a waiter to the session's table. One open call per table, 60 s between calls."""
+    kind = (
+        await db.scalar(select(DiningTable.kind).where(DiningTable.id == session.table_id))
+        if session.table_id is not None
+        else None
+    )
+    if kind != "table":
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Calling a waiter works only at a table",
+        )
+    on_the_way = HTTPException(
+        status_code=status.HTTP_409_CONFLICT, detail="A waiter is already on the way"
+    )
+    now = await db.scalar(select(func.clock_timestamp()))
+    latest = (
+        await db.execute(
+            select(ServiceCall)
+            .where(ServiceCall.table_id == session.table_id)
+            .order_by(ServiceCall.created_at.desc())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    if latest is not None and latest.resolved_at is None:
+        raise on_the_way
+    if latest is not None and now - latest.created_at < CALL_COOLDOWN:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Please wait a minute before calling again",
+        )
+    call = ServiceCall(
+        restaurant_id=session.restaurant_id,
+        table_id=session.table_id,
+        reason=payload.reason,
+        created_at=now,
+        resolved_at=None,
+    )
+    db.add(call)
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()  # the partial unique index: a parallel call won
+        raise on_the_way from None
+    await publish_event(
+        f"kitchen:{session.restaurant_id}",
+        json.dumps(
+            {
+                "event": "service_call_opened",
+                "call_id": str(call.id),
+                "table_id": str(call.table_id),
+            }
+        ),
+    )
+    return call_response(call, await _extra_label(db, session))
+
+
+@router.get(
+    "/service-calls/current",
+    response_model=CurrentCallResponse,
+    responses={401: {"description": "Unauthenticated or expired session"}},
+)
+async def current_service_call(
+    session: GuestSession = Depends(get_current_guest_session),
+    db: AsyncSession = Depends(get_db),
+) -> CurrentCallResponse:
+    """The table's open call, or null."""
+    if session.table_id is None:
+        return CurrentCallResponse(call=None)
+    call = (
+        await db.execute(
+            select(ServiceCall).where(
+                ServiceCall.table_id == session.table_id, ServiceCall.resolved_at.is_(None)
+            )
+        )
+    ).scalar_one_or_none()
+    if call is None:
+        return CurrentCallResponse(call=None)
+    return CurrentCallResponse(call=call_response(call, await _extra_label(db, session)))

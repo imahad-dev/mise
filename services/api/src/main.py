@@ -11,6 +11,7 @@ from src.inference.client import InferenceClient
 from src.routers.auth import router as auth_router
 from src.routers.bills import router as bills_router
 from src.routers.demo import router as demo_router
+from src.routers.floor import router as floor_router
 from src.routers.guest import router as guest_router
 from src.routers.health import router as health_router
 from src.routers.kitchen import router as kitchen_router
@@ -64,6 +65,7 @@ app.include_router(guest_router)
 app.include_router(orders_router)
 app.include_router(kitchen_router)
 app.include_router(bills_router)
+app.include_router(floor_router)
 app.include_router(owner_router)
 app.include_router(restaurants_router)
 
