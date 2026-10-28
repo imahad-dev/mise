@@ -396,6 +396,9 @@ async def settle_bill(
             select(func.pg_advisory_xact_lock(func.hashtext(f"ref:{restaurant.id}:{key}")))
         )
     reused = await reused_reference_bill_no(db, restaurant.id, bill.id, keys)
+    for key in keys:
+        if reused is None:
+            reused = await open_bill_with_claimed_key(db, restaurant.id, bill.id, key)
     if reused is not None and not acknowledge_reused:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,

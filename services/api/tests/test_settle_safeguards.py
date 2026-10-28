@@ -660,6 +660,30 @@ async def test_same_claim_on_two_open_bills_is_flagged(client, db_session, pv):
         "raast": "2527.00",
         "bank_transfer": "2714.00",
     }
+    # Settling needs the acknowledgement, whichever of the two bills staff settle first.
+    refused = await settle(client, pv.r.slug, a_bill, "raast")
+    assert refused.status_code == 409
+    assert refused.json()["detail"] == f"Reference already used on Bill {b['bill_no']:04d}"
+    ok = await settle(client, pv.r.slug, a_bill, "raast", acknowledge_reused_reference=True)
+    assert ok.status_code == 200, ok.text
+
+
+async def test_staff_reference_claimed_on_another_open_bill_needs_acknowledgement(
+    client, db_session, pv
+):
+    a_bill = await bill_id_of(db_session, await order_2340(client, pv))
+    b_bill = await bill_id_of(db_session, await place(client, pv.session_t2, [(pv.naan, 2)]))
+    guest(client, pv.session_t2)
+    assert (await client.post(PAY, json={"method": "raast", "reference": "R-6"})).is_success
+    await as_member(client, db_session, pv.r.id, "staff")
+    refused = await settle(client, pv.r.slug, a_bill, "raast", payment_reference="r6")
+    assert refused.status_code == 409
+    b_no = (await detail(client, pv, b_bill))["bill_no"]
+    assert refused.json()["detail"] == f"Reference already used on Bill {b_no:04d}"
+    ok = await settle(
+        client, pv.r.slug, a_bill, "raast", payment_reference="r6", acknowledge_reused_reference=True
+    )
+    assert ok.status_code == 200, ok.text
 
 
 async def test_void_of_the_last_order_cancels_the_bill(client, db_session, pv):
@@ -751,15 +775,15 @@ async def test_same_reference_settled_on_two_bills_at_once(committed_venue):  # 
         second_table = second.id
     async with _Clients(staff) as c:
         for n in range(4):
+            # Staff type the references: a guest claim of the same reference on another open
+            # bill would already need acknowledgement before any race.
             bills = []
             for table, ref in ((first_table, f"SAME-{n}"), (second_table, f"same {n}")):
                 party = await _new_committed_party(restaurant_id, table)
                 c.guest.cookies.set(GUEST_COOKIE_NAME, sign_value(str(party)))
                 placed = await c.guest.post("/api/orders", json=_order_body(item_id))
                 assert placed.status_code == 201, placed.text
-                claim = await c.guest.post(PAY, json={"method": "raast", "reference": ref})
-                assert claim.status_code == 200, claim.text
-                bills.append(await _bill_of(placed.json()["id"]))
+                bills.append((await _bill_of(placed.json()["id"]), ref))
             body = {
                 "payment_method": "raast",
                 "expected_method": "raast",
@@ -767,17 +791,21 @@ async def test_same_reference_settled_on_two_bills_at_once(committed_venue):  # 
             }
             results = await asyncio.gather(
                 *(
-                    c.staff.post(f"/api/restaurants/{slug}/bills/{b}/settle", json=body)
-                    for b in bills
+                    c.staff.post(
+                        f"/api/restaurants/{slug}/bills/{b}/settle",
+                        json={**body, "payment_reference": ref},
+                    )
+                    for b, ref in bills
                 )
             )
             codes = [r.status_code for r in results]
             assert sorted(codes) == [200, 409], [r.text for r in results]
             refused = results[codes.index(409)]
             assert refused.json()["detail"].startswith("Reference already used on Bill ")
+            b, ref = bills[codes.index(409)]
             ok = await c.staff.post(
-                f"/api/restaurants/{slug}/bills/{bills[codes.index(409)]}/settle",
-                json={**body, "acknowledge_reused_reference": True},
+                f"/api/restaurants/{slug}/bills/{b}/settle",
+                json={**body, "payment_reference": ref, "acknowledge_reused_reference": True},
             )
             assert ok.status_code == 200, ok.text
 
