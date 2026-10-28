@@ -217,7 +217,79 @@ print(json.dumps(line))") || return 1
   local bill
   bill=$(sql "SELECT status || ' ' || source FROM bills WHERE id = '$bill_id' AND bill_no IS NOT NULL")
   echo "live order $order_id: GET=$status live/items/session=$live bill=$bill simulated before=$before after=$after"
-  [ "$status" = "200" ] && [ "$live" = "1 1 1" ] && [ "$bill" = "settled live" ] && [ "$before" = "$after" ]
+  [ "$status" = "200" ] && [ "$live" = "1 1 1" ] && [ "$bill" = "settled live" ] && [ "$before" = "$after" ] ||
+    return 1
+  counter_and_pay_forward
+}
+
+balance() { # pay-it-forward chai waiting at the café
+  curl -sf -b "$OWNER_JAR" "$API/api/restaurants/$CAFE/floor" |
+    python3 -c "import json,sys; print(json.load(sys.stdin)['pay_forward_balance'])"
+}
+
+in_kitchen() { # in_kitchen <order id>: prints 1 when the café kitchen lists it
+  curl -sf -b "$OWNER_JAR" "$API/api/restaurants/$CAFE/kitchen/orders" |
+    python3 -c "import json,sys; print(sum(o['id'] == sys.argv[1] for o in json.load(sys.stdin)['orders']))" "$1"
+}
+
+# A counter order with a pay-it-forward chai: unpaid it never reaches the kitchen; a settle with
+# a stale total is refused, the right one sends it there; then one chai is handed out.
+counter_and_pay_forward() {
+  local jar="$TMP/counter.jar" token
+  token=$(curl -sf -b "$OWNER_JAR" "$API/api/restaurants/$CAFE/tables" |
+    python3 -c "import json,sys; print(next(t['qr_token'] for t in json.load(sys.stdin) if t['kind'] == 'counter'))") ||
+    return 1
+  curl -sf -c "$jar" -H "Content-Type: application/json" -X POST "$API/api/guest/sessions" \
+    -d "{\"qr_token\": \"$token\", \"language\": \"en\"}" >/dev/null || return 1
+  local lines
+  lines=$(curl -sf -b "$jar" "$API/api/guest/menu" | python3 -c "
+import json, sys
+items = json.load(sys.stdin)['items']
+chai = next(i for i in items if i['name'] == 'Pay-it-forward chai')
+dish = next(i for i in items if not i['options'] and i['id'] != chai['id'])
+print(json.dumps([{'menu_item_id': dish['id'], 'quantity': 1}, {'menu_item_id': chai['id'], 'quantity': 1}]))") ||
+    return 1
+  curl -sf -b "$jar" -H "Content-Type: application/json" -X POST "$API/api/orders" \
+    -d "{\"idempotency_key\": \"verify-counter-$(date +%s)\", \"acknowledge_allergen_risk\": true,
+         \"items\": $lines}" -o "$TMP/counter_order.json" || return 1
+  local order_id bill_id
+  order_id=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['id'])" "$TMP/counter_order.json")
+  bill_id=$(sql "SELECT bill_id FROM orders WHERE id = '$order_id'")
+  local unpaid; unpaid="$(sql "SELECT status FROM orders WHERE id = '$order_id'") $(in_kitchen "$order_id")"
+  [ "$unpaid" = "awaiting_payment 0" ] || { echo "unpaid counter order: $unpaid"; return 1; }
+
+  local before expected stale code
+  before=$(balance) || return 1
+  expected=$(curl -sf -b "$OWNER_JAR" "$API/api/restaurants/$CAFE/bills/$bill_id" |
+    python3 -c "import json,sys; print(json.load(sys.stdin)['preview_standard']['total'])") || return 1
+  stale=$(python3 -c "import sys; print(f'{float(sys.argv[1]) + 1:.2f}')" "$expected")
+  settle_counter() {
+    curl -s -o "$TMP/counter_bill.json" -w "%{http_code}" -b "$OWNER_JAR" -H "Content-Type: application/json" \
+      -X POST "$API/api/restaurants/$CAFE/bills/$bill_id/settle" \
+      -d "{\"payment_method\": \"cash\", \"expected_method\": \"cash\", \"expected_total\": \"$1\"}"
+  }
+  code=$(settle_counter "$stale")
+  [ "$code" = "409" ] || { echo "settle with a stale total answered $code"; return 1; }
+  code=$(settle_counter "$expected")
+  [ "$code" = "200" ] || { echo "settle answered $code"; cat "$TMP/counter_bill.json"; return 1; }
+  local paid; paid="$(sql "SELECT status FROM orders WHERE id = '$order_id'") $(in_kitchen "$order_id") $(balance)"
+  echo "counter order $order_id: unpaid=$unpaid paid/kitchen/balance=$paid (balance before $before)"
+  [ "$paid" = "placed 1 $((before + 1))" ] || return 1
+
+  local key; key="verify-give-$(date +%s)"
+  give() {
+    curl -s -o "$TMP/give.json" -w "%{http_code}" -b "$OWNER_JAR" -H "Content-Type: application/json" \
+      -X POST "$API/api/restaurants/$CAFE/pay-forward/give" -d "{\"quantity\": 1, \"idempotency_key\": \"$key\"}"
+  }
+  code=$(give)
+  [ "$code" = "200" ] || { echo "give answered $code"; cat "$TMP/give.json"; return 1; }
+  local handout
+  handout=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['order_id'])" "$TMP/give.json")
+  code=$(give) # a retry with the same key hands out nothing more
+  local after; after="$code $(balance) $(in_kitchen "$handout")"
+  local source; source=$(sql "SELECT source || ' ' || total FROM orders WHERE id = '$handout'")
+  echo "pay-forward give: order $handout ($source), retry/balance/in kitchen=$after"
+  [ "$after" = "200 $before 1" ] && [ "$source" = "pay_forward 0.00" ]
 }
 
 step_edge_proxy() { # Caddy (edge profile) must replace a client-sent X-Forwarded-For
@@ -239,9 +311,9 @@ run_step "stack: make reset, make up, API healthy" step_stack
 run_step "migrations: upgrade head, downgrade -1, upgrade head, alembic check" step_migrations
 run_step "seed twice: identical counts, two venues, demo users" step_seed_twice
 run_step "simulate-orders: sequential and parallel runs give identical counts" step_simulate
-run_step "brief and what-if: structure, grounded numbers, stored backtest" step_brief_whatif
-run_step "live order and its settled bill survive demo data regeneration" step_live_order_survives
-run_step "browser tests: two venues, sized order, kitchen, bills, owner, isolation" step_e2e
+run_step "brief, what-if and floor: structure, grounded numbers, stored backtest, pay-forward" step_brief_whatif
+run_step "live order survives demo data regeneration; counter order and pay-forward give" step_live_order_survives
+run_step "browser tests: two venues and the nine self-service stories" step_e2e
 run_step "edge proxy (Caddy) ignores spoofed X-Forwarded-For" step_edge_proxy
 run_step "make ci" step_ci
 echo "PASS verify-f: all steps"
