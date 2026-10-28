@@ -1,47 +1,17 @@
-import { expect, request, test, type APIRequestContext, type BrowserContext, type Page } from "@playwright/test";
-
-const API = process.env.API_URL ?? "http://127.0.0.1:8000";
-const GUEST = process.env.GUEST_URL ?? "http://127.0.0.1:3000";
-const OWNER = process.env.OWNER_URL ?? "http://127.0.0.1:3001";
-const ANGEETHI = "angeethi-house";
-const KEHWA = "kehwa-and-crumb";
-
-type Role = "owner" | "staff";
-
-async function demoApi(role: Role, venue?: string): Promise<APIRequestContext> {
-  const ctx = await request.newContext({ baseURL: API });
-  const res = await ctx.post("/api/auth/demo-login", { data: venue ? { role, venue } : { role } });
-  expect(res.ok(), "demo-login requires DEMO_MODE=true").toBeTruthy();
-  return ctx;
-}
-
-async function demoInfo() {
-  const ctx = await request.newContext({ baseURL: API });
-  const info = await (await ctx.get("/api/demo/info")).json();
-  await ctx.dispose();
-  return info as { venues: { slug: string; name: string; qr_token: string; table_label: string }[] };
-}
-
-/** Sign the browser context in as demo staff of one venue (cookie set through the owner app). */
-async function staffPage(page: Page, venue: string) {
-  const res = await page.request.post(`${OWNER}/api/auth/demo-login`, { data: { role: "staff", venue } });
-  expect(res.ok()).toBeTruthy();
-}
-
-async function openTableMenu(page: Page, qrToken: string) {
-  await page.goto(`${GUEST}/q/${qrToken}`);
-  await page.getByRole("button", { name: "View Menu" }).click();
-  await expect(page).toHaveURL(/\/en\/menu$/);
-}
-
-async function confirmOrder(page: Page) {
-  const ack = page.getByText("I have spoken with staff and understand the allergen risks");
-  if (await ack.isVisible()) await ack.click();
-  await page.getByRole("button", { name: "Confirm Order" }).click();
-  await expect(page).toHaveURL(/\/en\/orders\/[0-9a-f-]{36}$/);
-  await expect(page.getByText("Received by Kitchen")).toBeVisible();
-  return page.url().split("/").pop() ?? "";
-}
+import { expect, test, type BrowserContext } from "@playwright/test";
+import {
+  ANGEETHI,
+  GUEST,
+  KEHWA,
+  OWNER,
+  clearDemoLimits,
+  confirmOrder,
+  demoApi,
+  demoInfo,
+  openTableMenu,
+  resetVenue,
+  staffPage,
+} from "./helpers";
 
 // One story, in order: a guest at Angeethi House orders a sized dish and asks for the bill, the
 // kitchen bumps it, staff settle the bill and print the sample bill, the owner switches venues and
@@ -51,23 +21,9 @@ test.describe.serial("two venues: guest, kitchen, bills, owner", () => {
   let guestState: Awaited<ReturnType<BrowserContext["storageState"]>> | undefined;
 
   test.beforeAll(async () => {
-    // Start clean: bump open tickets and settle open bills so only this story's show up.
-    for (const slug of [ANGEETHI, KEHWA]) {
-      const staff = await demoApi("staff", slug);
-      const open = await (await staff.get(`/api/restaurants/${slug}/kitchen/orders`)).json();
-      for (const o of open.orders.filter((o: { status: string }) => o.status === "placed")) {
-        await staff.post(`/api/restaurants/${slug}/kitchen/orders/${o.id}/bump`);
-      }
-      const bills = await (await staff.get(`/api/restaurants/${slug}/bills?status=open`)).json();
-      for (const b of bills.bills) {
-        const bill = await (await staff.get(`/api/restaurants/${slug}/bills/${b.id}`)).json();
-        const res = await staff.post(`/api/restaurants/${slug}/bills/${b.id}/settle`, {
-          data: { payment_method: "cash", expected_method: "cash", expected_total: bill.preview_standard.total },
-        });
-        expect(res.ok(), `settle open bill ${b.id}`).toBeTruthy();
-      }
-      await staff.dispose();
-    }
+    // Start clean: only this story's tickets and bills show up.
+    clearDemoLimits();
+    for (const slug of [ANGEETHI, KEHWA]) await resetVenue(slug);
   });
 
   test("guest at Angeethi House orders a sized karahi and requests the bill", async ({ page }) => {
@@ -105,7 +61,8 @@ test.describe.serial("two venues: guest, kitchen, bills, owner", () => {
     await pay.getByRole("button", { name: /^Card/ }).click();
     await expect(pay.getByRole("status").filter({ hasText: "A waiter is bringing the card machine." })).toBeVisible();
     await page.keyboard.press("Escape");
-    await expect(page.getByText("A waiter is bringing the card machine.")).toBeVisible();
+    // The closed sheet keeps its own status line in the DOM: read the order page's line.
+    await expect(page.locator("p[aria-live=polite]").filter({ hasText: "A waiter is bringing the card machine." })).toBeVisible();
     guestState = await page.context().storageState();
   });
 
@@ -139,7 +96,8 @@ test.describe.serial("two venues: guest, kitchen, bills, owner", () => {
     await expect(dialog.getByText("tax 8%").first()).toBeVisible();
     // Method pre-selected from the guest's claim.
     await expect(dialog.getByRole("radio", { name: /^Card/ })).toBeChecked();
-    await dialog.getByLabel("Reference (optional)").fill("AUTH1");
+    // A fresh reference each run: one used in the last 7 days is (rightly) flagged as reused.
+    await dialog.getByLabel("Reference (optional)").fill(`AUTH${Date.now()}`);
     await dialog.getByRole("button", { name: "Confirm received" }).click();
 
     await expect(page).toHaveURL(/\/bills\/[0-9a-f-]{36}\/print\?venue=angeethi-house$/);
@@ -156,7 +114,9 @@ test.describe.serial("two venues: guest, kitchen, bills, owner", () => {
     const guest = await browser.newContext({ storageState: guestState });
     const guestPage = await guest.newPage();
     await guestPage.goto(`${GUEST}/en/orders/${orderId}`);
-    await expect(guestPage.getByText(/^Paid · Bill no\. \d{4} · thank you$/)).toBeVisible();
+    // The paid line is followed by the amount paid in the same paragraph.
+    await expect(guestPage.getByText(/^Paid · Bill no\. \d{4} · thank you/)).toBeVisible();
+    await expect(guestPage.getByText(/^Paid Rs\s[\d,]+ \(incl\. 8% sales tax\) by Card$/)).toBeVisible();
     await guest.close();
   });
 
