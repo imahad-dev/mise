@@ -31,6 +31,7 @@ interface KitchenOrder {
   bumped_at?: string | null;
   items: KitchenOrderItem[];
   pickup_label?: string | null;
+  pay_forward?: boolean;
 }
 
 interface OrdersResponse {
@@ -296,7 +297,7 @@ export default function KitchenDisplayPage() {
               onClick={() => handleRecall(mostRecentBumped.id)}
               className="px-5 py-2.5 rounded-xl bg-kds-warn hover:opacity-90 text-espresso font-black text-sm uppercase tracking-wide shadow-lg animate-pulse"
             >
-              ↺ RECALL {mostRecentBumped.pickup_label ? `PICKUP ${mostRecentBumped.pickup_label}` : `TABLE ${mostRecentBumped.table_label || ""}`} ({recallRemainingSeconds}s)
+              ↺ RECALL {mostRecentBumped.pay_forward ? "PAY-IT-FORWARD" : mostRecentBumped.pickup_label ? `PICKUP ${mostRecentBumped.pickup_label}` : `TABLE ${mostRecentBumped.table_label || ""}`} ({recallRemainingSeconds}s)
             </button>
           )}
         </div>
@@ -337,7 +338,9 @@ export default function KitchenDisplayPage() {
                 <div className="space-y-2 border-b border-cream/10 pb-3">
                   <div className="flex items-start justify-between">
                     <div>
-                      {order.pickup_label ? (
+                      {order.pay_forward ? (
+                        <h2 className="text-2xl font-black tracking-tight text-cream">PAY-IT-FORWARD · Chai</h2>
+                      ) : order.pickup_label ? (
                         <h2 className="text-4xl font-black tracking-tight text-cream">PICKUP {order.pickup_label}</h2>
                       ) : (
                         <h2 className="text-2xl font-black tracking-tight text-cream">

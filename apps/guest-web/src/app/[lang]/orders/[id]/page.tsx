@@ -8,7 +8,7 @@ import { ChatPanel } from "../../../../components/chat-panel";
 import { useSse } from "../../../../hooks/use-sse";
 import { getDictionary } from "../../../../i18n";
 import { Button, formatPrice } from "ui";
-import { VISIT_ENDED, billState, claimMessage, counterState, paidText, type GuestBill } from "../../../../lib/pay";
+import { VISIT_ENDED, billState, claimMessage, counterState, paidText, payForwardThanks, type GuestBill } from "../../../../lib/pay";
 
 interface OrderItem {
   id: string;
@@ -84,6 +84,7 @@ export default function OrderStatusPage({
   const state = billState(bill, ended);
   const counter = counterState(bill);
   const paid = bill ? paidText(bill, dict, lang) : null;
+  const thanks = bill ? payForwardThanks(bill, dict) : null;
   // Settled or cancelled while the sheet is open: nothing left to pay, so close it.
   useEffect(() => {
     if (bill && bill.status !== "open") setPaying(false);
@@ -211,6 +212,7 @@ export default function OrderStatusPage({
                   {counter === "cancelled" && dict.counter.cancelled}
                 </p>
                 {paid && <p className="text-sm text-ink-muted">{paid}</p>}
+                {thanks && <p className="text-sm">{thanks}</p>}
                 {counter === "awaiting" && (
                   <Button className="w-full" onClick={() => setPaying(true)}>
                     {dict.pay.button}
@@ -224,6 +226,7 @@ export default function OrderStatusPage({
                 {state === "none" && dict.pay.noBill}
                 {state === "paid" && dict.bill.paid.replace("{billNo}", String(bill?.bill_no ?? "").padStart(4, "0"))}
                 {state === "paid" && paid && <span className="block mt-1 font-semibold">{paid}</span>}
+                {state === "paid" && thanks && <span className="block mt-1">{thanks}</span>}
                 {state === "cancelled" && dict.pay.cancelled}
                 {state === "ended" && dict.pay.visitEnded}
                 {state === "claimed" && bill?.claim && claimMessage(bill.claim, dict, lang, bill.currency)}

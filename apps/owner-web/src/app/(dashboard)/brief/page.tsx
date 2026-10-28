@@ -329,6 +329,11 @@ export default function DailyBriefPage() {
               )}
             </Card>
 
+            {/* Not revenue: handouts are free and the chai sold already counts as a normal sale. */}
+            <Card className="p-4 text-sm text-ink">
+              Pay-it-forward: {brief.pay_forward.bought} bought · {brief.pay_forward.given} given this week
+            </Card>
+
             <div className="mise-card p-6 space-y-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>

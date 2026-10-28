@@ -21,6 +21,7 @@ export interface FloorResponse {
   thresholds: Record<string, [number, number]>;
   server_time: string;
   service_extra_label: string | null;
+  pay_forward_balance: number;
 }
 
 /** Milliseconds since `since` on the server's clock: the client clock only measures time since the load. */
@@ -66,3 +67,7 @@ export const isStale = (ageMs: number) => ageMs > STALE_MS;
 
 /** Text twin of the colour, so the level never relies on colour alone. */
 export const levelText = (level: FloorLevel) => (level === "red" ? "Urgent" : level === "amber" ? "Due soon" : null);
+
+/** The pay-it-forward tile's headline: chai bought by guests and not yet handed out. */
+export const payForwardText = (waiting: number) =>
+  waiting > 0 ? `Pay-it-forward chai: ${waiting} waiting` : "No chai waiting";

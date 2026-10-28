@@ -75,6 +75,8 @@ export interface DailyBrief {
   menu_engineering: MenuEngineeringItem[];
   thresholds: { median_units: number; median_unit_margin: number };
   payment_mix: PaymentMix;
+  /** Pay-it-forward chai over the last 7 days; not revenue. */
+  pay_forward: { bought: number; given: number };
   forecast: {
     method: string | null;
     model_name: string | null;

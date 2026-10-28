@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { elapsed, formatElapsed, isStale, levelClass, sortTiles, stateLabel, type FloorTile } from "./floor";
+import {
+  elapsed,
+  formatElapsed,
+  isStale,
+  levelClass,
+  payForwardText,
+  sortTiles,
+  stateLabel,
+  type FloorTile,
+} from "./floor";
 
 const tile = (label: string, level: FloorTile["level"]): FloorTile => ({
   table_id: label, label, state: "seated", level, since: null, reason: null, reason_label: null,
@@ -7,6 +16,10 @@ const tile = (label: string, level: FloorTile["level"]): FloorTile => ({
 });
 
 describe("floor helpers", () => {
+  it("says how many pay-it-forward chai are waiting", () => {
+    expect(payForwardText(0)).toBe("No chai waiting");
+    expect(payForwardText(3)).toBe("Pay-it-forward chai: 3 waiting");
+  });
   it("measures elapsed time on the server clock", () => {
     const since = "2026-10-25T12:00:00Z";
     const server = "2026-10-25T12:05:00Z";

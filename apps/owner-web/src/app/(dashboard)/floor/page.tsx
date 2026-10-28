@@ -6,6 +6,7 @@ import { Button, Card, PageHeader, formatPrice } from "ui";
 import { useVenue, useSlugRef } from "../../../lib/venue";
 import { useSse } from "../../../hooks/use-sse";
 import { apiError } from "../../../lib/bill";
+import { PayForwardTile } from "../../../components/PayForwardTile";
 import {
   elapsed,
   formatElapsed,
@@ -143,6 +144,12 @@ export default function FloorPage() {
           </button>
         </div>
       )}
+
+      <PayForwardTile
+        slug={slug}
+        balance={data ? data.floor.pay_forward_balance : null}
+        onChanged={() => void refetch()}
+      />
 
       {data && tiles.length === 0 ? (
         <Card className="p-12 text-center text-sm text-ink-muted">No tables yet. Add them under Tables &amp; QR.</Card>

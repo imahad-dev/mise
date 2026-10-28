@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Badge, Button, Card, PageHeader, Sheet, formatPrice } from "ui";
 import { useVenue, useSlugRef } from "../../../lib/venue";
 import { useSse } from "../../../hooks/use-sse";
+import { PayForwardTile } from "../../../components/PayForwardTile";
 import {
   PAYMENT_METHODS,
   VOID_REASONS,
@@ -49,7 +50,8 @@ const COLUMNS: { key: CounterColumn; title: string }[] = [
   { key: "preparing", title: "Preparing" },
   { key: "ready", title: "Ready" },
 ];
-type BillList = { bills: BillSummary[]; restaurant_timezone: string };
+// pay_forward_balance: loaded with the counter queue only.
+type BillList = { bills: BillSummary[]; restaurant_timezone: string; pay_forward_balance?: number };
 
 export default function BillsPage() {
   const { venue } = useVenue();
@@ -99,8 +101,13 @@ export default function BillsPage() {
     if (kind === "table" || view === "cancelled") return get(view);
     // Counter queue: unpaid bills are open; paid ones (preparing, ready, just collected) come
     // from the uncapped queue list, oldest payment first.
-    const [open, settled] = await Promise.all([get("open"), get("settled&queue=true")]);
-    return { ...open, bills: [...open.bills, ...settled.bills] };
+    const floor = async (): Promise<number> => {
+      const res = await fetch(`/api/restaurants/${slug}/floor`);
+      if (!res.ok) throw new Error(await apiError(res));
+      return (await res.json()).pay_forward_balance;
+    };
+    const [open, settled, payForward] = await Promise.all([get("open"), get("settled&queue=true"), floor()]);
+    return { ...open, bills: [...open.bills, ...settled.bills], pay_forward_balance: payForward };
   }, [slug, view, kind]);
 
   const { data, error: listError, refetch } = useSse<BillList>({
@@ -433,6 +440,10 @@ export default function BillsPage() {
       <p role="status" className="sr-only">
         {announce}
       </p>
+
+      {kind === "counter" && view === "open" && (
+        <PayForwardTile slug={slug} balance={data?.pay_forward_balance ?? null} onChanged={() => void refetch()} />
+      )}
 
       {kind === "counter" && view === "open" ? (
         <div className="grid gap-4 md:grid-cols-3">

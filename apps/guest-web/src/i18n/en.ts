@@ -79,6 +79,7 @@ export const en: TranslationDict = {
   },
   bill: {
     paid: "Paid · Bill no. {billNo} · thank you",
+    payForward: "You bought {count} chai for someone who needs it. Shukriya.",
   },
   pay: {
     button: "Pay bill",

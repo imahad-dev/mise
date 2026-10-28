@@ -75,6 +75,8 @@ export interface TranslationDict {
   bill: {
     /** Contains {billNo}. */
     paid: string;
+    /** Contains {count}: pay-it-forward chai on the settled bill. */
+    payForward: string;
   };
   pay: {
     button: string;

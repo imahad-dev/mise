@@ -47,6 +47,8 @@ export interface GuestBill {
   total: string | null;
   /** Counter pickup bills only: "K-042". */
   pickup_label?: string | null;
+  /** Pay-it-forward chai on this bill once settled. */
+  pay_forward_count?: number;
 }
 
 /** The API's 409 detail for a stale guest session (services/api/src/services/bills.py). */
@@ -119,6 +121,12 @@ export function paidText(bill: GuestBill, dict: TranslationDict, lang: string): 
     .replace("{total}", formatPrice(Number(bill.total), bill.currency, lang))
     .replace("{rate}", percent(bill.tax_rate))
     .replace("{method}", dict.pay.methods[bill.payment_method] ?? bill.payment_method);
+}
+
+/** The thank-you for pay-it-forward chai on a settled bill, else null. */
+export function payForwardThanks(bill: GuestBill, dict: TranslationDict): string | null {
+  const n = bill.pay_forward_count ?? 0;
+  return bill.status === "settled" && n > 0 ? dict.bill.payForward.replace("{count}", String(n)) : null;
 }
 
 export const percent = (rate: string) => String(Number((Number(rate) * 100).toFixed(2)));

@@ -102,6 +102,16 @@
     background: var(--color-danger-fg);
     color: var(--color-cream);
   }
+  /* Tabs switch at once and the selected one never darkens on hover, so exactly one reads as
+     selected even while the pointer rests on the tab just clicked. */
+  [role="tab"].btn-primary,
+  [role="tab"].btn-ghost {
+    transition: none;
+  }
+  [role="tab"][aria-selected="true"].btn-primary:hover {
+    background: var(--color-terracotta);
+    cursor: default;
+  }
   .btn-primary:disabled,
   .btn-ghost:disabled,
   .btn-dark:disabled,

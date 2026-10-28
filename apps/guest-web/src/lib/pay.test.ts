@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { formatPrice } from "ui";
 import { getDictionary } from "../i18n";
-import { billState, claimMessage, counterState, paidText, referenceFor, copyText, detailsFor, isValidReference, needsReference, percent, type GuestBill } from "./pay";
+import { billState, claimMessage, counterState, paidText, payForwardThanks, referenceFor, copyText, detailsFor, isValidReference, needsReference, percent, type GuestBill } from "./pay";
 
 const en = getDictionary("en");
 const claim = (method: "cash" | "card" | "wallet" | "raast" | "bank_transfer") => ({
@@ -124,5 +124,14 @@ describe("counterState", () => {
     expect(claimMessage(claim("cash"), en, "en", "PKR", true)).toBe(`Pay ${formatPrice(2714, "PKR")} at the counter.`);
     expect(claimMessage(claim("card"), en, "en", "PKR", true)).toBe("Pay by card at the counter.");
     expect(claimMessage(claim("raast"), en, "en", "PKR", true)).toBe(en.pay.sent);
+  });
+});
+
+describe("pay-it-forward thanks", () => {
+  const bill = { status: "settled", pay_forward_count: 2 } as GuestBill;
+  it("thanks the guest for chai bought for others, once settled", () => {
+    expect(payForwardThanks(bill, en)).toBe("You bought 2 chai for someone who needs it. Shukriya.");
+    expect(payForwardThanks({ ...bill, status: "open" }, en)).toBeNull();
+    expect(payForwardThanks({ ...bill, pay_forward_count: 0 }, en)).toBeNull();
   });
 });
