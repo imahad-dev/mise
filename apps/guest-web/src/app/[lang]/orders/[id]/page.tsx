@@ -21,10 +21,10 @@ interface OrderItem {
 }
 
 /**
- * The guest session's bill: polled every 10 s while open or while a paid counter order is still
- * on its way, every 30 s otherwise (a new order opens a new bill).
+ * This order's bill (its own counter bill, or the table bill it is on): polled every 10 s while
+ * open or while a paid counter order is still on its way, every 30 s otherwise.
  */
-function useGuestBill() {
+function useGuestBill(orderId: string) {
   const [bill, setBill] = useState<GuestBill | null>(null);
   const [ended, setEnded] = useState(false);
   const pickup = counterState(bill);
@@ -32,20 +32,30 @@ function useGuestBill() {
 
   const load = useCallback(
     () =>
-      fetch("/api/guest/bill")
+      fetch(`/api/guest/bill?order_id=${encodeURIComponent(orderId)}`)
         .then(async (r) => {
           if (r.status === 404) setBill(null);
           else if (r.ok) setBill((await r.json()) as GuestBill);
           // other errors: keep the last known bill
         })
         .catch(() => {}),
-    [],
+    [orderId],
   );
 
   useEffect(() => {
     void load();
     const timer = setInterval(load, slow ? 30_000 : 10_000);
-    return () => clearInterval(timer);
+    // Phones throttle background timers: catch up as soon as the guest looks again.
+    const visible = () => {
+      if (document.visibilityState === "visible") void load();
+    };
+    document.addEventListener("visibilitychange", visible);
+    window.addEventListener("focus", visible);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", visible);
+      window.removeEventListener("focus", visible);
+    };
   }, [slow, load]);
 
   return { bill, setBill, ended, setEnded, reload: load };
@@ -69,7 +79,7 @@ export default function OrderStatusPage({
 }) {
   const { lang, id } = use(params);
   const dict = getDictionary(lang);
-  const { bill, setBill, ended, setEnded, reload } = useGuestBill();
+  const { bill, setBill, ended, setEnded, reload } = useGuestBill(id);
   const [paying, setPaying] = useState(false);
   const state = billState(bill, ended);
   const counter = counterState(bill);
@@ -236,6 +246,7 @@ export default function OrderStatusPage({
               <PaySheet
                 lang={lang}
                 bill={bill}
+                orderId={id}
                 open={paying}
                 onClose={() => setPaying(false)}
                 onUpdated={setBill}

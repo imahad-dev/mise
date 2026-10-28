@@ -18,6 +18,8 @@ import {
 export interface PaySheetProps {
   lang: string;
   bill: GuestBill;
+  /** The order page's order: the claim goes to that order's bill only. */
+  orderId?: string;
   open: boolean;
   onClose: () => void;
   /** The server's answer to a claim. */
@@ -27,7 +29,7 @@ export interface PaySheetProps {
 }
 
 /** Lines, per-method totals and the guest's payment claim. Never settles: staff confirm. */
-export function PaySheet({ lang, bill, open, onClose, onUpdated, onConflict }: PaySheetProps) {
+export function PaySheet({ lang, bill, orderId, open, onClose, onUpdated, onConflict }: PaySheetProps) {
   const dict = getDictionary(lang);
   const money = (v: string) => formatPrice(Number(v), bill.currency, lang);
   const [selected, setSelected] = useState<Method | null>(bill.claim?.method ?? null);
@@ -49,7 +51,7 @@ export function PaySheet({ lang, bill, open, onClose, onUpdated, onConflict }: P
     setPosting(true);
     setError(null);
     try {
-      const r = await fetch("/api/guest/bill/payment", {
+      const r = await fetch(`/api/guest/bill/payment${orderId ? `?order_id=${encodeURIComponent(orderId)}` : ""}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ method, reference: ref }),

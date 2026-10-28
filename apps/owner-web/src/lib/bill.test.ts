@@ -5,7 +5,7 @@ import { formatPrice } from "ui";
 import {
   PAYMENT_METHODS, SAMPLE_BILL_FOOTER, amountDueText, billNo, claimChip, claimSummary, claimWarning, previewFor, sampleBillPieces, sampleBillText,
   nextFormState, settlePayload, taxLabel, voidReason, warningKey,
-  counterColumn, isExpiredUnpaid, pickupText, settingsErrors, undoSecondsLeft,
+  collectedUndoLeft, counterColumn, isExpiredUnpaid, pickupText, settingsBody, settingsErrors, undoSecondsLeft,
 } from "./bill";
 
 describe("sample bill", () => {
@@ -160,6 +160,28 @@ describe("counter helpers", () => {
     expect(counterColumn(row({ status: "settled", order_status: "bumped" }))).toBe("ready");
     expect(counterColumn(row({ status: "settled", order_status: "collected", collected_at: "2026-10-28T10:00:00Z" }))).toBeNull();
     expect(counterColumn(row({ status: "cancelled", order_status: "cancelled" }))).toBeNull();
+  });
+  it("keeps table bills out of the counter queue", () => {
+    expect(counterColumn(row({ pickup_label: null, order_status: null }))).toBeNull();
+  });
+  it("offers undo on a row collected less than 60 s ago", () => {
+    const at = Date.parse("2026-10-28T10:00:00Z");
+    const collected = { pickup_label: "K-042", collected_at: "2026-10-28T10:00:00Z" };
+    expect(collectedUndoLeft(collected, at + 15_000)).toBe(45);
+    expect(collectedUndoLeft(collected, at + 60_000)).toBe(0);
+    expect(collectedUndoLeft({ ...collected, collected_at: null }, at)).toBe(0);
+  });
+  it("always sends every settings field; empty clears", () => {
+    expect(settingsBody({ jazzcash: " 03001234567 ", account_title: "Kehwa", pickup_prefix: "", service_extra_label: "  " }, false)).toEqual({
+      payment_details: { raast_id: null, jazzcash: "03001234567", easypaisa: null, iban: null, account_title: "Kehwa", sample: false },
+      pickup_prefix: null,
+      service_extra_label: null,
+    });
+    expect(settingsBody({ pickup_prefix: "P", service_extra_label: "Extra naan" }, true)).toMatchObject({
+      payment_details: { sample: true },
+      pickup_prefix: "P",
+      service_extra_label: "Extra naan",
+    });
   });
   it("tags yesterday's pickup numbers", () => {
     expect(pickupText(row({}))).toBe("K-042");

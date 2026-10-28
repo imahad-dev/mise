@@ -23,7 +23,7 @@ import {
   pickupText,
   previewFor,
   settlePayload,
-  undoSecondsLeft,
+  collectedUndoLeft,
   voidReason,
   warningKey,
   type BillDetail,
@@ -67,13 +67,14 @@ export default function BillsPage() {
   const [busy, setBusy] = useState(false);
   const [view, setView] = useState<"open" | "cancelled">("open");
   const [kind, setKind] = useState<"table" | "counter">("table");
-  // Counter queue: cancel sheet, action errors and the Collected undo toast.
+  // Counter queue: cancel sheet, action errors, collect requests in flight and the undo countdown.
   const [cancelTarget, setCancelTarget] = useState<BillSummary | null>(null);
   const [cancelReason, setCancelReason] = useState("");
   const [cancelError, setCancelError] = useState<string | null>(null);
   const [cancelBusy, setCancelBusy] = useState(false);
   const [queueError, setQueueError] = useState<string | null>(null);
-  const [undo, setUndo] = useState<{ orderId: string; label: string; startedAt: number } | null>(null);
+  const [inFlight, setInFlight] = useState<string[]>([]);
+  const [announce, setAnnounce] = useState("");
   const [now, setNow] = useState(() => Date.now());
   // Void sheet
   const [voidTarget, setVoidTarget] = useState<BillOrder | null>(null);
@@ -90,15 +91,15 @@ export default function BillsPage() {
   const printHref = (id: string) => `/bills/${id}/print?venue=${encodeURIComponent(slug ?? "")}`;
 
   const fetchBills = useCallback(async (): Promise<BillList> => {
-    const get = async (status: string): Promise<BillList> => {
-      const res = await fetch(`/api/restaurants/${slug}/bills?status=${status}&kind=${kind}`);
+    const get = async (query: string): Promise<BillList> => {
+      const res = await fetch(`/api/restaurants/${slug}/bills?status=${query}&kind=${kind}`);
       if (!res.ok) throw new Error(await apiError(res));
       return res.json();
     };
     if (kind === "table" || view === "cancelled") return get(view);
-    // Counter queue: unpaid bills are open; paid ones (preparing, ready) are settled.
-    // shortcut: settled lists the 50 latest, so a ready order older than 50 paid ones drops off; add a server filter if a counter gets that busy.
-    const [open, settled] = await Promise.all([get("open"), get("settled")]);
+    // Counter queue: unpaid bills are open; paid ones (preparing, ready, just collected) come
+    // from the uncapped queue list, oldest payment first.
+    const [open, settled] = await Promise.all([get("open"), get("settled&queue=true")]);
     return { ...open, bills: [...open.bills, ...settled.bills] };
   }, [slug, view, kind]);
 
@@ -122,16 +123,13 @@ export default function BillsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reload only when the tab changes
   }, [view, kind]);
 
-  // The undo toast counts down, then goes away.
+  // "Just collected" rows count their undo window down, then leave the queue.
+  const hasCollected = (data?.bills ?? []).some((b) => b.collected_at);
   useEffect(() => {
-    if (!undo) return;
-    const tick = setInterval(() => {
-      const t = Date.now();
-      setNow(t);
-      if (undoSecondsLeft(undo.startedAt, t) === 0) setUndo(null);
-    }, 1000);
+    if (!hasCollected) return;
+    const tick = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(tick);
-  }, [undo]);
+  }, [hasCollected]);
 
   /** Show a (re)loaded bill; changed is true when the server said the bill changed (settle 409). */
   const show = (body: BillDetail, changed = false) => {
@@ -345,24 +343,25 @@ export default function BillsPage() {
   };
 
   const collect = async (orderId: string, label: string, undoIt = false) => {
-    const startedAt = Date.now();
+    if (inFlight.includes(orderId)) return;
+    setInFlight((ids) => [...ids, orderId]);
     setQueueError(null);
     try {
       const res = await fetch(`/api/restaurants/${slug}/orders/${orderId}/${undoIt ? "uncollect" : "collect"}`, { method: "POST" });
       if (res.ok) {
-        setUndo(undoIt ? null : { orderId, label, startedAt });
+        setAnnounce(undoIt ? `${label} back in Ready` : `${label} collected`);
         setNow(Date.now());
-      } else {
-        setQueueError(await apiError(res));
-        if (undoIt) setUndo(null);
-      }
-      void refetch();
+      } else setQueueError(await apiError(res));
+      await refetch();
     } catch {
       setQueueError("Network error. Try again.");
+    } finally {
+      setInFlight((ids) => ids.filter((id) => id !== orderId));
     }
   };
 
   const bills = data?.bills ?? [];
+  const justCollected = kind === "counter" && view === "open" ? bills.filter((b) => collectedUndoLeft(b, now) > 0) : [];
   const currency = venue?.currency ?? "PKR";
   const selected = detail ? previewFor(detail, method) : null;
   const claimNow = detail?.claim ? previewFor(detail, detail.claim.method) : null;
@@ -431,6 +430,9 @@ export default function BillsPage() {
           {queueError}
         </p>
       )}
+      <p role="status" className="sr-only">
+        {announce}
+      </p>
 
       {kind === "counter" && view === "open" ? (
         <div className="grid gap-4 md:grid-cols-3">
@@ -467,14 +469,38 @@ export default function BillsPage() {
                           </Button>
                         )}
                         {col.key === "ready" && (
-                          <Button className="w-full" aria-label={`${pickupText(b)} collected`} disabled={!b.order_id} onClick={() => b.order_id && void collect(b.order_id, pickupText(b))}>
-                            Collected
+                          <Button
+                            className="w-full"
+                            disabled={!b.order_id || inFlight.includes(b.order_id)}
+                            onClick={() => b.order_id && void collect(b.order_id, pickupText(b))}
+                          >
+                            Collected {pickupText(b)}
                           </Button>
                         )}
                       </div>
                     </li>
                   ))}
                 </ul>
+                {col.key === "ready" && justCollected.length > 0 && (
+                  <>
+                    <h3 className="pt-2 text-sm font-semibold text-ink-muted">Just collected</h3>
+                    <ul className="space-y-2">
+                      {justCollected.map((b) => (
+                        <li key={b.id} className="mise-card flex items-center justify-between gap-3">
+                          <span className="font-serif text-2xl font-bold text-ink-muted">{pickupText(b)}</span>
+                          <Button
+                            variant="outline"
+                            aria-label={`Undo ${pickupText(b)} collected`}
+                            disabled={!b.order_id || inFlight.includes(b.order_id)}
+                            onClick={() => b.order_id && void collect(b.order_id, pickupText(b), true)}
+                          >
+                            Undo <span aria-hidden="true">({collectedUndoLeft(b, now)} s)</span>
+                          </Button>
+                        </li>
+                      ))}
+                    </ul>
+                  </>
+                )}
               </section>
             );
           })}
@@ -797,20 +823,6 @@ export default function BillsPage() {
         </Button>
       </Sheet>
 
-      {undo && (
-        <div className="fixed inset-x-4 bottom-4 z-50 mx-auto flex max-w-md items-center justify-between gap-3 rounded-xl border border-line bg-card p-3 shadow-lg">
-          <span role="status" className="text-sm font-semibold text-ink">
-            {undo.label} collected
-          </span>
-          <Button
-            variant="outline"
-            aria-label={`Undo ${undo.label} collected`}
-            onClick={() => void collect(undo.orderId, undo.label, true)}
-          >
-            Undo <span aria-hidden="true">({undoSecondsLeft(undo.startedAt, now)} s)</span>
-          </Button>
-        </div>
-      )}
     </div>
   );
 }

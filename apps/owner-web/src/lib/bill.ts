@@ -183,6 +183,7 @@ export type CounterColumn = "awaiting" | "preparing" | "ready";
 
 /** Where a counter bill sits in the queue: unpaid, paid and cooking, bumped; null once collected or cancelled. */
 export function counterColumn(row: CounterRow): CounterColumn | null {
+  if (!row.pickup_label) return null; // table bills never join the counter queue
   if (row.status === "open") return "awaiting";
   if (row.status !== "settled" || row.collected_at || row.order_status === "collected") return null;
   if (row.order_status === "placed") return "preparing";
@@ -199,9 +200,28 @@ export const EXPIRED_UNPAID = "Expired unpaid";
 export const isExpiredUnpaid = (b: Pick<BillSummary, "status" | "cancel_reason" | "pickup_label"> & { cancelled_by_name?: string | null }) =>
   b.status === "cancelled" && b.cancel_reason === EXPIRED_UNPAID && Boolean(b.pickup_label) && !b.cancelled_by_name;
 
-/** Collected can be undone for 60 s (server clock); the client counts from before its request, so it never offers more. */
+/** Collected can be undone for 60 s (server clock). */
 export const UNDO_MS = 60_000;
 export const undoSecondsLeft = (startedAt: number, now: number) => Math.max(0, Math.ceil((startedAt + UNDO_MS - now) / 1000));
+
+/**
+ * Seconds of undo left on a "Just collected" queue row, 0 when it is not one.
+ * shortcut: counts collected_at (server clock) on the device clock, so a skewed device shows a shifted countdown; the server still decides.
+ */
+export const collectedUndoLeft = (row: Pick<BillSummary, "pickup_label" | "collected_at">, now: number) =>
+  row.pickup_label && row.collected_at ? undoSecondsLeft(Date.parse(row.collected_at), now) : 0;
+
+export const SETTINGS_PAYMENT_FIELDS = ["raast_id", "jazzcash", "easypaisa", "iban", "account_title"] as const;
+
+/** The PATCH /settings body: every field, always; empty text clears (null). */
+export function settingsBody(form: Record<string, string | undefined>, sample: boolean) {
+  const value = (key: string) => form[key]?.trim() || null;
+  return {
+    payment_details: { ...Object.fromEntries(SETTINGS_PAYMENT_FIELDS.map((k) => [k, value(k)])), sample },
+    pickup_prefix: value("pickup_prefix"),
+    service_extra_label: value("service_extra_label"),
+  };
+}
 
 /** PATCH /settings errors by field: {field, message} for payment details, FastAPI's list, or the 409 prefix message. */
 export function settingsErrors(status: number, body: unknown): Record<string, string> {

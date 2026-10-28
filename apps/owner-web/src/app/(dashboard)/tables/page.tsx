@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { Badge, Button, Card } from "ui";
 import { useVenue } from "../../../lib/venue";
-import { settingsErrors } from "../../../lib/bill";
+import { settingsBody, settingsErrors } from "../../../lib/bill";
 import QRCode from "qrcode";
 
 interface TableItem {
@@ -42,6 +42,7 @@ function VenueSettings({ slug }: { slug: string }) {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const apply = (body: VenueSettingsBody) => {
     setLoaded(body);
@@ -55,16 +56,28 @@ function VenueSettings({ slug }: { slug: string }) {
   useEffect(() => {
     let cancelled = false;
     setLoaded(null);
+    setLoadError(null);
     fetch(`/api/restaurants/${slug}/settings`)
       .then(async (r) => {
-        if (r.ok && !cancelled) apply((await r.json()) as VenueSettingsBody);
+        if (cancelled) return;
+        if (r.ok) apply((await r.json()) as VenueSettingsBody);
+        else setLoadError(`Couldn't load payment settings (${r.status}). Reload to try again.`);
       })
-      .catch(() => {});
+      .catch(() => {
+        if (!cancelled) setLoadError("Couldn't load payment settings. Reload to try again.");
+      });
     return () => {
       cancelled = true;
     };
   }, [slug]);
 
+  if (loadError) {
+    return (
+      <p role="alert" className="rounded-xl border border-danger-fg bg-danger-bg p-3 text-sm text-danger-fg print:hidden">
+        {loadError}
+      </p>
+    );
+  }
   if (!loaded) return null;
 
   const save = async (e: React.FormEvent) => {
@@ -72,20 +85,11 @@ function VenueSettings({ slug }: { slug: string }) {
     setBusy(true);
     setErrors({});
     setSaved(false);
-    const extra = form.service_extra_label.trim();
     try {
       const res = await fetch(`/api/restaurants/${slug}/settings`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          payment_details: {
-            ...Object.fromEntries(PAYMENT_FIELDS.map((f) => [f.key, form[f.key].trim() || null])),
-            sample: loaded.payment_details.sample === true,
-          },
-          pickup_prefix: form.pickup_prefix.trim() || null,
-          // The API keeps the current label when this is left out; it cannot be cleared.
-          ...(extra ? { service_extra_label: extra } : {}),
-        }),
+        body: JSON.stringify(settingsBody(form, loaded.payment_details.sample === true)),
       });
       if (res.ok) {
         apply((await res.json()) as VenueSettingsBody);
@@ -139,7 +143,7 @@ function VenueSettings({ slug }: { slug: string }) {
         </fieldset>
         <div className="grid gap-3 sm:grid-cols-2">
           {field("pickup_prefix", "Pickup prefix", "1–3 capital letters, e.g. K for K-042. Empty uses K.", { maxLength: 3 })}
-          {field("service_extra_label", "Extra call reason", "Shown on Call waiter, e.g. Extra naan", { maxLength: 40 })}
+          {field("service_extra_label", "Extra call reason", "Shown on Call waiter, e.g. Extra naan. Empty removes it.", { maxLength: 40 })}
         </div>
         {other.map(([k, message]) => (
           <p key={k} role="alert" className="text-sm text-danger-fg">
