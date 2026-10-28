@@ -43,7 +43,7 @@ async def test_debug_sse_endpoint_headers(client: AsyncClient):
         resp = await client.get("/debug/sse")
         assert resp.status_code == 200
         assert "text/event-stream" in resp.headers["content-type"]
-        assert resp.headers.get("cache-control") == "no-cache"
+        assert resp.headers.get("cache-control") == "no-cache, no-transform"
         assert resp.headers.get("connection") == "keep-alive"
         assert resp.headers.get("x-accel-buffering") == "no"
         assert 'data: {"count": 0, "msg": "debug heartbeat"}' in resp.text
