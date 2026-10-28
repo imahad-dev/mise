@@ -199,6 +199,10 @@ class OrderItem(Base):
     allergen_verified: Mapped[bool] = mapped_column(Boolean, nullable=False)
     allergen_status: Mapped[str] = mapped_column(Text, nullable=False)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # The item's pay-it-forward flag when ordered: settle credits this, not the current flag.
+    is_pay_forward: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("false")
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

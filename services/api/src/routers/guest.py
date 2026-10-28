@@ -441,7 +441,12 @@ async def _bill_detail(
             await db.scalar(
                 select(func.coalesce(func.sum(PayForward.quantity), 0))
                 .join(Order, Order.id == PayForward.order_id)
-                .where(Order.bill_id == bill.id, PayForward.kind == "bought")
+                .where(
+                    Order.bill_id == bill.id,
+                    # A shared table bill: thank each phone for its own chai only.
+                    Order.guest_session_id == session.id,
+                    PayForward.kind == "bought",
+                )
             )
         ),
     )

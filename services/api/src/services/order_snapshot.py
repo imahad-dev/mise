@@ -41,6 +41,7 @@ def snapshot_order_item(
             guest_allergens_to_avoid=guest_allergens_to_avoid,
         ),
         notes=notes,
+        is_pay_forward=item.is_pay_forward,
     )
 
 

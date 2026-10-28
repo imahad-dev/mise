@@ -7,6 +7,7 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from unittest.mock import patch
 
+import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import delete, func, select
@@ -86,6 +87,11 @@ async def pf(db_session: AsyncSession) -> PfVenue:
     return PfVenue(r, t1, naan, chai, party)
 
 
+def one(key: str | None = None) -> dict:
+    """A give body: one chai, a fresh idempotency key unless one is given."""
+    return {"quantity": 1, "idempotency_key": key or uuid.uuid4().hex}
+
+
 def url(v: PfVenue, suffix: str) -> str:
     return f"/api/restaurants/{v.r.slug}{suffix}"
 
@@ -153,7 +159,7 @@ async def test_give_one(client, db_session, pf, monkeypatch):
     staff = await as_member(client, db_session, pf.r.id, "staff")
     events = record_events(monkeypatch, "src.routers.floor.publish_event")
 
-    resp = await client.post(url(pf, "/pay-forward/give"), json={"quantity": 1})
+    resp = await client.post(url(pf, "/pay-forward/give"), json=one())
     assert resp.status_code == 200, resp.text
     assert resp.json()["pay_forward_balance"] == 0
     order_id = uuid.UUID(resp.json()["order_id"])
@@ -191,7 +197,7 @@ async def test_give_one(client, db_session, pf, monkeypatch):
     assert tickets[str(order_id)]["table_label"] is None
     assert [o["pay_forward"] for o in kitchen if o["id"] != str(order_id)] == [False]
 
-    again = await client.post(url(pf, "/pay-forward/give"), json={"quantity": 1})
+    again = await client.post(url(pf, "/pay-forward/give"), json=one())
     assert again.status_code == 409
     assert again.json()["detail"] == "None waiting"
     assert await balance(client, pf) == 0
@@ -200,7 +206,7 @@ async def test_give_one(client, db_session, pf, monkeypatch):
 async def test_give_validates_quantity_and_venue(client, db_session, pf):
     await buy_and_settle(client, db_session, pf)
     give = url(pf, "/pay-forward/give")
-    for body in ({"quantity": 2}, {"quantity": 0}, {}):
+    for body in ({**one(), "quantity": 2}, {**one(), "quantity": 0}, {"quantity": 1}, {}):
         assert (await client.post(give, json=body)).status_code == 422
     other = Restaurant(
         name="Other",
@@ -213,13 +219,13 @@ async def test_give_validates_quantity_and_venue(client, db_session, pf):
     db_session.add(other)
     await db_session.flush()
     await as_member(client, db_session, other.id, "owner")
-    assert (await client.post(give, json={"quantity": 1})).status_code == 404
+    assert (await client.post(give, json=one())).status_code == 404
     assert [r.kind for r in await rows(db_session, pf)] == ["bought"]
 
 
 async def test_handouts_are_not_revenue(client, db_session, pf):
     await buy_and_settle(client, db_session, pf)
-    give = await client.post(url(pf, "/pay-forward/give"), json={"quantity": 1})
+    give = await client.post(url(pf, "/pay-forward/give"), json=one())
     assert give.status_code == 200, give.text
     today = local_date(pf.r, datetime.now(UTC))
     w = analytics.Window(
@@ -237,6 +243,120 @@ async def test_handouts_are_not_revenue(client, db_session, pf):
         resp = await client.get(url(pf, "/ai/brief"))
     assert resp.status_code == 200, resp.text
     assert resp.json()["pay_forward"] == {"bought": 1, "given": 1}
+
+
+async def test_flag_is_read_when_ordered_not_when_settled(client, db_session, pf):
+    # Flagged after the order: no credit.
+    pf.chai.is_pay_forward = False
+    await db_session.flush()
+    first = await place(client, pf.party, [(pf.chai, 1)])
+    pf.chai.is_pay_forward = True
+    await db_session.flush()
+    await as_member(client, db_session, pf.r.id, "staff")
+    assert (await settle(client, pf.r.slug, await bill_id_of(db_session, first))).status_code == 200
+    assert await rows(db_session, pf) == []
+
+    # Unflagged after the order: still credited, and the credit can still be handed out.
+    party2 = GuestSession(
+        restaurant_id=pf.r.id,
+        table_id=pf.t1.id,
+        language="en",
+        expires_at=datetime.now(UTC) + timedelta(hours=2),
+        created_at=await db_session.scalar(select(func.clock_timestamp())),
+    )
+    db_session.add(party2)
+    await db_session.flush()
+    second = await place(client, party2, [(pf.chai, 1)])
+    pf.chai.is_pay_forward = False
+    await db_session.flush()
+    assert (
+        await settle(client, pf.r.slug, await bill_id_of(db_session, second))
+    ).status_code == 200
+    assert [(r.kind, r.order_id) for r in await rows(db_session, pf)] == [("bought", second)]
+    give = await client.post(url(pf, "/pay-forward/give"), json=one())
+    assert give.status_code == 200, give.text
+    handout = (
+        await db_session.execute(
+            select(OrderItem).where(OrderItem.order_id == uuid.UUID(give.json()["order_id"]))
+        )
+    ).scalar_one()
+    assert (handout.menu_item_id, handout.is_pay_forward) == (pf.chai.id, False)
+
+
+async def test_pay_forward_item_cannot_vanish_while_chai_wait(client, db_session, pf):
+    await buy_and_settle(client, db_session, pf)
+    await as_member(client, db_session, pf.r.id, "owner")
+    chai_url = url(pf, f"/menu-items/{pf.chai.id}")
+    waiting = "1 chai are still waiting to be given; give them out before removing this item"
+
+    unflag = await client.patch(chai_url, json={"is_pay_forward": False})
+    assert (unflag.status_code, unflag.json()["detail"]) == (409, waiting)
+    delete_resp = await client.delete(chai_url)
+    assert (delete_resp.status_code, delete_resp.json()["detail"]) == (409, waiting)
+
+    second = await client.patch(url(pf, f"/menu-items/{pf.naan.id}"), json={"is_pay_forward": True})
+    assert second.status_code == 409
+    assert second.json()["detail"] == "Another item is already the pay-it-forward chai"
+
+    assert (await client.post(url(pf, "/pay-forward/give"), json=one())).status_code == 200
+    unflag = await client.patch(chai_url, json={"is_pay_forward": False})
+    assert unflag.status_code == 200, unflag.text
+    assert unflag.json()["is_pay_forward"] is False
+    flag_naan = await client.patch(
+        url(pf, f"/menu-items/{pf.naan.id}"), json={"is_pay_forward": True}
+    )
+    assert flag_naan.status_code == 200, flag_naan.text
+
+
+async def test_one_live_pay_forward_item_per_venue(db_session, pf):
+    from sqlalchemy.exc import IntegrityError
+
+    pf.naan.is_pay_forward = True
+    with pytest.raises(IntegrityError):
+        await db_session.flush()
+
+
+async def test_give_replay_returns_the_first_handout(client, db_session, pf, monkeypatch):
+    await buy_and_settle(client, db_session, pf, chai=2)
+    events = record_events(monkeypatch, "src.routers.floor.publish_event")
+    body = one("retry-me")
+    first = await client.post(url(pf, "/pay-forward/give"), json=body)
+    again = await client.post(url(pf, "/pay-forward/give"), json=body)
+    assert (first.status_code, again.status_code) == (200, 200)
+    assert (
+        again.json()
+        == first.json()
+        == {
+            "order_id": first.json()["order_id"],
+            "pay_forward_balance": 1,
+        }
+    )
+    assert [r.kind for r in await rows(db_session, pf)] == ["bought", "given"]
+    handouts = await db_session.scalar(
+        select(func.count()).where(Order.restaurant_id == pf.r.id, Order.source == "pay_forward")
+    )
+    assert handouts == 1
+    assert [e["event"] for e in events] == ["pay_forward_given", "order_placed", "order_placed"]
+
+
+async def test_thank_you_counts_only_this_phone(client, db_session, pf):
+    other = GuestSession(
+        restaurant_id=pf.r.id,
+        table_id=pf.t1.id,
+        language="en",
+        expires_at=datetime.now(UTC) + timedelta(hours=2),
+    )
+    db_session.add(other)
+    await db_session.flush()
+    mine = await place(client, pf.party, [(pf.chai, 2)])
+    theirs = await place(client, other, [(pf.chai, 1), (pf.naan, 1)])
+    bill_id = await bill_id_of(db_session, mine)
+    assert await bill_id_of(db_session, theirs) == bill_id
+    await as_member(client, db_session, pf.r.id, "staff")
+    assert (await settle(client, pf.r.slug, bill_id)).status_code == 200
+    for session, count in ((pf.party, 2), (other, 1)):
+        guest(client, session)
+        assert (await client.get("/api/guest/bill")).json()["pay_forward_count"] == count
 
 
 # --- Concurrency: committed data, parallel clients ---
@@ -295,9 +415,7 @@ async def test_parallel_gives_never_go_below_zero(committed_pf):
                 async with async_session_factory() as s:
                     s.add(PayForward(restaurant_id=rid, kind="bought", quantity=1))
                     await s.commit()
-                results = await asyncio.gather(
-                    a.post(give, json={"quantity": 1}), b.post(give, json={"quantity": 1})
-                )
+                results = await asyncio.gather(a.post(give, json=one()), b.post(give, json=one()))
                 codes = sorted(r.status_code for r in results)
                 assert codes == [200, 409], [r.text for r in results]
                 refused = next(r for r in results if r.status_code == 409)
@@ -329,3 +447,31 @@ async def test_simulator_never_sells_pay_forward_chai(db_session, pf):
     ).all()
     assert pf.naan.id in lines
     assert pf.chai.id not in lines
+
+
+async def test_parallel_same_key_gives_once(committed_pf):
+    rid, slug, staff = committed_pf
+    async with async_session_factory() as s:
+        s.add(PayForward(restaurant_id=rid, kind="bought", quantity=2))
+        await s.commit()
+    saved_override = app.dependency_overrides.pop(get_db, None)
+    try:
+        async with (
+            AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as a,
+            AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as b,
+        ):
+            sign_in(a, staff)
+            sign_in(b, staff)
+            give = f"/api/restaurants/{slug}/pay-forward/give"
+            body = one("same-tap")
+            results = await asyncio.gather(a.post(give, json=body), b.post(give, json=body))
+    finally:
+        if saved_override is not None:
+            app.dependency_overrides[get_db] = saved_override
+    assert [r.status_code for r in results] == [200, 200], [r.text for r in results]
+    assert results[0].json()["order_id"] == results[1].json()["order_id"]
+    async with async_session_factory() as s:
+        given = await s.scalar(
+            select(func.count()).where(PayForward.restaurant_id == rid, PayForward.kind == "given")
+        )
+    assert given == 1

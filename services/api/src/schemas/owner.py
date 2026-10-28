@@ -31,6 +31,7 @@ class OwnerMenuItemResponse(BaseModel):
     is_gluten_free: bool
     available: bool
     featured: bool
+    is_pay_forward: bool = False
     sort_order: int
     image_url: str | None = None
     translations: list[OwnerMenuTranslation]
@@ -50,6 +51,8 @@ class PatchMenuItemRequest(BaseModel):
     is_vegetarian: bool | None = None
     is_vegan: bool | None = None
     is_gluten_free: bool | None = None
+    # The venue's pay-it-forward chai (at most one live item per venue).
+    is_pay_forward: bool | None = None
 
 
 class OwnerTableResponse(BaseModel):

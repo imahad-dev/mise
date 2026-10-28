@@ -59,6 +59,13 @@ class MenuItem(Base):
             "restaurant_id",
             postgresql_where=text("deleted_at IS NULL"),
         ),
+        # At most one live pay-it-forward item per venue: give hands out exactly that one.
+        Index(
+            "uq_menu_item_pay_forward",
+            "restaurant_id",
+            unique=True,
+            postgresql_where=text("is_pay_forward AND deleted_at IS NULL"),
+        ),
         Index(
             "idx_menu_item_listing",
             "restaurant_id",

@@ -38,6 +38,7 @@ from src.schemas.owner import (
     WhatIfRequest,
     WhatIfResponse,
 )
+from src.services import pay_forward
 from src.services.brief import compute_brief, compute_whatif
 from src.services.menu_ingest import ingest_menu_from_image
 from src.services.payment_details import PaymentDetailsError, validate_payment_details
@@ -71,6 +72,7 @@ def _build_owner_item_response(item: MenuItem) -> OwnerMenuItemResponse:
         is_gluten_free=item.is_gluten_free,
         available=item.available,
         featured=item.featured,
+        is_pay_forward=item.is_pay_forward,
         sort_order=item.sort_order,
         image_url=item.image_url,
         translations=translations,
@@ -117,6 +119,7 @@ async def list_owner_menu_items(
         401: {"description": "Unauthenticated"},
         403: {"description": "Unauthorized (Owner only)"},
         404: {"description": "Menu item not found"},
+        409: {"description": "Pay-it-forward item in use, or another item already is one"},
     },
 )
 async def patch_menu_item(
@@ -155,6 +158,13 @@ async def patch_menu_item(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail="Edit the size prices instead",
             )
+
+    if payload.is_pay_forward is not None and payload.is_pay_forward != item.is_pay_forward:
+        if payload.is_pay_forward:
+            await pay_forward.ensure_can_flag(db, restaurant.id, item.id)
+        else:
+            await pay_forward.ensure_can_remove(db, restaurant.id)
+        item.is_pay_forward = payload.is_pay_forward
 
     if payload.price is not None:
         item.price = payload.price
@@ -292,6 +302,7 @@ async def verify_menu_item(
         401: {"description": "Unauthenticated"},
         403: {"description": "Unauthorized (Owner only)"},
         404: {"description": "Menu item not found"},
+        409: {"description": "Pay-it-forward item in use, or another item already is one"},
     },
 )
 async def delete_menu_item(
@@ -311,6 +322,8 @@ async def delete_menu_item(
     item = res.scalar_one_or_none()
     if item is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Menu item not found")
+    if item.is_pay_forward:
+        await pay_forward.ensure_can_remove(db, restaurant.id)
 
     now = datetime.now(UTC)
     item.deleted_at = now

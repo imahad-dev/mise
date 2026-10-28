@@ -5,7 +5,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from src.models.service_call import ServiceCall
 from src.services.floor import reason_label
@@ -37,6 +37,8 @@ class FloorResponse(BaseModel):
 
 class GiveRequest(BaseModel):
     quantity: Literal[1]  # one chai per tap
+    # One per intended give, reused on retry: a lost response never hands out a second chai.
+    idempotency_key: str = Field(min_length=1, max_length=64)
 
 
 class GiveResponse(BaseModel):
