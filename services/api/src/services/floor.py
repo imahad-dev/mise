@@ -30,6 +30,7 @@ class TableFacts:
     oldest_placed_at: datetime | None
     has_active_orders: bool
     last_settled_at: datetime | None
+    last_cancelled_at: datetime | None
     call_reason: str | None
     call_since: datetime | None
     running_total: Decimal | None
@@ -69,14 +70,14 @@ def table_state(f: TableFacts, now: datetime) -> TileState | None:
             )
         if f.has_active_orders:
             return TileState("served", None, "none")
-    reset = max((t for t in (f.cleared_at, f.last_settled_at) if t is not None), default=None)
-    # An open bill (e.g. every order voided) is never Free.
+    # A cancelled bill (every order voided) ends the party like a settle, as session_is_current.
+    ended = max((t for t in (f.last_settled_at, f.last_cancelled_at) if t is not None), default=None)
+    reset = max((t for t in (f.cleared_at, ended) if t is not None), default=None)
+    # An open bill is never Free.
     if f.open_bill or _after(f.last_session_at, reset):
         return TileState("seated", f.last_session_at, _level("seated", f.last_session_at, now))
-    if _after(f.last_settled_at, f.cleared_at):
-        return TileState(
-            "needs_clearing", f.last_settled_at, _level("needs_clearing", f.last_settled_at, now)
-        )
+    if _after(ended, f.cleared_at):
+        return TileState("needs_clearing", ended, _level("needs_clearing", ended, now))
     return TileState("free", None, "none")
 
 

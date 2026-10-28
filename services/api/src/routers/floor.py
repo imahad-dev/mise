@@ -95,6 +95,15 @@ async def get_floor(
             )
         ).all()
     )
+    last_cancelled = dict(
+        (
+            await db.execute(
+                select(Bill.table_id, func.max(Bill.cancelled_at))
+                .where(Bill.restaurant_id == rid, Bill.status == "cancelled")
+                .group_by(Bill.table_id)
+            )
+        ).all()
+    )
     calls = {
         c.table_id: c
         for c in (
@@ -124,6 +133,7 @@ async def get_floor(
                 oldest_placed_at=bill.oldest if bill else None,
                 has_active_orders=bool(bill and bill.active),
                 last_settled_at=last_settled.get(t.id),
+                last_cancelled_at=last_cancelled.get(t.id),
                 call_reason=call.reason if call else None,
                 call_since=call.created_at if call else None,
                 running_total=total,

@@ -683,8 +683,9 @@ async def test_void_of_the_last_order_cancels_the_bill(client, db_session, pv):
     )
     tiles = (await client.get(url(pv, "/floor"))).json()["tiles"]
     t1 = next(t for t in tiles if t["label"] == "T1")
-    assert t1["state"] not in ("paying", "ordered")
-    assert t1["bill_id"] is None
+    # A cancelled bill ends the party like a settle: the table waits to be cleared.
+    assert (t1["state"], t1["level"], t1["bill_id"]) == ("needs_clearing", "none", None)
+    assert datetime.fromisoformat(t1["since"]) == stored.cancelled_at
 
     # The next party never sees the old bill or its removed lines, and gets a new bill.
     nxt = await new_party(db_session, pv, pv.t1)

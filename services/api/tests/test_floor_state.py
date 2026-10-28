@@ -21,6 +21,7 @@ def facts(**kw):
         oldest_placed_at=None,
         has_active_orders=False,
         last_settled_at=None,
+        last_cancelled_at=None,
         call_reason=None,
         call_since=None,
         running_total=None,
@@ -108,3 +109,24 @@ def test_paying_and_clearing_thresholds_are_inclusive():
     assert [table_state(paying, m(n)).level for n in (2, 3, 5)] == ["none", "amber", "red"]
     clearing = facts(last_settled_at=m(0))
     assert [table_state(clearing, m(n)).level for n in (1, 2, 5)] == ["none", "amber", "red"]
+
+
+def test_cancelled_bill_resets_like_a_settle():
+    # Every order voided: the bill is cancelled and the party's seat is over.
+    f = facts(last_session_at=m(0), last_cancelled_at=m(20))
+    s = table_state(f, m(22))
+    assert (s.state, s.since, s.level) == ("needs_clearing", m(20), "amber")
+
+
+def test_clear_after_a_cancel_is_free_and_new_guests_are_seated():
+    assert table_state(facts(last_cancelled_at=m(20), cleared_at=m(21)), m(30)).state == "free"
+    assert table_state(facts(last_cancelled_at=m(20), last_session_at=m(25)), m(26)).state == (
+        "seated"
+    )
+
+
+def test_needs_clearing_runs_from_the_later_of_settle_and_cancel():
+    s = table_state(facts(last_settled_at=m(10), last_cancelled_at=m(30)), m(31))
+    assert (s.state, s.since) == ("needs_clearing", m(30))
+    s = table_state(facts(last_settled_at=m(30), last_cancelled_at=m(10)), m(31))
+    assert (s.state, s.since) == ("needs_clearing", m(30))
