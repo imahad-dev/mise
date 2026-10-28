@@ -52,9 +52,11 @@ from src.services.bills import (
     active_orders,
     bill_lines,
     claim_of,
+    is_expired_unpaid,
     local_date,
     method_preview,
     method_previews,
+    revive_expired,
     session_is_current,
 )
 from src.services.counter import order_status as counter_order_status
@@ -463,6 +465,12 @@ async def claim_payment(
     bill = await _session_bill(db, session, lock=True)
     if bill is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No bill")
+    # A counter order that expired unpaid comes back when the guest says they paid.
+    revived = (
+        await revive_expired(db, bill, session.restaurant_id, f"guest:{session.id}")
+        if is_expired_unpaid(bill)
+        else []
+    )
     if bill.status != "open":
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Bill is not open")
     restaurant = await db.get(Restaurant, session.restaurant_id)
@@ -502,6 +510,10 @@ async def claim_payment(
             )
         )
     await db.commit()
+    for order_id in revived:
+        await publish_event(
+            f"orders:{order_id}", json.dumps({"event": "order_revived", "order_id": str(order_id)})
+        )
     if changed:
         await publish_event(
             f"kitchen:{session.restaurant_id}",

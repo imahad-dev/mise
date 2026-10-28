@@ -578,3 +578,115 @@ async def test_counter_session_is_always_current(db_session, cv):
     await db_session.flush()
     assert await session_is_current(db_session, s)
     assert not await session_is_current(db_session, await seat(db_session, cv.t1))
+
+
+async def _expired(client, db_session, cv) -> tuple[GuestSession, dict, Bill, str]:
+    """A counter order left unpaid for 31 minutes and expired by a list read; its cash total."""
+    s = await seat(db_session, cv.counter)
+    o = await order(client, cv, s)
+    b = await bill_of(db_session, o["id"])
+    await as_member(client, db_session, cv.r.id, "staff")
+    detail = (await client.get(f"/api/restaurants/{cv.r.slug}/bills/{b.id}")).json()
+    total = next(m["total"] for m in detail["methods"] if m["method"] == "cash")
+    await _backdate(db_session, o["id"], 31)
+    # Reading open bills with no kind expires too.
+    assert str(b.id) not in {
+        x["id"] for x in (await client.get(f"/api/restaurants/{cv.r.slug}/bills")).json()["bills"]
+    }
+    assert (await bill_of(db_session, o["id"])).status == "cancelled"
+    return s, o, b, total
+
+
+async def test_expired_order_can_still_be_settled(client, db_session, cv, monkeypatch):
+    events = record_events(monkeypatch, "src.routers.bills.publish_event")
+    _s, o, b, total = await _expired(client, db_session, cv)
+    assert {"event": "order_cancelled", "order_id": o["id"]} in events
+    events.clear()
+    resp = await client.post(
+        f"/api/restaurants/{cv.r.slug}/bills/{b.id}/settle",
+        json={"payment_method": "cash", "expected_method": "cash", "expected_total": total},
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert (body["status"], body["order_status"], body["cancel_reason"]) == (
+        "settled",
+        "placed",
+        None,
+    )
+    assert {"event": "order_revived", "order_id": o["id"]} in events
+    assert {"event": "order_placed", "order_id": o["id"]} in events
+    revived = await db_session.scalar(
+        select(AuditLog.actor).where(
+            AuditLog.restaurant_id == cv.r.id, AuditLog.event_type == "bill_revived"
+        )
+    )
+    assert revived.startswith("user:")
+    assert o["id"] in await kitchen(client, cv)
+
+
+async def test_expired_order_revived_by_guest_claim(client, db_session, cv):
+    s, o, b, _total = await _expired(client, db_session, cv)
+    client.cookies.set(GUEST_COOKIE_NAME, sign_value(str(s.id)))
+    resp = await client.post("/api/guest/bill/payment", json={"method": "cash"})
+    assert resp.status_code == 200, resp.text
+    assert (resp.json()["status"], resp.json()["order_status"]) == ("open", "awaiting_payment")
+    client.cookies.delete(GUEST_COOKIE_NAME)
+    row = (await counter_list(client, cv))[str(b.id)]
+    assert row["claim"]["method"] == "cash"
+    # A claimed bill is never expired again.
+    assert (await bill_of(db_session, o["id"])).status == "open"
+
+
+async def test_staff_cancelled_bill_is_never_revived(client, db_session, cv):
+    s = await seat(db_session, cv.counter)
+    o = await order(client, cv, s)
+    b = await bill_of(db_session, o["id"])
+    await as_member(client, db_session, cv.r.id, "staff")
+    detail = (await client.get(f"/api/restaurants/{cv.r.slug}/bills/{b.id}")).json()
+    total = next(m["total"] for m in detail["methods"] if m["method"] == "cash")
+    base = f"/api/restaurants/{cv.r.slug}/bills/{b.id}"
+    assert (await client.post(f"{base}/cancel", json={"reason": "Guest left"})).status_code == 200
+    resp = await client.post(
+        f"{base}/settle",
+        json={"payment_method": "cash", "expected_method": "cash", "expected_total": total},
+    )
+    assert (resp.status_code, resp.json()["detail"]) == (409, "Bill is not open")
+    client.cookies.set(GUEST_COOKIE_NAME, sign_value(str(s.id)))
+    assert (
+        await client.post("/api/guest/bill/payment", json={"method": "cash"})
+    ).status_code == 409
+
+
+async def test_awaiting_payment_cannot_be_bumped_or_voided(client, db_session, cv):
+    s = await seat(db_session, cv.counter)
+    o = await order(client, cv, s)
+    await as_member(client, db_session, cv.r.id, "staff")
+    bump = await client.post(f"/api/restaurants/{cv.r.slug}/kitchen/orders/{o['id']}/bump")
+    assert (bump.status_code, bump.json()["detail"]) == (409, "Awaiting payment")
+    void = await client.post(
+        f"/api/restaurants/{cv.r.slug}/orders/{o['id']}/void", json={"reason": "x"}
+    )
+    assert (void.status_code, void.json()["detail"]) == (409, "Awaiting payment")
+
+
+async def test_pickup_prefix_locked_while_counter_orders_open(client, db_session, cv):
+    await as_member(client, db_session, cv.r.id, "owner")
+    url = f"/api/restaurants/{cv.r.slug}/settings"
+    s = await seat(db_session, cv.counter)
+    o = await order(client, cv, s)
+    client.cookies.delete(GUEST_COOKIE_NAME)
+    resp = await client.patch(url, json={"pickup_prefix": "Q"})
+    assert (resp.status_code, resp.json()["detail"]) == (
+        409,
+        "Finish open counter orders before changing the prefix",
+    )
+    # The same value, or leaving it out, is not a change.
+    assert (await client.patch(url, json={"pickup_prefix": "K"})).status_code == 200
+    assert (await client.patch(url, json={})).json()["pickup_prefix"] == "K"
+    b = await bill_of(db_session, o["id"])
+    assert (
+        await client.post(f"/api/restaurants/{cv.r.slug}/bills/{b.id}/cancel", json={})
+    ).status_code == 200
+    cleared = await client.patch(url, json={"pickup_prefix": None})
+    assert (cleared.status_code, cleared.json()["pickup_prefix"]) == (200, None)
+    assert (await client.patch(url, json={"pickup_prefix": "Q"})).json()["pickup_prefix"] == "Q"

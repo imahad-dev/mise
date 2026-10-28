@@ -7,7 +7,7 @@ from decimal import Decimal
 from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException, status
-from sqlalchemy import exists, func, select
+from sqlalchemy import exists, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -24,6 +24,7 @@ logger = logging.getLogger(__name__)
 CENTS = Decimal("0.01")
 VISIT_ENDED = "Your visit has ended — scan the table QR again"
 REUSE_WINDOW = timedelta(days=7)
+EXPIRED = "Expired unpaid"
 
 
 class BillChanged(Exception):  # noqa: N818 - a signal, not an error
@@ -110,20 +111,69 @@ async def open_bill_for_table(
     return bill, True
 
 
-async def active_orders(db: AsyncSession, bill_id: uuid.UUID) -> list[Order]:
-    """The bill's non-cancelled orders with items loaded."""
+async def active_orders(
+    db: AsyncSession, bill_id: uuid.UUID, *, include_expired: bool = False
+) -> list[Order]:
+    """The bill's non-cancelled orders with items loaded.
+
+    include_expired: the orders an expired counter bill would get back (every unvoided one).
+    """
+    alive = Order.voided_at.is_(None) if include_expired else Order.status != "cancelled"
     return list(
         (
             await db.execute(
                 select(Order)
                 .options(selectinload(Order.items))
-                .where(Order.bill_id == bill_id, Order.status != "cancelled")
+                .where(Order.bill_id == bill_id, alive)
                 .order_by(Order.placed_at, Order.id)
             )
         )
         .scalars()
         .all()
     )
+
+
+def is_expired_unpaid(bill: Bill) -> bool:
+    """Cancelled by the 30-minute expiry, not by staff or voids: money may still arrive."""
+    return (
+        bill.status == "cancelled" and bill.cancel_reason == EXPIRED and bill.cancelled_by is None
+    )
+
+
+async def revive_expired(
+    db: AsyncSession, bill: Bill, restaurant_id: uuid.UUID, actor: str
+) -> list[uuid.UUID]:
+    """Reopen an expired counter bill (caller holds its lock); returns the revived order ids."""
+    bill.status = "open"
+    bill.cancelled_at = None
+    bill.cancelled_by = None
+    bill.cancel_reason = None
+    revived = list(
+        (
+            await db.execute(
+                update(Order)
+                .where(
+                    Order.bill_id == bill.id,
+                    Order.status == "cancelled",
+                    Order.voided_at.is_(None),
+                )
+                .values(status="awaiting_payment")
+                .returning(Order.id)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    db.add(
+        AuditLog(
+            restaurant_id=restaurant_id,
+            event_type="bill_revived",
+            actor=actor,
+            payload={"bill_id": str(bill.id), "order_ids": [str(i) for i in revived]},
+        )
+    )
+    await db.flush()
+    return revived
 
 
 def bill_lines(orders: list[Order]) -> tuple[list[BillLine], Decimal]:
@@ -286,11 +336,13 @@ async def settle_bill(
     expected_total: Decimal,
     user_id: uuid.UUID,
     acknowledge_reused: bool = False,
-) -> tuple[Bill, list[uuid.UUID]]:
+) -> tuple[Bill, list[uuid.UUID], list[uuid.UUID]]:
     """Lock the bill, recompute, check the staff's expectation, snapshot tax. Caller commits.
 
-    Returns the bill and the ids of counter orders released to the kitchen (awaiting_payment
-    -> placed); the caller publishes order_placed for them after commit.
+    Returns the bill, the ids of counter orders released to the kitchen (awaiting_payment
+    -> placed) and of orders revived from an expired counter bill; the caller publishes
+    order_revived / order_placed for them after commit. An expired (unpaid) counter bill is
+    reopened first: money that arrives late is still taken.
     Raises BillChanged (bill still locked, nothing modified) when expected_total differs.
     """
     bill = (
@@ -304,12 +356,14 @@ async def settle_bill(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bill not found")
     if bill.status == "settled":
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Bill already settled")
-    if bill.status != "open":
+    expired = is_expired_unpaid(bill)
+    if bill.status != "open" and not expired:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Bill is not open")
     # Database clock (same as orders.placed_at), read after the lock: every order on this
     # bill committed before it.
     now = (await db.execute(select(func.clock_timestamp()))).scalar_one()
-    orders = await active_orders(db, bill.id)
+    # Nothing is modified before the expected-total check, so BillChanged leaves no trace.
+    orders = await active_orders(db, bill.id, include_expired=expired)
     if not orders:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="No active orders"
@@ -346,6 +400,7 @@ async def settle_bill(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"Reference already used on {bill_no_label(reused)}",
         )
+    revived = await revive_expired(db, bill, restaurant.id, f"user:{user_id}") if expired else []
     bill.status = "settled"
     bill.payment_method = method
     bill.payment_reference = reference
@@ -357,10 +412,18 @@ async def settle_bill(
     bill.settled_at = now
     bill.settled_by = user_id
     # Under the bill lock, so no other path can change these orders meanwhile.
-    released = [o.id for o in orders if o.status == "awaiting_payment"]
-    for o in orders:
-        if o.status == "awaiting_payment":
-            o.status = "placed"
+    released = list(
+        (
+            await db.execute(
+                update(Order)
+                .where(Order.bill_id == bill.id, Order.status == "awaiting_payment")
+                .values(status="placed")
+                .returning(Order.id)
+            )
+        )
+        .scalars()
+        .all()
+    )
     db.add(
         AuditLog(
             restaurant_id=restaurant.id,
@@ -375,4 +438,4 @@ async def settle_bill(
         )
     )
     await db.flush()
-    return bill, released
+    return bill, released, revived

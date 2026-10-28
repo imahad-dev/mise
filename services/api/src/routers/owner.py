@@ -4,7 +4,7 @@ from dataclasses import replace
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from sqlalchemy import select
+from sqlalchemy import exists, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -17,6 +17,7 @@ from src.inference.client import (
     get_optional_inference_client,
 )
 from src.models.audit import AuditLog
+from src.models.bill import Bill
 from src.models.dining_table import DiningTable
 from src.models.menu import MenuItem, MenuItemOption
 from src.redis_client import redis_client
@@ -390,6 +391,7 @@ async def get_settings(access: RestaurantAccess = Depends(owner_access)) -> Sett
         401: {"description": "Unauthenticated"},
         403: {"description": "Unauthorized (Owner only)"},
         404: {"description": "Restaurant not found"},
+        409: {"description": "Pickup prefix changed while counter orders are open"},
         422: {"description": "Invalid setting; detail.field names it"},
     },
 )
@@ -400,7 +402,8 @@ async def patch_settings(
 ) -> SettingsResponse:
     """Update payment details, the extra call reason and the pickup prefix.
 
-    Omitted fields stay as they are; a given `payment_details` replaces the whole object.
+    Omitted fields stay as they are; a given `payment_details` replaces the whole object;
+    `pickup_prefix: null` clears the prefix (pickup numbers then print K-…).
     """
     restaurant = access.restaurant
     if payload.payment_details is not None:
@@ -426,7 +429,24 @@ async def patch_settings(
         restaurant.payment_details = cleaned
     if payload.service_extra_label is not None:
         restaurant.service_extra_label = payload.service_extra_label
-    if payload.pickup_prefix is not None:
+    if (
+        "pickup_prefix" in payload.model_fields_set
+        and payload.pickup_prefix != restaurant.pickup_prefix
+    ):
+        # Guests already hold a printed number: it must not change under them.
+        if await db.scalar(
+            select(
+                exists().where(
+                    Bill.restaurant_id == restaurant.id,
+                    Bill.pickup_no.is_not(None),
+                    Bill.status == "open",
+                )
+            )
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Finish open counter orders before changing the prefix",
+            )
         restaurant.pickup_prefix = payload.pickup_prefix
     await db.commit()
     return SettingsResponse(

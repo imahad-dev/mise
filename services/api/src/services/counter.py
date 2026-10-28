@@ -10,11 +10,10 @@ from src.models.audit import AuditLog
 from src.models.bill import Bill
 from src.models.order import Order
 from src.models.restaurant import Restaurant
-from src.services.bills import local_date
+from src.services.bills import EXPIRED, local_date
 
 EXPIRY = timedelta(minutes=30)
 UNDO_COLLECT = timedelta(seconds=60)
-EXPIRED = "Expired unpaid"
 
 
 def pickup_label(prefix: str | None, no: int) -> str:
@@ -58,11 +57,14 @@ async def open_counter_bill(db: AsyncSession, restaurant: Restaurant) -> Bill:
     return bill
 
 
-async def expire_unpaid(db: AsyncSession, restaurant: Restaurant) -> list[uuid.UUID]:
+async def expire_unpaid(
+    db: AsyncSession, restaurant: Restaurant
+) -> dict[uuid.UUID, list[uuid.UUID]]:
     """Cancel unclaimed counter bills whose order has waited unpaid for 30 minutes.
 
     Bills are locked FOR UPDATE SKIP LOCKED (a settle or claim in progress wins), then their
-    orders: bill before order, as everywhere. Returns the cancelled bill ids; caller commits.
+    orders: bill before order, as everywhere. Returns {cancelled bill id: its cancelled order
+    ids}; caller commits. Settling or a guest claim revives such a bill (revive_expired).
     """
     now = await db.scalar(select(func.clock_timestamp()))
     stale = exists().where(
@@ -88,7 +90,7 @@ async def expire_unpaid(db: AsyncSession, restaurant: Restaurant) -> list[uuid.U
         .scalars()
         .all()
     )
-    cancelled = []
+    cancelled: dict[uuid.UUID, list[uuid.UUID]] = {}
     for bill in bills:
         # Re-checked on the locked row: a claim or settle that committed first keeps the bill.
         if bill.status != "open" or bill.claimed_at is not None:
@@ -118,6 +120,6 @@ async def expire_unpaid(db: AsyncSession, restaurant: Restaurant) -> list[uuid.U
                 payload={"bill_id": str(bill.id), "reason": EXPIRED},
             )
         )
-        cancelled.append(bill.id)
+        cancelled[bill.id] = [o.id for o in orders]
     await db.flush()
     return cancelled

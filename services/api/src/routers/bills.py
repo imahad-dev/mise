@@ -67,6 +67,13 @@ ALL_VOIDED = "All orders voided"
 CANCELLED_BY_STAFF = "Cancelled by staff"
 
 
+async def _order_cancelled(order_id: uuid.UUID) -> None:
+    """Tell the guest following this order that it will not be made."""
+    await publish_event(
+        f"orders:{order_id}", json.dumps({"event": "order_cancelled", "order_id": str(order_id)})
+    )
+
+
 async def counter_fields(
     db: AsyncSession, restaurant: Restaurant, bills: list[Bill]
 ) -> dict[uuid.UUID, dict]:
@@ -210,16 +217,19 @@ async def list_bills(
 ) -> BillListResponse:
     """Open bills (requested first, then oldest), or the 50 latest settled or cancelled.
 
-    kind=counter first cancels unclaimed counter bills left unpaid for 30 minutes.
+    Reading open bills (other than kind=table) first cancels unclaimed counter bills left
+    unpaid for 30 minutes.
     """
     rid = access.restaurant.id
-    if kind == "counter":
+    if status_filter == "open" and kind != "table":
         expired = await expire_unpaid(db, access.restaurant)
         await db.commit()
-        for bill_id in expired:
+        for bill_id, order_ids in expired.items():
             await publish_event(
                 f"kitchen:{rid}", json.dumps({"event": "bill_cancelled", "bill_id": str(bill_id)})
             )
+            for order_id in order_ids:
+                await _order_cancelled(order_id)
     stmt = (
         select(
             Bill,
@@ -305,7 +315,7 @@ async def settle(
     db: AsyncSession = Depends(get_db),
 ) -> BillDetail | JSONResponse:
     try:
-        bill, released = await settle_bill(
+        bill, released, revived = await settle_bill(
             db,
             bill_id,
             access.restaurant,
@@ -330,6 +340,10 @@ async def settle(
         f"kitchen:{access.restaurant.id}",
         json.dumps({"event": "bill_settled", "bill_id": str(bill.id)}),
     )
+    for order_id in revived:
+        await publish_event(
+            f"orders:{order_id}", json.dumps({"event": "order_revived", "order_id": str(order_id)})
+        )
     # Paid counter orders reach the kitchen now.
     for order_id in released:
         event = json.dumps({"event": "order_placed", "order_id": str(order_id)})
@@ -345,8 +359,9 @@ async def settle(
         401: {"description": "Unauthenticated"},
         404: {"description": "Restaurant or order not found"},
         409: {
-            "description": "Bill not open, order already cancelled, or the void would cancel a "
-            'bill the guest says they paid ({"detail", "claim"}; resend with acknowledge_claim)'
+            "description": "Bill not open, order already cancelled or awaiting payment, or the "
+            'void would cancel a bill the guest says they paid ({"detail", "claim"}; resend '
+            "with acknowledge_claim)"
         },
         # A void that empties the bill cancels it ("All orders voided").
         422: {"description": "Reason must be 1-200 characters"},
@@ -395,6 +410,8 @@ async def void_order(
     ).scalar_one()
     if bill is None or bill.status != "open" or order.bill_id != bill.id:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Bill is not open")
+    if order.status == "awaiting_payment":
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Awaiting payment")
     if order.status not in ("placed", "bumped"):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Order already cancelled")
     empties = all(o.id == order.id for o in await active_orders(db, bill.id))
@@ -545,6 +562,8 @@ async def cancel_bill(
     await publish_event(
         f"kitchen:{rid}", json.dumps({"event": "bill_cancelled", "bill_id": str(bill.id)})
     )
+    for order in orders:
+        await _order_cancelled(order.id)
     return await bill_detail(db, access.restaurant, bill)
 
 

@@ -205,7 +205,7 @@ async def stream_kitchen_orders(
         401: {"description": "Unauthenticated"},
         403: {"description": "Unauthorized"},
         404: {"description": "Order not found"},
-        409: {"description": "Order was cancelled"},
+        409: {"description": "Order was cancelled, or awaiting payment"},
     },
 )
 async def bump_order(
@@ -242,6 +242,8 @@ async def bump_order(
     if order.status == "bumped":
         # Already bumped: idempotent return
         return _build_kitchen_order_response(order, table_labels, pickups)
+    if order.status == "awaiting_payment":
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Awaiting payment")
     if order.status != "placed":
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Order was cancelled")
 
