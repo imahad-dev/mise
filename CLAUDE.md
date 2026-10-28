@@ -27,6 +27,7 @@ Alembic + Postgres 16 + Redis 7 (`services/api`), two Next.js 15 apps (`apps/gue
 - Every route has a `response_model`.
 - Auth is per user; restaurant routes use `restaurant_access` and answer 404 to non-members.
 - Allergen status is deterministic server code; the model never decides it.
+- Guests never settle bills; every settle carries the expected total and method and is refused on mismatch.
 - The model never produces numbers: code computes them, the model only phrases them, and its
   text must pass the number-consistency check (`services/api/src/services/narrative.py`).
 - Never send guest allergens, preferences, session ids or any personal data to a model. No

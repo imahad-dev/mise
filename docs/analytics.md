@@ -12,9 +12,19 @@ Code: `services/api/src/services/` — `analytics.py`, `forecast.py`, `brief.py`
 
 - Source of truth is the immutable `order_item` snapshot (`quantity`, `unit_price`, `unit_cost`)
   taken when the order was placed. Later menu price or cost edits do not rewrite history.
-- Cancelled orders are excluded. Dates and hours use the restaurant's timezone.
+- Status filter: only `placed` and `bumped` orders count. `cancelled` orders (including staff
+  voids and expired counter orders) and `awaiting_payment` counter orders (not paid yet) are
+  excluded. The payment mix reads only `settled` bills, so `open` and `cancelled` bills never
+  count. Dates and hours use the restaurant's timezone.
+- Source filter: `orders.source IN ('live', 'simulated')` (`_SCOPE` in `analytics.py`).
+  Pay-it-forward handouts (`source='pay_forward'`, zero-price tickets with no bill) are free
+  chai, never sales, so they are excluded from revenue, orders, AOV, menu engineering, pairings,
+  peak hours and the forecast. The chai a guest buys for someone else is an ordinary paid line on
+  their bill and counts as revenue once like any other item; the brief reports the
+  pay-it-forward ledger separately as `pay_forward {bought, given}` over the last 7 local days
+  (today included), not narrated and not revenue.
 - **Daypart**: daytime before 18:00 local time is `lunch`, the evening after is `dinner`.
-- `orders.source` is `live` or `simulated`. Analytics include both; every response reports the
+- Of the analysed sources, `live` and `simulated`, analytics include both; every response reports the
   count of each (`data_sources`) and the UI shows a "Simulated data" banner when any simulated
   orders are in the window.
 - Analysis window for KPIs, menu engineering and what-if: the last **28 days** ending yesterday.

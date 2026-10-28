@@ -11,7 +11,11 @@ Mise is an ordering, kitchen and revenue analytics platform for independent rest
   - English and Italian (only these two languages are supported).
   - Deterministic EU-14 allergen cross-referencing with explicit acknowledgment guards.
   - Size picker for dishes with sizes; prices in PKR (`Rs 2,100`) with the note "Prices exclude sales tax, which is added to your bill."
-  - "Pay bill" on the order page: lines, subtotal and the total for each of the five payment methods; cash or card calls a waiter, wallet / Raast / bank transfer show the venue's payment details (under a demo banner for sample details) and take a transaction id. Staff always confirm; the page then shows "Paid · Bill no. 0042".
+  - **Table self-service**: guests at a table order more rounds onto the table's one open bill from any phone, call a waiter and choose how to pay, without staff having to come over first.
+  - **Call waiter** (menu and order pages, tables only): "Need help", "Water, please" or the venue's own extra reason ("More naan / roti" at Angeethi House, "More napkins / cutlery" at Kehwa & Crumb). The button then reads "Waiter called · m:ss" until staff tap Done. One open call per table; a new call is refused for 60 s after the previous one.
+  - **Pay from the table** ("Pay bill" on the order page): lines, subtotal and the total for each of the five payment methods with its tax rate. Cash → "A waiter is coming to collect Rs X."; Card → "A waiter is bringing the card machine."; JazzCash / Easypaisa, Raast QR and Bank transfer show the venue's payment details with copy buttons, and the guest pays in their own app, enters the transaction id and taps "I've paid" → "Payment sent — waiting for staff to confirm." Choosing a method records a claim and counts as asking for the bill; the latest claim wins until staff confirm. A retried "I've paid" after a dropped connection records the same claim, not a second one. Demo venues show sample details (`0000 SAMPLE`) under "Sample payment details — demo only. Do not send money." Orders staff voided show "Removed by staff: {item} ×{qty}" and leave the total. **Guests never settle a bill**: staff confirm, and the page then shows "Paid · Bill no. 0042 · thank you".
+  - **Counter pickup** (Kehwa & Crumb "Counter", Angeethi House "Takeaway"): the counter QR's menu says "Counter order — pay first, then collect". After ordering the guest sees a large pickup number (`K-001`, `P-001`, per venue per local day, never wrapping) and the same Pay sheet. The order reaches the kitchen only once staff confirm payment ("Paid — preparing your order"), then "Ready — collect K-001 at the counter" and "Collected · enjoy!". No Call waiter at the counter; unpaid, unclaimed counter orders are cancelled after 30 minutes.
+  - **Pay-it-forward chai**: a menu item a guest can buy for someone who needs it; once the bill is settled the guest sees "You bought N chai for someone who needs it. Shukriya."
   - Cart persistence with server-verified idempotency tokens.
   - Live order status tracking powered by Server-Sent Events (SSE).
   - AI menu chat assistant (sees the menu only, never the guest's allergen or dietary profile).
@@ -21,6 +25,7 @@ Mise is an ordering, kitchen and revenue analytics platform for independent rest
   - Real-time SSE order streaming with automatic reconnection and polling fallbacks.
   - High-visibility allergy alert banners extracted from immutable order item snapshots.
   - Each ticket line shows the chosen size ("Chicken Karahi — 1 kg").
+  - Counter tickets read "PICKUP K-001" in large type; pay-it-forward handouts read "PAY-IT-FORWARD · Chai". Unpaid counter orders never appear.
   - Color-coded ticket aging (green under 10 minutes, amber from 10 minutes, red from 20 minutes).
   - Idempotent ticket bump workflow with a 60-second undo recall safety window.
 
@@ -30,9 +35,27 @@ Mise is an ordering, kitchen and revenue analytics platform for independent rest
   - No public sign-up: clients are onboarded with `scripts/admin.py` (see Quick Start).
   - Two demo venues: **Angeethi House** (Lahore, Punjab; BBQ, karahi, handi, tandoor) and **Kehwa & Crumb** (Islamabad; coffee, chai, bakery). Prices and costs are illustrative.
 
+- **Floor view (`/floor`, staff and owner, first under "Service")**
+  - One tile per table (counters excluded) with its state in text, icon and colour, time in state (ticking from the server clock, so a wrong device clock does not skew it), running total and open call reason. Red first, then amber, then table order; a list on phones. Tiles reload on kitchen-stream events and every 30 s; the sidebar badge "Floor (n)" counts red and amber tiles.
+
+    | State | When | Amber / red after |
+    |---|---|---|
+    | Free | nobody scanned since the table was cleared and no open bill | — |
+    | Seated, no order | a guest scanned since the last clear or settle, no order yet | 3 / 5 min |
+    | Ordered | open bill with an order the kitchen has not bumped | 12 / 18 min from the oldest such order |
+    | Served | open bill, every active order bumped | timer only |
+    | Paying | open bill with a payment claim or bill request | 3 / 5 min from the claim or request |
+    | Needs clearing | bill settled since the last clear, no newer open bill | 2 / 5 min from the settle |
+    | Waiter called | an open call; overrides every other state | red at once |
+
+    Precedence: Waiter called > Paying > Ordered > Served > Seated > Needs clearing > Free, so dessert ordered after paying shows Ordered. The thresholds and states come from [docs/research/2026-10-25-floor-view-notes.md](docs/research/2026-10-25-floor-view-notes.md).
+  - Actions: Done (resolve the call), Mark cleared (refused while a bill is open, and while new guests are already seated unless staff choose "Clear anyway"), Open bill. A pay-it-forward tile shows "Pay-it-forward chai: N waiting" with **Give one**, which sends a free "PAY-IT-FORWARD · Chai" ticket to the kitchen and is disabled when none is waiting.
+
 - **Bills and sample bill (`owner-web`, staff and owner)**
-  - Bills page: open table bills live over SSE, requested first, with the guest's claim on each row ("Guest paying: Raast QR · ref …", "Guest paying: cash", "Card machine requested"); a Cancelled tab.
-  - Confirm sheet: each order with its device label ("Phone 1", "Phone 2") and a red "Joined late" flag, the total per payment method (Cash, Card, JazzCash / Easypaisa, Raast QR, Bank transfer), the method pre-selected from the claim, the amount and reference in large type with "Check your JazzCash / bank app for ref … and Rs … before confirming.", warnings for an amount still due or overpaid and for a reused reference (confirm only after "I've checked — confirm anyway"). "Confirm received" sends the total shown; if the bill changed meanwhile the sheet reloads with "The bill changed — check the new total". Staff can void an order with a reason; voiding the last order of a bill the guest says they paid asks before cancelling the bill. Settling snapshots subtotal, tax rate, tax and total on the bill.
+  - Bills page: Tables and Counter tabs, live over SSE, requested first, with the guest's claim on each row ("Guest paying: Raast QR · ref …", "Guest paying: cash", "Card machine requested"); a Cancelled tab.
+  - Confirm sheet: each order with its device label ("Phone 1", "Phone 2", numbered by each phone's first order on the bill) and a red "Joined late" flag when a phone's first order lands on a bill open for more than 20 minutes, the total per payment method (Cash, Card, JazzCash / Easypaisa, Raast QR, Bank transfer), the method pre-selected from the claim, the amount and reference in large type with "Check your JazzCash / bank app for ref … and Rs … before confirming.", warnings for an amount still due or overpaid ("Guest sent Rs A · bill is now Rs B · Rs … still due") and for a reference already used on another bill of the venue in the last 7 days (confirm only after "I've checked — confirm anyway"). "Confirm received" sends the total and method shown; the server recomputes them under the bill lock and refuses on any difference, and the sheet then reloads with "The bill changed — check the new total". When two staff confirm the same bill, one wins and the other sees that it is already settled. Staff can void an order with a reason; voiding the last order of a bill the guest says they paid asks before cancelling the bill. Settling snapshots subtotal, tax rate, tax and total on the bill and records who settled it.
+  - **The demo cannot verify a transaction with a bank.** "Confirm received" is a staff check: staff look for the reference and amount in the venue's own banking or wallet app before confirming. Nothing settles without a staff action.
+  - Counter tab: Awaiting payment (Confirm received / Cancel), Preparing, Ready (Collected, with a 60 s Undo). Expired unpaid orders move to Cancelled with "Take late payment".
   - Printable 80 mm sample bill with "Sales tax (illustrative)" and the fixed footer "Sample bill — not a tax invoice. Not connected to FBR or any provincial revenue authority."
   - Sales tax rates live in `data/tax_rates.json`, one row per jurisdiction, payment class and start date, each with its legal source: Punjab 16% (cash, bank transfer) / 8% (card, wallet, QR) from 1 July 2026 under the Punjab Sales Tax on Services Act 2012 as amended by the Punjab Finance Act 2026 (16% / 5% before); Islamabad 15% / 5% under the ICT (Tax on Services) Ordinance 2001. Verification notes: [docs/research/2026-10-24-tax-rate-verification.md](docs/research/2026-10-24-tax-rate-verification.md).
 
@@ -43,7 +66,9 @@ Mise is an ordering, kitchen and revenue analytics platform for independent rest
   - What-if calculator (`/ai`): price change, promotion or demand surge on recent sales with stated elasticity assumptions; returns weekly revenue and margin deltas. Cannibalization, capacity and staffing are not modeled.
   - Simulated demo data (`make simulate` or the **Generate demo data** button in DEMO_MODE, limited to 3 runs per hour per client IP), from each venue's own profile (service hours, party sizes, dish and size popularity, an assumed payment mix), with one settled bill per simulated party. Always stored as `source='simulated'` and labeled in the UI. Regenerating replaces the previous simulated orders, bills and stored forecasts; live orders and bills are never touched.
   - Visual Menu Ingestion (VLM) for digitizing paper menus from photo URLs into structured catalog items.
-  - Table management and QR code generator.
+  - Table management and QR code generator; the counter QR is listed and printable like the table QRs.
+  - Venue settings on the Tables & QR page: payment details guests pay into (Raast ID, JazzCash, Easypaisa, IBAN, account title), pickup prefix and the extra call reason. Validation: IBAN `PK` + 22 characters with the mod-97 checksum; JazzCash and Easypaisa a mobile number `03` + 9 digits (`+92`, `0092` and `92` forms are normalised to `03…`); Raast ID a mobile number or IBAN; an account title of 2–80 characters is required with any of them. Sample values are accepted only on demo venues and always shown under the demo banner.
+  - The brief shows pay-it-forward chai bought and given over the last 7 days; handouts are never revenue.
   - Methods, assumptions and limits: [docs/analytics.md](docs/analytics.md).
 
 ---
@@ -100,7 +125,7 @@ graph TD
 
 ## Screenshots
 
-Screenshots are produced by `make e2e` in `test-results/screens/`: guest menu, size picker and order sheet on a phone; kitchen display, sample bill and owner brief on desktop.
+Screenshots are produced by `make e2e` in `test-results/screens/`: guest menu, size picker and order sheet on a phone; kitchen display, sample bill and owner brief on desktop; every guest screen at 360 px on slow 3G (`slow3g-*.png`).
 
 ---
 
@@ -283,6 +308,13 @@ make test
 bash scripts/check_branding.sh
 
 # Browser tests (Playwright) against a running stack; first time: pnpm exec playwright install chromium
+# e2e/flows.spec.ts: two venues, sizes, kitchen, bills, sample bill, isolation.
+# e2e/self-service.spec.ts: the family at a table (water call, Raast, confirm, Needs clearing → Free),
+# Raast then cash at 16%, chai ordered during a pending payment, the café counter (K-001, paid
+# before the kitchen sees it, Ready, Collected, Undo), counter expiry, device labels / Joined late /
+# void, two staff confirming one bill, pay-it-forward chai, and every guest screen at 360 px on
+# slow 3G with "I've paid" surviving a dropped connection. Rows are backdated with psql in the
+# postgres container; there are no test-only endpoints.
 LLM_PROVIDER=mock DEMO_MODE=true make up && make e2e
 
 # Complete CI pipeline
@@ -290,9 +322,10 @@ make ci
 
 # End-to-end Phase 1 check on a fresh stack (wipes dev volumes; mock LLM only):
 # migrations up/down/check, seed twice (two venues, demo users), demo data for both venues
-# (sequential + parallel), brief and what-if in PKR, a live order and its settled bill surviving
-# regeneration, browser tests (both venues, sizes, bills, sample bill, isolation), edge proxy,
-# then make ci
+# (sequential + parallel), brief and what-if in PKR (with pay_forward) and Floor tiles for both
+# venues, a live order and its settled bill surviving regeneration, a café counter order (not in
+# the kitchen until a settle with the right expected total) and a pay-it-forward give, browser
+# tests, edge proxy, then make ci
 LLM_PROVIDER=mock DEMO_MODE=true make verify-f
 ```
 
