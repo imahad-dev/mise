@@ -41,11 +41,11 @@ Mise is an ordering, kitchen and revenue analytics platform for independent rest
     | State | When | Amber / red after |
     |---|---|---|
     | Free | nobody scanned since the table was cleared and no open bill | — |
-    | Seated, no order | a guest scanned since the last clear or settle, no order yet | 3 / 5 min |
+    | Seated, no order | a guest scanned since the last clear, settle or cancelled bill, no order yet | 3 / 5 min |
     | Ordered | open bill with an order the kitchen has not bumped | 12 / 18 min from the oldest such order |
     | Served | open bill, every active order bumped | timer only |
     | Paying | open bill with a payment claim or bill request | 3 / 5 min from the claim or request |
-    | Needs clearing | bill settled since the last clear, no newer open bill | 2 / 5 min from the settle |
+    | Needs clearing | bill settled or cancelled (every order voided) since the last clear, no newer open bill | 2 / 5 min from the settle or cancel |
     | Waiter called | an open call; overrides every other state | red at once |
 
     Precedence: Waiter called > Paying > Ordered > Served > Seated > Needs clearing > Free, so dessert ordered after paying shows Ordered. The thresholds and states come from [docs/research/2026-10-25-floor-view-notes.md](docs/research/2026-10-25-floor-view-notes.md).
