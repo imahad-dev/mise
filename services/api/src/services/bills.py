@@ -286,21 +286,23 @@ def _reference_key_sql(column):
 async def reused_reference_bill_no(
     db: AsyncSession, restaurant_id: uuid.UUID, bill_id: uuid.UUID, keys: list[str]
 ) -> int | None:
-    """Another settled bill of this venue (last 7 days) whose reference or claim has a key."""
+    """Another settled or cancelled bill of this venue (last 7 days) whose reference or claim
+    has a key. A cancelled bill keeps its guest's claim, so the same money is not taken twice."""
     keys = [k for k in keys if k]
     if not keys:
         return None
+    closed_at = func.coalesce(Bill.settled_at, Bill.cancelled_at)
     return await db.scalar(
         select(Bill.bill_no)
         .where(
             Bill.restaurant_id == restaurant_id,
             Bill.id != bill_id,
-            Bill.status == "settled",
-            Bill.settled_at > func.clock_timestamp() - REUSE_WINDOW,
+            Bill.status.in_(("settled", "cancelled")),
+            closed_at > func.clock_timestamp() - REUSE_WINDOW,
             _reference_key_sql(Bill.payment_reference).in_(keys)
             | _reference_key_sql(Bill.claimed_reference).in_(keys),
         )
-        .order_by(Bill.settled_at.desc())
+        .order_by(closed_at.desc())
         .limit(1)
     )
 

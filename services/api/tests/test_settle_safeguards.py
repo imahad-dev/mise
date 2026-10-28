@@ -686,6 +686,28 @@ async def test_staff_reference_claimed_on_another_open_bill_needs_acknowledgemen
     assert ok.status_code == 200, ok.text
 
 
+async def test_reference_claimed_on_a_cancelled_bill_is_flagged(client, db_session, pv):
+    gone = await place(client, pv.session_t1, [(pv.naan, 1)])
+    a_bill = await bill_id_of(db_session, gone)
+    guest(client, pv.session_t1)
+    assert (await client.post(PAY, json={"method": "raast", "reference": "R-8"})).is_success
+    await as_member(client, db_session, pv.r.id, "staff")
+    void = {"reason": "Left", "acknowledge_claim": True}
+    assert (await client.post(url(pv, f"/orders/{gone}/void"), json=void)).is_success
+    a = await detail(client, pv, a_bill)
+    assert a["status"] == "cancelled"
+    b_bill = await bill_id_of(db_session, await place(client, pv.session_t2, [(pv.naan, 2)]))
+    guest(client, pv.session_t2)
+    assert (await client.post(PAY, json={"method": "raast", "reference": "r 8"})).is_success
+    await as_member(client, db_session, pv.r.id, "staff")
+    assert (await detail(client, pv, b_bill))["reused_reference_bill_no"] == a["bill_no"]
+    refused = await settle(client, pv.r.slug, b_bill, "raast")
+    assert refused.status_code == 409
+    assert refused.json()["detail"] == f"Reference already used on Bill {a['bill_no']:04d}"
+    ok = await settle(client, pv.r.slug, b_bill, "raast", acknowledge_reused_reference=True)
+    assert ok.status_code == 200, ok.text
+
+
 async def test_void_of_the_last_order_cancels_the_bill(client, db_session, pv):
     only = await place(client, pv.session_t1, [(pv.naan, 2)])
     old_bill = await bill_id_of(db_session, only)

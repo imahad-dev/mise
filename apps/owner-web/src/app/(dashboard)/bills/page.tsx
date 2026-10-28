@@ -381,7 +381,7 @@ export default function BillsPage() {
   const reusedWarnings = detail
     ? [
         ...(detail.reused_reference_bill_no !== null
-          ? [`Reference ${detail.claim?.reference ?? ""} was already used on ${billNo(detail.reused_reference_bill_no)} (settled).`]
+          ? [`Reference ${detail.claim?.reference ?? ""} was already used on ${billNo(detail.reused_reference_bill_no)}.`]
           : []),
         ...(detail.reused_reference_open_bill_no !== null
           ? [`The same reference is claimed on open ${billNo(detail.reused_reference_open_bill_no)}.`]
