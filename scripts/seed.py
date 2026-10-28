@@ -14,11 +14,12 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import exists, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from src.config import settings
 from src.database import async_session_factory
+from src.models.bill import Bill
 from src.models.dining_table import DiningTable
 from src.models.menu import MenuItem, MenuItemOption, MenuTranslation
 from src.models.restaurant import Restaurant
@@ -151,7 +152,25 @@ async def seed_data(
         restaurant.city = rest_data.get("city")
         restaurant.tax_jurisdiction = rest_data.get("tax_jurisdiction")
         restaurant.service_extra_label = rest_data.get("service_extra_label")
-        restaurant.pickup_prefix = rest_data.get("pickup_prefix")
+        prefix = rest_data.get("pickup_prefix")
+        if prefix != restaurant.pickup_prefix:
+            # As the owner settings: guests already hold printed numbers, so the prefix only
+            # changes with no open counter bill. The bill-numbering lock keeps one from opening.
+            await session.execute(
+                select(func.pg_advisory_xact_lock(func.hashtext(f"bill:{restaurant.id}")))
+            )
+            if await session.scalar(
+                select(
+                    exists().where(
+                        Bill.restaurant_id == restaurant.id,
+                        Bill.pickup_no.is_not(None),
+                        Bill.status == "open",
+                    )
+                )
+            ):
+                print(f"Kept pickup prefix {restaurant.pickup_prefix!r}: counter orders are open")
+            else:
+                restaurant.pickup_prefix = prefix
         if "payment_details" in rest_data:
             restaurant.payment_details = payment_details
         restaurant.timezone = rest_data.get("timezone", "Asia/Karachi")
@@ -198,6 +217,20 @@ async def seed_data(
     res_items = await session.execute(stmt_items)
     existing_items_list = list(res_items.scalars().all())
     existing_items_by_id = {m.id: m for m in existing_items_list}
+
+    # One flagged pay-it-forward item per venue: unflag any other (an owner may have moved
+    # the flag) before the seed chai takes it back.
+    if any(item["key"] == PAY_FORWARD_KEY for item in items_data):
+        chai_id = uuid.uuid5(SEED_ITEM_NAMESPACE, f"{restaurant.slug}:{PAY_FORWARD_KEY}")
+        await session.execute(
+            update(MenuItem)
+            .where(
+                MenuItem.restaurant_id == restaurant.id,
+                MenuItem.is_pay_forward,
+                MenuItem.id != chai_id,
+            )
+            .values(is_pay_forward=False)
+        )
 
     items_created = 0
     items_updated = 0

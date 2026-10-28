@@ -1,6 +1,7 @@
 """Tests for database seed idempotency, row counts, and QR token stability."""
 
 import uuid
+from datetime import UTC, date, datetime
 
 import pytest
 import scripts.seed as seed_module
@@ -11,10 +12,11 @@ from scripts.seed import (
     seed_data,
     seed_demo_users,
 )
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from src.models.bill import Bill
 from src.models.dining_table import DiningTable
 from src.models.menu import MenuItem, MenuItemOption, MenuTranslation
 from src.models.restaurant import Restaurant
@@ -285,3 +287,62 @@ def test_find_seed_for_slug_skips_demo_users_and_malformed_files(tmp_path, monke
     assert any("a_broken.json" in w for w in warnings)
     assert any("b_wrong_shape.json" in w for w in warnings)
     assert not any("d_demo_users.json" in w for w in warnings)
+
+
+@pytest.mark.asyncio
+async def test_reseed_moves_the_pay_forward_flag_back_to_the_seed_chai(db_session: AsyncSession):
+    data = load_seed_data(ANGEETHI)
+    await seed_data(data, db_session)
+    rid = await db_session.scalar(
+        select(Restaurant.id).where(Restaurant.slug == data["restaurant"]["slug"])
+    )
+    chai = uuid.uuid5(SEED_ITEM_NAMESPACE, f"{data['restaurant']['slug']}:pay_forward_chai")
+    # The owner moves the flag to an item of their own (one flagged item per venue).
+    await db_session.execute(
+        update(MenuItem).where(MenuItem.id == chai).values(is_pay_forward=False)
+    )
+    own = MenuItem(
+        restaurant_id=rid, category="Drinks", price=100, unit_cost=10, is_pay_forward=True
+    )
+    db_session.add(own)
+    await db_session.flush()
+    await seed_data(data, db_session)
+    flagged = (
+        await db_session.scalars(
+            select(MenuItem.id).where(MenuItem.restaurant_id == rid, MenuItem.is_pay_forward)
+        )
+    ).all()
+    assert list(flagged) == [chai]
+
+
+@pytest.mark.asyncio
+async def test_reseed_keeps_the_pickup_prefix_while_counter_orders_are_open(
+    db_session: AsyncSession,
+):
+    data = load_seed_data(ANGEETHI)
+    await seed_data(data, db_session)
+    restaurant = await db_session.scalar(
+        select(Restaurant).where(Restaurant.slug == data["restaurant"]["slug"])
+    )
+    restaurant.pickup_prefix = "Q"
+    counter = await db_session.scalar(
+        select(DiningTable.id).where(
+            DiningTable.restaurant_id == restaurant.id, DiningTable.kind == "counter"
+        )
+    )
+    open_bill = Bill(
+        restaurant_id=restaurant.id,
+        table_id=counter,
+        bill_no=1,
+        pickup_day=date(2026, 10, 28),
+        pickup_no=1,
+    )
+    db_session.add(open_bill)
+    await db_session.flush()
+    await seed_data(data, db_session)
+    assert restaurant.pickup_prefix == "Q"  # guests already hold Q-numbers
+
+    open_bill.status, open_bill.cancelled_at = "cancelled", datetime.now(UTC)
+    await db_session.flush()
+    await seed_data(data, db_session)
+    assert restaurant.pickup_prefix == data["restaurant"]["pickup_prefix"]
