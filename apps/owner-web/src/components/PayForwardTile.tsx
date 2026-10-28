@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Button, Card } from "ui";
 import { apiError } from "../lib/bill";
-import { payForwardText } from "../lib/floor";
+import { keepGiveKey, newGiveKey, payForwardText } from "../lib/floor";
 
 /** Chai bought by guests for someone who needs it; "Give one" sends a free ticket to the kitchen. */
 export function PayForwardTile({
@@ -17,18 +17,25 @@ export function PayForwardTile({
 }) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ text: string; error: boolean } | null>(null);
+  // One key per intended give: a retry after a lost response must not hand out a second chai.
+  const giveKey = useRef<string | null>(null);
 
-  useEffect(() => setMessage(null), [slug]);
+  useEffect(() => {
+    setMessage(null);
+    giveKey.current = null;
+  }, [slug]);
 
   const give = async () => {
     setBusy(true);
     setMessage(null);
+    const key = (giveKey.current ??= newGiveKey());
     try {
       const res = await fetch(`/api/restaurants/${slug}/pay-forward/give`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ quantity: 1 }),
+        body: JSON.stringify({ quantity: 1, idempotency_key: key }),
       });
+      if (!keepGiveKey(res.status)) giveKey.current = null;
       setMessage(res.ok ? { text: "Given — the kitchen has the ticket.", error: false } : { text: await apiError(res), error: true });
     } catch {
       setMessage({ text: "Network error. Try again.", error: true });

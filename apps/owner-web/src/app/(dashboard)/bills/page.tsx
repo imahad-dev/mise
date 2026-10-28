@@ -101,10 +101,14 @@ export default function BillsPage() {
     if (kind === "table" || view === "cancelled") return get(view);
     // Counter queue: unpaid bills are open; paid ones (preparing, ready, just collected) come
     // from the uncapped queue list, oldest payment first.
-    const floor = async (): Promise<number> => {
-      const res = await fetch(`/api/restaurants/${slug}/floor`);
-      if (!res.ok) throw new Error(await apiError(res));
-      return (await res.json()).pay_forward_balance;
+    // The chai balance is extra: a /floor failure hides the tile, never the queue.
+    const floor = async (): Promise<number | undefined> => {
+      try {
+        const res = await fetch(`/api/restaurants/${slug}/floor`);
+        return res.ok ? (await res.json()).pay_forward_balance : undefined;
+      } catch {
+        return undefined;
+      }
     };
     const [open, settled, payForward] = await Promise.all([get("open"), get("settled&queue=true"), floor()]);
     return { ...open, bills: [...open.bills, ...settled.bills], pay_forward_balance: payForward };

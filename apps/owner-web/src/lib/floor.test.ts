@@ -3,6 +3,8 @@ import {
   elapsed,
   formatElapsed,
   isStale,
+  keepGiveKey,
+  newGiveKey,
   levelClass,
   payForwardText,
   sortTiles,
@@ -19,6 +21,13 @@ describe("floor helpers", () => {
   it("says how many pay-it-forward chai are waiting", () => {
     expect(payForwardText(0)).toBe("No chai waiting");
     expect(payForwardText(3)).toBe("Pay-it-forward chai: 3 waiting");
+  });
+  it("retries a give with the same key until the server answered for sure", () => {
+    expect(keepGiveKey("network")).toBe(true);
+    expect(keepGiveKey(502)).toBe(true);
+    expect(keepGiveKey(200)).toBe(false);
+    expect(keepGiveKey(409)).toBe(false);
+    expect(newGiveKey()).not.toBe(newGiveKey());
   });
   it("measures elapsed time on the server clock", () => {
     const since = "2026-10-25T12:00:00Z";

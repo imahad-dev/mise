@@ -71,3 +71,12 @@ export const levelText = (level: FloorLevel) => (level === "red" ? "Urgent" : le
 /** The pay-it-forward tile's headline: chai bought by guests and not yet handed out. */
 export const payForwardText = (waiting: number) =>
   waiting > 0 ? `Pay-it-forward chai: ${waiting} waiting` : "No chai waiting";
+
+/** A key for one intended "Give one"; randomUUID needs a secure context, so fall back on plain http. */
+export const newGiveKey = () =>
+  typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+    ? crypto.randomUUID()
+    : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+
+/** Reuse the key on the next tap unless the server answered for sure (done, or refused with 409). */
+export const keepGiveKey = (status: number | "network") => status === "network" || (status >= 300 && status !== 409);
