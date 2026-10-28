@@ -490,15 +490,34 @@
           "guest"
         ],
         "summary": "Get Guest Bill",
-        "description": "The bill of the session's latest billed order.",
+        "description": "The table's open bill (else the session's latest bill): lines, per-method totals, claim.\n\nWith order_id: the bill of that order of this session (404 for any other order).",
         "operationId": "get_guest_bill_api_guest_bill_get",
+        "parameters": [
+          {
+            "name": "order_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Order Id"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/GuestBillResponse"
+                  "$ref": "#/components/schemas/GuestBillDetail"
                 }
               }
             }
@@ -508,6 +527,148 @@
           },
           "404": {
             "description": "No bill for this session"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/guest/bill/payment": {
+      "post": {
+        "tags": [
+          "guest"
+        ],
+        "summary": "Claim Payment",
+        "description": "Record how the guest pays (counts as requesting the bill). Never settles; latest wins.",
+        "operationId": "claim_payment_api_guest_bill_payment_post",
+        "parameters": [
+          {
+            "name": "order_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Order Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GuestPaymentRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GuestBillDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated or expired session"
+          },
+          "404": {
+            "description": "No bill for this session"
+          },
+          "409": {
+            "description": "Bill is no longer open"
+          },
+          "422": {
+            "description": "Invalid method or reference, no active orders, or no tax rate"
+          }
+        }
+      }
+    },
+    "/api/guest/service-calls": {
+      "post": {
+        "tags": [
+          "guest"
+        ],
+        "summary": "Create Service Call",
+        "description": "Call a waiter to the session's table. One open call per table, 60 s between calls.",
+        "operationId": "create_service_call_api_guest_service_calls_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ServiceCallRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceCallResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated or expired session"
+          },
+          "409": {
+            "description": "A waiter is already on the way"
+          },
+          "422": {
+            "description": "Not a table session"
+          },
+          "429": {
+            "description": "Called less than 60 seconds ago"
+          }
+        }
+      }
+    },
+    "/api/guest/service-calls/current": {
+      "get": {
+        "tags": [
+          "guest"
+        ],
+        "summary": "Current Service Call",
+        "description": "The table's open call or null, whether calling is possible here, and the server clock.",
+        "operationId": "current_service_call_api_guest_service_calls_current_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CurrentCallResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated or expired session"
           }
         }
       }
@@ -813,6 +974,9 @@
           "404": {
             "description": "Order not found"
           },
+          "409": {
+            "description": "Order was cancelled, or awaiting payment"
+          },
           "422": {
             "description": "Validation Error",
             "content": {
@@ -897,7 +1061,7 @@
           "bills"
         ],
         "summary": "List Bills",
-        "description": "Open bills (requested first, then oldest) or the 50 latest settled bills.",
+        "description": "Open bills (requested first, then oldest), or the 50 latest settled or cancelled.\n\nReading open bills (other than kind=table) first cancels unclaimed counter bills left\nunpaid for 30 minutes. `status=settled&kind=counter&queue=true` lists the counter queue\ninstead: every paid order from today or yesterday still preparing or ready, or collected\nwithin the undo window, oldest payment first.",
         "operationId": "list_bills_api_restaurants__slug__bills_get",
         "parameters": [
           {
@@ -916,11 +1080,42 @@
             "schema": {
               "enum": [
                 "open",
-                "settled"
+                "settled",
+                "cancelled"
               ],
               "type": "string",
               "default": "open",
               "title": "Status"
+            }
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "table",
+                    "counter"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Kind"
+            }
+          },
+          {
+            "name": "queue",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Queue"
             }
           }
         ],
@@ -1068,10 +1263,514 @@
             "description": "Restaurant or bill not found"
           },
           "409": {
-            "description": "Bill already settled"
+            "description": "Bill already settled or not open; reference already used on another bill; or {\"detail\": \"Bill changed\", \"bill\": <fresh BillDetail>}"
           },
           "422": {
-            "description": "No active orders or no tax rate configured"
+            "description": "No active orders, no tax rate, or expected_method mismatch"
+          }
+        }
+      }
+    },
+    "/api/restaurants/{slug}/orders/{order_id}/void": {
+      "post": {
+        "tags": [
+          "bills"
+        ],
+        "summary": "Void Order",
+        "description": "Take a placed or bumped order off its open bill: it leaves the kitchen and the totals.\n\nVoiding the last active order cancels the bill, so the table's next order opens a new one.",
+        "operationId": "void_order_api_restaurants__slug__orders__order_id__void_post",
+        "parameters": [
+          {
+            "name": "order_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Order Id"
+            }
+          },
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Slug"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VoidOrderRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "404": {
+            "description": "Restaurant or order not found"
+          },
+          "409": {
+            "description": "Bill not open, order already cancelled or awaiting payment, or the void would cancel a bill the guest says they paid ({\"detail\", \"claim\"}; resend with acknowledge_claim)"
+          },
+          "422": {
+            "description": "Reason must be 1-200 characters"
+          }
+        }
+      }
+    },
+    "/api/restaurants/{slug}/bills/{bill_id}/cancel": {
+      "post": {
+        "tags": [
+          "bills"
+        ],
+        "summary": "Cancel Bill",
+        "description": "Cancel an unpaid counter bill and its order (the guest left). Table bills use voids.",
+        "operationId": "cancel_bill_api_restaurants__slug__bills__bill_id__cancel_post",
+        "parameters": [
+          {
+            "name": "bill_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Bill Id"
+            }
+          },
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Slug"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CancelBillRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "404": {
+            "description": "Restaurant or bill not found"
+          },
+          "409": {
+            "description": "Not a counter bill, already settled, or not open"
+          },
+          "422": {
+            "description": "The guest says they paid: a reason (1-200 characters) is required"
+          }
+        }
+      }
+    },
+    "/api/restaurants/{slug}/orders/{order_id}/collect": {
+      "post": {
+        "tags": [
+          "bills"
+        ],
+        "summary": "Collect Order",
+        "description": "The guest picked up a ready counter order.",
+        "operationId": "collect_order_api_restaurants__slug__orders__order_id__collect_post",
+        "parameters": [
+          {
+            "name": "order_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Order Id"
+            }
+          },
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Slug"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "404": {
+            "description": "Restaurant or order not found"
+          },
+          "409": {
+            "description": "Not a counter order, not ready (bumped), or already collected"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/restaurants/{slug}/orders/{order_id}/uncollect": {
+      "post": {
+        "tags": [
+          "bills"
+        ],
+        "summary": "Uncollect Order",
+        "description": "Undo Collected within 60 seconds (database clock).",
+        "operationId": "uncollect_order_api_restaurants__slug__orders__order_id__uncollect_post",
+        "parameters": [
+          {
+            "name": "order_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Order Id"
+            }
+          },
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Slug"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "404": {
+            "description": "Restaurant or order not found"
+          },
+          "409": {
+            "description": "Not a counter order, not collected, or collected over 60 s ago"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/restaurants/{slug}/floor": {
+      "get": {
+        "tags": [
+          "floor"
+        ],
+        "summary": "Get Floor",
+        "description": "One tile per table (counters excluded): red first, then amber, then label order.",
+        "operationId": "get_floor_api_restaurants__slug__floor_get",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Slug"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FloorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "404": {
+            "description": "Restaurant, table or call not found"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/restaurants/{slug}/pay-forward/give": {
+      "post": {
+        "tags": [
+          "floor"
+        ],
+        "summary": "Give Pay Forward",
+        "description": "Hand out one pay-it-forward chai: a free kitchen ticket, never revenue.",
+        "operationId": "give_pay_forward_api_restaurants__slug__pay_forward_give_post",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Slug"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GiveRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GiveResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "404": {
+            "description": "Restaurant, table or call not found"
+          },
+          "409": {
+            "description": "None waiting"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/restaurants/{slug}/tables/{table_id}/clear": {
+      "post": {
+        "tags": [
+          "floor"
+        ],
+        "summary": "Clear Table",
+        "operationId": "clear_table_api_restaurants__slug__tables__table_id__clear_post",
+        "parameters": [
+          {
+            "name": "table_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Table Id"
+            }
+          },
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Slug"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/ClearTableRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Payload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TableClearedResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "404": {
+            "description": "Restaurant, table or call not found"
+          },
+          "409": {
+            "description": "Settle the bill first, or new guests are already seated"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/restaurants/{slug}/service-calls/{call_id}/resolve": {
+      "post": {
+        "tags": [
+          "floor"
+        ],
+        "summary": "Resolve Call",
+        "operationId": "resolve_call_api_restaurants__slug__service_calls__call_id__resolve_post",
+        "parameters": [
+          {
+            "name": "call_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Call Id"
+            }
+          },
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Slug"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceCallResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "404": {
+            "description": "Restaurant, table or call not found"
+          },
+          "409": {
+            "description": "Call already resolved"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
           }
         }
       }
@@ -1191,6 +1890,9 @@
           "404": {
             "description": "Menu item not found"
           },
+          "409": {
+            "description": "Pay-it-forward item in use, or another item already is one"
+          },
           "422": {
             "description": "Validation Error",
             "content": {
@@ -1250,6 +1952,9 @@
           },
           "404": {
             "description": "Menu item not found"
+          },
+          "409": {
+            "description": "Pay-it-forward item in use, or another item already is one"
           },
           "422": {
             "description": "Validation Error",
@@ -1378,6 +2083,113 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/api/restaurants/{slug}/settings": {
+      "get": {
+        "tags": [
+          "owner"
+        ],
+        "summary": "Get Settings",
+        "operationId": "get_settings_api_restaurants__slug__settings_get",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Slug"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SettingsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "description": "Unauthorized (Owner only)"
+          },
+          "404": {
+            "description": "Restaurant not found"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "owner"
+        ],
+        "summary": "Patch Settings",
+        "description": "Update payment details, the extra call reason and the pickup prefix.\n\nOmitted fields stay as they are; a given `payment_details` replaces the whole object;\n`pickup_prefix: null` clears the prefix (pickup numbers then print K-\u2026);\n`service_extra_label: null` or \"\" clears the extra call reason.",
+        "operationId": "patch_settings_api_restaurants__slug__settings_patch",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Slug"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchSettingsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SettingsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "description": "Unauthorized (Owner only)"
+          },
+          "404": {
+            "description": "Restaurant not found"
+          },
+          "409": {
+            "description": "Pickup prefix changed while counter orders are open"
+          },
+          "422": {
+            "description": "Invalid setting; detail.field names it"
           }
         }
       }
@@ -1812,6 +2624,90 @@
             ],
             "title": "Bill Requested At"
           },
+          "claim": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PaymentClaim"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "cancelled_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cancelled At"
+          },
+          "cancel_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cancel Reason"
+          },
+          "pickup_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pickup Label"
+          },
+          "order_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Order Id"
+          },
+          "order_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Order Status"
+          },
+          "collected_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Collected At"
+          },
+          "pickup_yesterday": {
+            "type": "boolean",
+            "title": "Pickup Yesterday",
+            "default": false
+          },
           "lines": {
             "items": {
               "$ref": "#/components/schemas/BillLine"
@@ -1939,6 +2835,75 @@
           "currency": {
             "type": "string",
             "title": "Currency"
+          },
+          "methods": {
+            "items": {
+              "$ref": "#/components/schemas/MethodPreview"
+            },
+            "type": "array",
+            "title": "Methods"
+          },
+          "amount_due_after_claim": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount Due After Claim"
+          },
+          "reused_reference_bill_no": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reused Reference Bill No"
+          },
+          "reused_reference_open_bill_no": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reused Reference Open Bill No"
+          },
+          "orders": {
+            "items": {
+              "$ref": "#/components/schemas/BillOrder"
+            },
+            "type": "array",
+            "title": "Orders"
+          },
+          "settled_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Settled By Name"
+          },
+          "cancelled_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cancelled By Name"
           }
         },
         "type": "object",
@@ -1951,6 +2916,9 @@
           "order_count",
           "subtotal",
           "bill_requested_at",
+          "claim",
+          "cancelled_at",
+          "cancel_reason",
           "lines",
           "preview_standard",
           "preview_digital",
@@ -1964,7 +2932,14 @@
           "restaurant_name",
           "restaurant_city",
           "restaurant_timezone",
-          "currency"
+          "currency",
+          "methods",
+          "amount_due_after_claim",
+          "reused_reference_bill_no",
+          "reused_reference_open_bill_no",
+          "orders",
+          "settled_by_name",
+          "cancelled_by_name"
         ],
         "title": "BillDetail"
       },
@@ -2029,6 +3004,66 @@
         ],
         "title": "BillListResponse"
       },
+      "BillOrder": {
+        "properties": {
+          "order_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Order Id"
+          },
+          "placed_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Placed At"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "device_label": {
+            "type": "string",
+            "title": "Device Label"
+          },
+          "joined_late": {
+            "type": "boolean",
+            "title": "Joined Late"
+          },
+          "voided": {
+            "type": "boolean",
+            "title": "Voided"
+          },
+          "void_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Void Reason"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/BillLine"
+            },
+            "type": "array",
+            "title": "Lines"
+          }
+        },
+        "type": "object",
+        "required": [
+          "order_id",
+          "placed_at",
+          "status",
+          "device_label",
+          "joined_late",
+          "voided",
+          "void_reason",
+          "lines"
+        ],
+        "title": "BillOrder"
+      },
       "BillSummary": {
         "properties": {
           "id": {
@@ -2086,6 +3121,90 @@
               }
             ],
             "title": "Bill Requested At"
+          },
+          "claim": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PaymentClaim"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "cancelled_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cancelled At"
+          },
+          "cancel_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cancel Reason"
+          },
+          "pickup_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pickup Label"
+          },
+          "order_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Order Id"
+          },
+          "order_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Order Status"
+          },
+          "collected_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Collected At"
+          },
+          "pickup_yesterday": {
+            "type": "boolean",
+            "title": "Pickup Yesterday",
+            "default": false
           }
         },
         "type": "object",
@@ -2097,7 +3216,10 @@
           "opened_at",
           "order_count",
           "subtotal",
-          "bill_requested_at"
+          "bill_requested_at",
+          "claim",
+          "cancelled_at",
+          "cancel_reason"
         ],
         "title": "BillSummary"
       },
@@ -2193,6 +3315,23 @@
         ],
         "title": "BriefAction"
       },
+      "CancelBillRequest": {
+        "properties": {
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "title": "CancelBillRequest"
+      },
       "ChatMessageRequest": {
         "properties": {
           "message": {
@@ -2244,6 +3383,49 @@
           "name"
         ],
         "title": "ChatSuggestedItem"
+      },
+      "ClearTableRequest": {
+        "properties": {
+          "force": {
+            "type": "boolean",
+            "title": "Force",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "ClearTableRequest"
+      },
+      "CollectResponse": {
+        "properties": {
+          "order_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Order Id"
+          },
+          "order_status": {
+            "type": "string",
+            "title": "Order Status"
+          },
+          "collected_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Collected At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "order_id",
+          "order_status",
+          "collected_at"
+        ],
+        "title": "CollectResponse"
       },
       "CreateGuestSessionRequest": {
         "properties": {
@@ -2333,6 +3515,48 @@
         ],
         "title": "CreateOrderRequest"
       },
+      "CurrentCallResponse": {
+        "properties": {
+          "call": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ServiceCallResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "available": {
+            "type": "boolean",
+            "title": "Available"
+          },
+          "extra_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Extra Label"
+          },
+          "server_time": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Server Time"
+          }
+        },
+        "type": "object",
+        "required": [
+          "call",
+          "available",
+          "extra_label",
+          "server_time"
+        ],
+        "title": "CurrentCallResponse"
+      },
       "DailyBriefResponse": {
         "properties": {
           "date": {
@@ -2384,6 +3608,9 @@
           "payment_mix": {
             "$ref": "#/components/schemas/PaymentMix"
           },
+          "pay_forward": {
+            "$ref": "#/components/schemas/PayForwardTotals"
+          },
           "forecast": {
             "$ref": "#/components/schemas/ForecastSummary"
           },
@@ -2420,6 +3647,7 @@
           "pairings",
           "peak_hours",
           "payment_mix",
+          "pay_forward",
           "forecast",
           "actions",
           "summary",
@@ -2544,6 +3772,168 @@
         ],
         "title": "DemoVenueInfo"
       },
+      "FloorResponse": {
+        "properties": {
+          "tiles": {
+            "items": {
+              "$ref": "#/components/schemas/FloorTile"
+            },
+            "type": "array",
+            "title": "Tiles"
+          },
+          "counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Counts"
+          },
+          "thresholds": {
+            "additionalProperties": {
+              "items": {
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            "type": "object",
+            "title": "Thresholds"
+          },
+          "server_time": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Server Time"
+          },
+          "service_extra_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Service Extra Label"
+          },
+          "pay_forward_balance": {
+            "type": "integer",
+            "title": "Pay Forward Balance"
+          }
+        },
+        "type": "object",
+        "required": [
+          "tiles",
+          "counts",
+          "thresholds",
+          "server_time",
+          "service_extra_label",
+          "pay_forward_balance"
+        ],
+        "title": "FloorResponse"
+      },
+      "FloorTile": {
+        "properties": {
+          "table_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Table Id"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "state": {
+            "type": "string",
+            "title": "State"
+          },
+          "level": {
+            "type": "string",
+            "title": "Level"
+          },
+          "since": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Since"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "reason_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason Label"
+          },
+          "running_total": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Running Total"
+          },
+          "bill_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bill Id"
+          },
+          "call_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Call Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "table_id",
+          "label",
+          "state",
+          "level",
+          "since",
+          "reason",
+          "reason_label",
+          "running_total",
+          "bill_id",
+          "call_id"
+        ],
+        "title": "FloorTile"
+      },
       "ForecastPoint": {
         "properties": {
           "date": {
@@ -2654,6 +4044,194 @@
           "points"
         ],
         "title": "ForecastSummary"
+      },
+      "GiveRequest": {
+        "properties": {
+          "quantity": {
+            "type": "integer",
+            "const": 1,
+            "title": "Quantity"
+          },
+          "idempotency_key": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Idempotency Key"
+          }
+        },
+        "type": "object",
+        "required": [
+          "quantity",
+          "idempotency_key"
+        ],
+        "title": "GiveRequest"
+      },
+      "GiveResponse": {
+        "properties": {
+          "order_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Order Id"
+          },
+          "pay_forward_balance": {
+            "type": "integer",
+            "title": "Pay Forward Balance"
+          }
+        },
+        "type": "object",
+        "required": [
+          "order_id",
+          "pay_forward_balance"
+        ],
+        "title": "GiveResponse"
+      },
+      "GuestBillDetail": {
+        "properties": {
+          "bill_no": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bill No"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "bill_requested_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bill Requested At"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/BillLine"
+            },
+            "type": "array",
+            "title": "Lines"
+          },
+          "subtotal": {
+            "type": "string",
+            "title": "Subtotal"
+          },
+          "currency": {
+            "type": "string",
+            "title": "Currency"
+          },
+          "methods": {
+            "items": {
+              "$ref": "#/components/schemas/MethodPreview"
+            },
+            "type": "array",
+            "title": "Methods"
+          },
+          "payment_details": {
+            "$ref": "#/components/schemas/PaymentDetails"
+          },
+          "claim": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PaymentClaim"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "voided": {
+            "items": {
+              "$ref": "#/components/schemas/VoidedLine"
+            },
+            "type": "array",
+            "title": "Voided"
+          },
+          "order_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Order Status"
+          },
+          "payment_method": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payment Method"
+          },
+          "tax_rate": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tax Rate"
+          },
+          "total": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total"
+          },
+          "pickup_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pickup Label"
+          },
+          "pay_forward_count": {
+            "type": "integer",
+            "title": "Pay Forward Count",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "bill_no",
+          "status",
+          "bill_requested_at",
+          "lines",
+          "subtotal",
+          "currency",
+          "methods",
+          "payment_details",
+          "claim",
+          "voided",
+          "order_status"
+        ],
+        "title": "GuestBillDetail"
       },
       "GuestBillResponse": {
         "properties": {
@@ -2875,6 +4453,28 @@
             ],
             "title": "Table Label"
           },
+          "table_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Table Kind"
+          },
+          "service_extra_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Service Extra Label"
+          },
           "items": {
             "items": {
               "$ref": "#/components/schemas/GuestMenuItemResponse"
@@ -2913,6 +4513,38 @@
           "currency"
         ],
         "title": "GuestMenuRestaurant"
+      },
+      "GuestPaymentRequest": {
+        "properties": {
+          "method": {
+            "type": "string",
+            "enum": [
+              "cash",
+              "card",
+              "wallet",
+              "raast",
+              "bank_transfer"
+            ],
+            "title": "Method"
+          },
+          "reference": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference"
+          }
+        },
+        "type": "object",
+        "required": [
+          "method"
+        ],
+        "title": "GuestPaymentRequest"
       },
       "GuestSessionResponse": {
         "properties": {
@@ -3257,6 +4889,22 @@
             },
             "type": "array",
             "title": "Items"
+          },
+          "pickup_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pickup Label"
+          },
+          "pay_forward": {
+            "type": "boolean",
+            "title": "Pay Forward",
+            "default": false
           }
         },
         "type": "object",
@@ -3525,6 +5173,48 @@
           "median_unit_margin"
         ],
         "title": "MenuThresholds"
+      },
+      "MethodPreview": {
+        "properties": {
+          "payment_class": {
+            "type": "string",
+            "enum": [
+              "standard",
+              "digital"
+            ],
+            "title": "Payment Class"
+          },
+          "tax_rate": {
+            "type": "string",
+            "title": "Tax Rate"
+          },
+          "tax_amount": {
+            "type": "string",
+            "title": "Tax Amount"
+          },
+          "total": {
+            "type": "string",
+            "title": "Total"
+          },
+          "method": {
+            "type": "string",
+            "title": "Method"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          }
+        },
+        "type": "object",
+        "required": [
+          "payment_class",
+          "tax_rate",
+          "tax_amount",
+          "total",
+          "method",
+          "label"
+        ],
+        "title": "MethodPreview"
       },
       "MyRestaurant": {
         "properties": {
@@ -3901,6 +5591,11 @@
             "type": "boolean",
             "title": "Featured"
           },
+          "is_pay_forward": {
+            "type": "boolean",
+            "title": "Is Pay Forward",
+            "default": false
+          },
           "sort_order": {
             "type": "integer",
             "title": "Sort Order"
@@ -4009,6 +5704,14 @@
           "guest_url": {
             "type": "string",
             "title": "Guest Url"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "table",
+              "counter"
+            ],
+            "title": "Kind"
           }
         },
         "type": "object",
@@ -4017,7 +5720,8 @@
           "restaurant_id",
           "label",
           "qr_token",
-          "guest_url"
+          "guest_url",
+          "kind"
         ],
         "title": "OwnerTableResponse"
       },
@@ -4254,10 +5958,118 @@
               }
             ],
             "title": "Is Gluten Free"
+          },
+          "is_pay_forward": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Pay Forward"
           }
         },
         "type": "object",
         "title": "PatchMenuItemRequest"
+      },
+      "PatchSettingsRequest": {
+        "properties": {
+          "payment_details": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payment Details"
+          },
+          "service_extra_label": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 40,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Service Extra Label"
+          },
+          "pickup_prefix": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[A-Z]{1,3}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pickup Prefix"
+          }
+        },
+        "type": "object",
+        "title": "PatchSettingsRequest"
+      },
+      "PayForwardTotals": {
+        "properties": {
+          "bought": {
+            "type": "integer",
+            "title": "Bought"
+          },
+          "given": {
+            "type": "integer",
+            "title": "Given"
+          }
+        },
+        "type": "object",
+        "required": [
+          "bought",
+          "given"
+        ],
+        "title": "PayForwardTotals"
+      },
+      "PaymentClaim": {
+        "properties": {
+          "method": {
+            "type": "string",
+            "title": "Method"
+          },
+          "reference": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference"
+          },
+          "total": {
+            "type": "string",
+            "title": "Total"
+          },
+          "claimed_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Claimed At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "method",
+          "reference",
+          "total",
+          "claimed_at"
+        ],
+        "title": "PaymentClaim"
       },
       "PaymentClassCounts": {
         "properties": {
@@ -4294,6 +6106,72 @@
           "digital"
         ],
         "title": "PaymentClassShares"
+      },
+      "PaymentDetails": {
+        "properties": {
+          "raast_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Raast Id"
+          },
+          "jazzcash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Jazzcash"
+          },
+          "easypaisa": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Easypaisa"
+          },
+          "iban": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Iban"
+          },
+          "account_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Account Title"
+          },
+          "sample": {
+            "type": "boolean",
+            "title": "Sample",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "PaymentDetails"
       },
       "PaymentMix": {
         "properties": {
@@ -4353,6 +6231,105 @@
         ],
         "title": "PeakHour"
       },
+      "ServiceCallRequest": {
+        "properties": {
+          "reason": {
+            "type": "string",
+            "enum": [
+              "help",
+              "water",
+              "extra"
+            ],
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "reason"
+        ],
+        "title": "ServiceCallRequest"
+      },
+      "ServiceCallResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          },
+          "reason_label": {
+            "type": "string",
+            "title": "Reason Label"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "resolved_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolved At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "reason",
+          "reason_label",
+          "created_at",
+          "resolved_at"
+        ],
+        "title": "ServiceCallResponse"
+      },
+      "SettingsResponse": {
+        "properties": {
+          "payment_details": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Payment Details"
+          },
+          "service_extra_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Service Extra Label"
+          },
+          "pickup_prefix": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pickup Prefix"
+          }
+        },
+        "type": "object",
+        "required": [
+          "payment_details",
+          "service_extra_label",
+          "pickup_prefix"
+        ],
+        "title": "SettingsResponse"
+      },
       "SettleBillRequest": {
         "properties": {
           "payment_method": {
@@ -4377,11 +6354,40 @@
               }
             ],
             "title": "Payment Reference"
+          },
+          "expected_total": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Expected Total"
+          },
+          "expected_method": {
+            "type": "string",
+            "enum": [
+              "cash",
+              "card",
+              "wallet",
+              "raast",
+              "bank_transfer"
+            ],
+            "title": "Expected Method"
+          },
+          "acknowledge_reused_reference": {
+            "type": "boolean",
+            "title": "Acknowledge Reused Reference",
+            "default": false
           }
         },
         "type": "object",
         "required": [
-          "payment_method"
+          "payment_method",
+          "expected_total",
+          "expected_method"
         ],
         "title": "SettleBillRequest"
       },
@@ -4455,6 +6461,26 @@
           "status"
         ],
         "title": "StatusOkResponse"
+      },
+      "TableClearedResponse": {
+        "properties": {
+          "table_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Table Id"
+          },
+          "cleared_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Cleared At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "table_id",
+          "cleared_at"
+        ],
+        "title": "TableClearedResponse"
       },
       "TaxByRate": {
         "properties": {
@@ -4545,6 +6571,54 @@
           "type"
         ],
         "title": "ValidationError"
+      },
+      "VoidOrderRequest": {
+        "properties": {
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          },
+          "acknowledge_claim": {
+            "type": "boolean",
+            "title": "Acknowledge Claim",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "reason"
+        ],
+        "title": "VoidOrderRequest"
+      },
+      "VoidedLine": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "option_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Option Label"
+          },
+          "quantity": {
+            "type": "integer",
+            "title": "Quantity"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "option_label",
+          "quantity"
+        ],
+        "title": "VoidedLine"
       },
       "WhatIfRequest": {
         "properties": {
