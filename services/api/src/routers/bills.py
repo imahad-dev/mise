@@ -9,9 +9,9 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import JSONResponse
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import aliased, selectinload
 
 from src.access import RestaurantAccess, member_access
 from src.database import get_db
@@ -216,14 +216,22 @@ async def bill_detail(db: AsyncSession, restaurant: Restaurant, bill: Bill) -> B
 async def list_bills(
     status_filter: Literal["open", "settled", "cancelled"] = Query("open", alias="status"),
     kind: Literal["table", "counter"] | None = Query(None),
+    queue: bool = Query(False),
     access: RestaurantAccess = Depends(member_access),
     db: AsyncSession = Depends(get_db),
 ) -> BillListResponse:
     """Open bills (requested first, then oldest), or the 50 latest settled or cancelled.
 
     Reading open bills (other than kind=table) first cancels unclaimed counter bills left
-    unpaid for 30 minutes.
+    unpaid for 30 minutes. `status=settled&kind=counter&queue=true` lists the counter queue
+    instead: every paid order from today or yesterday still preparing or ready, or collected
+    within the undo window, oldest payment first.
     """
+    if queue and (status_filter != "settled" or kind != "counter"):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="queue=true needs status=settled&kind=counter",
+        )
     rid = access.restaurant.id
     if status_filter == "open" and kind != "table":
         expired = await expire_unpaid(db, access.restaurant)
@@ -265,7 +273,18 @@ async def list_bills(
         stmt = stmt.where(Bill.pickup_no.is_(None))
     elif kind == "counter":
         stmt = stmt.where(Bill.pickup_no.is_not(None))
-    if status_filter == "open":
+    if queue:
+        now = await db.scalar(select(func.clock_timestamp()))
+        queued = aliased(Order)
+        stmt = stmt.where(
+            Bill.pickup_day >= pickup_today(access.restaurant, now) - timedelta(days=1),
+            exists().where(
+                queued.bill_id == Bill.id,
+                queued.status.in_(("placed", "bumped")),
+                or_(queued.collected_at.is_(None), queued.collected_at > now - UNDO_COLLECT),
+            ),
+        ).order_by(Bill.settled_at, Bill.id)
+    elif status_filter == "open":
         stmt = stmt.order_by(Bill.bill_requested_at.is_(None), Bill.opened_at)
     elif status_filter == "settled":
         stmt = stmt.order_by(Bill.settled_at.desc()).limit(50)

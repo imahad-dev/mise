@@ -5,7 +5,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
 
 
 class OwnerMenuTranslation(BaseModel):
@@ -58,8 +58,8 @@ class OwnerTableResponse(BaseModel):
     label: str
     qr_token: str
     guest_url: str
-    # "table" or "counter" (the counter / pickup QR).
-    kind: str
+    # "counter" is the counter / pickup QR.
+    kind: Literal["table", "counter"]
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -71,6 +71,12 @@ class PatchSettingsRequest(BaseModel):
     ) = None
     # Pickup numbers print as "<prefix>-042": 1-3 uppercase ASCII letters.
     pickup_prefix: Annotated[str, StringConstraints(pattern=r"^[A-Z]{1,3}$")] | None = None
+
+    @field_validator("service_extra_label", mode="before")
+    @classmethod
+    def _blank_label_clears(cls, v: Any) -> Any:
+        # null or a blank label clears it (omit the field to keep it).
+        return None if isinstance(v, str) and not v.strip() else v
 
 
 class SettingsResponse(BaseModel):

@@ -2,6 +2,7 @@
 
 import json
 import math
+import uuid
 from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
@@ -339,9 +340,24 @@ async def request_bill(
 
 
 async def _session_bill(
-    db: AsyncSession, session: GuestSession, *, lock: bool = False
+    db: AsyncSession,
+    session: GuestSession,
+    *,
+    lock: bool = False,
+    order_id: uuid.UUID | None = None,
 ) -> Bill | None:
-    """The open bill of the session's table, else the bill of its latest billed order."""
+    """The bill of the given order of this session; else the open bill of the session's table,
+    else the bill of its latest billed order."""
+    if order_id is not None:
+        # Each counter order has its own bill: the order page reads and pays that one only.
+        query = (
+            select(Bill)
+            .join(Order, Order.bill_id == Bill.id)
+            .where(Order.id == order_id, Order.guest_session_id == session.id)
+        )
+        if lock:
+            query = query.with_for_update(of=Bill).execution_options(populate_existing=True)
+        return (await db.execute(query)).scalar_one_or_none()
     if session.table_id is not None and await session_is_current(db, session):
         query = select(Bill).where(
             Bill.restaurant_id == session.restaurant_id,
@@ -433,11 +449,15 @@ async def _bill_detail(
     },
 )
 async def get_guest_bill(
+    order_id: uuid.UUID | None = None,
     session: GuestSession = Depends(get_current_guest_session),
     db: AsyncSession = Depends(get_db),
 ) -> GuestBillDetail:
-    """The table's open bill (else the session's latest bill): lines, per-method totals, claim."""
-    bill = await _session_bill(db, session)
+    """The table's open bill (else the session's latest bill): lines, per-method totals, claim.
+
+    With order_id: the bill of that order of this session (404 for any other order).
+    """
+    bill = await _session_bill(db, session, order_id=order_id)
     if bill is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No bill")
     restaurant = await db.get(Restaurant, session.restaurant_id)
@@ -457,12 +477,13 @@ async def get_guest_bill(
 )
 async def claim_payment(
     payload: GuestPaymentRequest,
+    order_id: uuid.UUID | None = None,
     session: GuestSession = Depends(get_current_guest_session),
     db: AsyncSession = Depends(get_db),
 ) -> GuestBillDetail:
     """Record how the guest pays (counts as requesting the bill). Never settles; latest wins."""
     # Locked: concurrent taps serialise here, so an identical repeat sees the stored claim.
-    bill = await _session_bill(db, session, lock=True)
+    bill = await _session_bill(db, session, lock=True, order_id=order_id)
     if bill is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No bill")
     # A counter order that expired unpaid comes back when the guest says they paid.

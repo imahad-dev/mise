@@ -404,7 +404,8 @@ async def patch_settings(
     """Update payment details, the extra call reason and the pickup prefix.
 
     Omitted fields stay as they are; a given `payment_details` replaces the whole object;
-    `pickup_prefix: null` clears the prefix (pickup numbers then print K-…).
+    `pickup_prefix: null` clears the prefix (pickup numbers then print K-…);
+    `service_extra_label: null` or "" clears the extra call reason.
     """
     restaurant = access.restaurant
     if payload.payment_details is not None:
@@ -428,7 +429,7 @@ async def patch_settings(
             )
         )
         restaurant.payment_details = cleaned
-    if payload.service_extra_label is not None:
+    if "service_extra_label" in payload.model_fields_set:
         restaurant.service_extra_label = payload.service_extra_label
     if (
         "pickup_prefix" in payload.model_fields_set

@@ -729,3 +729,78 @@ async def test_owner_tables_list_marks_the_counter_qr(
     resp = await client.get(f"/api/restaurants/{cv.r.slug}/tables")
     assert resp.status_code == 200
     assert {t["label"]: t["kind"] for t in resp.json()} == {"Counter": "counter", "T1": "table"}
+
+
+async def test_queue_lists_every_waiting_order_past_the_cap(client, db_session, cv):
+    s = await seat(db_session, cv.counter)
+    orders = [await order(client, cv, s) for _ in range(52)]
+    client.cookies.delete(GUEST_COOKIE_NAME)
+    await as_member(client, db_session, cv.r.id, "staff")
+    bills = [await bill_of(db_session, o["id"]) for o in orders]
+    for o, b in zip(orders, bills, strict=True):
+        assert (await settle(client, cv.r.slug, b.id)).status_code == 200
+        await client.post(f"/api/restaurants/{cv.r.slug}/kitchen/orders/{o['id']}/bump")
+    for o in orders[1:]:
+        resp = await client.post(f"/api/restaurants/{cv.r.slug}/orders/{o['id']}/collect")
+        assert resp.status_code == 200, resp.text
+    # All but the last were collected long ago: past their undo window.
+    await db_session.execute(
+        update(Order)
+        .where(Order.id.in_([uuid.UUID(o["id"]) for o in orders[1:-1]]))
+        .values(collected_at=datetime.now(UTC) - timedelta(minutes=5))
+    )
+    old_ready, just_collected = str(bills[0].id), str(bills[-1].id)
+    capped = await counter_list(client, cv, "settled")
+    assert old_ready not in capped
+    resp = await client.get(
+        f"/api/restaurants/{cv.r.slug}/bills?kind=counter&status=settled&queue=true"
+    )
+    assert resp.status_code == 200, resp.text
+    rows = resp.json()["bills"]
+    assert [r["id"] for r in rows] == [old_ready, just_collected]
+    assert rows[0]["order_status"] == "bumped"
+    assert rows[1]["order_status"] == "collected"
+    bad = await client.get(f"/api/restaurants/{cv.r.slug}/bills?status=open&queue=true")
+    assert bad.status_code == 422
+
+
+async def test_guest_bill_per_order(client, db_session, cv):
+    s = await seat(db_session, cv.counter)
+    o1 = await order(client, cv, s)
+    o2 = await order(client, cv, s)
+    b1 = await bill_of(db_session, o1["id"])
+    client.cookies.delete(GUEST_COOKIE_NAME)
+    await as_member(client, db_session, cv.r.id, "staff")
+    assert (await settle(client, cv.r.slug, b1.id)).status_code == 200
+    client.cookies.set(GUEST_COOKIE_NAME, sign_value(str(s.id)))
+    first = (await client.get(f"/api/guest/bill?order_id={o1['id']}")).json()
+    second = (await client.get(f"/api/guest/bill?order_id={o2['id']}")).json()
+    assert (first["pickup_label"], first["status"], first["order_status"]) == (
+        "K-001",
+        "settled",
+        "placed",
+    )
+    assert (second["pickup_label"], second["status"], second["order_status"]) == (
+        "K-002",
+        "open",
+        "awaiting_payment",
+    )
+    # Paying from K-001's page never claims K-002.
+    resp = await client.post(
+        f"/api/guest/bill/payment?order_id={o1['id']}", json={"method": "cash"}
+    )
+    assert resp.status_code == 409
+    assert (await bill_of(db_session, o2["id"])).claimed_method is None
+    resp = await client.post(
+        f"/api/guest/bill/payment?order_id={o2['id']}", json={"method": "cash"}
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["pickup_label"] == "K-002"
+    # Another session's order is not found.
+    other = await seat(db_session, cv.counter)
+    client.cookies.set(GUEST_COOKIE_NAME, sign_value(str(other.id)))
+    assert (await client.get(f"/api/guest/bill?order_id={o1['id']}")).status_code == 404
+    resp = await client.post(
+        f"/api/guest/bill/payment?order_id={o2['id']}", json={"method": "card"}
+    )
+    assert resp.status_code == 404

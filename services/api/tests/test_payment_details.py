@@ -152,6 +152,16 @@ async def test_owner_saves_and_reads_settings(client: AsyncClient, db_session: A
     # omitted fields stay as they are
     resp = await client.patch(f"/api/restaurants/{r.slug}/settings", json={})
     assert resp.json() == got.json()
+    # null or a blank label clears the extra call reason
+    for blank in ("  ", None):
+        await client.patch(
+            f"/api/restaurants/{r.slug}/settings", json={"service_extra_label": "More naan"}
+        )
+        resp = await client.patch(
+            f"/api/restaurants/{r.slug}/settings", json={"service_extra_label": blank}
+        )
+        assert resp.status_code == 200
+        assert resp.json()["service_extra_label"] is None
 
 
 async def test_invalid_details_name_the_field(client: AsyncClient, db_session: AsyncSession):
