@@ -7,6 +7,7 @@ import random
 from datetime import UTC, date, datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import pytest_asyncio
 from sqlalchemy import func, select, update
@@ -173,3 +174,42 @@ async def test_sample_bills_agree_from_guest_to_analytics(client, db_session, mv
     assert kpis["orders"] == active  # voided orders are not revenue
     mix = await analytics.payment_mix(db_session, w, mv.r)
     assert sum(mix["bills"].values()) == BILLS
+
+
+async def test_revenue_counts_only_settled_bills(client, db_session, mv):
+    """An order on a still-open bill is not revenue; it counts once the bill settles; a voided
+    order and a cancelled bill never count."""
+    await as_member(client, db_session, mv.r.id, "staff")
+    parties = []
+    for table in (mv.t1, mv.t2):
+        party = GuestSession(
+            restaurant_id=mv.r.id,
+            table_id=table.id,
+            language="en",
+            expires_at=datetime.now(UTC) + timedelta(hours=2),
+            created_at=await db_session.scalar(select(func.clock_timestamp())),
+        )
+        db_session.add(party)
+        parties.append(party)
+    await db_session.flush()
+    kept = await place(client, parties[0], [(mv.naan, 2)])
+    voided = await place(client, parties[0], [(mv.naan, 1)])
+    cancelled = await place(client, parties[1], [(mv.naan, 3)])
+    await as_member(client, db_session, mv.r.id, "staff")
+    for order in (voided, cancelled):  # voiding the only order cancels the second bill
+        void = await client.post(
+            f"/api/restaurants/{mv.r.slug}/orders/{order}/void", json={"reason": "Test"}
+        )
+        assert void.status_code == 200, void.text
+    today = datetime.now(UTC).astimezone(ZoneInfo("Asia/Karachi")).date()
+    w = Window(mv.r.id, "Asia/Karachi", today, today + timedelta(days=1))
+
+    before = await analytics.kpis(db_session, w)
+    assert (before["orders"], Decimal(str(before["revenue"]))) == (0, 0)
+
+    bill_id = await bill_id_of(db_session, kept)
+    assert (await settle(client, mv.r.slug, bill_id, "cash")).status_code == 200
+    subtotal = await db_session.scalar(select(Bill.subtotal).where(Bill.id == bill_id))
+    after = await analytics.kpis(db_session, w)
+    assert (after["orders"], Decimal(str(after["revenue"]))) == (1, subtotal)
+    assert await analytics.order_counts_by_source(db_session, w) == {"live": 1, "simulated": 0}

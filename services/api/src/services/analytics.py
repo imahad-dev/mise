@@ -1,6 +1,7 @@
 """Sales analytics from order_item snapshots. SQL aggregates plus pure post-processing; no LLM.
 
-All dates and hours are in the restaurant's local timezone. Cancelled orders are excluded.
+All dates and hours are in the restaurant's local timezone. Only orders on settled bills count
+(cancelled orders and open or cancelled bills never do); a sale is dated by its order's placement.
 Daypart: local hour < 18 is lunch (daytime), otherwise dinner (evening).
 """
 
@@ -32,6 +33,10 @@ _SCOPE = (
     "o.restaurant_id = :rid AND o.status IN ('placed', 'bumped') "
     # Pay-it-forward handouts are free kitchen tickets, never sales.
     "AND o.source IN ('live', 'simulated') "
+    # Revenue is paid money: the order's bill must be settled. Simulated orders have no bill
+    # only when no tax rate was in force; they stand for paid parties and still count.
+    "AND (EXISTS (SELECT 1 FROM bills sb WHERE sb.id = o.bill_id AND sb.status = 'settled') "
+    "OR (o.source = 'simulated' AND o.bill_id IS NULL)) "
     "AND o.placed_at >= :start AND o.placed_at < :end"
 )
 

@@ -14,8 +14,13 @@ Code: `services/api/src/services/` — `analytics.py`, `forecast.py`, `brief.py`
   taken when the order was placed. Later menu price or cost edits do not rewrite history.
 - Status filter: only `placed` and `bumped` orders count. `cancelled` orders (including staff
   voids and expired counter orders) and `awaiting_payment` counter orders (not paid yet) are
-  excluded. The payment mix reads only `settled` bills, so `open` and `cancelled` bills never
-  count. Dates and hours use the restaurant's timezone.
+  excluded.
+- Paid filter: an order counts only once its bill is `settled`, so orders on an `open` or
+  `cancelled` bill are never revenue; a void before settlement removes the order before it ever
+  counts. A settled order is dated by its own placement time (`placed_at`), not by the settle
+  time. Simulated orders written without a bill (no tax rate in force, see Bills below) stand for
+  paid parties and count. The payment mix reads only `settled` bills, dated by `settled_at`.
+  Dates and hours use the restaurant's timezone.
 - Source filter: `orders.source IN ('live', 'simulated')` (`_SCOPE` in `analytics.py`).
   Pay-it-forward handouts (`source='pay_forward'`, zero-price tickets with no bill) are free
   chai, never sales, so they are excluded from revenue, orders, AOV, menu engineering, pairings,
@@ -221,7 +226,7 @@ number, no table, `status='settled'`, opened at the order time and settled 45–
 The subtotal is the order total; tax comes from `tax_for(jurisdiction, payment method, local
 settle date, subtotal)` and the bill total is subtotal plus tax. When no tax rate is in force
 (no jurisdiction, or a date before the first configured rate) the order is written without a
-bill. Regenerating deletes simulated bills together with simulated orders.
+bill and still counts as a paid sale. Regenerating deletes simulated bills together with simulated orders.
 
 Random draws: arrival times, party sizes and dishes use `default_rng(seed)`; option, payment
 method and settle-time draws use a second generator seeded `[seed, 1]`, so changing the payment
