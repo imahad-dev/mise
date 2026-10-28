@@ -15,16 +15,21 @@ import {
   claimChip,
   claimSummary,
   claimWarning,
+  counterColumn,
+  isExpiredUnpaid,
   localDateTime,
   nextFormState,
   paymentLabel,
+  pickupText,
   previewFor,
   settlePayload,
+  undoSecondsLeft,
   voidReason,
   warningKey,
   type BillDetail,
   type BillOrder,
   type BillSummary,
+  type CounterColumn,
   type PaymentMethod,
 } from "../../../lib/bill";
 
@@ -39,6 +44,12 @@ const RELOAD_EVENTS = new Set([
 ]);
 const NEEDS_REFERENCE = new Set(["wallet", "raast", "bank_transfer"]);
 const BILL_CHANGED = "The bill changed — check the new total";
+const COLUMNS: { key: CounterColumn; title: string }[] = [
+  { key: "awaiting", title: "Awaiting payment" },
+  { key: "preparing", title: "Preparing" },
+  { key: "ready", title: "Ready" },
+];
+type BillList = { bills: BillSummary[]; restaurant_timezone: string };
 
 export default function BillsPage() {
   const { venue } = useVenue();
@@ -55,6 +66,15 @@ export default function BillsPage() {
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [view, setView] = useState<"open" | "cancelled">("open");
+  const [kind, setKind] = useState<"table" | "counter">("table");
+  // Counter queue: cancel sheet, action errors and the Collected undo toast.
+  const [cancelTarget, setCancelTarget] = useState<BillSummary | null>(null);
+  const [cancelReason, setCancelReason] = useState("");
+  const [cancelError, setCancelError] = useState<string | null>(null);
+  const [cancelBusy, setCancelBusy] = useState(false);
+  const [queueError, setQueueError] = useState<string | null>(null);
+  const [undo, setUndo] = useState<{ orderId: string; label: string; startedAt: number } | null>(null);
+  const [now, setNow] = useState(() => Date.now());
   // Void sheet
   const [voidTarget, setVoidTarget] = useState<BillOrder | null>(null);
   const [voidChoice, setVoidChoice] = useState<(typeof VOID_REASONS)[number]>("Wrong table");
@@ -69,13 +89,20 @@ export default function BillsPage() {
   const touched = useRef(false);
   const printHref = (id: string) => `/bills/${id}/print?venue=${encodeURIComponent(slug ?? "")}`;
 
-  const fetchBills = useCallback(async (): Promise<{ bills: BillSummary[]; restaurant_timezone: string }> => {
-    const res = await fetch(`/api/restaurants/${slug}/bills?status=${view}`);
-    if (!res.ok) throw new Error(await apiError(res));
-    return res.json();
-  }, [slug, view]);
+  const fetchBills = useCallback(async (): Promise<BillList> => {
+    const get = async (status: string): Promise<BillList> => {
+      const res = await fetch(`/api/restaurants/${slug}/bills?status=${status}&kind=${kind}`);
+      if (!res.ok) throw new Error(await apiError(res));
+      return res.json();
+    };
+    if (kind === "table" || view === "cancelled") return get(view);
+    // Counter queue: unpaid bills are open; paid ones (preparing, ready) are settled.
+    // shortcut: settled lists the 50 latest, so a ready order older than 50 paid ones drops off; add a server filter if a counter gets that busy.
+    const [open, settled] = await Promise.all([get("open"), get("settled")]);
+    return { ...open, bills: [...open.bills, ...settled.bills] };
+  }, [slug, view, kind]);
 
-  const { data, error: listError, refetch } = useSse<{ bills: BillSummary[]; restaurant_timezone: string }>({
+  const { data, error: listError, refetch } = useSse<BillList>({
     url: slug ? `/api/restaurants/${slug}/kitchen/stream` : null,
     enabled: Boolean(slug),
     fetchState: fetchBills,
@@ -93,7 +120,18 @@ export default function BillsPage() {
   useEffect(() => {
     if (slug) void refetch();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reload only when the tab changes
-  }, [view]);
+  }, [view, kind]);
+
+  // The undo toast counts down, then goes away.
+  useEffect(() => {
+    if (!undo) return;
+    const tick = setInterval(() => {
+      const t = Date.now();
+      setNow(t);
+      if (undoSecondsLeft(undo.startedAt, t) === 0) setUndo(null);
+    }, 1000);
+    return () => clearInterval(tick);
+  }, [undo]);
 
   /** Show a (re)loaded bill; changed is true when the server said the bill changed (settle 409). */
   const show = (body: BillDetail, changed = false) => {
@@ -190,7 +228,12 @@ export default function BillsPage() {
       });
       if (slugRef.current !== forSlug || selectedId.current !== billId) return;
       if (res.ok) {
-        router.push(printHref(billId));
+        if (detail.pickup_label) {
+          // Counter: stay on the queue; the order now goes to the kitchen.
+          selectedId.current = null;
+          setOpen(false);
+          void refetch();
+        } else router.push(printHref(billId));
         return;
       }
       if (res.status === 409) {
@@ -266,6 +309,59 @@ export default function BillsPage() {
     }
   };
 
+  const openCancel = (b: BillSummary) => {
+    setCancelTarget(b);
+    setCancelReason("");
+    setCancelError(null);
+  };
+
+  const sendCancel = async () => {
+    if (!cancelTarget) return;
+    const reason = cancelReason.trim();
+    if (cancelTarget.claim && !reason) {
+      setCancelError("The guest says they paid: give a reason to cancel.");
+      return;
+    }
+    setCancelBusy(true);
+    setCancelError(null);
+    try {
+      const res = await fetch(`/api/restaurants/${slug}/bills/${cancelTarget.id}/cancel`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: reason || null }),
+      });
+      if (res.ok) {
+        setCancelTarget(null);
+        void refetch();
+        return;
+      }
+      setCancelError(await apiError(res));
+      if (res.status === 409) void refetch();
+    } catch {
+      setCancelError("Network error. Try again.");
+    } finally {
+      setCancelBusy(false);
+    }
+  };
+
+  const collect = async (orderId: string, label: string, undoIt = false) => {
+    const startedAt = Date.now();
+    setQueueError(null);
+    try {
+      const res = await fetch(`/api/restaurants/${slug}/orders/${orderId}/${undoIt ? "uncollect" : "collect"}`, { method: "POST" });
+      if (res.ok) {
+        setUndo(undoIt ? null : { orderId, label, startedAt });
+        setNow(Date.now());
+      } else {
+        setQueueError(await apiError(res));
+        if (undoIt) setUndo(null);
+      }
+      void refetch();
+    } catch {
+      setQueueError("Network error. Try again.");
+    }
+  };
+
   const bills = data?.bills ?? [];
   const currency = venue?.currency ?? "PKR";
   const selected = detail ? previewFor(detail, method) : null;
@@ -283,25 +379,46 @@ export default function BillsPage() {
       ]
     : [];
   const needsAck = reusedWarnings.length > 0 || refusedReference;
-  const sheetTitle = detail ? `${detail.table_label ? `Table ${detail.table_label}` : "Bill"} · ${billNo(detail.bill_no)}` : "Bill";
+  const sheetTitle = detail
+    ? `${detail.pickup_label ? `Pickup ${pickupText(detail)}` : detail.table_label ? `Table ${detail.table_label}` : "Bill"} · ${billNo(detail.bill_no)}`
+    : "Bill";
+  // Open bills, and counter bills the expiry cancelled (settling one revives it).
+  const payable = Boolean(detail && (detail.status === "open" || isExpiredUnpaid(detail)));
+  const timeZone = data?.restaurant_timezone ?? "UTC";
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Bills" subtitle="Open table bills. Confirm a payment to print a sample bill." />
+      <PageHeader title="Bills" subtitle="Table bills and counter orders. Confirm a payment once the money has arrived." />
 
-      <div role="tablist" aria-label="Bills" className="flex gap-2">
-        {(["open", "cancelled"] as const).map((v) => (
-          <button
-            key={v}
-            type="button"
-            role="tab"
-            aria-selected={view === v}
-            onClick={() => setView(v)}
-            className={view === v ? "btn-primary" : "btn-ghost"}
-          >
-            {v === "open" ? "Open" : "Cancelled"}
-          </button>
-        ))}
+      <div className="flex flex-wrap gap-4">
+        <div role="tablist" aria-label="Bill kind" className="flex gap-2">
+          {(["table", "counter"] as const).map((k) => (
+            <button
+              key={k}
+              type="button"
+              role="tab"
+              aria-selected={kind === k}
+              onClick={() => setKind(k)}
+              className={kind === k ? "btn-primary" : "btn-ghost"}
+            >
+              {k === "table" ? "Tables" : "Counter"}
+            </button>
+          ))}
+        </div>
+        <div role="tablist" aria-label="Bill status" className="flex gap-2">
+          {(["open", "cancelled"] as const).map((v) => (
+            <button
+              key={v}
+              type="button"
+              role="tab"
+              aria-selected={view === v}
+              onClick={() => setView(v)}
+              className={view === v ? "btn-primary" : "btn-ghost"}
+            >
+              {v === "open" ? "Open" : "Cancelled"}
+            </button>
+          ))}
+        </div>
       </div>
 
       {listError && !data && (
@@ -309,24 +426,78 @@ export default function BillsPage() {
           {listError.message}
         </p>
       )}
+      {queueError && (
+        <p role="alert" className="text-sm text-danger-fg">
+          {queueError}
+        </p>
+      )}
 
-      {data && bills.length === 0 ? (
+      {kind === "counter" && view === "open" ? (
+        <div className="grid gap-4 md:grid-cols-3">
+          {COLUMNS.map((col) => {
+            const rows = bills.filter((b) => counterColumn(b) === col.key);
+            return (
+              <section key={col.key} aria-label={col.title} className="space-y-2">
+                <h2 className="text-sm font-semibold text-ink">
+                  {col.title} <span className="text-ink-muted">({rows.length})</span>
+                </h2>
+                {rows.length === 0 && <p className="text-xs text-ink-muted">None</p>}
+                <ul className="space-y-2">
+                  {rows.map((b) => (
+                    <li key={b.id} className="mise-card space-y-2">
+                      <p className={`font-serif font-bold text-ink ${col.key === "ready" ? "text-5xl" : "text-3xl"}`}>{pickupText(b)}</p>
+                      <p className="text-xs text-ink-muted">
+                        {billNo(b.bill_no)} · {localDateTime(b.opened_at, timeZone)} · {formatPrice(Number(b.subtotal), currency)}
+                      </p>
+                      {col.key === "awaiting" && b.claim && <Badge className="bg-terracotta text-cream">{claimChip(b.claim)}</Badge>}
+                      <div className="flex flex-wrap gap-2">
+                        {col.key === "awaiting" && (
+                          <>
+                            <Button aria-label={`Confirm received for ${pickupText(b)}`} onClick={() => select(b.id)}>
+                              Confirm received
+                            </Button>
+                            <Button variant="outline" aria-label={`Cancel ${pickupText(b)}`} onClick={() => openCancel(b)}>
+                              Cancel
+                            </Button>
+                          </>
+                        )}
+                        {col.key === "preparing" && (
+                          <Button variant="outline" aria-label={`Details of ${pickupText(b)}`} onClick={() => select(b.id)}>
+                            Details
+                          </Button>
+                        )}
+                        {col.key === "ready" && (
+                          <Button className="w-full" aria-label={`${pickupText(b)} collected`} disabled={!b.order_id} onClick={() => b.order_id && void collect(b.order_id, pickupText(b))}>
+                            Collected
+                          </Button>
+                        )}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            );
+          })}
+        </div>
+      ) : data && bills.length === 0 ? (
         <Card className="p-12 text-center text-sm text-ink-muted">
           {view === "open" ? "No open bills right now." : "No cancelled bills."}
         </Card>
       ) : (
         <ul className="space-y-2">
           {bills.map((b) => (
-            <li key={b.id}>
+            <li key={b.id} className="flex items-stretch gap-2">
               <button
                 type="button"
                 onClick={() => select(b.id)}
-                className="mise-card flex w-full flex-wrap items-center justify-between gap-3 text-left hover:border-terracotta"
+                className="mise-card flex flex-1 flex-wrap items-center justify-between gap-3 text-left hover:border-terracotta"
               >
                 <span>
-                  <span className="block font-semibold text-ink">{b.table_label ? `Table ${b.table_label}` : "No table"}</span>
+                  <span className="block font-semibold text-ink">
+                    {b.pickup_label ? `Pickup ${pickupText(b)}` : b.table_label ? `Table ${b.table_label}` : "No table"}
+                  </span>
                   <span className="block text-xs text-ink-muted">
-                    {billNo(b.bill_no)} · opened {localDateTime(b.opened_at, data?.restaurant_timezone ?? "UTC")} · {b.order_count}{" "}
+                    {billNo(b.bill_no)} · opened {localDateTime(b.opened_at, timeZone)} · {b.order_count}{" "}
                     {b.order_count === 1 ? "order" : "orders"}
                   </span>
                   {b.status === "cancelled" && (
@@ -345,6 +516,11 @@ export default function BillsPage() {
                   <span className="font-semibold text-ink">{formatPrice(Number(b.subtotal), currency)}</span>
                 </span>
               </button>
+              {isExpiredUnpaid(b) && (
+                <Button variant="outline" aria-label={`Take late payment for ${pickupText(b)}`} onClick={() => select(b.id)}>
+                  Take late payment
+                </Button>
+              )}
             </li>
           ))}
         </ul>
@@ -358,7 +534,7 @@ export default function BillsPage() {
         }}
         title={sheetTitle}
         footer={
-          detail?.status === "open" && (
+          payable && (
             <Button className="w-full" onClick={settle} disabled={busy || !selected || (needsAck && !acknowledged)}>
               {busy ? "Saving…" : "Confirm received"}
             </Button>
@@ -379,7 +555,7 @@ export default function BillsPage() {
           !error && <p className="text-sm text-ink-muted">Loading…</p>
         ) : (
           <>
-            {detail.status === "open" && (
+            {payable && (
               <div className="space-y-1 rounded-xl border border-line bg-paper-2 p-4 text-center">
                 <p className="text-lg font-semibold text-ink">{sheetTitle}</p>
                 <p className="font-serif text-4xl font-bold text-ink">
@@ -392,25 +568,25 @@ export default function BillsPage() {
               </div>
             )}
 
-            {detail.status === "open" && detail.claim && (
+            {payable && detail.claim && (
               <p className="text-sm font-semibold text-ink">Guest claims: {claimSummary(detail.claim)}</p>
             )}
 
-            {detail.status === "open" && NEEDS_REFERENCE.has(method) && selected && (
+            {payable && NEEDS_REFERENCE.has(method) && selected && (
               <p className="text-sm font-semibold text-ink">
                 Check your JazzCash / bank app for ref {ref || "…"} and {formatPrice(Number(selected.total), detail.currency)} before
                 confirming.
               </p>
             )}
 
-            {detail.status === "open" && detail.claim && due && (
+            {payable && detail.claim && due && (
               <p className="rounded-xl border border-danger-fg bg-danger-bg p-3 text-sm font-semibold text-danger-fg">
                 Guest sent {formatPrice(Number(detail.claim.total), detail.currency)} · bill is now{" "}
                 {claimNow ? formatPrice(Number(claimNow.total), detail.currency) : "—"} · {due}
               </p>
             )}
 
-            {detail.status === "open" && needsAck && (
+            {payable && needsAck && (
               <div className="space-y-2 rounded-xl border border-danger-fg bg-danger-bg p-3 text-sm text-danger-fg">
                 {reusedWarnings.map((w) => (
                   <p key={w} className="font-semibold">
@@ -468,7 +644,7 @@ export default function BillsPage() {
               <span>{formatPrice(Number(detail.subtotal), detail.currency)}</span>
             </p>
 
-            {detail.status === "cancelled" ? (
+            {detail.status === "cancelled" && (
               <div className="space-y-1 text-sm">
                 <p className="text-ink-muted">
                   Cancelled: {detail.cancel_reason ?? "—"}
@@ -477,14 +653,15 @@ export default function BillsPage() {
                 </p>
                 {detail.claim && <p className="font-semibold text-danger-fg">{claimWarning(detail.claim, detail.currency)}</p>}
               </div>
-            ) : detail.status !== "open" ? (
+            )}
+            {detail.status === "settled" ? (
               <p className="text-sm text-ink-muted">
                 This bill is already settled{detail.settled_by_name && ` by ${detail.settled_by_name}`}.{" "}
                 <Link href={printHref(detail.id)} className="font-semibold text-terracotta underline">
                   Open sample bill
                 </Link>
               </p>
-            ) : (
+            ) : payable ? (
               <>
                 <fieldset className="space-y-2">
                   <legend className="text-sm font-semibold text-ink">Payment method</legend>
@@ -534,7 +711,7 @@ export default function BillsPage() {
                   </label>
                 )}
               </>
-            )}
+            ) : null}
           </>
         )}
       </Sheet>
@@ -589,6 +766,51 @@ export default function BillsPage() {
           </Button>
         )}
       </Sheet>
+
+      <Sheet
+        open={cancelTarget !== null}
+        onClose={() => setCancelTarget(null)}
+        title={cancelTarget ? `Cancel pickup ${pickupText(cancelTarget)}` : "Cancel order"}
+      >
+        {cancelTarget?.claim && (
+          <p className="rounded-xl border border-danger-fg bg-danger-bg p-3 text-sm font-semibold text-danger-fg">
+            {claimWarning(cancelTarget.claim, currency)}
+          </p>
+        )}
+        <label className="block space-y-1 text-sm text-ink">
+          <span>Reason{cancelTarget?.claim ? "" : " (optional)"}</span>
+          <input
+            type="text"
+            value={cancelReason}
+            maxLength={200}
+            onChange={(e) => setCancelReason(e.target.value)}
+            className="w-full rounded-lg border border-line bg-paper px-3 py-2 focus:border-terracotta focus:outline-none focus:ring-1 focus:ring-terracotta"
+          />
+        </label>
+        {cancelError && (
+          <p role="alert" className="text-sm text-danger-fg">
+            {cancelError}
+          </p>
+        )}
+        <Button variant="danger" className="w-full" disabled={cancelBusy} onClick={() => void sendCancel()}>
+          {cancelBusy ? "Cancelling…" : "Cancel order"}
+        </Button>
+      </Sheet>
+
+      {undo && (
+        <div className="fixed inset-x-4 bottom-4 z-50 mx-auto flex max-w-md items-center justify-between gap-3 rounded-xl border border-line bg-card p-3 shadow-lg">
+          <span role="status" className="text-sm font-semibold text-ink">
+            {undo.label} collected
+          </span>
+          <Button
+            variant="outline"
+            aria-label={`Undo ${undo.label} collected`}
+            onClick={() => void collect(undo.orderId, undo.label, true)}
+          >
+            Undo <span aria-hidden="true">({undoSecondsLeft(undo.startedAt, now)} s)</span>
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

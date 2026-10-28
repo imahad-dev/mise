@@ -90,5 +90,9 @@ export function getDictionary(locale: string | undefined | null): TranslationDic
       ...en.call,
       ...(raw.call || {}),
     },
+    counter: {
+      ...en.counter,
+      ...(raw.counter || {}),
+    },
   };
 }

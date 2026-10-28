@@ -1,7 +1,9 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import { Badge, Button, Card } from "ui";
 import { useVenue } from "../../../lib/venue";
+import { settingsErrors } from "../../../lib/bill";
 import QRCode from "qrcode";
 
 interface TableItem {
@@ -10,7 +12,153 @@ interface TableItem {
   label: string;
   qr_token: string;
   guest_url: string;
+  /** "counter" for the counter / pickup QR. */
+  kind: string;
   qrDataUrl?: string;
+}
+
+/** Mirrors SettingsResponse in services/api/src/schemas/owner.py. */
+interface VenueSettingsBody {
+  payment_details: Partial<Record<PaymentField, string>> & { sample?: boolean };
+  service_extra_label: string | null;
+  pickup_prefix: string | null;
+}
+
+const PAYMENT_FIELDS = [
+  { key: "raast_id", label: "Raast ID", hint: "Mobile number or IBAN" },
+  { key: "jazzcash", label: "JazzCash", hint: "03XXXXXXXXX" },
+  { key: "easypaisa", label: "Easypaisa", hint: "03XXXXXXXXX" },
+  { key: "iban", label: "IBAN", hint: "PK.. (24 characters)" },
+  { key: "account_title", label: "Account title", hint: "Required with any of the above" },
+] as const;
+type PaymentField = (typeof PAYMENT_FIELDS)[number]["key"];
+const INPUT =
+  "w-full rounded-lg border border-line bg-paper px-3 py-2 focus:border-terracotta focus:outline-none focus:ring-1 focus:ring-terracotta";
+
+/** Payment details guests pay into, the pickup prefix and the extra call reason (owner only). */
+function VenueSettings({ slug }: { slug: string }) {
+  const [loaded, setLoaded] = useState<VenueSettingsBody | null>(null);
+  const [form, setForm] = useState<Record<string, string>>({});
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  const apply = (body: VenueSettingsBody) => {
+    setLoaded(body);
+    setForm({
+      ...Object.fromEntries(PAYMENT_FIELDS.map((f) => [f.key, body.payment_details[f.key] ?? ""])),
+      pickup_prefix: body.pickup_prefix ?? "",
+      service_extra_label: body.service_extra_label ?? "",
+    });
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoaded(null);
+    fetch(`/api/restaurants/${slug}/settings`)
+      .then(async (r) => {
+        if (r.ok && !cancelled) apply((await r.json()) as VenueSettingsBody);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [slug]);
+
+  if (!loaded) return null;
+
+  const save = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    setErrors({});
+    setSaved(false);
+    const extra = form.service_extra_label.trim();
+    try {
+      const res = await fetch(`/api/restaurants/${slug}/settings`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          payment_details: {
+            ...Object.fromEntries(PAYMENT_FIELDS.map((f) => [f.key, form[f.key].trim() || null])),
+            sample: loaded.payment_details.sample === true,
+          },
+          pickup_prefix: form.pickup_prefix.trim() || null,
+          // The API keeps the current label when this is left out; it cannot be cleared.
+          ...(extra ? { service_extra_label: extra } : {}),
+        }),
+      });
+      if (res.ok) {
+        apply((await res.json()) as VenueSettingsBody);
+        setSaved(true);
+      } else {
+        setErrors(settingsErrors(res.status, await res.json().catch(() => null)));
+      }
+    } catch {
+      setErrors({ form: "Network error. Try again." });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const field = (key: string, label: string, hint: string, extra: React.InputHTMLAttributes<HTMLInputElement> = {}) => (
+    <label key={key} className="block space-y-1 text-sm text-ink">
+      <span className="font-semibold">{label}</span>
+      <input
+        type="text"
+        value={form[key] ?? ""}
+        onChange={(e) => {
+          setForm({ ...form, [key]: key === "pickup_prefix" ? e.target.value.toUpperCase() : e.target.value });
+          setSaved(false);
+        }}
+        aria-invalid={Boolean(errors[key])}
+        aria-describedby={errors[key] ? `${key}-error` : undefined}
+        className={INPUT}
+        {...extra}
+      />
+      <span className="block text-xs text-ink-muted">{hint}</span>
+      {errors[key] && (
+        <span id={`${key}-error`} className="block text-xs font-semibold text-danger-fg">
+          {errors[key]}
+        </span>
+      )}
+    </label>
+  );
+  const known = new Set<string>([...PAYMENT_FIELDS.map((f) => f.key), "pickup_prefix", "service_extra_label"]);
+  const other = Object.entries(errors).filter(([k]) => !known.has(k));
+
+  return (
+    <Card className="space-y-4 print:hidden">
+      <div className="flex flex-wrap items-center gap-2">
+        <h2 className="text-lg font-semibold text-ink">Payments and counter</h2>
+        {loaded.payment_details.sample && <Badge>Sample — demo only</Badge>}
+      </div>
+      <form onSubmit={save} className="space-y-4" noValidate>
+        <fieldset className="grid gap-3 sm:grid-cols-2">
+          <legend className="mb-2 text-sm text-ink-muted">Where guests send money. Leave a method empty to hide it.</legend>
+          {PAYMENT_FIELDS.map((f) => field(f.key, f.label, f.hint, { maxLength: 80 }))}
+        </fieldset>
+        <div className="grid gap-3 sm:grid-cols-2">
+          {field("pickup_prefix", "Pickup prefix", "1–3 capital letters, e.g. K for K-042. Empty uses K.", { maxLength: 3 })}
+          {field("service_extra_label", "Extra call reason", "Shown on Call waiter, e.g. Extra naan", { maxLength: 40 })}
+        </div>
+        {other.map(([k, message]) => (
+          <p key={k} role="alert" className="text-sm text-danger-fg">
+            {k === "form" ? message : `${k}: ${message}`}
+          </p>
+        ))}
+        <div className="flex items-center gap-3">
+          <Button type="submit" disabled={busy}>
+            {busy ? "Saving…" : "Save settings"}
+          </Button>
+          {saved && (
+            <span role="status" className="text-sm text-ink">
+              Saved
+            </span>
+          )}
+        </div>
+      </form>
+    </Card>
+  );
 }
 
 export default function TablesPage() {
@@ -53,7 +201,8 @@ export default function TablesPage() {
           })
         );
 
-        if (!cancelled) setTables(withQr);
+        // The counter QR first; tables keep the server's label order.
+        if (!cancelled) setTables(withQr.sort((a, b) => Number(b.kind === "counter") - Number(a.kind === "counter")));
       } catch (err: unknown) {
         if (!cancelled) setError(err instanceof Error ? err.message : String(err));
       } finally {
@@ -108,6 +257,8 @@ export default function TablesPage() {
         </button>
       </div>
 
+      {slug && <VenueSettings slug={slug} />}
+
       {/* Grid of Tables */}
       <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 print:grid-cols-2 print:gap-8">
         {tables.map((table) => (
@@ -118,7 +269,7 @@ export default function TablesPage() {
             {/* Table Label */}
             <div>
               <span className="text-xs font-bold uppercase tracking-wider text-terracotta print:text-ink-muted">
-                Dining Table
+                {table.kind === "counter" ? "Counter QR · pay first, then collect" : "Dining Table"}
               </span>
               <h2 className="text-2xl font-black text-ink print:text-black mt-0.5">
                 {table.label}

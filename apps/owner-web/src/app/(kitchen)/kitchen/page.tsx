@@ -30,6 +30,7 @@ interface KitchenOrder {
   placed_at: string;
   bumped_at?: string | null;
   items: KitchenOrderItem[];
+  pickup_label?: string | null;
 }
 
 interface OrdersResponse {
@@ -295,7 +296,7 @@ export default function KitchenDisplayPage() {
               onClick={() => handleRecall(mostRecentBumped.id)}
               className="px-5 py-2.5 rounded-xl bg-kds-warn hover:opacity-90 text-espresso font-black text-sm uppercase tracking-wide shadow-lg animate-pulse"
             >
-              ↺ RECALL TABLE {mostRecentBumped.table_label || ""} ({recallRemainingSeconds}s)
+              ↺ RECALL {mostRecentBumped.pickup_label ? `PICKUP ${mostRecentBumped.pickup_label}` : `TABLE ${mostRecentBumped.table_label || ""}`} ({recallRemainingSeconds}s)
             </button>
           )}
         </div>
@@ -336,9 +337,13 @@ export default function KitchenDisplayPage() {
                 <div className="space-y-2 border-b border-cream/10 pb-3">
                   <div className="flex items-start justify-between">
                     <div>
-                      <h2 className="text-2xl font-black tracking-tight text-cream">
-                        {order.table_label ? `TABLE ${order.table_label}` : "TAKEOUT"}
-                      </h2>
+                      {order.pickup_label ? (
+                        <h2 className="text-4xl font-black tracking-tight text-cream">PICKUP {order.pickup_label}</h2>
+                      ) : (
+                        <h2 className="text-2xl font-black tracking-tight text-cream">
+                          {order.table_label ? `TABLE ${order.table_label}` : "TAKEOUT"}
+                        </h2>
+                      )}
                       <p className="text-xs font-mono text-kds-muted">
                         {new Date(order.placed_at).toLocaleTimeString()}
                       </p>

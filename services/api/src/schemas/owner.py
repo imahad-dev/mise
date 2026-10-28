@@ -58,6 +58,8 @@ class OwnerTableResponse(BaseModel):
     label: str
     qr_token: str
     guest_url: str
+    # "table" or "counter" (the counter / pickup QR).
+    kind: str
 
     model_config = ConfigDict(from_attributes=True)
 

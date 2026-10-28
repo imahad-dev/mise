@@ -5,6 +5,7 @@ import { formatPrice } from "ui";
 import {
   PAYMENT_METHODS, SAMPLE_BILL_FOOTER, amountDueText, billNo, claimChip, claimSummary, claimWarning, previewFor, sampleBillPieces, sampleBillText,
   nextFormState, settlePayload, taxLabel, voidReason, warningKey,
+  counterColumn, isExpiredUnpaid, pickupText, settingsErrors, undoSecondsLeft,
 } from "./bill";
 
 describe("sample bill", () => {
@@ -146,5 +147,46 @@ describe("confirm sheet helpers", () => {
     expect(voidReason("Other", "  Spilled  ")).toBe("Spilled");
     expect(voidReason("Other", "  ")).toBeNull();
     expect(voidReason("Other", "x".repeat(201))).toBeNull();
+  });
+});
+
+describe("counter helpers", () => {
+  const row = (over: Record<string, unknown>) => ({
+    status: "open", pickup_label: "K-042", order_status: "awaiting_payment", collected_at: null, pickup_yesterday: false, ...over,
+  });
+  it("puts each counter bill in its column", () => {
+    expect(counterColumn(row({}))).toBe("awaiting");
+    expect(counterColumn(row({ status: "settled", order_status: "placed" }))).toBe("preparing");
+    expect(counterColumn(row({ status: "settled", order_status: "bumped" }))).toBe("ready");
+    expect(counterColumn(row({ status: "settled", order_status: "collected", collected_at: "2026-10-28T10:00:00Z" }))).toBeNull();
+    expect(counterColumn(row({ status: "cancelled", order_status: "cancelled" }))).toBeNull();
+  });
+  it("tags yesterday's pickup numbers", () => {
+    expect(pickupText(row({}))).toBe("K-042");
+    expect(pickupText(row({ pickup_yesterday: true }))).toBe("K-042 · Yesterday");
+  });
+  it("offers a late payment only on a bill the expiry cancelled", () => {
+    const expired = { status: "cancelled", cancel_reason: "Expired unpaid", pickup_label: "K-042" };
+    expect(isExpiredUnpaid(expired)).toBe(true);
+    expect(isExpiredUnpaid({ ...expired, cancelled_by_name: "Ali" })).toBe(false);
+    expect(isExpiredUnpaid({ ...expired, cancel_reason: "Cancelled by staff" })).toBe(false);
+    expect(isExpiredUnpaid({ ...expired, pickup_label: null })).toBe(false);
+    expect(isExpiredUnpaid({ ...expired, status: "open" })).toBe(false);
+  });
+  it("counts the 60 s undo window down to zero", () => {
+    expect(undoSecondsLeft(1_000, 1_000)).toBe(60);
+    expect(undoSecondsLeft(1_000, 31_500)).toBe(30);
+    expect(undoSecondsLeft(1_000, 61_000)).toBe(0);
+    expect(undoSecondsLeft(1_000, 99_000)).toBe(0);
+  });
+  it("maps settings errors to their field", () => {
+    expect(settingsErrors(422, { detail: { field: "iban", message: "Not a valid Pakistani IBAN" } })).toEqual({ iban: "Not a valid Pakistani IBAN" });
+    expect(settingsErrors(409, { detail: "Finish open counter orders before changing the prefix" })).toEqual({
+      pickup_prefix: "Finish open counter orders before changing the prefix",
+    });
+    expect(settingsErrors(422, { detail: [{ loc: ["body", "pickup_prefix"], msg: "String should match pattern" }] })).toEqual({
+      pickup_prefix: "String should match pattern",
+    });
+    expect(settingsErrors(500, null)).toEqual({ form: "Request failed (500)" });
   });
 });

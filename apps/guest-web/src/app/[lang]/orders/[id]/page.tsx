@@ -8,7 +8,7 @@ import { ChatPanel } from "../../../../components/chat-panel";
 import { useSse } from "../../../../hooks/use-sse";
 import { getDictionary } from "../../../../i18n";
 import { Button, formatPrice } from "ui";
-import { VISIT_ENDED, billState, claimMessage, paidText, type GuestBill } from "../../../../lib/pay";
+import { VISIT_ENDED, billState, claimMessage, counterState, paidText, type GuestBill } from "../../../../lib/pay";
 
 interface OrderItem {
   id: string;
@@ -20,11 +20,15 @@ interface OrderItem {
   allergen_status: string;
 }
 
-/** The table bill for this guest session: polled every 10 s while open, every 30 s otherwise (a new order opens a new bill). */
+/**
+ * The guest session's bill: polled every 10 s while open or while a paid counter order is still
+ * on its way, every 30 s otherwise (a new order opens a new bill).
+ */
 function useGuestBill() {
   const [bill, setBill] = useState<GuestBill | null>(null);
   const [ended, setEnded] = useState(false);
-  const slow = Boolean(bill && bill.status !== "open");
+  const pickup = counterState(bill);
+  const slow = Boolean(bill && bill.status !== "open" && pickup !== "preparing" && pickup !== "ready");
 
   const load = useCallback(
     () =>
@@ -68,6 +72,7 @@ export default function OrderStatusPage({
   const { bill, setBill, ended, setEnded, reload } = useGuestBill();
   const [paying, setPaying] = useState(false);
   const state = billState(bill, ended);
+  const counter = counterState(bill);
   const paid = bill ? paidText(bill, dict, lang) : null;
   // Settled or cancelled while the sheet is open: nothing left to pay, so close it.
   useEffect(() => {
@@ -90,6 +95,8 @@ export default function OrderStatusPage({
     url: `/api/orders/${id}/stream`,
     fetchState: fetchOrderState,
     pollingIntervalMs: 4000,
+    // Paid, ready, collected, cancelled or revived: the bill tells the guest, so reload it now.
+    onMessage: () => void reload(),
   });
 
   const getStatusBadge = (status?: string) => {
@@ -144,7 +151,7 @@ export default function OrderStatusPage({
             </div>
             <CallWaiter lang={lang} />
           </div>
-          {order && <div>{getStatusBadge(order.status)}</div>}
+          {order && !counter && <div>{getStatusBadge(order.status)}</div>}
         </header>
 
         {error && !order && (
@@ -157,7 +164,7 @@ export default function OrderStatusPage({
           <div className="space-y-6">
             {/* Status Summary Card */}
             <div className="p-5 rounded-2xl bg-card border border-line space-y-4">
-              {order.table_label && (
+              {order.table_label && !counter && (
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-ink-muted">{dict.ui.table}</span>
                   <span className="font-medium text-terracotta">{order.table_label}</span>
@@ -171,6 +178,36 @@ export default function OrderStatusPage({
               </div>
             </div>
 
+            {bill && counter ? (
+              <div className="p-5 rounded-2xl bg-card border border-line text-center text-ink space-y-3">
+                <p className="text-xs font-bold uppercase tracking-wider text-ink-muted">{dict.counter.pickupNumber}</p>
+                <p className="font-serif text-6xl font-bold tabular-nums text-ink">{bill.pickup_label}</p>
+                {/* One polite region: announced once per state change. */}
+                <p
+                  aria-live="polite"
+                  className={
+                    counter === "ready"
+                      ? "text-2xl font-bold text-terracotta"
+                      : counter === "cancelled"
+                        ? "text-sm font-semibold text-danger-fg"
+                        : "text-sm font-semibold"
+                  }
+                >
+                  {counter === "awaiting" &&
+                    (bill.claim ? claimMessage(bill.claim, dict, lang, bill.currency, true) : dict.counter.payPrompt)}
+                  {counter === "preparing" && dict.counter.preparing}
+                  {counter === "ready" && dict.counter.ready.replace("{label}", bill.pickup_label ?? "")}
+                  {counter === "collected" && dict.counter.collected}
+                  {counter === "cancelled" && dict.counter.cancelled}
+                </p>
+                {paid && <p className="text-sm text-ink-muted">{paid}</p>}
+                {counter === "awaiting" && (
+                  <Button className="w-full" onClick={() => setPaying(true)}>
+                    {dict.pay.button}
+                  </Button>
+                )}
+              </div>
+            ) : (
             <div className="p-5 rounded-2xl bg-card border border-line text-sm text-ink space-y-3">
               {/* One polite region: the text changes only when the bill's state does. */}
               <p aria-live="polite" className={state === "cancelled" || state === "ended" ? "font-semibold text-danger-fg" : ""}>
@@ -194,6 +231,7 @@ export default function OrderStatusPage({
                 </Button>
               )}
             </div>
+            )}
             {bill && (
               <PaySheet
                 lang={lang}

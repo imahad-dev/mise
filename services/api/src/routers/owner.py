@@ -359,6 +359,7 @@ async def list_tables(
             label=t.label,
             qr_token=t.qr_token,
             guest_url=f"{base_url}/q/{t.qr_token}",
+            kind=t.kind,
         )
         for t in tables
     ]

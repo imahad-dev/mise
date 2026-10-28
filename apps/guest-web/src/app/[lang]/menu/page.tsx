@@ -55,6 +55,7 @@ interface MenuResponse {
   };
   table_id?: string | null;
   table_label?: string | null;
+  table_kind?: "table" | "counter" | null;
   items: MenuItem[];
 }
 
@@ -242,10 +243,13 @@ export default function GuestMenuPage({
             <div>
               {menu.table_label && (
                 <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-muted">
-                  {dict.ui.table}: {menu.table_label}
+                  {menu.table_kind === "counter" ? menu.table_label : `${dict.ui.table}: ${menu.table_label}`}
                 </p>
               )}
               <h1 className="text-2xl text-ink">{menu.restaurant.name}</h1>
+              {menu.table_kind === "counter" && (
+                <p className="mt-0.5 text-sm font-semibold text-terracotta">{dict.counter.header}</p>
+              )}
             </div>
             <CallWaiter lang={lang} />
           </div>

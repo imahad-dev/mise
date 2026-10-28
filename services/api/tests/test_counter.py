@@ -719,3 +719,13 @@ async def test_guest_cannot_revive_an_earlier_day(client, db_session, cv, monkey
     resp = await client.post("/api/guest/bill/payment", json={"method": "cash"})
     assert (resp.status_code, resp.json()["detail"]) == (409, "Bill is not open")
     assert (await bill_of(db_session, o["id"])).status == "cancelled"
+
+
+@pytest.mark.asyncio
+async def test_owner_tables_list_marks_the_counter_qr(
+    client: AsyncClient, db_session: AsyncSession, cv: CounterVenue
+):
+    await as_member(client, db_session, cv.r.id, "owner")
+    resp = await client.get(f"/api/restaurants/{cv.r.slug}/tables")
+    assert resp.status_code == 200
+    assert {t["label"]: t["kind"] for t in resp.json()} == {"Counter": "counter", "T1": "table"}

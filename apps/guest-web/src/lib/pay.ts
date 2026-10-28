@@ -45,6 +45,8 @@ export interface GuestBill {
   payment_method: Method | null;
   tax_rate: string | null;
   total: string | null;
+  /** Counter pickup bills only: "K-042". */
+  pickup_label?: string | null;
 }
 
 /** The API's 409 detail for a stale guest session (services/api/src/services/bills.py). */
@@ -66,11 +68,23 @@ export function billState(bill: GuestBill | null, ended: boolean): BillState {
   return bill.claim ? "claimed" : "open";
 }
 
-/** The sentence a guest sees after choosing a method. */
-export function claimMessage(claim: PaymentClaim, dict: TranslationDict, lang: string, currency: string): string {
-  if (claim.method === "cash") return dict.pay.cash.replace("{total}", formatPrice(Number(claim.total), currency, lang));
-  if (claim.method === "card") return dict.pay.card;
+/** The sentence a guest sees after choosing a method; at the counter cash and card are paid there. */
+export function claimMessage(claim: PaymentClaim, dict: TranslationDict, lang: string, currency: string, counter = false): string {
+  const total = formatPrice(Number(claim.total), currency, lang);
+  if (claim.method === "cash") return (counter ? dict.counter.cash : dict.pay.cash).replace("{total}", total);
+  if (claim.method === "card") return counter ? dict.counter.card : dict.pay.card;
   return dict.pay.sent;
+}
+
+export type CounterState = "awaiting" | "preparing" | "ready" | "collected" | "cancelled";
+
+/** Where a counter pickup order stands for the guest; null for table bills. A revived bill reads as open again. */
+export function counterState(bill: GuestBill | null): CounterState | null {
+  if (!bill?.pickup_label) return null;
+  if (bill.status === "cancelled") return "cancelled";
+  if (bill.status !== "settled") return "awaiting";
+  if (bill.order_status === "collected") return "collected";
+  return bill.order_status === "bumped" ? "ready" : "preparing";
 }
 
 /** The venue details a guest needs for this method, in display order; empty values are left out. */

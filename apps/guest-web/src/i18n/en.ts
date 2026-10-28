@@ -118,6 +118,17 @@ export const en: TranslationDict = {
     cancelled: "This bill was cancelled by staff — please ask a waiter",
     visitEnded: "Your visit has ended — scan the table QR again",
   },
+  counter: {
+    header: "Counter order — pay first, then collect",
+    payPrompt: "Pay at the counter or from your phone",
+    pickupNumber: "Your pickup number",
+    preparing: "Paid — preparing your order",
+    ready: "Ready — collect {label} at the counter",
+    collected: "Collected · enjoy!",
+    cancelled: "This order was cancelled — please ask at the counter",
+    cash: "Pay {total} at the counter.",
+    card: "Pay by card at the counter.",
+  },
   call: {
     button: "Call waiter",
     help: "Need help",

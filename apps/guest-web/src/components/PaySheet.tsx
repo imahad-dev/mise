@@ -97,7 +97,7 @@ export function PaySheet({ lang, bill, open, onClose, onUpdated, onConflict }: P
   const details = selected ? detailsFor(selected, bill.payment_details) : [];
 
   return (
-    <Sheet open={open} onClose={onClose} title={dict.pay.button}>
+    <Sheet open={open} onClose={onClose} title={bill.pickup_label ? dict.counter.payPrompt : dict.pay.button}>
       <ul className="divide-y divide-line text-sm">
         {bill.lines.map((l, i) => (
           <li key={i} className="flex justify-between gap-3 py-2">
@@ -195,7 +195,7 @@ export function PaySheet({ lang, bill, open, onClose, onUpdated, onConflict }: P
       )}
       <p role="status" className="text-sm font-semibold text-ink">
         {/* The table's latest claim, from any phone: polling keeps it current. */}
-        {isOpen && bill.claim && !posting ? claimMessage(bill.claim, dict, lang, bill.currency) : ""}
+        {isOpen && bill.claim && !posting ? claimMessage(bill.claim, dict, lang, bill.currency, Boolean(bill.pickup_label)) : ""}
       </p>
     </Sheet>
   );

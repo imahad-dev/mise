@@ -107,6 +107,21 @@ export interface TranslationDict {
     cancelled: string;
     visitEnded: string;
   };
+  counter: {
+    /** Menu header on a counter QR. */
+    header: string;
+    /** Pay sheet title and the prompt under the pickup number. */
+    payPrompt: string;
+    pickupNumber: string;
+    preparing: string;
+    /** Contains {label}. */
+    ready: string;
+    collected: string;
+    cancelled: string;
+    /** Contains {total}. */
+    cash: string;
+    card: string;
+  };
   call: {
     button: string;
     help: string;

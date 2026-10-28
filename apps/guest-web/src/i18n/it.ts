@@ -118,6 +118,17 @@ export const it: TranslationDict = {
     cancelled: "Il personale ha annullato questo conto — chiedi a un cameriere",
     visitEnded: "La visita è terminata — scansiona di nuovo il QR del tavolo",
   },
+  counter: {
+    header: "Ordine al banco — prima paghi, poi ritiri",
+    payPrompt: "Paga al banco o dal tuo telefono",
+    pickupNumber: "Il tuo numero di ritiro",
+    preparing: "Pagato — stiamo preparando il tuo ordine",
+    ready: "Pronto — ritira {label} al banco",
+    collected: "Ritirato · buon appetito!",
+    cancelled: "Questo ordine è stato annullato — chiedi al banco",
+    cash: "Paga {total} al banco.",
+    card: "Paga con carta al banco.",
+  },
   call: {
     button: "Chiama il cameriere",
     help: "Ho bisogno di aiuto",

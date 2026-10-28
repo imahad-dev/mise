@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { formatPrice } from "ui";
 import { getDictionary } from "../i18n";
-import { billState, claimMessage, paidText, referenceFor, copyText, detailsFor, isValidReference, needsReference, percent, type GuestBill } from "./pay";
+import { billState, claimMessage, counterState, paidText, referenceFor, copyText, detailsFor, isValidReference, needsReference, percent, type GuestBill } from "./pay";
 
 const en = getDictionary("en");
 const claim = (method: "cash" | "card" | "wallet" | "raast" | "bank_transfer") => ({
@@ -100,5 +100,29 @@ describe("copyText", () => {
     vi.stubGlobal("navigator", { clipboard: { writeText } });
     await expect(copyText("0000 SAMPLE")).resolves.toBe(true);
     expect(writeText).toHaveBeenCalledWith("0000 SAMPLE");
+  });
+});
+
+describe("counterState", () => {
+  const counter = (over: Partial<GuestBill>) =>
+    ({ status: "open", claim: null, pickup_label: "K-042", order_status: "awaiting_payment", ...over }) as GuestBill;
+  it("is null for table bills and no bill", () => {
+    expect(counterState(null)).toBeNull();
+    expect(counterState(counter({ pickup_label: null }))).toBeNull();
+  });
+  it("follows the order from payment to collection", () => {
+    expect(counterState(counter({}))).toBe("awaiting");
+    expect(counterState(counter({ status: "settled", order_status: "placed" }))).toBe("preparing");
+    expect(counterState(counter({ status: "settled", order_status: "bumped" }))).toBe("ready");
+    expect(counterState(counter({ status: "settled", order_status: "collected" }))).toBe("collected");
+  });
+  it("says cancelled for an expired or cancelled order, and awaiting again once revived", () => {
+    expect(counterState(counter({ status: "cancelled", order_status: "cancelled" }))).toBe("cancelled");
+    expect(counterState(counter({ status: "open", order_status: "awaiting_payment" }))).toBe("awaiting");
+  });
+  it("tells counter guests to pay cash or card at the counter", () => {
+    expect(claimMessage(claim("cash"), en, "en", "PKR", true)).toBe(`Pay ${formatPrice(2714, "PKR")} at the counter.`);
+    expect(claimMessage(claim("card"), en, "en", "PKR", true)).toBe("Pay by card at the counter.");
+    expect(claimMessage(claim("raast"), en, "en", "PKR", true)).toBe(en.pay.sent);
   });
 });

@@ -33,6 +33,13 @@ export interface BillSummary {
   claim: PaymentClaim | null;
   cancelled_at: string | null;
   cancel_reason: string | null;
+  /** Counter bills only (one order each); null/false on table bills. */
+  pickup_label?: string | null;
+  order_id?: string | null;
+  /** awaiting_payment, placed, bumped, collected or cancelled */
+  order_status?: string | null;
+  collected_at?: string | null;
+  pickup_yesterday?: boolean;
 }
 
 export interface BillDetail extends BillSummary {
@@ -168,6 +175,51 @@ export function voidReason(choice: (typeof VOID_REASONS)[number], other: string)
   if (choice !== "Other") return choice;
   const text = other.trim();
   return text && text.length <= 200 ? text : null;
+}
+
+type CounterRow = Pick<BillSummary, "status" | "pickup_label" | "order_status" | "collected_at" | "pickup_yesterday">;
+
+export type CounterColumn = "awaiting" | "preparing" | "ready";
+
+/** Where a counter bill sits in the queue: unpaid, paid and cooking, bumped; null once collected or cancelled. */
+export function counterColumn(row: CounterRow): CounterColumn | null {
+  if (row.status === "open") return "awaiting";
+  if (row.status !== "settled" || row.collected_at || row.order_status === "collected") return null;
+  if (row.order_status === "placed") return "preparing";
+  return row.order_status === "bumped" ? "ready" : null;
+}
+
+/** "K-042", or "K-042 · Yesterday" for an order numbered on an earlier local day. */
+export const pickupText = (row: CounterRow) => `${row.pickup_label ?? "—"}${row.pickup_yesterday ? " · Yesterday" : ""}`;
+
+/** services/api/src/services/bills.py EXPIRED. */
+export const EXPIRED_UNPAID = "Expired unpaid";
+
+/** Cancelled by the 30-minute expiry, not by staff: money may still arrive, and settling revives it. */
+export const isExpiredUnpaid = (b: Pick<BillSummary, "status" | "cancel_reason" | "pickup_label"> & { cancelled_by_name?: string | null }) =>
+  b.status === "cancelled" && b.cancel_reason === EXPIRED_UNPAID && Boolean(b.pickup_label) && !b.cancelled_by_name;
+
+/** Collected can be undone for 60 s (server clock); the client counts from before its request, so it never offers more. */
+export const UNDO_MS = 60_000;
+export const undoSecondsLeft = (startedAt: number, now: number) => Math.max(0, Math.ceil((startedAt + UNDO_MS - now) / 1000));
+
+/** PATCH /settings errors by field: {field, message} for payment details, FastAPI's list, or the 409 prefix message. */
+export function settingsErrors(status: number, body: unknown): Record<string, string> {
+  const detail = (body as { detail?: unknown } | null)?.detail;
+  if (status === 409) return { pickup_prefix: typeof detail === "string" ? detail : "Finish open counter orders first" };
+  if (Array.isArray(detail)) {
+    const out: Record<string, string> = {};
+    for (const d of detail as { loc?: unknown[]; msg?: string }[]) {
+      const field = String(d.loc?.[1] ?? "form");
+      out[field] ??= d.msg ?? "Invalid value";
+    }
+    return out;
+  }
+  if (detail && typeof detail === "object" && "field" in detail) {
+    const d = detail as { field: unknown; message?: unknown };
+    return { [String(d.field)]: String(d.message ?? "Invalid value") };
+  }
+  return { form: typeof detail === "string" ? detail : `Request failed (${status})` };
 }
 
 export const billNo = (n: number | null) => (n === null ? "Bill no. —" : `Bill no. ${String(n).padStart(4, "0")}`);
