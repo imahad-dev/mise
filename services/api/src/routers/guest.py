@@ -57,6 +57,8 @@ from src.services.bills import (
     method_previews,
     session_is_current,
 )
+from src.services.counter import order_status as counter_order_status
+from src.services.counter import pickup_label
 from src.services.guest_chat import handle_guest_chat
 
 router = APIRouter(prefix="/api/guest", tags=["guest"])
@@ -354,7 +356,7 @@ async def _session_bill(
         select(Bill)
         .join(Order, Order.bill_id == Bill.id)
         .where(Order.guest_session_id == session.id)
-        .order_by(Order.placed_at.desc(), Bill.opened_at.desc())
+        .order_by(Order.placed_at.desc(), Bill.opened_at.desc(), Bill.bill_no.desc())
         .limit(1)
     )
     if lock:
@@ -381,12 +383,15 @@ async def _bill_detail(
         .all()
     )
     voided, _ = bill_lines(voided_orders)
-    order_status = await db.scalar(
-        select(Order.status)
-        .where(Order.bill_id == bill.id, Order.guest_session_id == session.id)
-        .order_by(Order.placed_at.desc(), Order.id.desc())
-        .limit(1)
-    )
+    latest = (
+        await db.execute(
+            select(Order.status, Order.collected_at)
+            .where(Order.bill_id == bill.id, Order.guest_session_id == session.id)
+            .order_by(Order.placed_at.desc(), Order.id.desc())
+            .limit(1)
+        )
+    ).one_or_none()
+    order_status = counter_order_status(*latest) if latest else None
     is_open = bill.status == "open"
     return GuestBillDetail(
         bill_no=bill.bill_no,
@@ -410,6 +415,9 @@ async def _bill_detail(
         payment_method=bill.payment_method if bill.status == "settled" else None,
         tax_rate=bill.tax_rate if bill.status == "settled" else None,
         total=bill.total if bill.status == "settled" else None,
+        pickup_label=(
+            pickup_label(restaurant.pickup_prefix, bill.pickup_no) if bill.pickup_no else None
+        ),
     )
 
 

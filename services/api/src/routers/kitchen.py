@@ -17,23 +17,40 @@ from sqlalchemy.orm import selectinload
 from src.access import RestaurantAccess, member_access
 from src.database import get_db
 from src.models.audit import AuditLog
+from src.models.bill import Bill
 from src.models.dining_table import DiningTable
 from src.models.order import Order
+from src.models.restaurant import Restaurant
 from src.redis_client import publish_event, redis_client
 from src.schemas.kitchen import (
     KitchenOrderItemResponse,
     KitchenOrderResponse,
     KitchenOrdersListResponse,
 )
+from src.services.counter import pickup_label
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/restaurants/{slug}/kitchen", tags=["kitchen"])
 
 
+async def _pickup_labels(
+    db: AsyncSession, restaurant: Restaurant, orders: list[Order]
+) -> dict[uuid.UUID, str]:
+    """Pickup label per counter bill id among the orders' bills."""
+    bill_ids = {o.bill_id for o in orders if o.bill_id is not None}
+    if not bill_ids:
+        return {}
+    rows = await db.execute(
+        select(Bill.id, Bill.pickup_no).where(Bill.id.in_(bill_ids), Bill.pickup_no.is_not(None))
+    )
+    return {bid: pickup_label(restaurant.pickup_prefix, no) for bid, no in rows.all()}
+
+
 def _build_kitchen_order_response(
     order: Order,
     table_labels: dict[uuid.UUID, str],
+    pickups: dict[uuid.UUID, str] | None = None,
 ) -> KitchenOrderResponse:
     items_resp: list[KitchenOrderItemResponse] = []
     for item in order.items:
@@ -67,6 +84,7 @@ def _build_kitchen_order_response(
         placed_at=order.placed_at,
         bumped_at=order.bumped_at,
         items=items_resp,
+        pickup_label=(pickups or {}).get(order.bill_id) if order.bill_id else None,
     )
 
 
@@ -122,7 +140,8 @@ async def get_kitchen_orders(
     recent_bumped = list(res_bumped.scalars().all())
 
     combined_orders = placed_orders + recent_bumped
-    result = [_build_kitchen_order_response(o, table_labels) for o in combined_orders]
+    pickups = await _pickup_labels(db, restaurant, combined_orders)
+    result = [_build_kitchen_order_response(o, table_labels, pickups) for o in combined_orders]
     return KitchenOrdersListResponse(orders=result)
 
 
@@ -219,9 +238,10 @@ async def bump_order(
     res_tables = await db.execute(stmt_tables)
     table_labels = {t.id: t.label for t in res_tables.scalars().all()}
 
+    pickups = await _pickup_labels(db, restaurant, [order])
     if order.status == "bumped":
         # Already bumped: idempotent return
-        return _build_kitchen_order_response(order, table_labels)
+        return _build_kitchen_order_response(order, table_labels, pickups)
     if order.status != "placed":
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Order was cancelled")
 
@@ -247,7 +267,7 @@ async def bump_order(
     await publish_event(f"kitchen:{restaurant.id}", event_payload)
     await publish_event(f"orders:{order.id}", event_payload)
 
-    return _build_kitchen_order_response(order, table_labels)
+    return _build_kitchen_order_response(order, table_labels, pickups)
 
 
 @router.post(
@@ -291,6 +311,9 @@ async def recall_order(
             status_code=status.HTTP_409_CONFLICT,
             detail="Order is not in bumped status",
         )
+    if order.collected_at is not None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Order was collected")
+    pickups = await _pickup_labels(db, restaurant, [order])
 
     now = datetime.now(UTC)
     elapsed_seconds = (now - order.bumped_at).total_seconds()
@@ -326,4 +349,4 @@ async def recall_order(
     await publish_event(f"kitchen:{restaurant.id}", event_payload)
     await publish_event(f"orders:{order.id}", event_payload)
 
-    return _build_kitchen_order_response(order, table_labels)
+    return _build_kitchen_order_response(order, table_labels, pickups)

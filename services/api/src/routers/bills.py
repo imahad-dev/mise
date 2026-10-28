@@ -1,4 +1,5 @@
-"""Table bills for staff and owners: list, detail with tax previews, settle, void an order."""
+"""Bills for staff and owners: list, detail with tax previews, settle, void an order; counter
+pickup cancel, collect and undo."""
 
 import json
 import uuid
@@ -26,6 +27,8 @@ from src.schemas.bills import (
     BillListResponse,
     BillOrder,
     BillSummary,
+    CancelBillRequest,
+    CollectResponse,
     SettleBillRequest,
     VoidOrderRequest,
 )
@@ -44,6 +47,13 @@ from src.services.bills import (
     reused_reference_bill_no,
     settle_bill,
 )
+from src.services.counter import (
+    UNDO_COLLECT,
+    expire_unpaid,
+    order_status,
+    pickup_label,
+    pickup_today,
+)
 
 # Prefix stops at the venue so the void route can share it; bill paths are unchanged.
 router = APIRouter(prefix="/api/restaurants/{slug}", tags=["bills"])
@@ -54,6 +64,36 @@ RESPONSES = {
 }
 JOINED_LATE = timedelta(minutes=20)
 ALL_VOIDED = "All orders voided"
+CANCELLED_BY_STAFF = "Cancelled by staff"
+
+
+async def counter_fields(
+    db: AsyncSession, restaurant: Restaurant, bills: list[Bill]
+) -> dict[uuid.UUID, dict]:
+    """Pickup label, the single order's id and status, and the yesterday tag per counter bill."""
+    counter = [b for b in bills if b.pickup_no is not None]
+    if not counter:
+        return {}
+    today = pickup_today(restaurant, await db.scalar(select(func.clock_timestamp())))
+    rows = (
+        await db.execute(
+            select(Order.bill_id, Order.id, Order.status, Order.collected_at).where(
+                Order.bill_id.in_([b.id for b in counter])
+            )
+        )
+    ).all()
+    by_bill = {r.bill_id: r for r in rows}
+    out = {}
+    for b in counter:
+        r = by_bill.get(b.id)
+        out[b.id] = {
+            "pickup_label": pickup_label(restaurant.pickup_prefix, b.pickup_no),
+            "order_id": r.id if r else None,
+            "order_status": order_status(r.status, r.collected_at) if r else None,
+            "collected_at": r.collected_at if r else None,
+            "pickup_yesterday": b.pickup_day < today,
+        }
+    return out
 
 
 def bill_orders(bill: Bill, orders: list[Order]) -> list[BillOrder]:
@@ -157,16 +197,29 @@ async def bill_detail(db: AsyncSession, restaurant: Restaurant, bill: Bill) -> B
         cancelled_by_name=names.get(bill.cancelled_by),
         cancelled_at=bill.cancelled_at,
         cancel_reason=bill.cancel_reason,
+        **(await counter_fields(db, restaurant, [bill])).get(bill.id, {}),
     )
 
 
 @router.get("/bills", response_model=BillListResponse, responses=RESPONSES)
 async def list_bills(
     status_filter: Literal["open", "settled", "cancelled"] = Query("open", alias="status"),
+    kind: Literal["table", "counter"] | None = Query(None),
     access: RestaurantAccess = Depends(member_access),
     db: AsyncSession = Depends(get_db),
 ) -> BillListResponse:
-    """Open bills (requested first, then oldest), or the 50 latest settled or cancelled."""
+    """Open bills (requested first, then oldest), or the 50 latest settled or cancelled.
+
+    kind=counter first cancels unclaimed counter bills left unpaid for 30 minutes.
+    """
+    rid = access.restaurant.id
+    if kind == "counter":
+        expired = await expire_unpaid(db, access.restaurant)
+        await db.commit()
+        for bill_id in expired:
+            await publish_event(
+                f"kitchen:{rid}", json.dumps({"event": "bill_cancelled", "bill_id": str(bill_id)})
+            )
     stmt = (
         select(
             Bill,
@@ -176,9 +229,13 @@ async def list_bills(
         )
         .outerjoin(DiningTable, DiningTable.id == Bill.table_id)
         .outerjoin(Order, and_(Order.bill_id == Bill.id, Order.status != "cancelled"))
-        .where(Bill.restaurant_id == access.restaurant.id, Bill.status == status_filter)
+        .where(Bill.restaurant_id == rid, Bill.status == status_filter)
         .group_by(Bill.id, DiningTable.label)
     )
+    if kind == "table":
+        stmt = stmt.where(Bill.pickup_no.is_(None))
+    elif kind == "counter":
+        stmt = stmt.where(Bill.pickup_no.is_not(None))
     if status_filter == "open":
         stmt = stmt.order_by(Bill.bill_requested_at.is_(None), Bill.opened_at)
     elif status_filter == "settled":
@@ -186,6 +243,7 @@ async def list_bills(
     else:
         stmt = stmt.order_by(Bill.cancelled_at.desc()).limit(50)
     rows = (await db.execute(stmt)).all()
+    counter = await counter_fields(db, access.restaurant, [row[0] for row in rows])
     return BillListResponse(
         restaurant_timezone=access.restaurant.timezone,
         bills=[
@@ -205,6 +263,7 @@ async def list_bills(
                 claim=claim_of(bill),
                 cancelled_at=bill.cancelled_at,
                 cancel_reason=bill.cancel_reason,
+                **counter.get(bill.id, {}),
             )
             for bill, label, count, subtotal in rows
         ],
@@ -246,7 +305,7 @@ async def settle(
     db: AsyncSession = Depends(get_db),
 ) -> BillDetail | JSONResponse:
     try:
-        bill = await settle_bill(
+        bill, released = await settle_bill(
             db,
             bill_id,
             access.restaurant,
@@ -271,6 +330,11 @@ async def settle(
         f"kitchen:{access.restaurant.id}",
         json.dumps({"event": "bill_settled", "bill_id": str(bill.id)}),
     )
+    # Paid counter orders reach the kitchen now.
+    for order_id in released:
+        event = json.dumps({"event": "order_placed", "order_id": str(order_id)})
+        await publish_event(f"kitchen:{access.restaurant.id}", event)
+        await publish_event(f"orders:{order_id}", event)
     return await bill_detail(db, access.restaurant, bill)
 
 
@@ -392,3 +456,201 @@ async def void_order(
     for event in events:
         await publish_event(f"kitchen:{rid}", json.dumps(event))
     return await bill_detail(db, access.restaurant, bill)
+
+
+@router.post(
+    "/bills/{bill_id}/cancel",
+    response_model=BillDetail,
+    responses={
+        **RESPONSES,
+        409: {"description": "Not a counter bill, already settled, or not open"},
+        422: {"description": "The guest says they paid: a reason (1-200 characters) is required"},
+    },
+)
+async def cancel_bill(
+    bill_id: uuid.UUID,
+    payload: CancelBillRequest,
+    access: RestaurantAccess = Depends(member_access),
+    db: AsyncSession = Depends(get_db),
+) -> BillDetail:
+    """Cancel an unpaid counter bill and its order (the guest left). Table bills use voids."""
+    rid = access.restaurant.id
+    bill = (
+        await db.execute(
+            select(Bill)
+            .where(Bill.id == bill_id, Bill.restaurant_id == rid)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+    ).scalar_one_or_none()
+    if bill is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bill not found")
+    if bill.pickup_no is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="Only counter bills can be cancelled"
+        )
+    if bill.status == "settled":
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Bill already settled")
+    if bill.status != "open":
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Bill is not open")
+    claim = claim_of(bill)
+    if claim is not None and payload.reason is None:
+        label = METHOD_LABELS.get(claim.method, claim.method)
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=f"Guest says they paid by {label} (Rs {claim.total}) — any refund happens "
+            "outside Mise. Give a reason to cancel.",
+        )
+    reason = payload.reason or CANCELLED_BY_STAFF
+    orders = (
+        (
+            await db.execute(
+                select(Order)
+                .where(Order.bill_id == bill.id, Order.status != "cancelled")
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    for order in orders:
+        order.status = "cancelled"
+    now = await db.scalar(select(func.clock_timestamp()))
+    bill.status = "cancelled"
+    bill.cancelled_at = now
+    bill.cancelled_by = access.user.id
+    bill.cancel_reason = reason
+    db.add(
+        AuditLog(
+            restaurant_id=rid,
+            event_type="bill_cancelled",
+            actor=f"user:{access.user.id}",
+            payload={
+                "bill_id": str(bill.id),
+                "reason": reason,
+                **(
+                    {
+                        "claimed_method": claim.method,
+                        "claimed_total": str(claim.total),
+                        "claimed_reference_last4": (claim.reference or "")[-4:] or None,
+                    }
+                    if claim
+                    else {}
+                ),
+            },
+        )
+    )
+    await db.commit()
+    await publish_event(
+        f"kitchen:{rid}", json.dumps({"event": "bill_cancelled", "bill_id": str(bill.id)})
+    )
+    return await bill_detail(db, access.restaurant, bill)
+
+
+async def _locked_counter_order(db: AsyncSession, rid: uuid.UUID, order_id: uuid.UUID) -> Order:
+    # Only the order is locked: collect never touches the bill, so lock order stays acyclic.
+    order = (
+        await db.execute(
+            select(Order)
+            .where(Order.id == order_id, Order.restaurant_id == rid)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+    ).scalar_one_or_none()
+    if order is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
+    is_counter = order.bill_id is not None and (
+        await db.scalar(select(Bill.pickup_no).where(Bill.id == order.bill_id)) is not None
+    )
+    if not is_counter:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="Not a counter pickup order"
+        )
+    return order
+
+
+COLLECT_RESPONSES = {
+    401: {"description": "Unauthenticated"},
+    404: {"description": "Restaurant or order not found"},
+}
+
+
+@router.post(
+    "/orders/{order_id}/collect",
+    response_model=CollectResponse,
+    responses={
+        **COLLECT_RESPONSES,
+        409: {"description": "Not a counter order, not ready (bumped), or already collected"},
+    },
+)
+async def collect_order(
+    order_id: uuid.UUID,
+    access: RestaurantAccess = Depends(member_access),
+    db: AsyncSession = Depends(get_db),
+) -> CollectResponse:
+    """The guest picked up a ready counter order."""
+    rid = access.restaurant.id
+    order = await _locked_counter_order(db, rid, order_id)
+    if order.collected_at is not None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Already collected")
+    if order.status != "bumped":
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Order is not ready")
+    order.collected_at = await db.scalar(select(func.clock_timestamp()))
+    order.collected_by = access.user.id
+    db.add(
+        AuditLog(
+            restaurant_id=rid,
+            event_type="order_collected",
+            actor=f"user:{access.user.id}",
+            payload={"order_id": str(order.id)},
+        )
+    )
+    await db.commit()
+    event = json.dumps({"event": "order_collected", "order_id": str(order.id)})
+    await publish_event(f"kitchen:{rid}", event)
+    await publish_event(f"orders:{order.id}", event)
+    return CollectResponse(
+        order_id=order.id, order_status="collected", collected_at=order.collected_at
+    )
+
+
+@router.post(
+    "/orders/{order_id}/uncollect",
+    response_model=CollectResponse,
+    responses={
+        **COLLECT_RESPONSES,
+        409: {"description": "Not a counter order, not collected, or collected over 60 s ago"},
+    },
+)
+async def uncollect_order(
+    order_id: uuid.UUID,
+    access: RestaurantAccess = Depends(member_access),
+    db: AsyncSession = Depends(get_db),
+) -> CollectResponse:
+    """Undo Collected within 60 seconds (database clock)."""
+    rid = access.restaurant.id
+    order = await _locked_counter_order(db, rid, order_id)
+    if order.collected_at is None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Order is not collected")
+    now = await db.scalar(select(func.clock_timestamp()))
+    if now - order.collected_at >= UNDO_COLLECT:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="Undo window expired (60 seconds)"
+        )
+    previous = order.collected_at
+    order.collected_at = None
+    order.collected_by = None
+    db.add(
+        AuditLog(
+            restaurant_id=rid,
+            event_type="order_uncollected",
+            actor=f"user:{access.user.id}",
+            payload={"order_id": str(order.id), "previous_collected_at": str(previous)},
+        )
+    )
+    await db.commit()
+    event = json.dumps({"event": "order_uncollected", "order_id": str(order.id)})
+    await publish_event(f"kitchen:{rid}", event)
+    await publish_event(f"orders:{order.id}", event)
+    return CollectResponse(order_id=order.id, order_status=order.status, collected_at=None)

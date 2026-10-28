@@ -36,8 +36,12 @@ async def session_is_current(db: AsyncSession, session: GuestSession) -> bool:
     The table resets when it is cleared or one of its bills is settled or cancelled (every order
     voided). A session is current if
     it began after the last reset, or it has an active order on the table's open bill.
+    A counter session is always current: each of its orders opens its own bill.
     """
     if session.table_id is None:
+        return True
+    kind = await db.scalar(select(DiningTable.kind).where(DiningTable.id == session.table_id))
+    if kind == "counter":
         return True
     reset = await db.scalar(
         select(
@@ -282,9 +286,11 @@ async def settle_bill(
     expected_total: Decimal,
     user_id: uuid.UUID,
     acknowledge_reused: bool = False,
-) -> Bill:
+) -> tuple[Bill, list[uuid.UUID]]:
     """Lock the bill, recompute, check the staff's expectation, snapshot tax. Caller commits.
 
+    Returns the bill and the ids of counter orders released to the kitchen (awaiting_payment
+    -> placed); the caller publishes order_placed for them after commit.
     Raises BillChanged (bill still locked, nothing modified) when expected_total differs.
     """
     bill = (
@@ -350,6 +356,11 @@ async def settle_bill(
     bill.total = subtotal + tax
     bill.settled_at = now
     bill.settled_by = user_id
+    # Under the bill lock, so no other path can change these orders meanwhile.
+    released = [o.id for o in orders if o.status == "awaiting_payment"]
+    for o in orders:
+        if o.status == "awaiting_payment":
+            o.status = "placed"
     db.add(
         AuditLog(
             restaurant_id=restaurant.id,
@@ -364,4 +375,4 @@ async def settle_bill(
         )
     )
     await db.flush()
-    return bill
+    return bill, released

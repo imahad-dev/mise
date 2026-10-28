@@ -53,6 +53,14 @@ class BillSummary(BaseModel):
     claim: PaymentClaim | None
     cancelled_at: datetime | None
     cancel_reason: str | None
+    # Counter bills only (one order each); None/False on table bills.
+    pickup_label: str | None = None
+    order_id: uuid.UUID | None = None
+    # awaiting_payment, placed, bumped, collected or cancelled
+    order_status: str | None = None
+    collected_at: datetime | None = None
+    # Numbered on an earlier local day than today.
+    pickup_yesterday: bool = False
 
 
 class BillListResponse(BaseModel):
@@ -136,6 +144,27 @@ class VoidOrderRequest(BaseModel):
         if not 1 <= len(v) <= 200:
             raise ValueError("Reason: 1-200 characters")
         return v
+
+
+class CancelBillRequest(BaseModel):
+    # Required when the guest says they paid (the bill has a claim).
+    reason: str | None = None
+
+    @field_validator("reason")
+    @classmethod
+    def _reason(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        v = v.strip()
+        if not 1 <= len(v) <= 200:
+            raise ValueError("Reason: 1-200 characters")
+        return v
+
+
+class CollectResponse(BaseModel):
+    order_id: uuid.UUID
+    order_status: str
+    collected_at: datetime | None
 
 
 class GuestBillResponse(BaseModel):

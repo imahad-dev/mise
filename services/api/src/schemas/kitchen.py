@@ -34,6 +34,8 @@ class KitchenOrderResponse(BaseModel):
     placed_at: datetime
     bumped_at: datetime | None
     items: list[KitchenOrderItemResponse]
+    # Counter orders: "K-042", shown large on the ticket.
+    pickup_label: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
 
