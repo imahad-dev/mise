@@ -180,7 +180,7 @@ async def test_guest_session_flow_and_no_unit_cost(
     resp_menu = await client.get("/api/guest/menu")
     assert resp_menu.status_code == 200
     menu_data = resp_menu.json()
-    assert len(menu_data["items"]) == 26
+    assert len(menu_data["items"]) == 27  # 26 dishes + pay-it-forward chai
     assert_no_unit_cost(menu_data)
     # The guest menu page renders these; their absence crashed the page.
     assert menu_data["restaurant"] == {

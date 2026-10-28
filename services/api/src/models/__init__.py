@@ -7,6 +7,7 @@ from src.models.forecast import ForecastRun
 from src.models.menu import MenuItem, MenuItemOption, MenuTranslation
 from src.models.metrics import MetricsSample
 from src.models.order import Order, OrderItem
+from src.models.pay_forward import PayForward
 from src.models.restaurant import Restaurant
 from src.models.service_call import ServiceCall
 from src.models.session import GuestSession
@@ -25,6 +26,7 @@ __all__ = [
     "MetricsSample",
     "Order",
     "OrderItem",
+    "PayForward",
     "Restaurant",
     "ServiceCall",
     "User",

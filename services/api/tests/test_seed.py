@@ -66,20 +66,20 @@ async def test_seed_data_idempotent_and_stable_tokens(db_session: AsyncSession):
     )
     assert res_tables.scalar() == 13
 
-    # 3. Assert exactly 26 menu items for this restaurant
+    # 3. Assert exactly 27 menu items for this restaurant
     res_items = await db_session.execute(
         select(func.count()).select_from(MenuItem).where(MenuItem.restaurant_id == restaurant.id)
     )
-    assert res_items.scalar() == 26
+    assert res_items.scalar() == 27
 
-    # 4. Assert exactly 26 menu translations (EN for each item) for this restaurant
+    # 4. Assert exactly 27 menu translations (EN for each item) for this restaurant
     res_trans = await db_session.execute(
         select(func.count())
         .select_from(MenuTranslation)
         .join(MenuItem, MenuTranslation.menu_item_id == MenuItem.id)
         .where(MenuItem.restaurant_id == restaurant.id)
     )
-    assert res_trans.scalar() == 26
+    assert res_trans.scalar() == 27
 
     # 5. Assert every item is unverified (allergen_verified is False) for this restaurant
     res_unverified = await db_session.execute(
@@ -90,7 +90,21 @@ async def test_seed_data_idempotent_and_stable_tokens(db_session: AsyncSession):
             MenuItem.allergen_verified.is_(False),
         )
     )
-    assert res_unverified.scalar() == 26
+    assert res_unverified.scalar() == 27
+
+    # 5b. Exactly one item is the pay-it-forward chai, flagged by its seed key
+    flagged = (
+        (
+            await db_session.execute(
+                select(MenuItem.id).where(
+                    MenuItem.restaurant_id == restaurant.id, MenuItem.is_pay_forward
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert flagged == [uuid.uuid5(SEED_ITEM_NAMESPACE, f"{slug}:pay_forward_chai")]
 
     # 6. Assert unchanged table tokens after second run
     res_tables_2 = await db_session.execute(

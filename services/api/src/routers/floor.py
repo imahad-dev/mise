@@ -22,10 +22,13 @@ from src.schemas.floor import (
     ClearTableRequest,
     FloorResponse,
     FloorTile,
+    GiveRequest,
+    GiveResponse,
     ServiceCallResponse,
     TableClearedResponse,
     call_response,
 )
+from src.services import pay_forward
 from src.services.bills import CENTS
 from src.services.floor import THRESHOLDS, TableFacts, reason_label, table_state
 
@@ -152,7 +155,33 @@ async def get_floor(
         },
         server_time=now,
         service_extra_label=extra,
+        pay_forward_balance=await pay_forward.balance(db, rid),
     )
+
+
+@router.post(
+    "/pay-forward/give",
+    response_model=GiveResponse,
+    responses={**RESPONSES, 409: {"description": "None waiting"}},
+)
+async def give_pay_forward(
+    payload: GiveRequest,
+    access: RestaurantAccess = Depends(member_access),
+    db: AsyncSession = Depends(get_db),
+) -> GiveResponse:
+    """Hand out one pay-it-forward chai: a free kitchen ticket, never revenue."""
+    rid = access.restaurant.id
+    order = await pay_forward.give(db, access.restaurant, access.user.id)
+    left = await pay_forward.balance(db, rid)
+    await db.commit()
+    order_id = str(order.id)
+    await publish_event(
+        f"kitchen:{rid}", json.dumps({"event": "pay_forward_given", "order_id": order_id})
+    )
+    placed = json.dumps({"event": "order_placed", "order_id": order_id})
+    await publish_event(f"kitchen:{rid}", placed)
+    await publish_event(f"orders:{order_id}", placed)
+    return GiveResponse(order_id=order.id, pay_forward_balance=left)
 
 
 @router.post(

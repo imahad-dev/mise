@@ -19,6 +19,7 @@ from src.models.bill import Bill
 from src.models.dining_table import DiningTable
 from src.models.menu import MenuItem
 from src.models.order import Order
+from src.models.pay_forward import PayForward
 from src.models.restaurant import Restaurant
 from src.models.service_call import ServiceCall
 from src.models.session import GuestSession
@@ -435,6 +436,13 @@ async def _bill_detail(
         total=bill.total if bill.status == "settled" else None,
         pickup_label=(
             pickup_label(restaurant.pickup_prefix, bill.pickup_no) if bill.pickup_no else None
+        ),
+        pay_forward_count=int(
+            await db.scalar(
+                select(func.coalesce(func.sum(PayForward.quantity), 0))
+                .join(Order, Order.id == PayForward.order_id)
+                .where(Order.bill_id == bill.id, PayForward.kind == "bought")
+            )
         ),
     )
 

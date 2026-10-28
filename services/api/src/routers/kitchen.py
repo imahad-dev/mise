@@ -85,6 +85,7 @@ def _build_kitchen_order_response(
         bumped_at=order.bumped_at,
         items=items_resp,
         pickup_label=(pickups or {}).get(order.bill_id) if order.bill_id else None,
+        pay_forward=order.source == "pay_forward",
     )
 
 

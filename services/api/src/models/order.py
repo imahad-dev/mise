@@ -44,7 +44,7 @@ class Order(Base):
             "(status <> 'bumped') OR (bumped_at IS NOT NULL)",
             name="chk_orders_bumped_at_required",
         ),
-        CheckConstraint("source IN ('live', 'simulated')", name="chk_orders_source"),
+        CheckConstraint("source IN ('live', 'simulated', 'pay_forward')", name="chk_orders_source"),
         CheckConstraint("voided_at IS NULL OR status = 'cancelled'", name="chk_orders_void"),
         CheckConstraint("collected_at IS NULL OR status = 'bumped'", name="chk_orders_collected"),
         UniqueConstraint(

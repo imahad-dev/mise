@@ -1031,6 +1031,35 @@
         }
       },
       "sim_weight": 4
+    },
+    {
+      "key": "pay_forward_chai",
+      "category": "Drinks",
+      "price": 250,
+      "unit_cost": 45,
+      "ingredients": [
+        "tea",
+        "milk",
+        "sugar"
+      ],
+      "allergens": [
+        "milk"
+      ],
+      "allergen_verified": false,
+      "is_vegetarian": true,
+      "is_vegan": false,
+      "is_gluten_free": true,
+      "dietary_verified": false,
+      "available": true,
+      "featured": false,
+      "sort_order": 27,
+      "translations": {
+        "en": {
+          "name": "Pay-it-forward chai",
+          "description": "A chai for someone who needs it — we hand it out free, no questions asked."
+        }
+      },
+      "sim_weight": 0
     }
   ]
 }

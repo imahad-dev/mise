@@ -31,6 +31,8 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_SEED_FILES = ["data/seed/angeethi_house.json", "data/seed/kehwa_and_crumb.json"]
 DEFAULT_DEMO_USERS_FILE = "data/seed/demo_users.json"
+# Settling a bill with this item records chai bought for someone else.
+PAY_FORWARD_KEY = "pay_forward_chai"
 
 
 def simulation_profile(data: dict[str, Any]) -> dict[str, Any] | None:
@@ -230,6 +232,7 @@ async def seed_data(
                 available=item_data.get("available", True),
                 featured=item_data.get("featured", False),
                 sort_order=item_data.get("sort_order", 0),
+                is_pay_forward=item_data["key"] == PAY_FORWARD_KEY,
             )
             session.add(target_item)
             await session.flush()
@@ -258,6 +261,7 @@ async def seed_data(
             target_item.available = item_data.get("available", True)
             target_item.featured = item_data.get("featured", False)
             target_item.sort_order = item_data.get("sort_order", 0)
+            target_item.is_pay_forward = item_data["key"] == PAY_FORWARD_KEY
 
             # Upsert translations
             existing_trans = {t.language: t for t in target_item.translations}

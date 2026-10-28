@@ -18,6 +18,7 @@ from src.models.order import Order
 from src.models.restaurant import Restaurant
 from src.models.session import GuestSession
 from src.schemas.bills import BillLine, MethodPreview, PaymentClaim, TaxPreview
+from src.services.pay_forward import record_bought
 from src.services.tax import PAYMENT_METHODS, TaxRateError, default_rates, payment_class, tax_for
 
 logger = logging.getLogger(__name__)
@@ -424,6 +425,7 @@ async def settle_bill(
         .scalars()
         .all()
     )
+    await record_bought(db, restaurant.id, orders)
     db.add(
         AuditLog(
             restaurant_id=restaurant.id,

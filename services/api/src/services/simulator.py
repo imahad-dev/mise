@@ -337,6 +337,8 @@ async def persist_simulation(
                     MenuItem.restaurant_id == restaurant.id,
                     MenuItem.deleted_at.is_(None),
                     MenuItem.available.is_(True),
+                    # Pay-it-forward chai is bought on purpose, never simulated.
+                    MenuItem.is_pay_forward.is_(False),
                 )
             )
         ).scalars()

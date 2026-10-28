@@ -32,6 +32,16 @@ class FloorResponse(BaseModel):
     thresholds: dict[str, list[int]]  # state -> [amber, red] in seconds
     server_time: datetime
     service_extra_label: str | None
+    pay_forward_balance: int  # pay-it-forward chai bought and not yet handed out
+
+
+class GiveRequest(BaseModel):
+    quantity: Literal[1]  # one chai per tap
+
+
+class GiveResponse(BaseModel):
+    order_id: uuid.UUID
+    pay_forward_balance: int
 
 
 class ClearTableRequest(BaseModel):

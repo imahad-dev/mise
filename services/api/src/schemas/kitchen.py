@@ -36,6 +36,8 @@ class KitchenOrderResponse(BaseModel):
     items: list[KitchenOrderItemResponse]
     # Counter orders: "K-042", shown large on the ticket.
     pickup_label: str | None = None
+    # A free pay-it-forward chai handed out by staff: no table, no bill.
+    pay_forward: bool = False
 
     model_config = ConfigDict(from_attributes=True)
 

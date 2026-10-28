@@ -135,6 +135,11 @@ class DataSources(BaseModel):
     simulated: int
 
 
+class PayForwardTotals(BaseModel):
+    bought: int
+    given: int
+
+
 class Kpis(BaseModel):
     orders: int
     revenue: float
@@ -251,6 +256,7 @@ class DailyBriefResponse(BaseModel):
     pairings: list[Pairing]
     peak_hours: list[PeakHour]
     payment_mix: PaymentMix
+    pay_forward: PayForwardTotals
     forecast: ForecastSummary
     actions: list[BriefAction]
     summary: str

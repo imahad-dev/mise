@@ -21,7 +21,7 @@ from sqlalchemy import select
 
 from src.models.forecast import ForecastRun
 from src.models.menu import MenuItem, MenuItemOption, MenuTranslation
-from src.services import analytics
+from src.services import analytics, pay_forward
 from src.services.forecast import HORIZON_DAYS, build_input, forecast
 from src.services.narrative import narrate
 from src.services.whatif import DEFAULT_PRICE_ELASTICITY, ItemBaseline, run_whatif
@@ -337,6 +337,9 @@ async def compute_brief(
     w = analytics.Window(
         restaurant.id, restaurant.timezone, today - timedelta(days=WINDOW_DAYS), today
     )
+    week = analytics.Window(
+        restaurant.id, restaurant.timezone, today - timedelta(days=6), today + timedelta(days=1)
+    )
     names = await item_names(db, restaurant)
     sources = await analytics.order_counts_by_source(db, w)
     kpis = await analytics.kpis(db, w)
@@ -420,6 +423,11 @@ async def compute_brief(
         "pairings": pairings,
         "peak_hours": peaks,
         "payment_mix": payments,
+        # Not narrated and not revenue: chai bought for others and handed out this week
+        # (the last 7 local days, today included).
+        "pay_forward": await pay_forward.window_totals(
+            db, restaurant.id, week.params()["start"], week.params()["end"]
+        ),
         "forecast": {
             "run_id": run_id,
             "method": fc.get("method"),

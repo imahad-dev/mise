@@ -106,6 +106,10 @@ class MenuItem(Base):
     )
     available: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"))
     featured: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
+    # Bought for someone else: settling writes a pay_forward 'bought' row per line.
+    is_pay_forward: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("false")
+    )
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
     image_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

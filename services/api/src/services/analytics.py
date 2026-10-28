@@ -30,6 +30,8 @@ MIN_PAIR_ORDERS = 5  # co-occurrences below this are too noisy to report
 _LOCAL = "(o.placed_at AT TIME ZONE :tz)"
 _SCOPE = (
     "o.restaurant_id = :rid AND o.status IN ('placed', 'bumped') "
+    # Pay-it-forward handouts are free kitchen tickets, never sales.
+    "AND o.source IN ('live', 'simulated') "
     "AND o.placed_at >= :start AND o.placed_at < :end"
 )
 
