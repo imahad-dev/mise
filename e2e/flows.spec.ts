@@ -4,7 +4,6 @@ import {
   GUEST,
   KEHWA,
   OWNER,
-  clearDemoLimits,
   confirmOrder,
   demoApi,
   demoInfo,
@@ -22,7 +21,6 @@ test.describe.serial("two venues: guest, kitchen, bills, owner", () => {
 
   test.beforeAll(async () => {
     // Start clean: only this story's tickets and bills show up.
-    clearDemoLimits();
     for (const slug of [ANGEETHI, KEHWA]) await resetVenue(slug);
   });
 

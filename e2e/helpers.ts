@@ -110,6 +110,7 @@ export const billOf = (orderId: string) => sql(`SELECT bill_id FROM orders WHERE
  * chai, bump every kitchen ticket, collect ready pickups, resolve calls and clear every table.
  */
 export async function resetVenue(slug: string, opts: { drainPayForward?: boolean } = {}) {
+  clearDemoLimits(); // stories run back to back: a fresh demo-login budget for each
   const staff = await demoApi("staff", slug);
   const base = `/api/restaurants/${slug}`;
   const json = async (path: string) => {
