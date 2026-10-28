@@ -4,7 +4,7 @@ from dataclasses import replace
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from sqlalchemy import exists, select
+from sqlalchemy import exists, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -433,7 +433,9 @@ async def patch_settings(
         "pickup_prefix" in payload.model_fields_set
         and payload.pickup_prefix != restaurant.pickup_prefix
     ):
-        # Guests already hold a printed number: it must not change under them.
+        # Guests already hold a printed number: it must not change under them. The bill-numbering
+        # lock keeps a counter order from opening between this check and the commit.
+        await db.execute(select(func.pg_advisory_xact_lock(func.hashtext(f"bill:{restaurant.id}"))))
         if await db.scalar(
             select(
                 exists().where(

@@ -690,3 +690,32 @@ async def test_pickup_prefix_locked_while_counter_orders_open(client, db_session
     cleared = await client.patch(url, json={"pickup_prefix": None})
     assert (cleared.status_code, cleared.json()["pickup_prefix"]) == (200, None)
     assert (await client.patch(url, json={"pickup_prefix": "Q"})).json()["pickup_prefix"] == "Q"
+
+
+async def test_expired_bill_shows_real_total_and_settles(client, db_session, cv):
+    _s, _o, b, total_before = await _expired(client, db_session, cv)
+    base = f"/api/restaurants/{cv.r.slug}/bills"
+    detail = (await client.get(f"{base}/{b.id}")).json()
+    assert detail["status"] == "cancelled"
+    assert detail["lines"] and detail["subtotal"] == "60.00"
+    total = next(m["total"] for m in detail["methods"] if m["method"] == "cash")
+    assert total == total_before
+    row = (await counter_list(client, cv, "cancelled"))[str(b.id)]
+    assert (row["subtotal"], row["order_count"]) == ("60.00", 1)
+    resp = await client.post(
+        f"{base}/{b.id}/settle",
+        json={"payment_method": "cash", "expected_method": "cash", "expected_total": total},
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["order_status"] == "placed"
+    assert resp.json()["lines"]
+
+
+async def test_guest_cannot_revive_an_earlier_day(client, db_session, cv, monkeypatch):
+    s, o, b, _total = await _expired(client, db_session, cv)
+    tomorrow = b.pickup_day + timedelta(days=1)
+    monkeypatch.setattr("src.routers.guest.local_date", lambda r, at: tomorrow)
+    client.cookies.set(GUEST_COOKIE_NAME, sign_value(str(s.id)))
+    resp = await client.post("/api/guest/bill/payment", json={"method": "cash"})
+    assert (resp.status_code, resp.json()["detail"]) == (409, "Bill is not open")
+    assert (await bill_of(db_session, o["id"])).status == "cancelled"

@@ -9,7 +9,7 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import JSONResponse
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -34,11 +34,13 @@ from src.schemas.bills import (
 )
 from src.services.bills import (
     CENTS,
+    EXPIRED,
     METHOD_LABELS,
     BillChanged,
     active_orders,
     bill_lines,
     claim_of,
+    is_expired_unpaid,
     local_date,
     method_previews,
     open_bill_with_claimed_key,
@@ -142,7 +144,9 @@ async def bill_detail(db: AsyncSession, restaurant: Restaurant, bill: Bill) -> B
         .scalars()
         .all()
     )
-    orders = [o for o in every if o.status != "cancelled"]
+    # An expired counter bill shows what settling it would take (its unvoided orders).
+    expired = is_expired_unpaid(bill)
+    orders = [o for o in every if (o.voided_at is None if expired else o.status != "cancelled")]
     lines, live_subtotal = bill_lines(orders)
     # A settled bill shows its snapshot; the running total applies only while open.
     subtotal = bill.subtotal if bill.status == "settled" else live_subtotal
@@ -238,7 +242,22 @@ async def list_bills(
             func.sum(Order.total),
         )
         .outerjoin(DiningTable, DiningTable.id == Bill.table_id)
-        .outerjoin(Order, and_(Order.bill_id == Bill.id, Order.status != "cancelled"))
+        .outerjoin(
+            Order,
+            and_(
+                Order.bill_id == Bill.id,
+                or_(
+                    Order.status != "cancelled",
+                    # is_expired_unpaid in SQL: such a bill still shows its real total.
+                    and_(
+                        Bill.status == "cancelled",
+                        Bill.cancel_reason == EXPIRED,
+                        Bill.cancelled_by.is_(None),
+                        Order.voided_at.is_(None),
+                    ),
+                ),
+            ),
+        )
         .where(Bill.restaurant_id == rid, Bill.status == status_filter)
         .group_by(Bill.id, DiningTable.label)
     )
