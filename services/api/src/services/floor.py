@@ -71,7 +71,9 @@ def table_state(f: TableFacts, now: datetime) -> TileState | None:
         if f.has_active_orders:
             return TileState("served", None, "none")
     # A cancelled bill (every order voided) ends the party like a settle, as session_is_current.
-    ended = max((t for t in (f.last_settled_at, f.last_cancelled_at) if t is not None), default=None)
+    ended = max(
+        (t for t in (f.last_settled_at, f.last_cancelled_at) if t is not None), default=None
+    )
     reset = max((t for t in (f.cleared_at, ended) if t is not None), default=None)
     # An open bill is never Free.
     if f.open_bill or _after(f.last_session_at, reset):

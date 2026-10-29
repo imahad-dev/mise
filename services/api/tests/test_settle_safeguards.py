@@ -681,7 +681,12 @@ async def test_staff_reference_claimed_on_another_open_bill_needs_acknowledgemen
     b_no = (await detail(client, pv, b_bill))["bill_no"]
     assert refused.json()["detail"] == f"Reference already used on Bill {b_no:04d}"
     ok = await settle(
-        client, pv.r.slug, a_bill, "raast", payment_reference="r6", acknowledge_reused_reference=True
+        client,
+        pv.r.slug,
+        a_bill,
+        "raast",
+        payment_reference="r6",
+        acknowledge_reused_reference=True,
     )
     assert ok.status_code == 200, ok.text
 

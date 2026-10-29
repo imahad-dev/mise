@@ -495,9 +495,7 @@ async def _counter_party(db: AsyncSession, v: PfVenue) -> GuestSession:
     return party
 
 
-async def test_chai_on_an_expired_counter_bill_settled_late_is_bought_once(
-    client, db_session, pf
-):
+async def test_chai_on_an_expired_counter_bill_settled_late_is_bought_once(client, db_session, pf):
     party = await _counter_party(db_session, pf)
     order_id = await place(client, party, [(pf.chai, 1)])
     bill_id = await bill_id_of(db_session, order_id)

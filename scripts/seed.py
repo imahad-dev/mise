@@ -157,7 +157,9 @@ async def seed_data(
             # As the owner settings: guests already hold printed numbers, so the prefix only
             # changes with no open counter bill. The bill-numbering lock keeps one from opening.
             await session.execute(
-                select(func.pg_advisory_xact_lock(func.hashtext(f"bill:{restaurant.id}")))
+                select(
+                    func.pg_advisory_xact_lock(func.hashtext(f"bill:{restaurant.id}"))
+                )
             )
             if await session.scalar(
                 select(
@@ -168,7 +170,9 @@ async def seed_data(
                     )
                 )
             ):
-                print(f"Kept pickup prefix {restaurant.pickup_prefix!r}: counter orders are open")
+                print(
+                    f"Kept pickup prefix {restaurant.pickup_prefix!r}: counter orders are open"
+                )
             else:
                 restaurant.pickup_prefix = prefix
         if "payment_details" in rest_data:
@@ -221,7 +225,9 @@ async def seed_data(
     # One flagged pay-it-forward item per venue: unflag any other (an owner may have moved
     # the flag) before the seed chai takes it back.
     if any(item["key"] == PAY_FORWARD_KEY for item in items_data):
-        chai_id = uuid.uuid5(SEED_ITEM_NAMESPACE, f"{restaurant.slug}:{PAY_FORWARD_KEY}")
+        chai_id = uuid.uuid5(
+            SEED_ITEM_NAMESPACE, f"{restaurant.slug}:{PAY_FORWARD_KEY}"
+        )
         await session.execute(
             update(MenuItem)
             .where(
