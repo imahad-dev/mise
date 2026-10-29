@@ -10,7 +10,7 @@ from unittest.mock import patch
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from tests.helpers import as_member, make_user, settle, sign_in
@@ -21,6 +21,7 @@ from src.config import settings
 from src.database import async_session_factory, get_db
 from src.main import app
 from src.models.audit import AuditLog
+from src.models.bill import Bill
 from src.models.dining_table import DiningTable
 from src.models.menu import MenuItem, MenuTranslation
 from src.models.order import Order, OrderItem
@@ -475,3 +476,63 @@ async def test_parallel_same_key_gives_once(committed_pf):
             select(func.count()).where(PayForward.restaurant_id == rid, PayForward.kind == "given")
         )
     assert given == 1
+
+
+async def _counter_party(db: AsyncSession, v: PfVenue) -> GuestSession:
+    counter = DiningTable(
+        restaurant_id=v.r.id, label="Counter", kind="counter", qr_token=uuid.uuid4().hex
+    )
+    db.add(counter)
+    await db.flush()
+    party = GuestSession(
+        restaurant_id=v.r.id,
+        table_id=counter.id,
+        language="en",
+        expires_at=datetime.now(UTC) + timedelta(hours=2),
+    )
+    db.add(party)
+    await db.flush()
+    return party
+
+
+async def test_chai_on_an_expired_counter_bill_settled_late_is_bought_once(
+    client, db_session, pf
+):
+    party = await _counter_party(db_session, pf)
+    order_id = await place(client, party, [(pf.chai, 1)])
+    bill_id = await bill_id_of(db_session, order_id)
+    await as_member(client, db_session, pf.r.id, "staff")
+    await db_session.execute(
+        update(Order)
+        .where(Order.id == order_id)
+        .values(placed_at=datetime.now(UTC) - timedelta(minutes=31))
+    )
+    assert (await client.get(url(pf, "/bills?kind=counter"))).status_code == 200  # expires it
+    assert await db_session.scalar(select(Bill.status).where(Bill.id == bill_id)) == "cancelled"
+    assert await rows(db_session, pf) == []
+
+    assert (await settle(client, pf.r.slug, bill_id)).status_code == 200  # money came late
+    assert (await settle(client, pf.r.slug, bill_id)).status_code == 409
+    [row] = await rows(db_session, pf)
+    assert (row.kind, row.quantity, row.order_id) == ("bought", 1, order_id)
+    assert await balance(client, pf) == 1
+
+
+async def test_chai_on_a_cancelled_bill_is_never_bought(client, db_session, pf):
+    party = await _counter_party(db_session, pf)
+    counter_bill = await bill_id_of(db_session, await place(client, party, [(pf.chai, 2)]))
+    table_order = await place(client, pf.party, [(pf.chai, 1)])
+    table_bill = await bill_id_of(db_session, table_order)
+    await as_member(client, db_session, pf.r.id, "staff")
+    cancel = await client.post(url(pf, f"/bills/{counter_bill}/cancel"), json={"reason": "Left"})
+    assert cancel.status_code == 200, cancel.text
+    void = await client.post(url(pf, f"/orders/{table_order}/void"), json={"reason": "Left"})
+    assert void.status_code == 200, void.text
+    statuses = (
+        await db_session.scalars(select(Bill.status).where(Bill.id.in_([counter_bill, table_bill])))
+    ).all()
+    assert list(statuses) == ["cancelled", "cancelled"]
+    for bill_id in (counter_bill, table_bill):  # a staff cancel is final
+        assert (await settle(client, pf.r.slug, bill_id)).status_code == 409
+    assert await rows(db_session, pf) == []
+    assert await balance(client, pf) == 0
