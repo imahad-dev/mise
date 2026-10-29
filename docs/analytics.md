@@ -12,9 +12,24 @@ Code: `services/api/src/services/` — `analytics.py`, `forecast.py`, `brief.py`
 
 - Source of truth is the immutable `order_item` snapshot (`quantity`, `unit_price`, `unit_cost`)
   taken when the order was placed. Later menu price or cost edits do not rewrite history.
-- Cancelled orders are excluded. Dates and hours use the restaurant's timezone.
-- **Daypart**: local hour before 16:00 is `lunch`, otherwise `dinner`.
-- `orders.source` is `live` or `simulated`. Analytics include both; every response reports the
+- Status filter: only `placed` and `bumped` orders count. `cancelled` orders (including staff
+  voids and expired counter orders) and `awaiting_payment` counter orders (not paid yet) are
+  excluded.
+- Paid filter: an order counts only once its bill is `settled`, so orders on an `open` or
+  `cancelled` bill are never revenue; a void before settlement removes the order before it ever
+  counts. A settled order is dated by its own placement time (`placed_at`), not by the settle
+  time. Simulated orders written without a bill (no tax rate in force, see Bills below) stand for
+  paid parties and count. The payment mix reads only `settled` bills, dated by `settled_at`.
+  Dates and hours use the restaurant's timezone.
+- Source filter: `orders.source IN ('live', 'simulated')` (`_SCOPE` in `analytics.py`).
+  Pay-it-forward handouts (`source='pay_forward'`, zero-price tickets with no bill) are free
+  chai, never sales, so they are excluded from revenue, orders, AOV, menu engineering, pairings,
+  peak hours and the forecast. The chai a guest buys for someone else is an ordinary paid line on
+  their bill and counts as revenue once like any other item; the brief reports the
+  pay-it-forward ledger separately as `pay_forward {bought, given}` over the last 7 local days
+  (today included), not narrated and not revenue.
+- **Daypart**: daytime before 18:00 local time is `lunch`, the evening after is `dinner`.
+- Of the analysed sources, `live` and `simulated`, analytics include both; every response reports the
   count of each (`data_sources`) and the UI shows a "Simulated data" banner when any simulated
   orders are in the window.
 - Analysis window for KPIs, menu engineering and what-if: the last **28 days** ending yesterday.
@@ -38,11 +53,34 @@ count as high):
 
 Items with no sales in the window are not classified.
 
+**Portion rows.** A dish with sizes (`menu_item_option`) is analysed per (dish, size): "Chicken
+Karahi — ½ kg" and "Chicken Karahi — 1 kg" are separate rows with their own units and margins,
+because a half and a full portion sell and earn differently. Each row carries the dish's
+`item_id` and, for a size row, its `option_id` (null for a dish without sizes). Brief actions
+name the row they apply to and carry the same two ids. The forecast stays per dish (its
+size rows summed). The What-if page works per dish: a price change applies to every size, and
+the current price it shows is the units-weighted average of the size prices (this is stated in
+the assumptions).
+
 ## Pairings and peak hours
 
 - Pair lift = P(A and B in an order) / (P(A) × P(B)) over orders in the window. Pairs seen
   together in fewer than 5 orders are dropped. Top 5 by lift.
 - Peak hours: the 3 local hours with the most orders, as average orders and revenue per day.
+
+## Payment mix and tax
+
+Over bills settled in the window (live and simulated, like orders), by payment class: `cash`
+and `bank_transfer` are **standard**; `card`, `wallet` (JazzCash / Easypaisa) and `raast` (Raast
+QR) are **digital**.
+
+- Bills per class, and each class's share of billed revenue (pre-tax subtotal).
+- Tax collected per rate (the rate snapshotted on each bill at settle).
+- Digital tax saving = Σ over digital bills of (tax at the standard rate in force on the settle
+  date − tax actually charged). Bills whose date has no standard rate on file add nothing.
+
+Rates come from `data/tax_rates.json` through `tax_for` (see [architecture.md](architecture.md)).
+The tax on the demo's bills is illustrative; the sample bill is not a tax invoice.
 
 ## Forecast
 
@@ -96,17 +134,19 @@ guaranteed coverage.
 | Promote puzzle | top 2 puzzles by unit margin | 0.20 × weekly units × unit margin (assumes featuring lifts units 20%) |
 | Reprice plowhorse | top 2 plowhorses by units | what-if price change +5% at elasticity −0.8 on the current menu price and cost (margin delta; same baseline as the What-if page) |
 | Review dog | dog with the lowest contribution | weekly units × (median unit margin − unit margin) |
-| Prep targets | top 3 items by forecast for the next day | none; prep = ceil(Σ dayparts upper interval bound) |
+| Prep targets | top 3 dishes by forecast for the next day (all sizes of a dish together) | none; prep = ceil(Σ dayparts upper interval bound) |
 
 Weekly units = units in the window / 4. Each action lists its evidence numbers and formula.
 
 In DEMO_MODE the brief response is cached in Redis for 10 minutes; generating demo data clears
 that cache. Recomputing a forecast runs in a worker thread so other requests are not blocked.
+Money fields carry no currency in their names; the brief and what-if responses include `currency`
+(the venue's ISO code) and the template text uses it.
 
 ## Summary text and the numbers guard
 
-The facts (KPIs, actions with evidence, pairings by item name, peak hours, forecast method and
-backtest WAPE) are sent to the configured model with an instruction to only restate numbers. The
+The facts (KPIs, actions with evidence, pairings by item name, peak hours, payment mix, forecast
+method and backtest WAPE) are sent to the configured model with an instruction to only restate numbers. The
 response is accepted only if every number in it equals a number in the facts rounded to the
 same number of decimals (thousands separators allowed). Otherwise, or if the model is
 unavailable (no client, daily cap, 429, error), a template summary built from the same facts is
@@ -142,7 +182,8 @@ same snapshot code as live orders, are stored as `status='bumped'` (so they neve
 kitchen display) and `source='simulated'`, under one synthetic expired guest session with no
 allergen or dietary data.
 
-Assumptions (`SimAssumptions`, all parameters):
+Assumptions (`SimAssumptions`, all parameters). These are the defaults; each venue's seed file
+has a `simulation` block that overrides them (see below):
 
 | Assumption | Default |
 |---|---|
@@ -152,8 +193,43 @@ Assumptions (`SimAssumptions`, all parameters):
 | Service windows (local) | lunch 12:00–15:00, dinner 19:00–23:00, uniform arrival minute |
 | Party size 1–6 | 10%, 45%, 15%, 22%, 4%, 4% |
 | Dishes per order | max(party size, Poisson(1.4 × party size)) |
-| Item popularity | Zipf, weight ∝ 1 / rank^1.0, rank from a seeded shuffle of the menu |
-| Promotion | the rank-6 item, days 21–27, demand weight × 1.8 (disable with `--no-promo`) |
+| Item popularity | proportional to the item's weight (1 when the venue gives none) |
+| Option choice | proportional to the item's option weights (equal when none, or when their count no longer matches the item's options) |
+| Promotion | the rank-6 item by weight, days 21–27, demand weight × 1.8 (disable with `--no-promo`) |
 | Noise | daily multiplicative factor exp(N(0, 0.12)) on arrival rates |
+| Payment method | cash 60%, card 20%, wallet 15%, Raast 5% |
+| Bill settled after | uniform 45–75 minutes after the order |
+
+**Venue profiles.** `scripts/seed.py` stores the seed's `simulation` block in
+`restaurant.onboarding["simulation"]`, together with `weights` (each item's `sim_weight`, by
+item key) and `option_weights` (each item's list, in the order of its options). The simulate
+endpoint and `scripts/simulate.py` build the assumptions from that profile, then apply the
+request's days, seed and promotion switch. Without `--slug`, `scripts/simulate.py` simulates
+every demo venue.
+
+| Profile | Angeethi House | Kehwa & Crumb |
+|---|---|---|
+| Lunch orders, Mon→Sun | 9, 9, 10, 10, 13, 18, 16 | 12, 12, 13, 14, 16, 22, 20 |
+| Dinner orders, Mon→Sun | 14, 15, 15, 17, 26, 30, 22 | 16, 16, 18, 20, 26, 30, 24 |
+| Lunch window | 13:00–16:00 | 15:00–18:00 (afternoon) |
+| Dinner window | 20:00–23:00 | 20:00–23:00 |
+| Party size 1–6 | 5%, 20%, 15%, 30%, 15%, 15% | 35%, 40%, 15%, 10%, 0, 0 |
+| Dishes per guest | 1.6 | 1.5 |
+| Payment mix | cash 60 / card 20 / wallet 15 / Raast 5 | cash 35 / card 40 / wallet 15 / Raast 10 |
+
+**The payment mix is an assumption.** We found no published breakdown of payment methods for
+Pakistani restaurants; the shares only make the demo's cash-versus-digital split visible and
+must not be read as market data.
+
+**Bills.** Each simulated order is one party with one bill: `source='simulated'`, no bill
+number, no table, `status='settled'`, opened at the order time and settled 45–75 minutes later.
+The subtotal is the order total; tax comes from `tax_for(jurisdiction, payment method, local
+settle date, subtotal)` and the bill total is subtotal plus tax. When no tax rate is in force
+(no jurisdiction, or a date before the first configured rate) the order is written without a
+bill and still counts as a paid sale. Regenerating deletes simulated bills together with simulated orders.
+
+Random draws: arrival times, party sizes and dishes use `default_rng(seed)`; option, payment
+method and settle-time draws use a second generator seeded `[seed, 1]`, so changing the payment
+mix or an item's options never shifts the order stream.
 
 Item choice is independent of course or category; quantities are capped at 20 per line.

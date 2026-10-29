@@ -3,7 +3,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Index, Text, func, text
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, Text, func, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -12,7 +12,10 @@ from src.database import Base
 
 class DiningTable(Base):
     __tablename__ = "dining_table"
-    __table_args__ = (Index("idx_dining_table_restaurant_id", "restaurant_id"),)
+    __table_args__ = (
+        Index("idx_dining_table_restaurant_id", "restaurant_id"),
+        CheckConstraint("kind IN ('table','counter')", name="chk_dining_table_kind"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -26,6 +29,8 @@ class DiningTable(Base):
     )
     label: Mapped[str] = mapped_column(Text, nullable=False)
     qr_token: Mapped[str] = mapped_column(Text, unique=True, nullable=False)
+    kind: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'table'"))
+    cleared_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

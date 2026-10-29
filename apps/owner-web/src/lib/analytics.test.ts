@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
+import { formatPrice } from "ui";
 import {
-  eur,
+  money,
   forecastTable,
   quadrantLayout,
+  sharePct,
   wapePct,
   type ForecastPoint,
   type MenuEngineeringItem,
@@ -10,12 +12,13 @@ import {
 
 const item = (id: string, units: number, margin: number): MenuEngineeringItem => ({
   item_id: id,
+  option_id: null,
   name: id,
   units,
   weekly_units: units / 4,
-  revenue_eur: 0,
-  unit_margin_eur: margin,
-  contribution_eur: 0,
+  revenue: 0,
+  unit_margin: margin,
+  contribution: 0,
   menu_class: "star",
 });
 
@@ -23,7 +26,7 @@ describe("quadrantLayout", () => {
   it("places high-unit items right and high-margin items up", () => {
     const { points, medianX, medianY } = quadrantLayout(
       [item("a", 100, 10), item("b", 0, 0)],
-      { median_units: 50, median_unit_margin_eur: 5 },
+      { median_units: 50, median_unit_margin: 5 },
       200,
       100,
       10,
@@ -58,9 +61,11 @@ describe("forecastTable", () => {
 });
 
 describe("formatting", () => {
-  it("formats euros and WAPE", () => {
-    expect(eur(1234.5)).toBe("€1,234.50");
+  it("formats money and WAPE", () => {
+    expect(money(1234.5, "PKR")).toBe(formatPrice(1234.5, "PKR"));
     expect(wapePct(0.4123)).toBe("41.2%");
     expect(wapePct(null)).toBe("n/a");
+    expect(sharePct(0.6667)).toBe("66.7%");
+    expect(sharePct(0)).toBe("0.0%");
   });
 });

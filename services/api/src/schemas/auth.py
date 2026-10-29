@@ -2,21 +2,23 @@
 
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class LoginRequest(BaseModel):
-    role: Literal["owner", "staff"]
-    secret: str
+    email: str = Field(min_length=3, max_length=254)
+    password: str = Field(min_length=1, max_length=256)
 
 
 class LoginResponse(BaseModel):
     status: Literal["ok"]
-    role: Literal["owner", "staff"]
+    name: str
+    email: str
 
 
 class MeResponse(BaseModel):
-    role: Literal["owner", "staff"]
+    name: str
+    email: str
 
 
 class LogoutResponse(BaseModel):
@@ -29,11 +31,19 @@ class AuthConfigResponse(BaseModel):
 
 class DemoLoginRequest(BaseModel):
     role: Literal["owner", "staff"]
+    venue: str | None = None
+
+
+class DemoVenueInfo(BaseModel):
+    slug: str
+    name: str
+    city: str | None
+    guest_url: str
+    qr_token: str
+    table_label: str
 
 
 class DemoInfoResponse(BaseModel):
-    guest_url: str
     owner_url: str
     kitchen_url: str
-    qr_token: str | None = None
-    table_label: str | None = None
+    venues: list[DemoVenueInfo]

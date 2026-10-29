@@ -19,13 +19,16 @@ from sqlalchemy.orm import selectinload
 from src.auth import get_current_guest_session
 from src.database import get_db
 from src.models.audit import AuditLog
-from src.models.menu import MenuItem
+from src.models.dining_table import DiningTable
+from src.models.menu import MenuItem, MenuItemOption
 from src.models.order import Order, OrderItem
 from src.models.restaurant import Restaurant
 from src.models.session import GuestSession
 from src.redis_client import publish_event, redis_client
 from src.schemas.orders import CreateOrderRequest, OrderItemRequest, OrderResponse
 from src.services.allergen_service import compute_allergen_status
+from src.services.bills import VISIT_ENDED, open_bill_for_table, session_is_current
+from src.services.counter import open_counter_bill
 from src.services.order_snapshot import line_total, snapshot_order_item
 
 logger = logging.getLogger(__name__)
@@ -38,12 +41,13 @@ def compute_payload_hash(items: list[OrderItemRequest]) -> str:
     canonical = [
         {
             "menu_item_id": str(i.menu_item_id),
+            "option_id": str(i.option_id or ""),
             "quantity": i.quantity,
             "notes": i.notes or "",
         }
         for i in sorted(
             items,
-            key=lambda x: (str(x.menu_item_id), x.quantity, x.notes or ""),
+            key=lambda x: (str(x.menu_item_id), str(x.option_id or ""), x.quantity, x.notes or ""),
         )
     ]
     raw = json.dumps(canonical, sort_keys=True)
@@ -70,6 +74,17 @@ def is_idempotency_unique_violation(err: IntegrityError) -> bool:
     return "orders_guest_idempotency_key" in err_str or "idempotency_key" in err_str
 
 
+async def order_response(db: AsyncSession, order: Order) -> OrderResponse:
+    """OrderResponse with the venue currency, loaded explicitly (relationships are lazy="raise")."""
+    currency = await db.scalar(
+        select(Restaurant.currency).where(Restaurant.id == order.restaurant_id)
+    )
+    fields = {
+        name: getattr(order, name) for name in OrderResponse.model_fields if name != "currency"
+    }
+    return OrderResponse.model_validate({**fields, "currency": currency}, from_attributes=True)
+
+
 @router.post(
     "",
     response_model=OrderResponse,
@@ -88,7 +103,7 @@ async def create_order(
     response: Response,
     session: GuestSession = Depends(get_current_guest_session),
     db: AsyncSession = Depends(get_db),
-) -> Order:
+) -> OrderResponse:
     """Place an order with canonical hash idempotency, allergen check, and audit logging."""
     payload_hash = compute_payload_hash(payload.items)
 
@@ -107,7 +122,7 @@ async def create_order(
     if existing_order is not None:
         if existing_order.payload_hash == payload_hash:
             response.status_code = status.HTTP_200_OK
-            return existing_order
+            return await order_response(db, existing_order)
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Idempotency key mismatch with different payload",
@@ -117,7 +132,7 @@ async def create_order(
     item_ids = [item_req.menu_item_id for item_req in payload.items]
     stmt_items = (
         select(MenuItem)
-        .options(selectinload(MenuItem.translations))
+        .options(selectinload(MenuItem.translations), selectinload(MenuItem.options))
         .where(
             MenuItem.id.in_(item_ids),
             MenuItem.restaurant_id == session.restaurant_id,
@@ -152,6 +167,23 @@ async def create_order(
     stmt_rest = select(Restaurant).where(Restaurant.id == session.restaurant_id)
     res_rest = await db.execute(stmt_rest)
     restaurant = res_rest.scalar_one()
+
+    # 4b. Resolve each line's option (422 before any allergen check)
+    line_options: list[MenuItemOption | None] = []
+    for req in payload.items:
+        item = found_items[req.menu_item_id]
+        opts = {o.id: o for o in item.options}
+        if opts and req.option_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=f"Choose a size for {item.id}",
+            )
+        if req.option_id is not None and req.option_id not in opts:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=f"Unknown option for {item.id}",
+            )
+        line_options.append(opts.get(req.option_id))
 
     # 5. Check allergen conflict against session's allergens_to_avoid
     conflict_items: list[dict] = []
@@ -191,19 +223,36 @@ async def create_order(
             guest_language=session.language,
             default_language=restaurant.default_language,
             guest_allergens_to_avoid=session.allergens_to_avoid,
+            option=opt,
         )
-        for req in payload.items
+        for req, opt in zip(payload.items, line_options, strict=True)
     ]
     total = sum((line_total(oi) for oi in order_items), Decimal("0.00"))
 
     has_conflict = bool(conflict_items)
     ack_recorded = has_conflict and bool(payload.acknowledge_allergen_risk)
 
+    at_counter = session.table_id is not None and (
+        await db.scalar(select(DiningTable.kind).where(DiningTable.id == session.table_id))
+        == "counter"
+    )
+    if at_counter:
+        # Every counter order is its own bill and pickup number, held until paid.
+        bill, bill_created = await open_counter_bill(db, restaurant), True
+    elif session.table_id:
+        bill, bill_created = await open_bill_for_table(db, session.restaurant_id, session.table_id)
+    else:
+        bill, bill_created = None, False
+    # After the bill lock: a settle racing this order is committed by now.
+    if bill is not None and not await session_is_current(db, session):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=VISIT_ENDED)
+
     order = Order(
         guest_session_id=session.id,
         restaurant_id=session.restaurant_id,
         table_id=session.table_id,
-        status="placed",
+        bill_id=bill.id if bill else None,
+        status="awaiting_payment" if at_counter else "placed",
         total=total,
         idempotency_key=payload.idempotency_key,
         payload_hash=payload_hash,
@@ -248,7 +297,7 @@ async def create_order(
         conc_order = res_conc.scalar_one_or_none()
         if conc_order is not None and conc_order.payload_hash == payload_hash:
             response.status_code = status.HTTP_200_OK
-            return conc_order
+            return await order_response(db, conc_order)
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Order conflict",
@@ -260,13 +309,20 @@ async def create_order(
     )
     final_order = res_final.scalar_one()
 
-    # 8. Publish Redis change signal AFTER commit (publish failures never fail the order)
-    order_event = json.dumps({"event": "order_placed", "order_id": str(final_order.id)})
-    await publish_event(f"kitchen:{final_order.restaurant_id}", order_event)
-    await publish_event(f"orders:{final_order.id}", order_event)
+    # 8. Publish Redis change signal AFTER commit (publish failures never fail the order).
+    # A counter order reaches the kitchen only when its bill is settled.
+    if not at_counter:
+        order_event = json.dumps({"event": "order_placed", "order_id": str(final_order.id)})
+        await publish_event(f"kitchen:{final_order.restaurant_id}", order_event)
+        await publish_event(f"orders:{final_order.id}", order_event)
+    if bill_created:
+        await publish_event(
+            f"kitchen:{final_order.restaurant_id}",
+            json.dumps({"event": "bill_opened", "bill_id": str(final_order.bill_id)}),
+        )
 
     response.status_code = status.HTTP_201_CREATED
-    return final_order
+    return await order_response(db, final_order)
 
 
 @router.get(
@@ -279,7 +335,7 @@ async def get_order(
     id: uuid.UUID,
     session: GuestSession = Depends(get_current_guest_session),
     db: AsyncSession = Depends(get_db),
-) -> Order:
+) -> OrderResponse:
     """Retrieve an order. Returns 404 unless order belongs to the session cookie's session."""
     stmt = (
         select(Order)
@@ -294,7 +350,7 @@ async def get_order(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Order not found",
         )
-    return order
+    return await order_response(db, order)
 
 
 @router.get(
@@ -343,7 +399,7 @@ async def stream_order(
         event_generator(),
         media_type="text/event-stream",
         headers={
-            "Cache-Control": "no-cache",
+            "Cache-Control": "no-cache, no-transform",
             "Connection": "keep-alive",
             "X-Accel-Buffering": "no",
         },

@@ -1,12 +1,15 @@
 "use client";
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useSse } from "../../../hooks/use-sse";
+import { useVenue } from "../../../lib/venue";
 
 interface KitchenOrderItem {
   id: string;
   menu_item_id: string;
   kitchen_name: string;
+  option_label?: string | null;
   quantity: number;
   notes?: string | null;
   allergens: string[];
@@ -27,20 +30,18 @@ interface KitchenOrder {
   placed_at: string;
   bumped_at?: string | null;
   items: KitchenOrderItem[];
+  pickup_label?: string | null;
+  pay_forward?: boolean;
 }
 
 interface OrdersResponse {
   orders: KitchenOrder[];
 }
 
-const DEFAULT_SLUG = process.env.NEXT_PUBLIC_RESTAURANT_SLUG || "trattoria-da-mario";
-
 export default function KitchenDisplayPage() {
-  const [slug] = useState(DEFAULT_SLUG);
-  const [pin, setPin] = useState("");
-  const [authChecking, setAuthChecking] = useState(true);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [loginError, setLoginError] = useState<string | null>(null);
+  const router = useRouter();
+  const { venue, loading, error: venueError, retry } = useVenue();
+  const slug = venue?.slug;
   const [actionError, setActionError] = useState<string | null>(null);
 
   const [soundEnabled, setSoundEnabled] = useState(false);
@@ -61,25 +62,6 @@ export default function KitchenDisplayPage() {
     return () => clearInterval(timer);
   }, []);
 
-  // Check initial authentication
-  useEffect(() => {
-    async function checkAuth() {
-      try {
-        const res = await fetch("/api/auth/me");
-        if (res.ok) {
-          setIsAuthenticated(true);
-        } else {
-          setIsAuthenticated(false);
-        }
-      } catch {
-        setIsAuthenticated(false);
-      } finally {
-        setAuthChecking(false);
-      }
-    }
-    checkAuth();
-  }, []);
-
   // Screen Wake Lock API: request on load and on visibilitychange
   useEffect(() => {
     async function requestWakeLock() {
@@ -92,7 +74,7 @@ export default function KitchenDisplayPage() {
       }
     }
 
-    if (isAuthenticated) {
+    if (slug) {
       void requestWakeLock();
       const onVisibilityChange = () => {
         if (document.visibilityState === "visible") {
@@ -105,14 +87,15 @@ export default function KitchenDisplayPage() {
         wakeLockRef.current?.release?.();
       };
     }
-  }, [isAuthenticated]);
+  }, [slug]);
 
   // Fetch kitchen orders with server time offset tracking
   const fetchOrders = useCallback(async (): Promise<OrdersResponse> => {
+    if (!slug) throw new Error("No venue selected");
     const res = await fetch(`/api/restaurants/${slug}/kitchen/orders`);
-    if (res.status === 401 || res.status === 403) {
-      setIsAuthenticated(false);
-      throw new Error("Staff PIN required");
+    if (res.status === 401) {
+      router.push("/login");
+      throw new Error("Sign in required");
     }
     if (!res.ok) {
       throw new Error(`Failed to load kitchen stream (${res.status})`);
@@ -127,7 +110,7 @@ export default function KitchenDisplayPage() {
 
     const data: OrdersResponse = await res.json();
     return data;
-  }, [slug]);
+  }, [slug, router]);
 
   // SSE hook with polling fallback
   const {
@@ -135,10 +118,10 @@ export default function KitchenDisplayPage() {
     isReconnecting,
     refetch,
   } = useSse<OrdersResponse>({
-    url: isAuthenticated ? `/api/restaurants/${slug}/kitchen/stream` : null,
+    url: slug ? `/api/restaurants/${slug}/kitchen/stream` : null,
     fetchState: fetchOrders,
     pollingIntervalMs: 4000,
-    enabled: isAuthenticated,
+    enabled: Boolean(slug),
   });
 
   // Check for new orders to trigger audible alert
@@ -161,32 +144,16 @@ export default function KitchenDisplayPage() {
     }
   }, [data, soundEnabled]);
 
-  // Staff PIN submission handler
-  const handlePinSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoginError(null);
-    try {
-      const res = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ role: "staff", secret: pin }),
-      });
-      if (!res.ok) {
-        throw new Error("Invalid Staff PIN");
-      }
-      setIsAuthenticated(true);
-      setPin("");
-    } catch (err: unknown) {
-      setLoginError(err instanceof Error ? err.message : String(err));
-    }
-  };
-
   const handleBump = async (orderId: string) => {
     setActionError(null);
     try {
       const res = await fetch(`/api/restaurants/${slug}/kitchen/orders/${orderId}/bump`, {
         method: "POST",
       });
+      if (res.status === 401) {
+        router.push("/login");
+        return;
+      }
       if (!res.ok) {
         throw new Error(`Failed to bump order (${res.status})`);
       }
@@ -202,6 +169,10 @@ export default function KitchenDisplayPage() {
       const res = await fetch(`/api/restaurants/${slug}/kitchen/orders/${orderId}/recall`, {
         method: "POST",
       });
+      if (res.status === 401) {
+        router.push("/login");
+        return;
+      }
       if (res.status === 409) {
         throw new Error("Recall window expired (must be within 60 seconds of bump).");
       }
@@ -214,7 +185,7 @@ export default function KitchenDisplayPage() {
     }
   };
 
-  if (authChecking) {
+  if (loading) {
     return (
       <div className="min-h-screen bg-espresso text-cream flex items-center justify-center">
         <p className="text-xl font-bold">Initializing Kitchen System...</p>
@@ -222,41 +193,26 @@ export default function KitchenDisplayPage() {
     );
   }
 
-  // Staff PIN Login Screen if unauthenticated
-  if (!isAuthenticated) {
+  if (venueError === "failed") {
+    return (
+      <div className="min-h-screen bg-espresso text-cream flex flex-col items-center justify-center gap-4 p-4">
+        <p role="alert" className="text-lg font-bold">
+          Couldn&apos;t load your restaurants. Try again.
+        </p>
+        <button
+          onClick={retry}
+          className="min-h-[48px] rounded-xl bg-kds-accent px-6 py-3 font-black uppercase text-espresso"
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
+
+  if (venueError === "no_venues") {
     return (
       <div className="min-h-screen bg-espresso text-cream flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-kds-card border-2 border-cream/10 rounded-3xl p-8 space-y-6">
-          <div className="text-center space-y-2">
-            <h1 className="text-3xl font-black tracking-tight text-cream">KITCHEN DISPLAY</h1>
-            <p className="text-sm text-kds-muted">Enter Staff PIN to access kitchen orders</p>
-          </div>
-
-          {loginError && (
-            <div className="p-3 bg-kds-late/20 border border-kds-late text-cream text-sm font-bold text-center rounded-xl">
-              {loginError}
-            </div>
-          )}
-
-          <form onSubmit={handlePinSubmit} className="space-y-6">
-            <input
-              type="password"
-              inputMode="numeric"
-              maxLength={8}
-              autoFocus
-              placeholder="Enter PIN..."
-              value={pin}
-              onChange={(e) => setPin(e.target.value)}
-              className="w-full text-center text-4xl tracking-widest py-4 bg-kds-card border-2 border-cream/10 rounded-2xl text-cream font-mono focus:outline-none focus:border-kds-fresh"
-            />
-            <button
-              type="submit"
-              className="w-full py-4 rounded-2xl bg-kds-fresh hover:opacity-90 text-espresso font-black text-xl shadow-lg active:scale-95 transition-all"
-            >
-              ACCESS KITCHEN
-            </button>
-          </form>
-        </div>
+        <p className="text-lg font-bold">This account is not linked to a restaurant yet.</p>
       </div>
     );
   }
@@ -341,7 +297,7 @@ export default function KitchenDisplayPage() {
               onClick={() => handleRecall(mostRecentBumped.id)}
               className="px-5 py-2.5 rounded-xl bg-kds-warn hover:opacity-90 text-espresso font-black text-sm uppercase tracking-wide shadow-lg animate-pulse"
             >
-              ↺ RECALL TABLE {mostRecentBumped.table_label || ""} ({recallRemainingSeconds}s)
+              ↺ RECALL {mostRecentBumped.pay_forward ? "PAY-IT-FORWARD" : mostRecentBumped.pickup_label ? `PICKUP ${mostRecentBumped.pickup_label}` : `TABLE ${mostRecentBumped.table_label || ""}`} ({recallRemainingSeconds}s)
             </button>
           )}
         </div>
@@ -382,9 +338,15 @@ export default function KitchenDisplayPage() {
                 <div className="space-y-2 border-b border-cream/10 pb-3">
                   <div className="flex items-start justify-between">
                     <div>
-                      <h2 className="text-2xl font-black tracking-tight text-cream">
-                        {order.table_label ? `TABLE ${order.table_label}` : "TAKEOUT"}
-                      </h2>
+                      {order.pay_forward ? (
+                        <h2 className="text-2xl font-black tracking-tight text-cream">PAY-IT-FORWARD · Chai</h2>
+                      ) : order.pickup_label ? (
+                        <h2 className="text-4xl font-black tracking-tight text-cream">PICKUP {order.pickup_label}</h2>
+                      ) : (
+                        <h2 className="text-2xl font-black tracking-tight text-cream">
+                          {order.table_label ? `TABLE ${order.table_label}` : "TAKEOUT"}
+                        </h2>
+                      )}
                       <p className="text-xs font-mono text-kds-muted">
                         {new Date(order.placed_at).toLocaleTimeString()}
                       </p>
@@ -417,7 +379,10 @@ export default function KitchenDisplayPage() {
                     >
                       <div className="flex items-baseline justify-between text-base font-black">
                         <span className="text-xl text-kds-accent font-mono">{item.quantity}x</span>
-                        <span className="flex-1 text-right text-lg text-cream">{item.kitchen_name}</span>
+                        <span className="flex-1 text-right text-lg text-cream">
+                          {item.kitchen_name}
+                          {item.option_label && <span className="text-kds-accent"> — {item.option_label}</span>}
+                        </span>
                       </div>
 
                       {/* Prominent Solid Red Allergy Banner on Affected Items */}

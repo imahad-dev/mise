@@ -35,7 +35,7 @@ fi
 
 # Step 3: ensure services are up
 UP_LOG="$LOG_DIR/up.log"
-if docker compose up -d --wait guest-web owner-web api postgres redis > "$UP_LOG" 2>&1; then
+if DEMO_MODE=true docker compose up -d --wait guest-web owner-web api postgres redis > "$UP_LOG" 2>&1; then
     echo "PASS: docker compose up running stack"
 else
     fail_step "docker compose up running stack" "$UP_LOG"
@@ -103,9 +103,9 @@ fi
 # Step 7: Owner login through owner-web → GET / must NOT redirect back to /login
 API_URL="http://127.0.0.1:8000"
 OWNER_JAR=$(mktemp)
-curl -sf --max-time 5 -X POST "$API_URL/api/auth/login" \
+curl -sf --max-time 5 -X POST "$API_URL/api/auth/demo-login" \
   -H "Content-Type: application/json" \
-  -d '{"api_key":"change_me_in_production"}' \
+  -d '{"role":"owner"}' \
   -c "$OWNER_JAR" > /dev/null || { echo "FAIL: owner API login" >&2; exit 1; }
 
 OWNER_ROOT_STATUS=$(curl -s --max-time 10 -o /dev/null -w "%{http_code}" \
@@ -120,9 +120,9 @@ fi
 
 # Step 8: Staff login → GET /kitchen returns 200
 STAFF_JAR=$(mktemp)
-curl -sf --max-time 5 -X POST "$API_URL/api/auth/staff-login" \
+curl -sf --max-time 5 -X POST "$API_URL/api/auth/demo-login" \
   -H "Content-Type: application/json" \
-  -d '{"pin":"0000"}' \
+  -d '{"role":"staff"}' \
   -c "$STAFF_JAR" > /dev/null || { echo "FAIL: staff API login" >&2; exit 1; }
 
 KITCHEN_STATUS=$(curl -s --max-time 10 -o /dev/null -w "%{http_code}" \

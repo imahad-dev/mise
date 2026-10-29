@@ -14,9 +14,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from src.auth import Role, require_staff_or_owner
+from src.access import RestaurantAccess, member_access
 from src.database import get_db
 from src.models.audit import AuditLog
+from src.models.bill import Bill
 from src.models.dining_table import DiningTable
 from src.models.order import Order
 from src.models.restaurant import Restaurant
@@ -26,27 +27,30 @@ from src.schemas.kitchen import (
     KitchenOrderResponse,
     KitchenOrdersListResponse,
 )
+from src.services.counter import pickup_label
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/restaurants/{slug}/kitchen", tags=["kitchen"])
 
 
-async def _get_restaurant(slug: str, db: AsyncSession) -> Restaurant:
-    stmt = select(Restaurant).where(Restaurant.slug == slug)
-    res = await db.execute(stmt)
-    restaurant = res.scalar_one_or_none()
-    if restaurant is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Restaurant '{slug}' not found",
-        )
-    return restaurant
+async def _pickup_labels(
+    db: AsyncSession, restaurant: Restaurant, orders: list[Order]
+) -> dict[uuid.UUID, str]:
+    """Pickup label per counter bill id among the orders' bills."""
+    bill_ids = {o.bill_id for o in orders if o.bill_id is not None}
+    if not bill_ids:
+        return {}
+    rows = await db.execute(
+        select(Bill.id, Bill.pickup_no).where(Bill.id.in_(bill_ids), Bill.pickup_no.is_not(None))
+    )
+    return {bid: pickup_label(restaurant.pickup_prefix, no) for bid, no in rows.all()}
 
 
 def _build_kitchen_order_response(
     order: Order,
     table_labels: dict[uuid.UUID, str],
+    pickups: dict[uuid.UUID, str] | None = None,
 ) -> KitchenOrderResponse:
     items_resp: list[KitchenOrderItemResponse] = []
     for item in order.items:
@@ -57,6 +61,7 @@ def _build_kitchen_order_response(
                 id=item.id,
                 menu_item_id=item.menu_item_id,
                 kitchen_name=item.kitchen_name,
+                option_label=item.option_label,
                 quantity=item.quantity,
                 notes=item.notes,
                 allergens=item.allergens,
@@ -79,6 +84,8 @@ def _build_kitchen_order_response(
         placed_at=order.placed_at,
         bumped_at=order.bumped_at,
         items=items_resp,
+        pickup_label=(pickups or {}).get(order.bill_id) if order.bill_id else None,
+        pay_forward=order.source == "pay_forward",
     )
 
 
@@ -93,12 +100,11 @@ def _build_kitchen_order_response(
     },
 )
 async def get_kitchen_orders(
-    slug: str,
-    role: Role = Depends(require_staff_or_owner),
+    access: RestaurantAccess = Depends(member_access),
     db: AsyncSession = Depends(get_db),
 ) -> KitchenOrdersListResponse:
     """Return placed orders plus the most recent order bumped within the last 60 seconds."""
-    restaurant = await _get_restaurant(slug, db)
+    restaurant = access.restaurant
 
     # 1. Fetch tables for label resolution
     stmt_tables = select(DiningTable).where(DiningTable.restaurant_id == restaurant.id)
@@ -135,7 +141,8 @@ async def get_kitchen_orders(
     recent_bumped = list(res_bumped.scalars().all())
 
     combined_orders = placed_orders + recent_bumped
-    result = [_build_kitchen_order_response(o, table_labels) for o in combined_orders]
+    pickups = await _pickup_labels(db, restaurant, combined_orders)
+    result = [_build_kitchen_order_response(o, table_labels, pickups) for o in combined_orders]
     return KitchenOrdersListResponse(orders=result)
 
 
@@ -148,15 +155,14 @@ async def get_kitchen_orders(
     },
 )
 async def stream_kitchen_orders(
-    slug: str,
-    role: Role = Depends(require_staff_or_owner),
+    access: RestaurantAccess = Depends(member_access),
     db: AsyncSession = Depends(get_db),
 ) -> StreamingResponse:
     """Stream kitchen change notifications via Server-Sent Events.
 
     Generators hold no database session.
     """
-    restaurant = await _get_restaurant(slug, db)
+    restaurant = access.restaurant
     await db.close()
 
     channel_name = f"kitchen:{restaurant.id}"
@@ -185,7 +191,7 @@ async def stream_kitchen_orders(
         event_generator(),
         media_type="text/event-stream",
         headers={
-            "Cache-Control": "no-cache",
+            "Cache-Control": "no-cache, no-transform",
             "Connection": "keep-alive",
             "X-Accel-Buffering": "no",
         },
@@ -200,21 +206,24 @@ async def stream_kitchen_orders(
         401: {"description": "Unauthenticated"},
         403: {"description": "Unauthorized"},
         404: {"description": "Order not found"},
+        409: {"description": "Order was cancelled, or awaiting payment"},
     },
 )
 async def bump_order(
-    slug: str,
     id: uuid.UUID,
-    role: Role = Depends(require_staff_or_owner),
+    access: RestaurantAccess = Depends(member_access),
     db: AsyncSession = Depends(get_db),
 ) -> KitchenOrderResponse:
     """Mark an order as bumped. Idempotent: already bumped order returns existing bumped_at."""
-    restaurant = await _get_restaurant(slug, db)
+    restaurant = access.restaurant
 
+    # Locked: a concurrent void commits first or waits, and the status checks below see it.
     stmt = (
         select(Order)
         .options(selectinload(Order.items))
         .where(Order.id == id, Order.restaurant_id == restaurant.id)
+        .with_for_update(of=Order)
+        .execution_options(populate_existing=True)
     )
     res = await db.execute(stmt)
     order = res.scalar_one_or_none()
@@ -230,9 +239,14 @@ async def bump_order(
     res_tables = await db.execute(stmt_tables)
     table_labels = {t.id: t.label for t in res_tables.scalars().all()}
 
+    pickups = await _pickup_labels(db, restaurant, [order])
     if order.status == "bumped":
         # Already bumped: idempotent return
-        return _build_kitchen_order_response(order, table_labels)
+        return _build_kitchen_order_response(order, table_labels, pickups)
+    if order.status == "awaiting_payment":
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Awaiting payment")
+    if order.status != "placed":
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Order was cancelled")
 
     now = datetime.now(UTC)
     order.status = "bumped"
@@ -241,7 +255,7 @@ async def bump_order(
     audit = AuditLog(
         restaurant_id=restaurant.id,
         event_type="order_bumped",
-        actor=role,
+        actor=f"user:{access.user.id}",
         payload={"order_id": str(order.id), "bumped_at": str(now)},
     )
     db.add(audit)
@@ -256,7 +270,7 @@ async def bump_order(
     await publish_event(f"kitchen:{restaurant.id}", event_payload)
     await publish_event(f"orders:{order.id}", event_payload)
 
-    return _build_kitchen_order_response(order, table_labels)
+    return _build_kitchen_order_response(order, table_labels, pickups)
 
 
 @router.post(
@@ -271,18 +285,20 @@ async def bump_order(
     },
 )
 async def recall_order(
-    slug: str,
     id: uuid.UUID,
-    role: Role = Depends(require_staff_or_owner),
+    access: RestaurantAccess = Depends(member_access),
     db: AsyncSession = Depends(get_db),
 ) -> KitchenOrderResponse:
     """Recall an order if within 60s of bump. Sets status back to placed."""
-    restaurant = await _get_restaurant(slug, db)
+    restaurant = access.restaurant
 
+    # Locked: a concurrent void commits first or waits, and the status checks below see it.
     stmt = (
         select(Order)
         .options(selectinload(Order.items))
         .where(Order.id == id, Order.restaurant_id == restaurant.id)
+        .with_for_update(of=Order)
+        .execution_options(populate_existing=True)
     )
     res = await db.execute(stmt)
     order = res.scalar_one_or_none()
@@ -298,6 +314,9 @@ async def recall_order(
             status_code=status.HTTP_409_CONFLICT,
             detail="Order is not in bumped status",
         )
+    if order.collected_at is not None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Order was collected")
+    pickups = await _pickup_labels(db, restaurant, [order])
 
     now = datetime.now(UTC)
     elapsed_seconds = (now - order.bumped_at).total_seconds()
@@ -314,7 +333,7 @@ async def recall_order(
     audit = AuditLog(
         restaurant_id=restaurant.id,
         event_type="order_recalled",
-        actor=role,
+        actor=f"user:{access.user.id}",
         payload={"order_id": str(order.id), "previous_bumped_at": str(previous_bumped_at)},
     )
     db.add(audit)
@@ -333,4 +352,4 @@ async def recall_order(
     await publish_event(f"kitchen:{restaurant.id}", event_payload)
     await publish_event(f"orders:{order.id}", event_payload)
 
-    return _build_kitchen_order_response(order, table_labels)
+    return _build_kitchen_order_response(order, table_labels, pickups)

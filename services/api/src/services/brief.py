@@ -5,7 +5,7 @@ Action formulas (all weekly, documented in docs/analytics.md):
 - reprice_plowhorse: what-if price_change of +REPRICE_PCT% at the default price elasticity
 - review_dog: weekly_units x (median_unit_margin - unit_margin), the gain if its volume moved
   to a median-margin dish
-- prep_target: ceil of the summed upper forecast bound for the next service day (no EUR impact)
+- prep_target: ceil of the summed upper forecast bound for the next service day (no money impact)
 """
 
 from __future__ import annotations
@@ -20,8 +20,8 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import select
 
 from src.models.forecast import ForecastRun
-from src.models.menu import MenuItem, MenuTranslation
-from src.services import analytics
+from src.models.menu import MenuItem, MenuItemOption, MenuTranslation
+from src.services import analytics, pay_forward
 from src.services.forecast import HORIZON_DAYS, build_input, forecast
 from src.services.narrative import narrate
 from src.services.whatif import DEFAULT_PRICE_ELASTICITY, ItemBaseline, run_whatif
@@ -57,22 +57,71 @@ def local_today(restaurant: Restaurant) -> date:
     return datetime.now(ZoneInfo(restaurant.timezone)).date()
 
 
+def row_names(totals: dict[str, dict], names: dict[str, str]) -> dict[str, str]:
+    """Display names by menu item id (forecast, prep) plus one per row key.
+
+    An option row reads "{dish} — {option label}".
+    """
+    out = dict(names)
+    for key, t in totals.items():
+        dish = names.get(t["item_id"], "Unknown item")
+        out[key] = f"{dish} — {t['option_label']}" if t["option_label"] else dish
+    return out
+
+
 async def current_prices(
     db: AsyncSession, restaurant: Restaurant
 ) -> dict[str, tuple[float, float]]:
-    """Current menu (price, unit_cost) per item id."""
+    """Current menu (price, unit_cost) per row key: the item id, and item:option per option."""
     rows = await db.execute(
         select(MenuItem.id, MenuItem.price, MenuItem.unit_cost).where(
             MenuItem.restaurant_id == restaurant.id
         )
     )
-    return {str(i): (float(p), float(c)) for i, p, c in rows.all()}
+    prices = {str(i): (float(p), float(c)) for i, p, c in rows.all()}
+    options = await db.execute(
+        select(
+            MenuItemOption.menu_item_id,
+            MenuItemOption.id,
+            MenuItemOption.price,
+            MenuItemOption.unit_cost,
+        )
+        .join(MenuItem)
+        .where(MenuItem.restaurant_id == restaurant.id)
+    )
+    for item_id, option_id, p, c in options.all():
+        prices[analytics.row_key(str(item_id), str(option_id))] = (float(p), float(c))
+    return prices
+
+
+def item_baselines(
+    totals: dict[str, dict], names: dict[str, str], prices: dict[str, tuple[float, float]]
+) -> list[ItemBaseline]:
+    """What-if baselines per menu item: option rows summed, prices weighted by their units.
+
+    Exact for the scenarios: a uniform price change or demand multiplier on the summed row
+    gives the same totals as applying it to every option row.
+    """
+    acc: dict[str, list[float]] = {}  # item_id -> [weekly_units, revenue/wk, cost/wk]
+    for key, t in totals.items():
+        if key not in prices:  # deleted item or option: skip
+            continue
+        price, cost = prices[key]
+        a = acc.setdefault(t["item_id"], [0.0, 0.0, 0.0])
+        a[0] += t["weekly_units"]
+        a[1] += t["weekly_units"] * price
+        a[2] += t["weekly_units"] * cost
+    return [
+        ItemBaseline(i, names.get(i, ""), u, rev / u if u else 0.0, cost / u if u else 0.0)
+        for i, (u, rev, cost) in acc.items()
+    ]
 
 
 def baseline_for(item_id: str, name: str, totals: dict, price: float, cost: float) -> ItemBaseline:
     """What-if baseline: recent weekly units at the current menu price and cost.
 
-    Shared by the brief's reprice action and the what-if endpoint so both agree.
+    The brief's reprice action uses it per row; the what-if endpoint's item_baselines gives
+    the same baseline for a dish without options, so both agree there.
     """
     return ItemBaseline(item_id, name, totals["weekly_units"], price, cost)
 
@@ -105,6 +154,7 @@ async def get_or_run_forecast(
     daily = await analytics.daily_item_sales(db, w)
     if daily:
         first = min(r["date"] for r in daily)
+        # Forecast is per menu item: build_input sums the option rows of a dish.
         rows = [(r["item_id"], r["date"], r["daypart"], r["units"]) for r in daily]
         fi = build_input(
             rows, await analytics.promotions(db, restaurant.id), first, w.end - timedelta(days=1)
@@ -151,18 +201,19 @@ def build_actions(
         money.append(
             {
                 "type": "promote_puzzle",
-                "item_id": i,
+                "item_id": t["item_id"],
+                "option_id": t["option_id"],
                 "item": name(i),
                 "title": f"Promote {name(i)}",
                 "evidence": {
                     "weekly_units": t["weekly_units"],
-                    "unit_margin_eur": t["unit_margin"],
+                    "unit_margin": t["unit_margin"],
                     "median_units": thresholds["median_units"],
                 },
-                "estimated_impact_eur_per_week": round(
+                "estimated_impact_per_week": round(
                     PROMOTE_UPLIFT * t["weekly_units"] * t["unit_margin"], 2
                 ),
-                "formula": f"{PROMOTE_UPLIFT} x weekly_units x unit_margin_eur",
+                "formula": f"{PROMOTE_UPLIFT} x weekly_units x unit_margin",
             }
         )
 
@@ -175,16 +226,17 @@ def build_actions(
         money.append(
             {
                 "type": "reprice_plowhorse",
-                "item_id": i,
+                "item_id": t["item_id"],
+                "option_id": t["option_id"],
                 "item": name(i),
                 "title": f"Raise the price of {name(i)} by {REPRICE_PCT}%",
                 "evidence": {
                     "weekly_units": t["weekly_units"],
-                    "price_eur": round(price, 2),
-                    "unit_cost_eur": round(cost, 2),
-                    "median_unit_margin_eur": thresholds["median_unit_margin_eur"],
+                    "price": round(price, 2),
+                    "unit_cost": round(cost, 2),
+                    "median_unit_margin": thresholds["median_unit_margin"],
                 },
-                "estimated_impact_eur_per_week": wi["delta"]["margin_eur"],
+                "estimated_impact_per_week": wi["delta"]["margin"],
                 "formula": (
                     f"what-if price_change +{REPRICE_PCT}% at elasticity "
                     f"{DEFAULT_PRICE_ELASTICITY}: "
@@ -196,24 +248,25 @@ def build_actions(
     dogs = sorted(by_class["dog"], key=lambda i: totals[i]["contribution"])[:1]
     for i in dogs:
         t = totals[i]
-        gap = thresholds["median_unit_margin_eur"] - t["unit_margin"]
+        gap = thresholds["median_unit_margin"] - t["unit_margin"]
         money.append(
             {
                 "type": "review_dog",
-                "item_id": i,
+                "item_id": t["item_id"],
+                "option_id": t["option_id"],
                 "item": name(i),
                 "title": f"Review {name(i)} (rework, reprice or replace)",
                 "evidence": {
                     "weekly_units": t["weekly_units"],
-                    "unit_margin_eur": t["unit_margin"],
-                    "median_unit_margin_eur": thresholds["median_unit_margin_eur"],
+                    "unit_margin": t["unit_margin"],
+                    "median_unit_margin": thresholds["median_unit_margin"],
                 },
-                "estimated_impact_eur_per_week": round(t["weekly_units"] * gap, 2),
-                "formula": "weekly_units x (median_unit_margin_eur - unit_margin_eur)",
+                "estimated_impact_per_week": round(t["weekly_units"] * gap, 2),
+                "formula": "weekly_units x (median_unit_margin - unit_margin)",
             }
         )
 
-    money.sort(key=lambda a: -(a["estimated_impact_eur_per_week"] or 0))
+    money.sort(key=lambda a: -(a["estimated_impact_per_week"] or 0))
     actions = money[:MAX_MONEY_ACTIONS]
 
     if fc.get("points"):
@@ -230,13 +283,14 @@ def build_actions(
                 {
                     "type": "prep_target",
                     "item_id": None,
+                    "option_id": None,
                     "item": ", ".join(name(i) for i, _ in top),
                     "title": f"Prep targets for {first_day}",
                     "evidence": {
                         f"{name(i)} forecast / prep": f"{round(v[0], 1)} / {math.ceil(v[1])}"
                         for i, v in top
                     },
-                    "estimated_impact_eur_per_week": None,
+                    "estimated_impact_per_week": None,
                     "formula": "prep = ceil(sum over dayparts of the upper interval bound)",
                 }
             )
@@ -253,16 +307,23 @@ def template_summary(facts: dict) -> str:
             f"No orders between {w['start']} and {w['end']}. "
             "Generate demo data or take live orders to see analytics."
         )
+    cur = facts["currency"]
     text = (
         f"In the {w['days']} days to {w['end']}: {k['orders']} orders, revenue "
-        f"EUR {k['revenue_eur']}, average order EUR {k['aov_eur']}, contribution margin "
-        f"EUR {k['contribution_margin_eur']} ({k['margin_pct']}%)."
+        f"{cur} {k['revenue']}, average order {cur} {k['aov']}, contribution margin "
+        f"{cur} {k['contribution_margin']} ({k['margin_pct']}%)."
     )
-    money = [a for a in facts["actions"] if a["estimated_impact_eur_per_week"] is not None]
+    money = [a for a in facts["actions"] if a["estimated_impact_per_week"] is not None]
     if money:
         text += (
             f" Top action: {money[0]['title']} "
-            f"(estimated EUR {money[0]['estimated_impact_eur_per_week']} per week)."
+            f"(estimated {cur} {money[0]['estimated_impact_per_week']} per week)."
+        )
+    pm = facts.get("payment_mix")
+    if pm and (pm["bills"]["standard"] or pm["bills"]["digital"]):
+        text += (
+            f" Digital payments were {pm['digital_revenue_pct']}% of billed revenue and saved "
+            f"guests {cur} {pm['digital_tax_saving']} in tax."
         )
     if facts["data_sources"]["simulated"]:
         text += " Figures include simulated demo orders."
@@ -276,11 +337,16 @@ async def compute_brief(
     w = analytics.Window(
         restaurant.id, restaurant.timezone, today - timedelta(days=WINDOW_DAYS), today
     )
+    week = analytics.Window(
+        restaurant.id, restaurant.timezone, today - timedelta(days=6), today + timedelta(days=1)
+    )
     names = await item_names(db, restaurant)
     sources = await analytics.order_counts_by_source(db, w)
     kpis = await analytics.kpis(db, w)
     totals = analytics.item_totals(await analytics.daily_item_sales(db, w), w.days / 7)
+    rnames = row_names(totals, names)
     classes, thresholds = analytics.classify_menu(totals)
+    payments = await analytics.payment_mix(db, w, restaurant)
     pairings = [
         {**p, "a_name": names.get(p["a"], ""), "b_name": names.get(p["b"], "")}
         for p in await analytics.top_pairings(db, w)
@@ -290,11 +356,12 @@ async def compute_brief(
     await db.commit()
 
     actions = build_actions(
-        totals, classes, thresholds, fc, names, await current_prices(db, restaurant)
+        totals, classes, thresholds, fc, rnames, await current_prices(db, restaurant)
     )
     backtest = (fc.get("backtest") or {}).get("methods", {})
     facts = {
         "restaurant": restaurant.name,
+        "currency": restaurant.currency,
         "window": {
             "start": w.start.isoformat(),
             "end": (w.end - timedelta(days=1)).isoformat(),
@@ -303,13 +370,23 @@ async def compute_brief(
         "data_sources": sources,
         "kpis": kpis,
         "actions": [
-            {k: a[k] for k in ("rank", "title", "evidence", "estimated_impact_eur_per_week")}
+            {k: a[k] for k in ("rank", "title", "evidence", "estimated_impact_per_week")}
             for a in actions
         ],
         "top_pairings": [
             {"items": f"{p['a_name']} + {p['b_name']}", "lift": p["lift"]} for p in pairings
         ],
         "peak_hours": peaks,
+        # Decimals as strings: the number guard reads numbers inside strings.
+        "payment_mix": {
+            "bills": payments["bills"],
+            "revenue_share": payments["revenue_share"],
+            "digital_revenue_pct": payments["digital_revenue_pct"],
+            "tax_by_rate": [
+                {"rate": str(r["rate"]), "tax": str(r["tax"])} for r in payments["tax_by_rate"]
+            ],
+            "digital_tax_saving": str(payments["digital_tax_saving"]),
+        },
         "forecast": {
             "method": fc.get("method"),
             "low_confidence": fc.get("low_confidence"),
@@ -322,19 +399,21 @@ async def compute_brief(
 
     menu = [
         {
-            "item_id": i,
-            "name": names.get(i, "Unknown item"),
+            "item_id": t["item_id"],
+            "option_id": t["option_id"],
+            "name": rnames[i],
             "units": t["units"],
             "weekly_units": t["weekly_units"],
-            "revenue_eur": t["revenue"],
-            "unit_margin_eur": t["unit_margin"],
-            "contribution_eur": t["contribution"],
+            "revenue": t["revenue"],
+            "unit_margin": t["unit_margin"],
+            "contribution": t["contribution"],
             "menu_class": classes[i],
         }
         for i, t in sorted(totals.items(), key=lambda kv: -kv[1]["units"])
     ]
     return {
         "date": today.isoformat(),
+        "currency": restaurant.currency,
         "window_start": facts["window"]["start"],
         "window_end": facts["window"]["end"],
         "data_sources": sources,
@@ -343,6 +422,12 @@ async def compute_brief(
         "thresholds": thresholds,
         "pairings": pairings,
         "peak_hours": peaks,
+        "payment_mix": payments,
+        # Not narrated and not revenue: chai bought for others and handed out this week
+        # (the last 7 local days, today included).
+        "pay_forward": await pay_forward.window_totals(
+            db, restaurant.id, week.params()["start"], week.params()["end"]
+        ),
         "forecast": {
             "run_id": run_id,
             "method": fc.get("method"),
@@ -373,20 +458,24 @@ async def compute_whatif(
     names = await item_names(db, restaurant)
     sources = await analytics.order_counts_by_source(db, w)
     totals = analytics.item_totals(await analytics.daily_item_sales(db, w), w.days / 7)
-    prices = await current_prices(db, restaurant)
-    baselines = [
-        baseline_for(i, names.get(i, ""), t, *prices[i]) for i, t in totals.items() if i in prices
-    ]
-    result = run_whatif(scenario, baselines, params)
-    d = result["delta"]
-    template = (
-        f"Estimated weekly change: revenue {d['revenue_eur']:+.2f} EUR, contribution margin "
-        f"{d['margin_eur']:+.2f} EUR, under the assumptions listed."
-    )
+    baselines = item_baselines(totals, names, await current_prices(db, restaurant))
+    result = run_whatif(scenario, baselines, params, restaurant.currency)
     item_id = params.get("item_id")
+    if item_id and any(t["item_id"] == str(item_id) and t["option_id"] for t in totals.values()):
+        result["assumptions"].append(
+            "Price change applies to every portion; current price shown is the "
+            "units-weighted average of portion prices."
+        )
+    d = result["delta"]
+    cur = restaurant.currency
+    template = (
+        f"Estimated weekly change: revenue {cur} {d['revenue']:+.2f}, contribution margin "
+        f"{cur} {d['margin']:+.2f}, under the assumptions listed."
+    )
     # Ids are dropped: their digits would otherwise count as "allowed" numbers.
     llm_facts = {
         **{k: v for k, v in result.items() if k != "params"},
+        "currency": restaurant.currency,
         "item": names.get(str(item_id)) if item_id else None,
         "params": {k: v for k, v in params.items() if k != "item_id"},
     }
@@ -395,6 +484,7 @@ async def compute_whatif(
     )
     return {
         **result,
+        "currency": restaurant.currency,
         "item": names.get(str(item_id)) if item_id else None,
         "window_start": w.start.isoformat(),
         "window_end": (w.end - timedelta(days=1)).isoformat(),

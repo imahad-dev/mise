@@ -8,6 +8,8 @@ import {
   calculateCartTotal,
   hasAllergenRisk,
   saveCart,
+  lineKey,
+  toOrderPayload,
 } from "./cart";
 
 const store = new Map<string, string>();
@@ -155,5 +157,58 @@ describe("Cart and idempotency-key management", () => {
       matchedAllergens: [],
     });
     expect(getCart().acknowledged).toBe(false);
+  });
+
+  describe("portion options", () => {
+    const karahi = {
+      menuItemId: "karahi",
+      name: "Chicken Karahi",
+      price: 2100,
+      allergenStatus: "no_declared_match" as const,
+      matchedAllergens: [],
+    };
+    const half = { id: "opt-half", label: "Half", price: 2100 };
+    const full = { id: "opt-full", label: "1 kg", price: 3900 };
+
+    it("keys a line by dish and option", () => {
+      expect(lineKey({ menuItemId: "karahi", optionId: "opt-half" })).toBe("karahi:opt-half");
+      expect(lineKey({ menuItemId: "naan" })).toBe("naan:");
+    });
+
+    it("keeps two sizes of one dish as two lines", () => {
+      addToCart(karahi, 1, half);
+      const cart = addToCart(karahi, 1, full);
+      expect(cart.items).toHaveLength(2);
+      expect(cart.items.map((i) => i.optionLabel)).toEqual(["Half", "1 kg"]);
+    });
+
+    it("adds the same size twice as quantity 2", () => {
+      addToCart(karahi, 1, full);
+      const cart = addToCart(karahi, 1, full);
+      expect(cart.items).toHaveLength(1);
+      expect(cart.items[0].quantity).toBe(2);
+    });
+
+    it("totals each line at its option price", () => {
+      addToCart(karahi, 1, half);
+      addToCart(karahi, 2, full);
+      expect(calculateCartTotal(getCart())).toBe(2100 + 2 * 3900);
+    });
+
+    it("changes the quantity of one size only", () => {
+      addToCart(karahi, 1, half);
+      addToCart(karahi, 1, full);
+      const cart = updateCartItemQuantity("karahi", 0, undefined, "opt-half");
+      expect(cart.items.map((i) => i.optionId)).toEqual(["opt-full"]);
+    });
+
+    it("sends option_id in the order payload", () => {
+      addToCart(karahi, 1, full);
+      addToCart({ ...karahi, menuItemId: "naan", name: "Naan", price: 60 });
+      expect(toOrderPayload(getCart()).items).toEqual([
+        { menu_item_id: "karahi", option_id: "opt-full", quantity: 1, notes: null },
+        { menu_item_id: "naan", option_id: null, quantity: 1, notes: null },
+      ]);
+    });
   });
 });

@@ -26,7 +26,10 @@ from src.database import Base
 class Order(Base):
     __tablename__ = "orders"
     __table_args__ = (
-        CheckConstraint("status IN ('placed', 'bumped', 'cancelled')", name="chk_orders_status"),
+        CheckConstraint(
+            "status IN ('awaiting_payment', 'placed', 'bumped', 'cancelled')",
+            name="chk_orders_status",
+        ),
         CheckConstraint("total >= 0", name="chk_orders_total"),
         CheckConstraint(
             "allergens_to_avoid <@ ARRAY['gluten','milk','eggs','fish','crustaceans','molluscs',"
@@ -41,7 +44,9 @@ class Order(Base):
             "(status <> 'bumped') OR (bumped_at IS NOT NULL)",
             name="chk_orders_bumped_at_required",
         ),
-        CheckConstraint("source IN ('live', 'simulated')", name="chk_orders_source"),
+        CheckConstraint("source IN ('live', 'simulated', 'pay_forward')", name="chk_orders_source"),
+        CheckConstraint("voided_at IS NULL OR status = 'cancelled'", name="chk_orders_void"),
+        CheckConstraint("collected_at IS NULL OR status = 'bumped'", name="chk_orders_collected"),
         UniqueConstraint(
             "guest_session_id", "idempotency_key", name="orders_guest_idempotency_key"
         ),
@@ -50,6 +55,7 @@ class Order(Base):
         Index("idx_orders_table_id", "table_id"),
         Index("idx_orders_kitchen_query", "restaurant_id", "status", "placed_at"),
         Index("idx_orders_analytics", "restaurant_id", "source", "placed_at"),
+        Index("idx_orders_bill_id", "bill_id"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -70,6 +76,11 @@ class Order(Base):
     table_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("dining_table.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    bill_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("bills.id", ondelete="SET NULL"),
         nullable=True,
     )
     status: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'placed'"))
@@ -98,6 +109,15 @@ class Order(Base):
         server_default=func.now(),
     )
     bumped_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    voided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    voided_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    void_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    collected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    collected_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -160,6 +180,12 @@ class OrderItem(Base):
         ForeignKey("menu_item.id", ondelete="RESTRICT"),
         nullable=False,
     )
+    option_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("menu_item_option.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    option_label: Mapped[str | None] = mapped_column(Text, nullable=True)
     quantity: Mapped[int] = mapped_column(Integer, nullable=False)
     unit_price: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     unit_cost: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
@@ -173,6 +199,10 @@ class OrderItem(Base):
     allergen_verified: Mapped[bool] = mapped_column(Boolean, nullable=False)
     allergen_status: Mapped[str] = mapped_column(Text, nullable=False)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # The item's pay-it-forward flag when ordered: settle credits this, not the current flag.
+    is_pay_forward: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("false")
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

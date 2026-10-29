@@ -3,6 +3,8 @@ export interface CartItem {
   name: string;
   price: number;
   quantity: number;
+  optionId?: string;
+  optionLabel?: string;
   notes?: string;
   allergenStatus: "contains" | "unverified" | "no_declared_match";
   matchedAllergens: string[];
@@ -74,20 +76,35 @@ export function clearCart(): void {
   }
 }
 
+export interface CartOption {
+  id: string;
+  label: string;
+  price: number;
+}
+
+/** A cart line is one dish in one size: Half and Full of the same dish are separate lines. */
+export function lineKey(item: { menuItemId: string; optionId?: string }): string {
+  return item.menuItemId + ":" + (item.optionId ?? "");
+}
+
+function sameLine(a: CartItem, menuItemId: string, optionId?: string, notes?: string): boolean {
+  return lineKey(a) === lineKey({ menuItemId, optionId }) && (a.notes || "") === (notes || "");
+}
+
 export function addToCart(
-  item: Omit<CartItem, "quantity">,
+  item: Omit<CartItem, "quantity" | "optionId" | "optionLabel">,
   quantity = 1,
+  option?: CartOption,
 ): CartState {
   const cart = getCart();
-  const existingIndex = cart.items.findIndex(
-    (i) => i.menuItemId === item.menuItemId && (i.notes || "") === (item.notes || "")
-  );
+  const existing = cart.items.find((i) => sameLine(i, item.menuItemId, option?.id, item.notes));
 
-  if (existingIndex >= 0) {
-    cart.items[existingIndex].quantity += quantity;
+  if (existing) {
+    existing.quantity += quantity;
   } else {
     cart.items.push({
       ...item,
+      ...(option && { optionId: option.id, optionLabel: option.label, price: option.price }),
       quantity,
     });
   }
@@ -104,16 +121,13 @@ export function updateCartItemQuantity(
   menuItemId: string,
   quantity: number,
   notes?: string,
+  optionId?: string,
 ): CartState {
   const cart = getCart();
   if (quantity <= 0) {
-    cart.items = cart.items.filter(
-      (i) => !(i.menuItemId === menuItemId && (i.notes || "") === (notes || ""))
-    );
+    cart.items = cart.items.filter((i) => !sameLine(i, menuItemId, optionId, notes));
   } else {
-    const target = cart.items.find(
-      (i) => i.menuItemId === menuItemId && (i.notes || "") === (notes || "")
-    );
+    const target = cart.items.find((i) => sameLine(i, menuItemId, optionId, notes));
     if (target) {
       target.quantity = quantity;
     }
@@ -138,4 +152,18 @@ export function hasAllergenRisk(cart: CartState): boolean {
 
 export function calculateCartTotal(cart: CartState): number {
   return cart.items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+}
+
+/** Body for POST /api/orders. */
+export function toOrderPayload(cart: CartState) {
+  return {
+    idempotency_key: cart.idempotencyKey,
+    items: cart.items.map((i) => ({
+      menu_item_id: i.menuItemId,
+      option_id: i.optionId ?? null,
+      quantity: i.quantity,
+      notes: i.notes || null,
+    })),
+    acknowledge_allergen_risk: cart.acknowledged,
+  };
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import { VenueProvider } from "../../lib/venue";
 
 export default function KitchenLayout({
   children,
@@ -31,7 +32,7 @@ export default function KitchenLayout({
           ⚠️ Demo environment: synthetic data
         </div>
       )}
-      {children}
+      <VenueProvider>{children}</VenueProvider>
     </div>
   );
 }

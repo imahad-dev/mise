@@ -59,6 +59,13 @@ class MenuItem(Base):
             "restaurant_id",
             postgresql_where=text("deleted_at IS NULL"),
         ),
+        # At most one live pay-it-forward item per venue: give hands out exactly that one.
+        Index(
+            "uq_menu_item_pay_forward",
+            "restaurant_id",
+            unique=True,
+            postgresql_where=text("is_pay_forward AND deleted_at IS NULL"),
+        ),
         Index(
             "idx_menu_item_listing",
             "restaurant_id",
@@ -106,6 +113,10 @@ class MenuItem(Base):
     )
     available: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"))
     featured: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
+    # Bought for someone else: settling writes a pay_forward 'bought' row per line.
+    is_pay_forward: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("false")
+    )
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
     image_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -131,6 +142,51 @@ class MenuItem(Base):
         cascade="all, delete-orphan",
         lazy="raise",
     )
+    options: Mapped[list["MenuItemOption"]] = relationship(
+        "MenuItemOption",
+        back_populates="menu_item",
+        cascade="all, delete-orphan",
+        order_by="MenuItemOption.sort_order",
+        lazy="raise",
+    )
+
+
+class MenuItemOption(Base):
+    __tablename__ = "menu_item_option"
+    __table_args__ = (
+        CheckConstraint("price >= 0", name="chk_menu_item_options_price"),
+        CheckConstraint("unit_cost >= 0", name="chk_menu_item_options_cost"),
+        UniqueConstraint("menu_item_id", "label", name="uq_menu_item_options_label"),
+        Index("idx_menu_item_options_item", "menu_item_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        server_default=text("gen_random_uuid()"),
+    )
+    menu_item_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("menu_item.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    label: Mapped[str] = mapped_column(Text, nullable=False)
+    price: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    unit_cost: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    menu_item: Mapped["MenuItem"] = relationship("MenuItem", back_populates="options", lazy="raise")
 
 
 class MenuTranslation(Base):

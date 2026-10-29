@@ -30,7 +30,7 @@ def _r(x: float) -> float:
     return round(x, 2)
 
 
-def run_whatif(scenario: str, items: list[ItemBaseline], params: dict) -> dict:
+def run_whatif(scenario: str, items: list[ItemBaseline], params: dict, currency: str = "") -> dict:
     """Return weekly baseline vs scenario revenue and contribution margin, plus assumptions.
 
     Scenarios:
@@ -62,7 +62,8 @@ def run_whatif(scenario: str, items: list[ItemBaseline], params: dict) -> dict:
         new_price[item.item_id] = item.price * (1 + pct / 100)
         new_units[item.item_id] = item.weekly_units * max(0.0, 1 + elasticity * pct / 100)
         assumptions += [
-            f"Price of {item.name} changes by {_r(pct)}% to {_r(new_price[item.item_id])} EUR.",
+            f"Price of {item.name} changes by {_r(pct)}% to "
+            f"{currency} {_r(new_price[item.item_id])}.",
             f"Units respond with elasticity {elasticity}: units x (1 + {elasticity} x {_r(pct)}%).",
             "No effect on other items (no cannibalization or halo modeled).",
         ]
@@ -82,8 +83,8 @@ def run_whatif(scenario: str, items: list[ItemBaseline], params: dict) -> dict:
     return {
         "scenario": scenario,
         "params": params,
-        "baseline": {"revenue_eur": _r(base_rev), "margin_eur": _r(base_margin)},
-        "result": {"revenue_eur": _r(rev), "margin_eur": _r(margin)},
-        "delta": {"revenue_eur": _r(rev - base_rev), "margin_eur": _r(margin - base_margin)},
+        "baseline": {"revenue": _r(base_rev), "margin": _r(base_margin)},
+        "result": {"revenue": _r(rev), "margin": _r(margin)},
+        "delta": {"revenue": _r(rev - base_rev), "margin": _r(margin - base_margin)},
         "assumptions": assumptions,
     }

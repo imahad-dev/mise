@@ -57,6 +57,9 @@ export interface paths {
          *
          *     - cost_usd comes from usage.cost in the inference provider response
          *     - daily_budget_remaining_usd from the most recent rate-limit header
+         *
+         *     Samples carry no restaurant, so this is an installation-wide operator diagnostic:
+         *     available only in DEMO_MODE, never on a real multi-venue installation.
          */
         get: operations["inference_metrics_api_metrics_inference_get"];
         put?: never;
@@ -98,7 +101,7 @@ export interface paths {
         put?: never;
         /**
          * Demo Login
-         * @description Issue signed auth cookie for owner or staff in DEMO_MODE without credentials.
+         * @description Sign in as the seeded demo owner or a venue's demo staff user in DEMO_MODE.
          *
          *     Rate limited to 20 per minute per client IP. Returns 404 if DEMO_MODE is false.
          */
@@ -120,7 +123,7 @@ export interface paths {
         put?: never;
         /**
          * Login
-         * @description Authenticate staff or owner and set httpOnly signed cookie.
+         * @description Authenticate a user by email and password and set httpOnly signed cookie.
          *
          *     Rate limited via Redis to 5 failures per 5 minutes per client IP.
          */
@@ -160,7 +163,7 @@ export interface paths {
         };
         /**
          * Get Me
-         * @description Return current authenticated role.
+         * @description Return the signed-in user's name and email.
          */
         get: operations["get_me_api_auth_me_get"];
         put?: never;
@@ -282,6 +285,108 @@ export interface paths {
          *     The server builds the menu context — client only displays the response.
          */
         post: operations["guest_chat_api_guest_chat_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/guest/bill-request": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Request Bill
+         * @description Ask for the table's open bill. Idempotent: the first request time is kept.
+         */
+        post: operations["request_bill_api_guest_bill_request_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/guest/bill": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Guest Bill
+         * @description The table's open bill (else the session's latest bill): lines, per-method totals, claim.
+         *
+         *     With order_id: the bill of that order of this session (404 for any other order).
+         */
+        get: operations["get_guest_bill_api_guest_bill_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/guest/bill/payment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Claim Payment
+         * @description Record how the guest pays (counts as requesting the bill). Never settles; latest wins.
+         */
+        post: operations["claim_payment_api_guest_bill_payment_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/guest/service-calls": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Service Call
+         * @description Call a waiter to the session's table. One open call per table, 60 s between calls.
+         */
+        post: operations["create_service_call_api_guest_service_calls_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/guest/service-calls/current": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Current Service Call
+         * @description The table's open call or null, whether calling is possible here, and the server clock.
+         */
+        get: operations["current_service_call_api_guest_service_calls_current_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -432,6 +537,221 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/restaurants/{slug}/bills": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Bills
+         * @description Open bills (requested first, then oldest), or the 50 latest settled or cancelled.
+         *
+         *     Reading open bills (other than kind=table) first cancels unclaimed counter bills left
+         *     unpaid for 30 minutes. `status=settled&kind=counter&queue=true` lists the counter queue
+         *     instead: every paid order from today or yesterday still preparing or ready, or collected
+         *     within the undo window, oldest payment first.
+         */
+        get: operations["list_bills_api_restaurants__slug__bills_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/restaurants/{slug}/bills/{bill_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Bill */
+        get: operations["get_bill_api_restaurants__slug__bills__bill_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/restaurants/{slug}/bills/{bill_id}/settle": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Settle */
+        post: operations["settle_api_restaurants__slug__bills__bill_id__settle_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/restaurants/{slug}/orders/{order_id}/void": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Void Order
+         * @description Take a placed or bumped order off its open bill: it leaves the kitchen and the totals.
+         *
+         *     Voiding the last active order cancels the bill, so the table's next order opens a new one.
+         */
+        post: operations["void_order_api_restaurants__slug__orders__order_id__void_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/restaurants/{slug}/bills/{bill_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel Bill
+         * @description Cancel an unpaid counter bill and its order (the guest left). Table bills use voids.
+         */
+        post: operations["cancel_bill_api_restaurants__slug__bills__bill_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/restaurants/{slug}/orders/{order_id}/collect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Collect Order
+         * @description The guest picked up a ready counter order.
+         */
+        post: operations["collect_order_api_restaurants__slug__orders__order_id__collect_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/restaurants/{slug}/orders/{order_id}/uncollect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Uncollect Order
+         * @description Undo Collected within 60 seconds (database clock).
+         */
+        post: operations["uncollect_order_api_restaurants__slug__orders__order_id__uncollect_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/restaurants/{slug}/floor": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Floor
+         * @description One tile per table (counters excluded): red first, then amber, then label order.
+         */
+        get: operations["get_floor_api_restaurants__slug__floor_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/restaurants/{slug}/pay-forward/give": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Give Pay Forward
+         * @description Hand out one pay-it-forward chai: a free kitchen ticket, never revenue.
+         */
+        post: operations["give_pay_forward_api_restaurants__slug__pay_forward_give_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/restaurants/{slug}/tables/{table_id}/clear": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Clear Table */
+        post: operations["clear_table_api_restaurants__slug__tables__table_id__clear_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/restaurants/{slug}/service-calls/{call_id}/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Resolve Call */
+        post: operations["resolve_call_api_restaurants__slug__service_calls__call_id__resolve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/restaurants/{slug}/menu-items": {
         parameters: {
             query?: never;
@@ -517,6 +837,31 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/restaurants/{slug}/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Settings */
+        get: operations["get_settings_api_restaurants__slug__settings_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Patch Settings
+         * @description Update payment details, the extra call reason and the pickup prefix.
+         *
+         *     Omitted fields stay as they are; a given `payment_details` replaces the whole object;
+         *     `pickup_prefix: null` clears the prefix (pickup numbers then print K-…);
+         *     `service_extra_label: null` or "" clears the extra call reason.
+         */
+        patch: operations["patch_settings_api_restaurants__slug__settings_patch"];
         trace?: never;
     };
     "/api/restaurants/{slug}/menu-items/ingest": {
@@ -619,6 +964,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/restaurants": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List My Restaurants
+         * @description List the restaurants the signed-in user is a member of, with their role in each.
+         */
+        get: operations["list_my_restaurants_api_restaurants_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -639,6 +1004,177 @@ export interface components {
             /** N Points */
             n_points: number;
         };
+        /** BillDetail */
+        BillDetail: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Bill No */
+            bill_no: number | null;
+            /** Table Label */
+            table_label: string | null;
+            /** Status */
+            status: string;
+            /**
+             * Opened At
+             * Format: date-time
+             */
+            opened_at: string;
+            /** Order Count */
+            order_count: number;
+            /** Subtotal */
+            subtotal: string;
+            /** Bill Requested At */
+            bill_requested_at: string | null;
+            claim: components["schemas"]["PaymentClaim"] | null;
+            /** Cancelled At */
+            cancelled_at: string | null;
+            /** Cancel Reason */
+            cancel_reason: string | null;
+            /** Pickup Label */
+            pickup_label?: string | null;
+            /** Order Id */
+            order_id?: string | null;
+            /** Order Status */
+            order_status?: string | null;
+            /** Collected At */
+            collected_at?: string | null;
+            /**
+             * Pickup Yesterday
+             * @default false
+             */
+            pickup_yesterday: boolean;
+            /** Lines */
+            lines: components["schemas"]["BillLine"][];
+            preview_standard: components["schemas"]["TaxPreview"] | null;
+            preview_digital: components["schemas"]["TaxPreview"] | null;
+            /** Payment Method */
+            payment_method: string | null;
+            /** Payment Reference */
+            payment_reference: string | null;
+            /** Tax Jurisdiction */
+            tax_jurisdiction: string | null;
+            /** Tax Rate */
+            tax_rate: string | null;
+            /** Tax Amount */
+            tax_amount: string | null;
+            /** Total */
+            total: string | null;
+            /** Settled At */
+            settled_at: string | null;
+            /** Restaurant Name */
+            restaurant_name: string;
+            /** Restaurant City */
+            restaurant_city: string | null;
+            /** Restaurant Timezone */
+            restaurant_timezone: string;
+            /** Currency */
+            currency: string;
+            /** Methods */
+            methods: components["schemas"]["MethodPreview"][];
+            /** Amount Due After Claim */
+            amount_due_after_claim: string | null;
+            /** Reused Reference Bill No */
+            reused_reference_bill_no: number | null;
+            /** Reused Reference Open Bill No */
+            reused_reference_open_bill_no: number | null;
+            /** Orders */
+            orders: components["schemas"]["BillOrder"][];
+            /** Settled By Name */
+            settled_by_name: string | null;
+            /** Cancelled By Name */
+            cancelled_by_name: string | null;
+        };
+        /** BillLine */
+        BillLine: {
+            /** Name */
+            name: string;
+            /** Option Label */
+            option_label: string | null;
+            /** Quantity */
+            quantity: number;
+            /** Unit Price */
+            unit_price: string;
+            /** Line Total */
+            line_total: string;
+        };
+        /** BillListResponse */
+        BillListResponse: {
+            /** Bills */
+            bills: components["schemas"]["BillSummary"][];
+            /** Restaurant Timezone */
+            restaurant_timezone: string;
+        };
+        /** BillOrder */
+        BillOrder: {
+            /**
+             * Order Id
+             * Format: uuid
+             */
+            order_id: string;
+            /**
+             * Placed At
+             * Format: date-time
+             */
+            placed_at: string;
+            /** Status */
+            status: string;
+            /** Device Label */
+            device_label: string;
+            /** Joined Late */
+            joined_late: boolean;
+            /** Voided */
+            voided: boolean;
+            /** Void Reason */
+            void_reason: string | null;
+            /** Lines */
+            lines: components["schemas"]["BillLine"][];
+        };
+        /** BillSummary */
+        BillSummary: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Bill No */
+            bill_no: number | null;
+            /** Table Label */
+            table_label: string | null;
+            /** Status */
+            status: string;
+            /**
+             * Opened At
+             * Format: date-time
+             */
+            opened_at: string;
+            /** Order Count */
+            order_count: number;
+            /** Subtotal */
+            subtotal: string;
+            /** Bill Requested At */
+            bill_requested_at: string | null;
+            claim: components["schemas"]["PaymentClaim"] | null;
+            /** Cancelled At */
+            cancelled_at: string | null;
+            /** Cancel Reason */
+            cancel_reason: string | null;
+            /** Pickup Label */
+            pickup_label?: string | null;
+            /** Order Id */
+            order_id?: string | null;
+            /** Order Status */
+            order_status?: string | null;
+            /** Collected At */
+            collected_at?: string | null;
+            /**
+             * Pickup Yesterday
+             * @default false
+             */
+            pickup_yesterday: boolean;
+        };
         /** BriefAction */
         BriefAction: {
             /** Rank */
@@ -650,6 +1186,8 @@ export interface components {
             type: "promote_puzzle" | "reprice_plowhorse" | "review_dog" | "prep_target";
             /** Item Id */
             item_id: string | null;
+            /** Option Id */
+            option_id?: string | null;
             /** Item */
             item: string;
             /** Title */
@@ -658,10 +1196,15 @@ export interface components {
             evidence: {
                 [key: string]: number | string;
             };
-            /** Estimated Impact Eur Per Week */
-            estimated_impact_eur_per_week: number | null;
+            /** Estimated Impact Per Week */
+            estimated_impact_per_week: number | null;
             /** Formula */
             formula: string;
+        };
+        /** CancelBillRequest */
+        CancelBillRequest: {
+            /** Reason */
+            reason?: string | null;
         };
         /** ChatMessageRequest */
         ChatMessageRequest: {
@@ -688,13 +1231,33 @@ export interface components {
              */
             reason: string;
         };
+        /** ClearTableRequest */
+        ClearTableRequest: {
+            /**
+             * Force
+             * @default false
+             */
+            force: boolean;
+        };
+        /** CollectResponse */
+        CollectResponse: {
+            /**
+             * Order Id
+             * Format: uuid
+             */
+            order_id: string;
+            /** Order Status */
+            order_status: string;
+            /** Collected At */
+            collected_at: string | null;
+        };
         /** CreateGuestSessionRequest */
         CreateGuestSessionRequest: {
             /** Qr Token */
             qr_token: string;
             /**
              * Language
-             * @default it
+             * @default en
              * @enum {string}
              */
             language: "en" | "it";
@@ -721,10 +1284,25 @@ export interface components {
              */
             acknowledge_allergen_risk: boolean;
         };
+        /** CurrentCallResponse */
+        CurrentCallResponse: {
+            call: components["schemas"]["ServiceCallResponse"] | null;
+            /** Available */
+            available: boolean;
+            /** Extra Label */
+            extra_label: string | null;
+            /**
+             * Server Time
+             * Format: date-time
+             */
+            server_time: string;
+        };
         /** DailyBriefResponse */
         DailyBriefResponse: {
             /** Date */
             date: string;
+            /** Currency */
+            currency: string;
             /** Window Start */
             window_start: string;
             /** Window End */
@@ -738,6 +1316,8 @@ export interface components {
             pairings: components["schemas"]["Pairing"][];
             /** Peak Hours */
             peak_hours: components["schemas"]["PeakHour"][];
+            payment_mix: components["schemas"]["PaymentMix"];
+            pay_forward: components["schemas"]["PayForwardTotals"];
             forecast: components["schemas"]["ForecastSummary"];
             /** Actions */
             actions: components["schemas"]["BriefAction"][];
@@ -758,16 +1338,12 @@ export interface components {
         };
         /** DemoInfoResponse */
         DemoInfoResponse: {
-            /** Guest Url */
-            guest_url: string;
             /** Owner Url */
             owner_url: string;
             /** Kitchen Url */
             kitchen_url: string;
-            /** Qr Token */
-            qr_token?: string | null;
-            /** Table Label */
-            table_label?: string | null;
+            /** Venues */
+            venues: components["schemas"]["DemoVenueInfo"][];
         };
         /** DemoLoginRequest */
         DemoLoginRequest: {
@@ -776,6 +1352,71 @@ export interface components {
              * @enum {string}
              */
             role: "owner" | "staff";
+            /** Venue */
+            venue?: string | null;
+        };
+        /** DemoVenueInfo */
+        DemoVenueInfo: {
+            /** Slug */
+            slug: string;
+            /** Name */
+            name: string;
+            /** City */
+            city: string | null;
+            /** Guest Url */
+            guest_url: string;
+            /** Qr Token */
+            qr_token: string;
+            /** Table Label */
+            table_label: string;
+        };
+        /** FloorResponse */
+        FloorResponse: {
+            /** Tiles */
+            tiles: components["schemas"]["FloorTile"][];
+            /** Counts */
+            counts: {
+                [key: string]: number;
+            };
+            /** Thresholds */
+            thresholds: {
+                [key: string]: number[];
+            };
+            /**
+             * Server Time
+             * Format: date-time
+             */
+            server_time: string;
+            /** Service Extra Label */
+            service_extra_label: string | null;
+            /** Pay Forward Balance */
+            pay_forward_balance: number;
+        };
+        /** FloorTile */
+        FloorTile: {
+            /**
+             * Table Id
+             * Format: uuid
+             */
+            table_id: string;
+            /** Label */
+            label: string;
+            /** State */
+            state: string;
+            /** Level */
+            level: string;
+            /** Since */
+            since: string | null;
+            /** Reason */
+            reason: string | null;
+            /** Reason Label */
+            reason_label: string | null;
+            /** Running Total */
+            running_total: string | null;
+            /** Bill Id */
+            bill_id: string | null;
+            /** Call Id */
+            call_id: string | null;
         };
         /** ForecastPoint */
         ForecastPoint: {
@@ -816,6 +1457,71 @@ export interface components {
             backtest: components["schemas"]["BacktestMetric"][];
             /** Points */
             points: components["schemas"]["ForecastPoint"][];
+        };
+        /** GiveRequest */
+        GiveRequest: {
+            /**
+             * Quantity
+             * @constant
+             */
+            quantity: 1;
+            /** Idempotency Key */
+            idempotency_key: string;
+        };
+        /** GiveResponse */
+        GiveResponse: {
+            /**
+             * Order Id
+             * Format: uuid
+             */
+            order_id: string;
+            /** Pay Forward Balance */
+            pay_forward_balance: number;
+        };
+        /** GuestBillDetail */
+        GuestBillDetail: {
+            /** Bill No */
+            bill_no: number | null;
+            /** Status */
+            status: string;
+            /** Bill Requested At */
+            bill_requested_at: string | null;
+            /** Lines */
+            lines: components["schemas"]["BillLine"][];
+            /** Subtotal */
+            subtotal: string;
+            /** Currency */
+            currency: string;
+            /** Methods */
+            methods: components["schemas"]["MethodPreview"][];
+            payment_details: components["schemas"]["PaymentDetails"];
+            claim: components["schemas"]["PaymentClaim"] | null;
+            /** Voided */
+            voided: components["schemas"]["VoidedLine"][];
+            /** Order Status */
+            order_status: string | null;
+            /** Payment Method */
+            payment_method?: string | null;
+            /** Tax Rate */
+            tax_rate?: string | null;
+            /** Total */
+            total?: string | null;
+            /** Pickup Label */
+            pickup_label?: string | null;
+            /**
+             * Pay Forward Count
+             * @default 0
+             */
+            pay_forward_count: number;
+        };
+        /** GuestBillResponse */
+        GuestBillResponse: {
+            /** Bill No */
+            bill_no: number | null;
+            /** Status */
+            status: string;
+            /** Bill Requested At */
+            bill_requested_at: string | null;
         };
         /** GuestMenuItemResponse */
         GuestMenuItemResponse: {
@@ -858,6 +1564,23 @@ export interface components {
             allergen_status: string;
             /** Matched Allergens */
             matched_allergens: string[];
+            /**
+             * Options
+             * @default []
+             */
+            options: components["schemas"]["GuestMenuOption"][];
+        };
+        /** GuestMenuOption */
+        GuestMenuOption: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Label */
+            label: string;
+            /** Price */
+            price: string;
         };
         /** GuestMenuResponse */
         GuestMenuResponse: {
@@ -866,6 +1589,10 @@ export interface components {
             table_id?: string | null;
             /** Table Label */
             table_label?: string | null;
+            /** Table Kind */
+            table_kind?: string | null;
+            /** Service Extra Label */
+            service_extra_label?: string | null;
             /** Items */
             items: components["schemas"]["GuestMenuItemResponse"][];
         };
@@ -880,6 +1607,16 @@ export interface components {
             name: string;
             /** Currency */
             currency: string;
+        };
+        /** GuestPaymentRequest */
+        GuestPaymentRequest: {
+            /**
+             * Method
+             * @enum {string}
+             */
+            method: "cash" | "card" | "wallet" | "raast" | "bank_transfer";
+            /** Reference */
+            reference?: string | null;
         };
         /** GuestSessionResponse */
         GuestSessionResponse: {
@@ -959,6 +1696,8 @@ export interface components {
             menu_item_id: string;
             /** Kitchen Name */
             kitchen_name: string;
+            /** Option Label */
+            option_label?: string | null;
             /** Quantity */
             quantity: number;
             /** Notes */
@@ -1007,6 +1746,13 @@ export interface components {
             bumped_at: string | null;
             /** Items */
             items: components["schemas"]["KitchenOrderItemResponse"][];
+            /** Pickup Label */
+            pickup_label?: string | null;
+            /**
+             * Pay Forward
+             * @default false
+             */
+            pay_forward: boolean;
         };
         /** KitchenOrdersListResponse */
         KitchenOrdersListResponse: {
@@ -1017,24 +1763,21 @@ export interface components {
         Kpis: {
             /** Orders */
             orders: number;
-            /** Revenue Eur */
-            revenue_eur: number;
-            /** Aov Eur */
-            aov_eur: number;
-            /** Contribution Margin Eur */
-            contribution_margin_eur: number;
+            /** Revenue */
+            revenue: number;
+            /** Aov */
+            aov: number;
+            /** Contribution Margin */
+            contribution_margin: number;
             /** Margin Pct */
             margin_pct: number;
         };
         /** LoginRequest */
         LoginRequest: {
-            /**
-             * Role
-             * @enum {string}
-             */
-            role: "owner" | "staff";
-            /** Secret */
-            secret: string;
+            /** Email */
+            email: string;
+            /** Password */
+            password: string;
         };
         /** LoginResponse */
         LoginResponse: {
@@ -1043,11 +1786,10 @@ export interface components {
              * @constant
              */
             status: "ok";
-            /**
-             * Role
-             * @enum {string}
-             */
-            role: "owner" | "staff";
+            /** Name */
+            name: string;
+            /** Email */
+            email: string;
         };
         /** LogoutResponse */
         LogoutResponse: {
@@ -1059,28 +1801,29 @@ export interface components {
         };
         /** MeResponse */
         MeResponse: {
-            /**
-             * Role
-             * @enum {string}
-             */
-            role: "owner" | "staff";
+            /** Name */
+            name: string;
+            /** Email */
+            email: string;
         };
         /** MenuEngineeringItem */
         MenuEngineeringItem: {
             /** Item Id */
             item_id: string;
+            /** Option Id */
+            option_id: string | null;
             /** Name */
             name: string;
             /** Units */
             units: number;
             /** Weekly Units */
             weekly_units: number;
-            /** Revenue Eur */
-            revenue_eur: number;
-            /** Unit Margin Eur */
-            unit_margin_eur: number;
-            /** Contribution Eur */
-            contribution_eur: number;
+            /** Revenue */
+            revenue: number;
+            /** Unit Margin */
+            unit_margin: number;
+            /** Contribution */
+            contribution: number;
             /**
              * Menu Class
              * @enum {string}
@@ -1114,8 +1857,47 @@ export interface components {
         MenuThresholds: {
             /** Median Units */
             median_units: number;
-            /** Median Unit Margin Eur */
-            median_unit_margin_eur: number;
+            /** Median Unit Margin */
+            median_unit_margin: number;
+        };
+        /** MethodPreview */
+        MethodPreview: {
+            /**
+             * Payment Class
+             * @enum {string}
+             */
+            payment_class: "standard" | "digital";
+            /** Tax Rate */
+            tax_rate: string;
+            /** Tax Amount */
+            tax_amount: string;
+            /** Total */
+            total: string;
+            /** Method */
+            method: string;
+            /** Label */
+            label: string;
+        };
+        /** MyRestaurant */
+        MyRestaurant: {
+            /** Slug */
+            slug: string;
+            /** Name */
+            name: string;
+            /** City */
+            city: string | null;
+            /** Currency */
+            currency: string;
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "owner" | "staff";
+        };
+        /** MyRestaurantsResponse */
+        MyRestaurantsResponse: {
+            /** Restaurants */
+            restaurants: components["schemas"]["MyRestaurant"][];
         };
         /** OrderItemRequest */
         OrderItemRequest: {
@@ -1124,6 +1906,8 @@ export interface components {
              * Format: uuid
              */
             menu_item_id: string;
+            /** Option Id */
+            option_id?: string | null;
             /** Quantity */
             quantity: number;
             /** Notes */
@@ -1141,6 +1925,10 @@ export interface components {
              * Format: uuid
              */
             menu_item_id: string;
+            /** Option Id */
+            option_id: string | null;
+            /** Option Label */
+            option_label: string | null;
             /** Quantity */
             quantity: number;
             /** Unit Price */
@@ -1181,6 +1969,8 @@ export interface components {
             status: string;
             /** Total */
             total: string;
+            /** Currency */
+            currency: string;
             /** Idempotency Key */
             idempotency_key: string;
             /** Allergen Conflict Acknowledged */
@@ -1235,6 +2025,11 @@ export interface components {
             available: boolean;
             /** Featured */
             featured: boolean;
+            /**
+             * Is Pay Forward
+             * @default false
+             */
+            is_pay_forward: boolean;
             /** Sort Order */
             sort_order: number;
             /** Image Url */
@@ -1271,6 +2066,11 @@ export interface components {
             qr_token: string;
             /** Guest Url */
             guest_url: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "table" | "counter";
         };
         /** Pairing */
         Pairing: {
@@ -1318,6 +2118,86 @@ export interface components {
             is_vegan?: boolean | null;
             /** Is Gluten Free */
             is_gluten_free?: boolean | null;
+            /** Is Pay Forward */
+            is_pay_forward?: boolean | null;
+        };
+        /** PatchSettingsRequest */
+        PatchSettingsRequest: {
+            /** Payment Details */
+            payment_details?: {
+                [key: string]: unknown;
+            } | null;
+            /** Service Extra Label */
+            service_extra_label?: string | null;
+            /** Pickup Prefix */
+            pickup_prefix?: string | null;
+        };
+        /** PayForwardTotals */
+        PayForwardTotals: {
+            /** Bought */
+            bought: number;
+            /** Given */
+            given: number;
+        };
+        /** PaymentClaim */
+        PaymentClaim: {
+            /** Method */
+            method: string;
+            /** Reference */
+            reference: string | null;
+            /** Total */
+            total: string;
+            /**
+             * Claimed At
+             * Format: date-time
+             */
+            claimed_at: string;
+        };
+        /** PaymentClassCounts */
+        PaymentClassCounts: {
+            /** Standard */
+            standard: number;
+            /** Digital */
+            digital: number;
+        };
+        /** PaymentClassShares */
+        PaymentClassShares: {
+            /** Standard */
+            standard: number;
+            /** Digital */
+            digital: number;
+        };
+        /** PaymentDetails */
+        PaymentDetails: {
+            /** Raast Id */
+            raast_id?: string | null;
+            /** Jazzcash */
+            jazzcash?: string | null;
+            /** Easypaisa */
+            easypaisa?: string | null;
+            /** Iban */
+            iban?: string | null;
+            /** Account Title */
+            account_title?: string | null;
+            /**
+             * Sample
+             * @default false
+             */
+            sample: boolean;
+        };
+        /**
+         * PaymentMix
+         * @description Settled bills in the window: standard (cash, bank transfer) vs digital payments.
+         */
+        PaymentMix: {
+            bills: components["schemas"]["PaymentClassCounts"];
+            revenue_share: components["schemas"]["PaymentClassShares"];
+            /** Digital Revenue Pct */
+            digital_revenue_pct: number;
+            /** Tax By Rate */
+            tax_by_rate: components["schemas"]["TaxByRate"][];
+            /** Digital Tax Saving */
+            digital_tax_saving: string;
         };
         /** PeakHour */
         PeakHour: {
@@ -1325,8 +2205,68 @@ export interface components {
             hour: number;
             /** Avg Orders Per Day */
             avg_orders_per_day: number;
-            /** Avg Revenue Per Day Eur */
-            avg_revenue_per_day_eur: number;
+            /** Avg Revenue Per Day */
+            avg_revenue_per_day: number;
+        };
+        /** ServiceCallRequest */
+        ServiceCallRequest: {
+            /**
+             * Reason
+             * @enum {string}
+             */
+            reason: "help" | "water" | "extra";
+        };
+        /** ServiceCallResponse */
+        ServiceCallResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Reason */
+            reason: string;
+            /** Reason Label */
+            reason_label: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Resolved At */
+            resolved_at: string | null;
+        };
+        /** SettingsResponse */
+        SettingsResponse: {
+            /** Payment Details */
+            payment_details: {
+                [key: string]: unknown;
+            };
+            /** Service Extra Label */
+            service_extra_label: string | null;
+            /** Pickup Prefix */
+            pickup_prefix: string | null;
+        };
+        /** SettleBillRequest */
+        SettleBillRequest: {
+            /**
+             * Payment Method
+             * @enum {string}
+             */
+            payment_method: "cash" | "card" | "wallet" | "raast" | "bank_transfer";
+            /** Payment Reference */
+            payment_reference?: string | null;
+            /** Expected Total */
+            expected_total: number | string;
+            /**
+             * Expected Method
+             * @enum {string}
+             */
+            expected_method: "cash" | "card" | "wallet" | "raast" | "bank_transfer";
+            /**
+             * Acknowledge Reused Reference
+             * @default false
+             */
+            acknowledge_reused_reference: boolean;
         };
         /** SimulateOrdersRequest */
         SimulateOrdersRequest: {
@@ -1350,6 +2290,8 @@ export interface components {
         SimulateOrdersResponse: {
             /** Orders Created */
             orders_created: number;
+            /** Bills Created */
+            bills_created: number;
             /** Start Date */
             start_date: string;
             /** End Date */
@@ -1367,6 +2309,40 @@ export interface components {
              */
             status: "ok";
         };
+        /** TableClearedResponse */
+        TableClearedResponse: {
+            /**
+             * Table Id
+             * Format: uuid
+             */
+            table_id: string;
+            /**
+             * Cleared At
+             * Format: date-time
+             */
+            cleared_at: string;
+        };
+        /** TaxByRate */
+        TaxByRate: {
+            /** Rate */
+            rate: string;
+            /** Tax */
+            tax: string;
+        };
+        /** TaxPreview */
+        TaxPreview: {
+            /**
+             * Payment Class
+             * @enum {string}
+             */
+            payment_class: "standard" | "digital";
+            /** Tax Rate */
+            tax_rate: string;
+            /** Tax Amount */
+            tax_amount: string;
+            /** Total */
+            total: string;
+        };
         /** ValidationError */
         ValidationError: {
             /** Location */
@@ -1379,6 +2355,25 @@ export interface components {
             input?: unknown;
             /** Context */
             ctx?: Record<string, never>;
+        };
+        /** VoidOrderRequest */
+        VoidOrderRequest: {
+            /** Reason */
+            reason: string;
+            /**
+             * Acknowledge Claim
+             * @default false
+             */
+            acknowledge_claim: boolean;
+        };
+        /** VoidedLine */
+        VoidedLine: {
+            /** Name */
+            name: string;
+            /** Option Label */
+            option_label: string | null;
+            /** Quantity */
+            quantity: number;
         };
         /** WhatIfRequest */
         WhatIfRequest: {
@@ -1402,6 +2397,8 @@ export interface components {
         WhatIfResponse: {
             /** Scenario */
             scenario: string;
+            /** Currency */
+            currency: string;
             /** Item */
             item: string | null;
             /** Window Start */
@@ -1424,10 +2421,10 @@ export interface components {
         };
         /** WhatIfTotals */
         WhatIfTotals: {
-            /** Revenue Eur */
-            revenue_eur: number;
-            /** Margin Eur */
-            margin_eur: number;
+            /** Revenue */
+            revenue: number;
+            /** Margin */
+            margin: number;
         };
     };
     responses: never;
@@ -1505,6 +2502,20 @@ export interface operations {
                     "application/json": components["schemas"]["InferenceMetricsResponse"];
                 };
             };
+            /** @description Unauthenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demo mode disabled */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     get_auth_config_api_auth_config_get: {
@@ -1549,7 +2560,7 @@ export interface operations {
                     "application/json": components["schemas"]["LoginResponse"];
                 };
             };
-            /** @description Demo mode disabled */
+            /** @description Demo mode disabled or demo user not seeded */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -1876,6 +2887,218 @@ export interface operations {
             };
         };
     };
+    request_bill_api_guest_bill_request_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GuestBillResponse"];
+                };
+            };
+            /** @description Unauthenticated or expired session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No open bill */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_guest_bill_api_guest_bill_get: {
+        parameters: {
+            query?: {
+                order_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GuestBillDetail"];
+                };
+            };
+            /** @description Unauthenticated or expired session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No bill for this session */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    claim_payment_api_guest_bill_payment_post: {
+        parameters: {
+            query?: {
+                order_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GuestPaymentRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GuestBillDetail"];
+                };
+            };
+            /** @description Unauthenticated or expired session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No bill for this session */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bill is no longer open */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid method or reference, no active orders, or no tax rate */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    create_service_call_api_guest_service_calls_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ServiceCallRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServiceCallResponse"];
+                };
+            };
+            /** @description Unauthenticated or expired session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description A waiter is already on the way */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not a table session */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Called less than 60 seconds ago */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    current_service_call_api_guest_service_calls_current_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CurrentCallResponse"];
+                };
+            };
+            /** @description Unauthenticated or expired session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     create_order_api_orders_post: {
         parameters: {
             query?: never;
@@ -2117,8 +3340,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                slug: string;
                 id: string;
+                slug: string;
             };
             cookie?: never;
         };
@@ -2154,6 +3377,13 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Order was cancelled, or awaiting payment */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description Validation Error */
             422: {
                 headers: {
@@ -2170,8 +3400,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                slug: string;
                 id: string;
+                slug: string;
             };
             cookie?: never;
         };
@@ -2208,6 +3438,583 @@ export interface operations {
                 content?: never;
             };
             /** @description Recall window expired or order not bumped */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_bills_api_restaurants__slug__bills_get: {
+        parameters: {
+            query?: {
+                status?: "open" | "settled" | "cancelled";
+                kind?: ("table" | "counter") | null;
+                queue?: boolean;
+            };
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BillListResponse"];
+                };
+            };
+            /** @description Unauthenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Restaurant or bill not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_bill_api_restaurants__slug__bills__bill_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                bill_id: string;
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BillDetail"];
+                };
+            };
+            /** @description Unauthenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Restaurant or bill not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    settle_api_restaurants__slug__bills__bill_id__settle_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                bill_id: string;
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SettleBillRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BillDetail"];
+                };
+            };
+            /** @description Unauthenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Restaurant or bill not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bill already settled or not open; reference already used on another bill; or {"detail": "Bill changed", "bill": <fresh BillDetail>} */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No active orders, no tax rate, or expected_method mismatch */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    void_order_api_restaurants__slug__orders__order_id__void_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                order_id: string;
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VoidOrderRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BillDetail"];
+                };
+            };
+            /** @description Unauthenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Restaurant or order not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bill not open, order already cancelled or awaiting payment, or the void would cancel a bill the guest says they paid ({"detail", "claim"}; resend with acknowledge_claim) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Reason must be 1-200 characters */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    cancel_bill_api_restaurants__slug__bills__bill_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                bill_id: string;
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CancelBillRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BillDetail"];
+                };
+            };
+            /** @description Unauthenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Restaurant or bill not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not a counter bill, already settled, or not open */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The guest says they paid: a reason (1-200 characters) is required */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    collect_order_api_restaurants__slug__orders__order_id__collect_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                order_id: string;
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectResponse"];
+                };
+            };
+            /** @description Unauthenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Restaurant or order not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not a counter order, not ready (bumped), or already collected */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    uncollect_order_api_restaurants__slug__orders__order_id__uncollect_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                order_id: string;
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectResponse"];
+                };
+            };
+            /** @description Unauthenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Restaurant or order not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not a counter order, not collected, or collected over 60 s ago */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_floor_api_restaurants__slug__floor_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FloorResponse"];
+                };
+            };
+            /** @description Unauthenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Restaurant, table or call not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    give_pay_forward_api_restaurants__slug__pay_forward_give_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GiveRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GiveResponse"];
+                };
+            };
+            /** @description Unauthenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Restaurant, table or call not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description None waiting */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clear_table_api_restaurants__slug__tables__table_id__clear_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                table_id: string;
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ClearTableRequest"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TableClearedResponse"];
+                };
+            };
+            /** @description Unauthenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Restaurant, table or call not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Settle the bill first, or new guests are already seated */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    resolve_call_api_restaurants__slug__service_calls__call_id__resolve_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                call_id: string;
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServiceCallResponse"];
+                };
+            };
+            /** @description Unauthenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Restaurant, table or call not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Call already resolved */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -2282,8 +4089,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                slug: string;
                 id: string;
+                slug: string;
             };
             cookie?: never;
         };
@@ -2319,6 +4126,13 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Pay-it-forward item in use, or another item already is one */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description Validation Error */
             422: {
                 headers: {
@@ -2335,8 +4149,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                slug: string;
                 id: string;
+                slug: string;
             };
             cookie?: never;
         };
@@ -2376,6 +4190,13 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Pay-it-forward item in use, or another item already is one */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description Validation Error */
             422: {
                 headers: {
@@ -2392,8 +4213,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                slug: string;
                 id: string;
+                slug: string;
             };
             cookie?: never;
         };
@@ -2489,6 +4310,119 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+        };
+    };
+    get_settings_api_restaurants__slug__settings_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SettingsResponse"];
+                };
+            };
+            /** @description Unauthenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized (Owner only) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Restaurant not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    patch_settings_api_restaurants__slug__settings_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PatchSettingsRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SettingsResponse"];
+                };
+            };
+            /** @description Unauthenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized (Owner only) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Restaurant not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Pickup prefix changed while counter orders are open */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid setting; detail.field names it */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -2773,6 +4707,33 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+        };
+    };
+    list_my_restaurants_api_restaurants_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyRestaurantsResponse"];
+                };
+            };
+            /** @description Unauthenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

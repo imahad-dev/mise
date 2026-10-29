@@ -68,9 +68,13 @@ export function useSse<T>({
   }, [executeFetch, pollingIntervalMs]);
 
   useEffect(() => {
+    // New stream (e.g. venue switch): drop the old data and ignore in-flight responses.
+    fetchSeqRef.current++;
+    setData(null);
+    setError(null);
+    setIsConnected(false);
+    setIsReconnecting(false);
     if (!enabled || !url) {
-      setIsConnected(false);
-      setIsReconnecting(false);
       stopPolling();
       return;
     }

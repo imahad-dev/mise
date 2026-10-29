@@ -3,27 +3,42 @@
 import contextlib
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.access import get_current_user
 from src.config import settings
 from src.database import get_db
 from src.models.metrics import MetricsSample
+from src.models.user import User
 from src.schemas.metrics import InferenceMetricsResponse
 
 router = APIRouter(prefix="/api/metrics", tags=["metrics"])
 
 
-@router.get("/inference", response_model=InferenceMetricsResponse)
+@router.get(
+    "/inference",
+    response_model=InferenceMetricsResponse,
+    responses={
+        401: {"description": "Unauthenticated"},
+        404: {"description": "Demo mode disabled"},
+    },
+)
 async def inference_metrics(
     db: Annotated[AsyncSession, Depends(get_db)],
+    _user: Annotated[User, Depends(get_current_user)],
 ) -> InferenceMetricsResponse:
     """Aggregated inference metrics with cost tracking.
 
     - cost_usd comes from usage.cost in the inference provider response
     - daily_budget_remaining_usd from the most recent rate-limit header
+
+    Samples carry no restaurant, so this is an installation-wide operator diagnostic:
+    available only in DEMO_MODE, never on a real multi-venue installation.
     """
+    if not settings.demo_mode:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Demo mode is disabled")
     result = await db.execute(
         select(
             func.count(MetricsSample.id).label("total_calls"),

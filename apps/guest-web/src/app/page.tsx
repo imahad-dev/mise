@@ -8,12 +8,19 @@ interface AuthConfig {
   demo_mode: boolean;
 }
 
-interface DemoInfo {
+interface DemoVenue {
+  slug: string;
+  name: string;
+  city: string | null;
   guest_url: string;
-  owner_url: string;
-  kitchen_url: string;
   qr_token: string;
   table_label: string;
+}
+
+interface DemoInfo {
+  owner_url: string;
+  kitchen_url: string;
+  venues: DemoVenue[];
 }
 
 export default function HomePage() {
@@ -48,7 +55,7 @@ export default function HomePage() {
               const infoData: DemoInfo = await demoRes.json();
               if (isMounted) {
                 setDemoInfo(infoData);
-                const url = await QRCode.toDataURL(infoData.guest_url, {
+                const url = await QRCode.toDataURL(infoData.venues[0]?.guest_url ?? "http://localhost:3000/q/demo", {
                   width: 240,
                   margin: 1,
                   color: {
@@ -126,7 +133,7 @@ export default function HomePage() {
     );
   }
 
-  const guestUrl = demoInfo?.guest_url ?? "http://localhost:3000/q/demo";
+  const guestUrl = demoInfo?.venues[0]?.guest_url ?? "http://localhost:3000/q/demo";
   const ownerUrl = demoInfo?.owner_url ?? "http://localhost:3001";
   const kitchenUrl = demoInfo?.kitchen_url ?? "http://localhost:3001/kitchen";
 
@@ -216,7 +223,7 @@ export default function HomePage() {
                     Guest Experience
                   </span>
                   <span className="chip chip-safe">
-                    {demoInfo?.table_label ?? "Table 1"}
+                    {demoInfo?.venues[0]?.table_label ?? "Table 1"}
                   </span>
                 </div>
                 <h3 className="text-lg font-bold text-ink">
