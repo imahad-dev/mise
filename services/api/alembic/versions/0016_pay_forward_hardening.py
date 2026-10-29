@@ -29,6 +29,13 @@ def upgrade() -> None:
         "WHERE oi.menu_item_id = m.id AND m.is_pay_forward AND oi.order_id = o.id "
         "AND o.source <> 'pay_forward'"
     )
+    # One flagged item per venue from here on: keep the first by menu order, unflag the rest.
+    op.execute(
+        "UPDATE menu_item m SET is_pay_forward = false FROM ("
+        "SELECT id, row_number() OVER (PARTITION BY restaurant_id ORDER BY sort_order, id) AS n "
+        "FROM menu_item WHERE is_pay_forward AND deleted_at IS NULL) d "
+        "WHERE m.id = d.id AND d.n > 1"
+    )
     op.create_index(
         "uq_menu_item_pay_forward",
         "menu_item",
