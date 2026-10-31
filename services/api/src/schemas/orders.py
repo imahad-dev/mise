@@ -3,6 +3,7 @@
 import uuid
 from datetime import datetime
 from decimal import Decimal
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -64,5 +65,7 @@ class OrderResponse(BaseModel):
     items: list[OrderItemResponse]
     # The visit's orders waiting for the waiter add up to more than the venue's first-order cap.
     over_first_order_cap: bool = False
+    # Why a cancelled order was cancelled, for the guest screen; never the staff's own words.
+    cancel_reason: Literal["declined", "table_closed", "voided"] | None = None
 
     model_config = ConfigDict(from_attributes=True, extra="forbid")

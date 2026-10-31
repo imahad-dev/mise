@@ -38,7 +38,7 @@ from src.services.bills import (
 )
 from src.services.counter import open_counter_bill
 from src.services.order_snapshot import line_total, snapshot_order_item
-from src.services.sitting import get_open_sitting, has_approved_order
+from src.services.sitting import DECLINED, TABLE_CLOSED, get_open_sitting, has_approved_order
 
 logger = logging.getLogger(__name__)
 
@@ -83,6 +83,15 @@ def is_idempotency_unique_violation(err: IntegrityError) -> bool:
     return "orders_guest_idempotency_key" in err_str or "idempotency_key" in err_str
 
 
+def cancel_reason(order: Order) -> str | None:
+    """Guest-safe reason for a cancelled order, from the staff's void_reason."""
+    if order.status != "cancelled":
+        return None
+    return {DECLINED: "declined", TABLE_CLOSED: "table_closed"}.get(
+        order.void_reason or "", "voided"
+    )
+
+
 async def order_response(
     db: AsyncSession, order: Order, over_first_order_cap: bool = False
 ) -> OrderResponse:
@@ -90,7 +99,11 @@ async def order_response(
     currency = await db.scalar(
         select(Restaurant.currency).where(Restaurant.id == order.restaurant_id)
     )
-    computed = {"currency": currency, "over_first_order_cap": over_first_order_cap}
+    computed = {
+        "currency": currency,
+        "over_first_order_cap": over_first_order_cap,
+        "cancel_reason": cancel_reason(order),
+    }
     fields = {
         name: getattr(order, name) for name in OrderResponse.model_fields if name not in computed
     }

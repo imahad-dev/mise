@@ -6082,6 +6082,22 @@
             "type": "boolean",
             "title": "Over First Order Cap",
             "default": false
+          },
+          "cancel_reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "declined",
+                  "table_closed",
+                  "voided"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cancel Reason"
           }
         },
         "additionalProperties": false,

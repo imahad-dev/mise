@@ -2172,6 +2172,8 @@ export interface components {
              * @default false
              */
             over_first_order_cap: boolean;
+            /** Cancel Reason */
+            cancel_reason?: ("declined" | "table_closed" | "voided") | null;
         };
         /** OwnerMenuItemResponse */
         OwnerMenuItemResponse: {

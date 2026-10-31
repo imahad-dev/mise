@@ -148,6 +148,7 @@ async def test_first_order_waits_for_the_waiter_and_is_not_on_any_bill(client, d
     body = resp.json()
     assert body["status"] == "pending_approval"
     assert body["over_first_order_cap"] is False
+    assert body["cancel_reason"] is None
     row = await order_row(db_session, body["id"])
     assert row.bill_id is None
     assert row.sitting_id == sitting.id
@@ -253,6 +254,9 @@ async def test_decline_cancels_without_a_bill_and_the_guest_can_order_again(clie
     assert row.status == "cancelled"
     assert row.voided_at is not None
     assert row.void_reason == "Declined by waiter"
+    client.cookies.set(GUEST_COOKIE_NAME, sign_value(str(tv.s1.id)))
+    seen = (await client.get(f"/api/orders/{o1}")).json()
+    assert (seen["status"], seen["cancel_reason"]) == ("cancelled", "declined")
     assert row.voided_by == user.id
     assert row.bill_id is None
     assert (await db_session.scalar(select(Bill.id).where(Bill.table_id == tv.t1.id))) is None
@@ -549,6 +553,7 @@ async def test_closing_the_table_cancels_its_waiting_orders(client, db_session, 
     assert row.voided_at is not None and row.bill_id is None
     assert declined_for(events, tv, o1) == {f"orders:{o1}", f"kitchen:{tv.r.id}"}
     assert await guest_sees(client, tv, o1) == "cancelled"
+    assert (await client.get(f"/api/orders/{o1}")).json()["cancel_reason"] == "table_closed"
 
 
 async def test_an_idle_close_cancels_the_waiting_orders(client, db_session, tv, monkeypatch):
@@ -610,6 +615,10 @@ async def test_voiding_the_last_order_closes_the_sitting(client, db_session, tv)
     assert (await void(client, tv, o1)).status_code == 200
     row = await sitting_row(db_session, sitting.id)
     assert row.close_reason == "cancelled" and row.closed_at is not None
+    client.cookies.set(GUEST_COOKIE_NAME, sign_value(str(tv.s1.id)))
+    seen = (await client.get(f"/api/orders/{o1}")).json()
+    assert seen["cancel_reason"] == "voided"  # never the staff's own words ("Guest left")
+    assert "Guest left" not in json.dumps(seen)
 
 
 async def test_voiding_one_of_two_orders_keeps_the_sitting_open(client, db_session, tv):

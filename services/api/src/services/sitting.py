@@ -133,7 +133,7 @@ async def _close(
         order.status = "cancelled"
         order.voided_at = now
         order.voided_by = user_id
-        order.void_reason = "Table closed"
+        order.void_reason = TABLE_CLOSED
     await db.flush()
     return [o.id for o in pending]
 
@@ -168,6 +168,7 @@ async def _pending(db: AsyncSession, sitting_id: uuid.UUID) -> list[Order]:
 ORDER_CHANGED = "The order changed. Please check the table again."
 ALREADY_HANDLED = "Already handled"
 DECLINED = "Declined by waiter"
+TABLE_CLOSED = "Table closed"
 
 
 async def _waiting_as_seen(
