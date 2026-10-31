@@ -358,7 +358,8 @@ async def open_table(
     )
     if open_bill is not None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Settle the bill first")
-    if await get_open_sitting(db, table.id) is not None:
+    cancelled: list[uuid.UUID] = []  # by an idle close of the previous party's sitting
+    if await get_open_sitting(db, table.id, cancelled) is not None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Table is already open")
     try:
         sitting = await open_sitting_for_table(
@@ -381,6 +382,7 @@ async def open_table(
     await publish_event(
         f"kitchen:{rid}", json.dumps({"event": "table_opened", "table_id": str(table.id)})
     )
+    await publish_declined(rid, cancelled)
     return OpenSittingResponse(
         sitting_id=sitting.id, code=sitting.code, opened_at=sitting.opened_at
     )
@@ -402,11 +404,14 @@ async def close_table(
     # close has either opened its bill (refused here) or waits until the sitting is closed.
     if await lock_open_bill(db, rid, table.id) is not None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Settle the bill first")
-    if await get_open_sitting(db, table.id) is None:
+    cancelled: list[uuid.UUID] = []
+    if await get_open_sitting(db, table.id, cancelled) is None:
         await db.commit()  # keep an idle close get_open_sitting may have just made
+        await publish_declined(rid, cancelled)
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="No sitting is open")
     now = await db.scalar(select(func.clock_timestamp()))
-    await close_sitting_for_table(db, table.id, "staff_closed", now)
+    # Waiting orders (no bill) are allowed: closing the table cancels them.
+    cancelled = await close_sitting_for_table(db, table.id, "staff_closed", now, access.user.id)
     db.add(
         AuditLog(
             restaurant_id=rid,
@@ -419,6 +424,7 @@ async def close_table(
     await publish_event(
         f"kitchen:{rid}", json.dumps({"event": "table_closed", "table_id": str(table.id)})
     )
+    await publish_declined(rid, cancelled)
     return CloseSittingResponse(table_id=table.id, closed_at=now)
 
 

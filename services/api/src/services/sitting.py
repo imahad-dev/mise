@@ -45,9 +45,12 @@ async def open_sitting_for_table(
     return sitting
 
 
-async def get_open_sitting(db: AsyncSession, table_id: uuid.UUID) -> TableSitting | None:
+async def get_open_sitting(
+    db: AsyncSession, table_id: uuid.UUID, cancelled: list[uuid.UUID] | None = None
+) -> TableSitting | None:
     """The table's open sitting, lazily closing it first if it has gone idle (never while
-    the table has an open bill).
+    the table has an open bill). An idle close cancels the sitting's waiting orders and adds
+    their ids to `cancelled`: a caller that commits publishes them (publish_declined).
 
     Caller owns the txn.
     """
@@ -69,9 +72,9 @@ async def get_open_sitting(db: AsyncSession, table_id: uuid.UUID) -> TableSittin
     now = await db.scalar(select(func.clock_timestamp()))
     last_activity = await _last_activity(db, sitting.id, sitting.table_id)
     if is_idle(opened_at=sitting.opened_at, last_activity_at=last_activity, now=now):
-        sitting.closed_at = now
-        sitting.close_reason = "idle_timeout"
-        await db.flush()
+        ids = await _close(db, sitting, "idle_timeout", now, None)
+        if cancelled is not None:
+            cancelled.extend(ids)
         return None
     return sitting
 
@@ -90,11 +93,19 @@ async def _last_activity(
 
 
 async def close_sitting_for_table(
-    db: AsyncSession, table_id: uuid.UUID, reason: str, now: datetime
-) -> None:
-    """Close the table's open sitting, if any. No-op for counter tables (never have one) and
-    for a table with no open sitting (settle/void paths call this unconditionally — it's a
-    no-op, not an error, when there's nothing to close). Caller owns the txn."""
+    db: AsyncSession,
+    table_id: uuid.UUID,
+    reason: str,
+    now: datetime,
+    user_id: uuid.UUID | None = None,
+) -> list[uuid.UUID]:
+    """Close the table's open sitting, if any, cancelling its waiting orders (`user_id` is the
+    staff member closing it, None for a system close). No-op for counter tables (never have
+    one) and for a table with no open sitting (settle/void paths call this unconditionally —
+    it's a no-op, not an error, when there's nothing to close).
+
+    Returns the cancelled order ids; the caller commits, then publishes them
+    (publish_declined)."""
     sitting = (
         await db.execute(
             select(TableSitting)
@@ -103,9 +114,28 @@ async def close_sitting_for_table(
         )
     ).scalar_one_or_none()
     if sitting is None:
-        return
+        return []
+    return await _close(db, sitting, reason, now, user_id)
+
+
+async def _close(
+    db: AsyncSession,
+    sitting: TableSitting,
+    reason: str,
+    now: datetime,
+    user_id: uuid.UUID | None,
+) -> list[uuid.UUID]:
+    """Close a locked sitting; its waiting orders (never on a bill) are cancelled with it."""
     sitting.closed_at = now
     sitting.close_reason = reason
+    pending = await _pending(db, sitting.id)
+    for order in pending:
+        order.status = "cancelled"
+        order.voided_at = now
+        order.voided_by = user_id
+        order.void_reason = "Table closed"
+    await db.flush()
+    return [o.id for o in pending]
 
 
 # An order of these statuses means a waiter has approved the sitting: later orders skip approval.

@@ -379,7 +379,7 @@ async def test_open_table_race_answers_409_not_500(client, db_session, fv, monke
     db_session.add(TableSitting(table_id=fv.t1.id))
     await db_session.flush()
 
-    async def none(db, table_id):
+    async def none(db, table_id, cancelled=None):
         return None
 
     monkeypatch.setattr("src.routers.floor.get_open_sitting", none)

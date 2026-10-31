@@ -4,7 +4,7 @@ from dataclasses import replace
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from sqlalchemy import exists, func, select, update
+from sqlalchemy import exists, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -21,7 +21,7 @@ from src.models.bill import Bill
 from src.models.dining_table import DiningTable
 from src.models.menu import MenuItem, MenuItemOption
 from src.models.sitting import TableSitting
-from src.redis_client import redis_client
+from src.redis_client import publish_declined, redis_client
 from src.request_limits import enforce_ip_limit
 from src.schemas.owner import (
     DailyBriefResponse,
@@ -44,6 +44,7 @@ from src.services.brief import compute_brief, compute_whatif
 from src.services.menu_ingest import ingest_menu_from_image
 from src.services.payment_details import PaymentDetailsError, validate_payment_details
 from src.services.simulator import SimAssumptions, persist_simulation
+from src.services.sitting import close_sitting_for_table
 
 router = APIRouter(prefix="/api/restaurants/{slug}", tags=["owner"])
 logger = logging.getLogger(__name__)
@@ -664,17 +665,25 @@ async def reset_demo_data(
     try:
         await seed_data(data, db, rotate_qr=False)
         # A reset demo starts with free tables; an unpaid bill keeps its table open (spec §1).
-        await db.execute(
-            update(TableSitting)
-            .where(
-                TableSitting.closed_at.is_(None),
-                TableSitting.table_id.in_(
-                    select(DiningTable.id).where(DiningTable.restaurant_id == access.restaurant.id)
-                ),
-                ~exists().where(Bill.table_id == TableSitting.table_id, Bill.status == "open"),
+        to_free = (
+            await db.scalars(
+                select(TableSitting.table_id).where(
+                    TableSitting.closed_at.is_(None),
+                    TableSitting.table_id.in_(
+                        select(DiningTable.id).where(
+                            DiningTable.restaurant_id == access.restaurant.id
+                        )
+                    ),
+                    ~exists().where(Bill.table_id == TableSitting.table_id, Bill.status == "open"),
+                )
             )
-            .values(closed_at=func.clock_timestamp(), close_reason="staff_closed")
-        )
+        ).all()
+        now = await db.scalar(select(func.clock_timestamp()))
+        cancelled: list[uuid.UUID] = []
+        for table_id in to_free:
+            cancelled += await close_sitting_for_table(
+                db, table_id, "staff_closed", now, access.user.id
+            )
         await db.commit()
     except Exception as e:
         logger.error("Failed to reset demo data: %s", e)
@@ -683,4 +692,5 @@ async def reset_demo_data(
             detail=f"Failed to reset demo data: {e}",
         ) from e
 
+    await publish_declined(access.restaurant.id, cancelled)
     return StatusOkResponse(status="ok")

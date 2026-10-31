@@ -1,6 +1,7 @@
 """Safer table ordering: the table must be open, a visit's orders wait for the waiter until
 one is approved, the table code, and per-phone order limits."""
 
+import json
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -503,3 +504,65 @@ async def test_a_phone_from_an_earlier_sitting_must_scan_again(client, db_sessio
     assert (await post_order(client, s2, tv.naan)).status_code == 201
     await db_session.refresh(s2)
     assert s2.sitting_id == second.id
+
+
+def record_declined(monkeypatch) -> list[dict]:
+    events: list[dict] = []
+
+    async def fake(channel: str, message: str) -> None:
+        events.append({"channel": channel, **json.loads(message)})
+
+    for target in ("src.redis_client.publish_event", "src.routers.floor.publish_event"):
+        monkeypatch.setattr(target, fake)
+    return events
+
+
+def declined_for(events: list[dict], tv: TV, order_id: str) -> set[str]:
+    return {
+        e["channel"]
+        for e in events
+        if e.get("event") == "order_declined" and e.get("order_id") == order_id
+    } & {f"orders:{order_id}", f"kitchen:{tv.r.id}"}
+
+
+async def guest_sees(client: AsyncClient, tv: TV, order_id: str) -> str:
+    client.cookies.set(GUEST_COOKIE_NAME, sign_value(str(tv.s1.id)))
+    resp = await client.get(f"/api/orders/{order_id}")
+    assert resp.status_code == 200, resp.text
+    return resp.json()["status"]
+
+
+async def test_closing_the_table_cancels_its_waiting_orders(client, db_session, tv, monkeypatch):
+    await open_table(db_session, tv.t1.id)
+    o1 = (await post_order(client, tv.s1, tv.naan)).json()["id"]
+    events = record_declined(monkeypatch)
+    user = await as_member(client, db_session, tv.r.id, "staff")
+    resp = await client.delete(f"/api/restaurants/{tv.r.slug}/tables/{tv.t1.id}/sitting")
+    assert resp.status_code == 200, resp.text
+    row = await order_row(db_session, o1)
+    assert (row.status, row.void_reason, row.voided_by) == ("cancelled", "Table closed", user.id)
+    assert row.voided_at is not None and row.bill_id is None
+    assert declined_for(events, tv, o1) == {f"orders:{o1}", f"kitchen:{tv.r.id}"}
+    assert await guest_sees(client, tv, o1) == "cancelled"
+
+
+async def test_an_idle_close_cancels_the_waiting_orders(client, db_session, tv, monkeypatch):
+    sitting = await open_table(db_session, tv.t1.id)
+    o1 = (await post_order(client, tv.s1, tv.naan)).json()["id"]
+    long_ago = datetime.now(UTC) - timedelta(hours=3)
+    sitting.opened_at = long_ago
+    await db_session.execute(
+        update(Order).where(Order.id == uuid.UUID(o1)).values(placed_at=long_ago)
+    )
+    await db_session.flush()
+    events = record_declined(monkeypatch)
+    late = await post_order(client, await new_session(db_session, tv), tv.naan)
+    assert late.status_code == 409
+    assert late.json()["detail"]["error"] == "table_not_open"
+    await db_session.refresh(sitting)
+    assert sitting.close_reason == "idle_timeout"
+    row = await order_row(db_session, o1)
+    assert (row.status, row.void_reason, row.voided_by) == ("cancelled", "Table closed", None)
+    assert row.voided_at is not None
+    assert declined_for(events, tv, o1) == {f"orders:{o1}", f"kitchen:{tv.r.id}"}
+    assert await guest_sees(client, tv, o1) == "cancelled"

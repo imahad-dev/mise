@@ -26,7 +26,7 @@ from src.models.order import Order, OrderItem
 from src.models.restaurant import Restaurant
 from src.models.session import GuestSession
 from src.models.sitting import TableSitting
-from src.redis_client import publish_event, redis_client
+from src.redis_client import publish_declined, publish_event, redis_client
 from src.request_limits import enforce_session_limit
 from src.schemas.orders import CreateOrderRequest, OrderItemRequest, OrderResponse
 from src.services.allergen_service import compute_allergen_status
@@ -194,10 +194,12 @@ async def create_order(
     if session.table_id is not None and not at_counter:
         # Bill lock before the sitting lock, the order every path takes.
         bill = await lock_open_bill(db, session.restaurant_id, session.table_id)
-        sitting = await get_open_sitting(db, session.table_id)
+        cancelled: list[uuid.UUID] = []
+        sitting = await get_open_sitting(db, session.table_id, cancelled)
         # A phone from an earlier sitting rescans the QR to join the new party's visit.
         if sitting is None or session.sitting_id not in (None, sitting.id):
             await db.commit()  # keep an idle close get_open_sitting may have just made
+            await publish_declined(session.restaurant_id, cancelled)
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT, detail={"error": "table_not_open"}
             )

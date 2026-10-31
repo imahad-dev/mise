@@ -1,5 +1,6 @@
 """Tests for demo mode endpoints: /api/auth/config, /api/auth/demo-login, /api/demo/info."""
 
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from unittest.mock import AsyncMock, patch
 
@@ -14,7 +15,9 @@ from src.config import settings
 from src.models.bill import Bill
 from src.models.dining_table import DiningTable
 from src.models.menu import MenuItem
+from src.models.order import Order
 from src.models.restaurant import Restaurant
+from src.models.session import GuestSession
 
 
 async def _demo_venue(db: AsyncSession) -> Restaurant:
@@ -324,3 +327,50 @@ async def test_demo_reset_frees_open_tables_but_never_one_with_an_unpaid_bill(
     await db_session.refresh(unpaid)
     assert (free_me.closed_at is not None, free_me.close_reason) == (True, "staff_closed")
     assert (unpaid.closed_at, unpaid.close_reason) == (None, None)
+
+
+async def test_demo_reset_cancels_the_waiting_orders_of_the_tables_it_frees(
+    client: AsyncClient, db_session: AsyncSession
+):
+    await seed_data(load_seed_data("data/seed/angeethi_house.json"), db_session)
+    mine = (
+        await db_session.execute(select(Restaurant).where(Restaurant.slug == "angeethi-house"))
+    ).scalar_one()
+    t1 = (
+        await db_session.scalars(
+            select(DiningTable)
+            .where(DiningTable.restaurant_id == mine.id, DiningTable.kind == "table")
+            .order_by(DiningTable.label)
+            .limit(1)
+        )
+    ).one()
+    sitting = await open_table(db_session, t1.id)
+    phone = GuestSession(
+        restaurant_id=mine.id,
+        table_id=t1.id,
+        language="en",
+        expires_at=datetime.now(UTC) + timedelta(hours=2),
+    )
+    db_session.add(phone)
+    await db_session.flush()
+    waiting = Order(
+        guest_session_id=phone.id,
+        restaurant_id=mine.id,
+        table_id=t1.id,
+        sitting_id=sitting.id,
+        status="pending_approval",
+        total=Decimal("60.00"),
+        idempotency_key="waiting",
+        payload_hash="x",
+    )
+    db_session.add(waiting)
+    await db_session.flush()
+
+    await as_member(client, db_session, mine.id, "owner")
+    with patch.object(settings, "demo_mode", True):
+        resp = await client.post("/api/restaurants/angeethi-house/demo/reset")
+    assert resp.status_code == 200, resp.text
+
+    await db_session.refresh(waiting)
+    assert (waiting.status, waiting.void_reason) == ("cancelled", "Table closed")
+    assert waiting.voided_at is not None
