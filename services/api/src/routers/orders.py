@@ -195,11 +195,15 @@ async def create_order(
         # Bill lock before the sitting lock, the order every path takes.
         bill = await lock_open_bill(db, session.restaurant_id, session.table_id)
         sitting = await get_open_sitting(db, session.table_id)
-        if sitting is None:
+        # A phone from an earlier sitting rescans the QR to join the new party's visit.
+        if sitting is None or session.sitting_id not in (None, sitting.id):
             await db.commit()  # keep an idle close get_open_sitting may have just made
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT, detail={"error": "table_not_open"}
             )
+        # After the bill lock (a racing settle is committed by now), before any code try.
+        if not await session_is_current(db, session):
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=VISIT_ENDED)
         if sitting.code_required and session.sitting_id != sitting.id:
             await _check_table_code(session, sitting, payload.code)
         # After the code check: a guest typing the code is not ordering quickly.
@@ -321,9 +325,6 @@ async def create_order(
         bill = None
     elif sitting is not None:
         bill, bill_created = await open_bill_for_table(db, session.restaurant_id, session.table_id)
-    # After the bill lock: a settle racing this order is committed by now.
-    if session.table_id is not None and not await session_is_current(db, session):
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=VISIT_ENDED)
 
     over_first_order_cap = False
     if pending:

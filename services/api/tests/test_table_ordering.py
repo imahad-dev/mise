@@ -21,6 +21,7 @@ from src.models.restaurant import Restaurant
 from src.models.session import GuestSession
 from src.models.sitting import TableSitting
 from src.redis_client import redis_client
+from src.services.bills import VISIT_ENDED
 
 CHANGED = "The order changed. Please check the table again."
 
@@ -455,3 +456,32 @@ async def test_a_late_decline_never_cancels_a_fresh_order(client, db_session, tv
     stale = await act(client, tv, "approve", [o1])
     assert (stale.status_code, stale.json()["detail"]) == (409, CHANGED)
 
+
+async def test_an_ended_visit_is_told_before_any_code_is_tried(client, db_session, tv):
+    await open_table(db_session, tv.t1.id, code="4821")
+    await redis_client.delete(f"code_lock:{tv.s1.id}", f"code_attempts:{tv.s1.id}")
+    tv.t1.cleared_at = datetime.now(UTC)  # the phone scanned before the table was cleared
+    await db_session.flush()
+    resp = await post_order(client, tv.s1, tv.naan, code="0000")
+    assert resp.status_code == 409
+    assert resp.json()["detail"] == VISIT_ENDED
+    assert await redis_client.get(f"code_attempts:{tv.s1.id}") is None
+
+
+async def test_a_phone_from_an_earlier_sitting_must_scan_again(client, db_session, tv):
+    first = await open_table(db_session, tv.t1.id)
+    assert (await post_order(client, tv.s1, tv.naan)).status_code == 201
+    first.closed_at = datetime.now(UTC)
+    first.close_reason = "staff_closed"
+    await db_session.flush()
+    second = await open_table(db_session, tv.t1.id)
+    resp = await post_order(client, tv.s1, tv.naan)
+    assert resp.status_code == 409
+    assert resp.json()["detail"]["error"] == "table_not_open"
+    await db_session.refresh(tv.s1)
+    assert tv.s1.sitting_id == first.id  # never re-bound to the new party's sitting
+    # A phone that scans now joins the new sitting on its first order.
+    s2 = await new_session(db_session, tv)
+    assert (await post_order(client, s2, tv.naan)).status_code == 201
+    await db_session.refresh(s2)
+    assert s2.sitting_id == second.id
