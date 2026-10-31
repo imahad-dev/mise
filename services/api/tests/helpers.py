@@ -6,6 +6,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from httpx import AsyncClient
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.auth import AUTH_COOKIE_NAME, sign_value
@@ -96,9 +97,19 @@ async def seat_table(table_id: uuid.UUID) -> None:
 
 
 async def approve_order(order_id: uuid.UUID | str) -> None:
-    """The waiter approves the order's table if it is waiting, as POST .../approve does."""
+    """The waiter approves the order's table if it is waiting, as POST .../approve does with
+    the waiting orders the Floor tile shows."""
     async with _app_db() as db:
         order = await db.get(Order, uuid.UUID(str(order_id)), populate_existing=True)
         if order.status == "pending_approval":
-            await approve_pending(db, order.restaurant_id, order.table_id, "user:test")
+            waiting = (
+                await db.scalars(
+                    select(Order.id).where(
+                        Order.sitting_id == order.sitting_id, Order.status == "pending_approval"
+                    )
+                )
+            ).all()
+            await approve_pending(
+                db, order.restaurant_id, order.table_id, "user:test", list(waiting)
+            )
         await db.commit()

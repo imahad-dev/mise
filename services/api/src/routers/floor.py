@@ -20,8 +20,9 @@ from src.models.order import Order
 from src.models.service_call import ServiceCall
 from src.models.session import GuestSession
 from src.models.sitting import TableSitting
-from src.redis_client import publish_event
+from src.redis_client import publish_declined, publish_event
 from src.schemas.floor import (
+    ApprovalRequest,
     ApprovalResponse,
     ClearTableRequest,
     CloseSittingResponse,
@@ -38,7 +39,6 @@ from src.services import pay_forward
 from src.services.bills import CENTS
 from src.services.floor import THRESHOLDS, TableFacts, reason_label, table_state
 from src.services.sitting import (
-    APPROVED,
     approve_pending,
     close_sitting_for_table,
     decline_pending,
@@ -203,6 +203,7 @@ async def get_floor(
                 sitting_open=sitting is not None,
                 waiting_for_open=tile.waiting_for_open,
                 pending_order_id=pend[0].id if pend else None,
+                pending_order_ids=[o.id for o in pend],
                 pending_order_total=sum((o.total for o in pend), Decimal("0")) if pend else None,
                 pending_order_items=sum(i.quantity for o in pend for i in o.items)
                 if pend
@@ -422,77 +423,58 @@ async def close_table(
     return CloseSittingResponse(table_id=table.id, closed_at=now)
 
 
-ALREADY_HANDLED = "Already handled"
+APPROVAL_409 = {409: {"description": "The waiting orders changed, or already handled"}}
 
 
 @router.post(
     "/tables/{table_id}/approve",
     response_model=ApprovalResponse,
-    responses={**RESPONSES, 409: {"description": "Already handled: nothing is waiting"}},
+    responses={**RESPONSES, **APPROVAL_409},
 )
 async def approve_table(
     table_id: uuid.UUID,
+    payload: ApprovalRequest,
     access: RestaurantAccess = Depends(member_access),
     db: AsyncSession = Depends(get_db),
 ) -> ApprovalResponse:
-    """Send the table's waiting orders to the kitchen; a repeated tap returns the approved ones."""
+    """Send the waiting orders the waiter saw to the kitchen; a repeated tap replays."""
     rid = access.restaurant.id
     table = await _table(db, rid, table_id)
-    ids, bill, created = await approve_pending(db, rid, table.id, f"user:{access.user.id}")
-    if not ids:
-        # Replay: the visit is approved and nothing waits. Otherwise a decline got there first.
-        approved = list(
-            (
-                await db.scalars(
-                    select(Order.id)
-                    .join(TableSitting, TableSitting.id == Order.sitting_id)
-                    .where(
-                        TableSitting.table_id == table.id,
-                        TableSitting.closed_at.is_(None),
-                        Order.status.in_(APPROVED),
-                    )
-                    .order_by(Order.placed_at, Order.id)
-                )
-            ).all()
-        )
-        await db.commit()  # keep an idle close get_open_sitting may have just made
-        if not approved:
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=ALREADY_HANDLED)
-        return ApprovalResponse(table_id=table.id, order_ids=approved, status="placed")
+    bill, created = await approve_pending(
+        db, rid, table.id, f"user:{access.user.id}", payload.order_ids
+    )
     await db.commit()
-    for order_id in ids:
-        placed = json.dumps({"event": "order_placed", "order_id": str(order_id)})
-        await publish_event(f"kitchen:{rid}", placed)
-        await publish_event(f"orders:{order_id}", placed)
-    if created:
-        await publish_event(
-            f"kitchen:{rid}", json.dumps({"event": "bill_opened", "bill_id": str(bill.id)})
-        )
-    return ApprovalResponse(table_id=table.id, order_ids=ids, status="placed")
+    if bill is not None:  # else a replay: the first tap already told everyone
+        for order_id in payload.order_ids:
+            placed = json.dumps({"event": "order_placed", "order_id": str(order_id)})
+            await publish_event(f"kitchen:{rid}", placed)
+            await publish_event(f"orders:{order_id}", placed)
+        if created:
+            await publish_event(
+                f"kitchen:{rid}", json.dumps({"event": "bill_opened", "bill_id": str(bill.id)})
+            )
+    return ApprovalResponse(table_id=table.id, order_ids=payload.order_ids, status="placed")
 
 
 @router.post(
     "/tables/{table_id}/decline",
     response_model=ApprovalResponse,
-    responses={**RESPONSES, 409: {"description": "Already handled: nothing is waiting"}},
+    responses={**RESPONSES, **APPROVAL_409},
 )
 async def decline_table(
     table_id: uuid.UUID,
+    payload: ApprovalRequest,
     access: RestaurantAccess = Depends(member_access),
     db: AsyncSession = Depends(get_db),
 ) -> ApprovalResponse:
-    """Cancel the table's waiting orders ("Not now"); the table stays open for a new order."""
+    """Cancel the waiting orders the waiter saw ("Not now"); the table stays open."""
     rid = access.restaurant.id
     table = await _table(db, rid, table_id)
-    ids = await decline_pending(db, rid, table.id, access.user.id)
+    declined = await decline_pending(db, rid, table.id, access.user.id, payload.order_ids)
     await db.commit()
-    if not ids:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=ALREADY_HANDLED)
-    for order_id in ids:
-        declined = json.dumps({"event": "order_declined", "order_id": str(order_id)})
-        await publish_event(f"kitchen:{rid}", declined)  # the Floor reloads on kitchen events
-        await publish_event(f"orders:{order_id}", declined)
-    return ApprovalResponse(table_id=table.id, order_ids=ids, status="cancelled")
+    if declined:
+        await publish_declined(rid, payload.order_ids)
+    return ApprovalResponse(table_id=table.id, order_ids=payload.order_ids, status="cancelled")
 
 
 @router.post(

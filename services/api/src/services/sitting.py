@@ -4,6 +4,7 @@ import secrets
 import uuid
 from datetime import datetime, timedelta
 
+from fastapi import HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -134,19 +135,52 @@ async def _pending(db: AsyncSession, sitting_id: uuid.UUID) -> list[Order]:
     )
 
 
-async def approve_pending(
-    db: AsyncSession, restaurant_id: uuid.UUID, table_id: uuid.UUID, actor: str
-) -> tuple[list[uuid.UUID], Bill | None, bool]:
-    """Send every pending order of the table's open sitting to the kitchen on the table's bill.
+ORDER_CHANGED = "The order changed. Please check the table again."
+ALREADY_HANDLED = "Already handled"
+DECLINED = "Declined by waiter"
 
-    Returns (approved order ids, bill, bill created?); no ids when nothing was pending.
-    Caller commits.
+
+async def _waiting_as_seen(
+    db: AsyncSession, sitting: TableSitting | None, order_ids: list[uuid.UUID], *done
+) -> list[Order] | None:
+    """The sitting's waiting orders, when they are exactly `order_ids` (what the waiter saw).
+
+    None when every id is already handled the way `done` (filters on Order) says: a replay.
+    Otherwise 409: the waiting orders changed, or they were handled another way.
+    """
+    pending = await _pending(db, sitting.id) if sitting else []
+    if pending and {o.id for o in pending} == set(order_ids):
+        return pending
+    if sitting is not None:
+        handled = await db.scalar(
+            select(func.count(Order.id)).where(
+                Order.id.in_(order_ids), Order.sitting_id == sitting.id, *done
+            )
+        )
+        if handled == len(set(order_ids)):
+            return None
+    raise HTTPException(
+        status_code=status.HTTP_409_CONFLICT, detail=ORDER_CHANGED if pending else ALREADY_HANDLED
+    )
+
+
+async def approve_pending(
+    db: AsyncSession,
+    restaurant_id: uuid.UUID,
+    table_id: uuid.UUID,
+    actor: str,
+    order_ids: list[uuid.UUID],
+) -> tuple[Bill | None, bool]:
+    """Send the table's waiting orders to the kitchen on the table's bill, if they are the ones
+    the waiter saw (`order_ids`; see _waiting_as_seen for the 409s).
+
+    Returns (bill, bill created?); no bill on a replay. Caller commits.
     """
     await lock_open_bill(db, restaurant_id, table_id)  # bill lock before the sitting lock
     sitting = await get_open_sitting(db, table_id)
-    pending = await _pending(db, sitting.id) if sitting else []
-    if not pending:
-        return [], None, False
+    pending = await _waiting_as_seen(db, sitting, order_ids, Order.status.in_(APPROVED))
+    if pending is None:
+        return None, False
     bill, created = await open_bill_for_table(db, restaurant_id, table_id)
     for order in pending:
         order.bill_id = bill.id
@@ -160,23 +194,30 @@ async def approve_pending(
             )
         )
     await db.flush()
-    return [o.id for o in pending], bill, created
+    return bill, created
 
 
 async def decline_pending(
-    db: AsyncSession, restaurant_id: uuid.UUID, table_id: uuid.UUID, user_id: uuid.UUID
-) -> list[uuid.UUID]:
-    """Cancel every pending order of the table's open sitting (never on a bill, so no money
-    moves); the table stays open. Returns the declined ids, none when nothing was pending.
-    Caller commits."""
+    db: AsyncSession,
+    restaurant_id: uuid.UUID,
+    table_id: uuid.UUID,
+    user_id: uuid.UUID,
+    order_ids: list[uuid.UUID],
+) -> bool:
+    """Cancel the table's waiting orders if they are the ones the waiter saw (never on a bill,
+    so no money moves); the table stays open. False on a replay. Caller commits."""
     sitting = await get_open_sitting(db, table_id)
-    pending = await _pending(db, sitting.id) if sitting else []
+    pending = await _waiting_as_seen(
+        db, sitting, order_ids, Order.status == "cancelled", Order.void_reason == DECLINED
+    )
+    if pending is None:
+        return False
     now = await db.scalar(select(func.clock_timestamp()))
     for order in pending:
         order.status = "cancelled"
         order.voided_at = now
         order.voided_by = user_id
-        order.void_reason = "Declined by waiter"
+        order.void_reason = DECLINED
         db.add(
             AuditLog(
                 restaurant_id=restaurant_id,
@@ -186,4 +227,4 @@ async def decline_pending(
             )
         )
     await db.flush()
-    return [o.id for o in pending]
+    return True

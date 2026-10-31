@@ -22,6 +22,8 @@ from src.models.session import GuestSession
 from src.models.sitting import TableSitting
 from src.redis_client import redis_client
 
+CHANGED = "The order changed. Please check the table again."
+
 
 @dataclass
 class TV:
@@ -105,8 +107,11 @@ async def staff(client: AsyncClient, db: AsyncSession, tv: TV) -> None:
     await as_member(client, db, tv.r.id, "staff")
 
 
-async def act(client: AsyncClient, tv: TV, what: str):
-    return await client.post(f"/api/restaurants/{tv.r.slug}/tables/{tv.t1.id}/{what}")
+async def act(client: AsyncClient, tv: TV, what: str, order_ids: list[str]):
+    """Approve or decline the waiting orders the waiter saw on the tile."""
+    return await client.post(
+        f"/api/restaurants/{tv.r.slug}/tables/{tv.t1.id}/{what}", json={"order_ids": order_ids}
+    )
 
 
 async def order_row(db: AsyncSession, order_id: str) -> Order:
@@ -181,6 +186,7 @@ async def test_second_order_while_the_first_waits_also_waits_and_floor_sums_both
     await staff(client, db_session, tv)
     t = await floor_tile(client, tv)
     assert t["pending_order_id"] == first["id"]  # the oldest
+    assert t["pending_order_ids"] == [first["id"], second.json()["id"]]
     assert Decimal(t["pending_order_total"]) == Decimal("3360.00")
     assert t["pending_order_items"] == 4
 
@@ -190,7 +196,7 @@ async def test_approve_sends_every_waiting_order_to_the_kitchen_on_one_bill(clie
     o1 = (await post_order(client, tv.s1, tv.naan, 1)).json()["id"]
     o2 = (await post_order(client, tv.s1, tv.karahi, 1)).json()["id"]
     await staff(client, db_session, tv)
-    resp = await act(client, tv, "approve")
+    resp = await act(client, tv, "approve", [o1, o2])
     assert resp.status_code == 200, resp.text
     assert resp.json() == {"table_id": str(tv.t1.id), "order_ids": [o1, o2], "status": "placed"}
     r1, r2 = await order_row(db_session, o1), await order_row(db_session, o2)
@@ -215,11 +221,11 @@ async def test_approve_twice_replays_and_decline_after_approve_is_already_handle
     await open_table(db_session, tv.t1.id)
     o1 = (await post_order(client, tv.s1, tv.naan)).json()["id"]
     await staff(client, db_session, tv)
-    first = await act(client, tv, "approve")
-    second = await act(client, tv, "approve")
+    first = await act(client, tv, "approve", [o1])
+    second = await act(client, tv, "approve", [o1])
     assert first.status_code == second.status_code == 200
     assert second.json() == {"table_id": str(tv.t1.id), "order_ids": [o1], "status": "placed"}
-    late = await act(client, tv, "decline")
+    late = await act(client, tv, "decline", [o1])
     assert late.status_code == 409
     assert late.json()["detail"] == "Already handled"
     assert (await order_row(db_session, o1)).status == "placed"
@@ -229,7 +235,7 @@ async def test_approve_or_decline_with_nothing_waiting_is_already_handled(client
     await open_table(db_session, tv.t1.id)
     await staff(client, db_session, tv)
     for what in ("approve", "decline"):
-        resp = await act(client, tv, what)
+        resp = await act(client, tv, what, [str(uuid.uuid4())])
         assert resp.status_code == 409
         assert resp.json()["detail"] == "Already handled"
 
@@ -238,7 +244,7 @@ async def test_decline_cancels_without_a_bill_and_the_guest_can_order_again(clie
     sitting = await open_table(db_session, tv.t1.id)
     o1 = (await post_order(client, tv.s1, tv.karahi)).json()["id"]
     user = await as_member(client, db_session, tv.r.id, "staff")
-    resp = await act(client, tv, "decline")
+    resp = await act(client, tv, "decline", [o1])
     assert resp.status_code == 200, resp.text
     assert resp.json() == {"table_id": str(tv.t1.id), "order_ids": [o1], "status": "cancelled"}
     row = await order_row(db_session, o1)
@@ -259,7 +265,7 @@ async def test_settle_never_includes_a_waiting_order(client, db_session, tv):
     sitting = await open_table(db_session, tv.t1.id)
     o1 = (await post_order(client, tv.s1, tv.naan, 2)).json()["id"]
     await staff(client, db_session, tv)
-    assert (await act(client, tv, "approve")).status_code == 200
+    assert (await act(client, tv, "approve", [o1])).status_code == 200
     bill_id = (await order_row(db_session, o1)).bill_id
     # A waiting order on the same visit, e.g. one that raced the approval.
     other = await new_session(db_session, tv)
@@ -385,7 +391,7 @@ async def test_more_than_thirty_items_is_refused(client, db_session, tv):
 
 async def test_approve_and_decline_are_404_for_non_members(client, db_session, tv):
     await open_table(db_session, tv.t1.id)
-    await post_order(client, tv.s1, tv.naan)
+    oid = (await post_order(client, tv.s1, tv.naan)).json()["id"]
     other = Restaurant(
         name="Other",
         slug=f"other-{uuid.uuid4().hex[:8]}",
@@ -398,10 +404,54 @@ async def test_approve_and_decline_are_404_for_non_members(client, db_session, t
     await db_session.flush()
     await as_member(client, db_session, other.id, "owner")
     for what in ("approve", "decline"):
-        assert (await act(client, tv, what)).status_code == 404
+        assert (await act(client, tv, what, [oid])).status_code == 404
     client.cookies.delete(AUTH_COOKIE_NAME)
     for what in ("approve", "decline"):
-        assert (await act(client, tv, what)).status_code == 401
+        assert (await act(client, tv, what, [oid])).status_code == 401
     assert (
         await db_session.scalar(select(TableSitting.id).where(TableSitting.table_id == tv.t1.id))
     ) is not None
+
+
+async def test_approve_covers_only_the_orders_the_waiter_saw(client, db_session, tv):
+    await open_table(db_session, tv.t1.id)
+    o1 = (await post_order(client, tv.s1, tv.naan)).json()["id"]
+    await staff(client, db_session, tv)
+    seen = (await floor_tile(client, tv))["pending_order_ids"]
+    assert seen == [o1]
+    # The guest adds a big order after the waiter read the tile.
+    o2 = (await post_order(client, tv.s1, tv.karahi, 2)).json()["id"]
+    await staff(client, db_session, tv)
+    stale = await act(client, tv, "approve", seen)
+    assert stale.status_code == 409
+    assert stale.json()["detail"] == CHANGED
+    assert [(await order_row(db_session, o)).status for o in (o1, o2)] == ["pending_approval"] * 2
+    assert (await db_session.scalar(select(Bill.id).where(Bill.table_id == tv.t1.id))) is None
+    fresh = (await floor_tile(client, tv))["pending_order_ids"]
+    assert sorted(fresh) == sorted([o1, o2])  # one test transaction: same placed_at
+    resp = await act(client, tv, "approve", fresh)
+    assert resp.status_code == 200, resp.text
+    assert [(await order_row(db_session, o)).status for o in (o1, o2)] == ["placed"] * 2
+
+
+async def test_a_late_decline_never_cancels_a_fresh_order(client, db_session, tv):
+    await open_table(db_session, tv.t1.id)
+    o1 = (await post_order(client, tv.s1, tv.naan)).json()["id"]
+    await staff(client, db_session, tv)
+    assert (await act(client, tv, "decline", [o1])).status_code == 200
+    o2 = (await post_order(client, tv.s1, tv.karahi)).json()["id"]
+    await staff(client, db_session, tv)
+    # A retried "Not now" for the first order replays; the re-order still waits.
+    replay = await act(client, tv, "decline", [o1])
+    assert replay.status_code == 200, replay.text
+    assert replay.json()["order_ids"] == [o1]
+    assert (await order_row(db_session, o2)).status == "pending_approval"
+    # A stale tile that mixes the two is refused.
+    mixed = await act(client, tv, "decline", [o1, o2])
+    assert mixed.status_code == 409
+    assert mixed.json()["detail"] == CHANGED
+    assert (await order_row(db_session, o2)).status == "pending_approval"
+    # Approving the declined order is no replay either: the tile is stale.
+    stale = await act(client, tv, "approve", [o1])
+    assert (stale.status_code, stale.json()["detail"]) == (409, CHANGED)
+
