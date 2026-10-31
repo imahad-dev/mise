@@ -742,3 +742,15 @@ async def test_voiding_every_order_moves_the_reset_forward(client, db_session, t
     assert (await void(client, tv, o1)).status_code == 200
     assert not await session_is_current(db_session, bystander)
     assert await session_is_current(db_session, await scan(client, db_session, tv))
+
+
+async def test_guest_status_of_a_phone_left_from_the_last_party(client, db_session, tv):
+    await open_table(db_session, tv.t1.id)
+    leftover = await new_session(db_session, tv)  # scanned with party 1, never ordered
+    o1 = await approved_order(client, db_session, tv, tv.naan)
+    resp = await settle(client, tv.r.slug, (await order_row(db_session, o1)).bill_id)
+    assert resp.status_code == 200, resp.text
+    await open_table(db_session, tv.t1.id, code="4821")
+    # As create_order would judge it: the visit ended, so no table and no code to ask for.
+    assert await guest_status(client, leftover) == (False, False)
+    assert (await post_order(client, leftover, tv.naan, code="4821")).status_code == 409

@@ -139,7 +139,11 @@ async def get_guest_session(
                 )
             )
         ).one_or_none()
-        sitting_open = sitting is not None and session.sitting_id in (None, sitting.id)
+        sitting_open = (
+            sitting is not None
+            and session.sitting_id in (None, sitting.id)
+            and await session_is_current(db, session)  # a phone left from the last party
+        )
         code_required = sitting_open and sitting.code_required and session.sitting_id is None
     return GuestSessionStatusResponse(
         **GuestSessionResponse.model_validate(session).model_dump(),
