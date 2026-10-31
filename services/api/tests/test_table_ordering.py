@@ -754,3 +754,38 @@ async def test_guest_status_of_a_phone_left_from_the_last_party(client, db_sessi
     # As create_order would judge it: the visit ended, so no table and no code to ask for.
     assert await guest_status(client, leftover) == (False, False)
     assert (await post_order(client, leftover, tv.naan, code="4821")).status_code == 409
+
+
+async def test_approval_takes_one_to_a_hundred_order_ids(client, db_session, tv):
+    await open_table(db_session, tv.t1.id)
+    o1 = (await post_order(client, tv.s1, tv.naan)).json()["id"]
+    await staff(client, db_session, tv)
+    for what in ("approve", "decline"):
+        assert (await act(client, tv, what, [])).status_code == 422
+        too_many = [o1] + [str(uuid.uuid4()) for _ in range(100)]
+        assert (await act(client, tv, what, too_many)).status_code == 422
+    assert (await order_row(db_session, o1)).status == "pending_approval"
+
+
+async def test_approving_an_order_of_another_table_is_refused(client, db_session, tv):
+    t2 = DiningTable(restaurant_id=tv.r.id, label="T2", qr_token=uuid.uuid4().hex)
+    db_session.add(t2)
+    await db_session.flush()
+    await open_table(db_session, tv.t1.id)
+    await open_table(db_session, t2.id)
+    elsewhere = GuestSession(
+        restaurant_id=tv.r.id,
+        table_id=t2.id,
+        language="en",
+        expires_at=datetime.now(UTC) + timedelta(hours=2),
+    )
+    db_session.add(elsewhere)
+    await db_session.flush()
+    o1 = (await post_order(client, tv.s1, tv.naan)).json()["id"]
+    o2 = (await post_order(client, elsewhere, tv.karahi)).json()["id"]
+    await staff(client, db_session, tv)
+    for what in ("approve", "decline"):
+        for ids in ([o2], [o1, o2]):
+            resp = await act(client, tv, what, ids)
+            assert (resp.status_code, resp.json()["detail"]) == (409, CHANGED)
+    assert [(await order_row(db_session, o)).status for o in (o1, o2)] == ["pending_approval"] * 2

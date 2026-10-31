@@ -42,7 +42,8 @@ class OpenSittingResponse(BaseModel):
 
 
 class ApprovalRequest(BaseModel):
-    order_ids: list[uuid.UUID] = Field(min_length=1)  # the waiting orders the tile showed
+    # The waiting orders the tile showed.
+    order_ids: list[uuid.UUID] = Field(min_length=1, max_length=100)
 
 
 class ApprovalResponse(BaseModel):
