@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.models.bill import Bill
 from src.models.order import Order
 from src.models.service_call import ServiceCall
 from src.models.sitting import TableSitting
@@ -42,7 +43,8 @@ async def open_sitting_for_table(
 
 
 async def get_open_sitting(db: AsyncSession, table_id: uuid.UUID) -> TableSitting | None:
-    """The table's open sitting, lazily closing it first if it has gone idle.
+    """The table's open sitting, lazily closing it first if it has gone idle (never while
+    the table has an open bill).
 
     Caller owns the txn.
     """
@@ -55,6 +57,12 @@ async def get_open_sitting(db: AsyncSession, table_id: uuid.UUID) -> TableSittin
     ).scalar_one_or_none()
     if sitting is None:
         return None
+    # Spec §1: an open unpaid bill is never idle-closed.
+    open_bill = await db.scalar(
+        select(Bill.id).where(Bill.table_id == table_id, Bill.status == "open").limit(1)
+    )
+    if open_bill is not None:
+        return sitting
     now = await db.scalar(select(func.clock_timestamp()))
     last_activity = await _last_activity(db, sitting.id, sitting.table_id)
     if is_idle(opened_at=sitting.opened_at, last_activity_at=last_activity, now=now):

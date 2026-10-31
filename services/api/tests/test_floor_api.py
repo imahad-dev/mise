@@ -341,7 +341,8 @@ async def test_floor_shows_waiting_guests_and_pending_approval(client, db_sessio
     assert (t1["state"], t1["sitting_open"], t1["waiting_for_open"]) == ("seated", False, True)
     assert t1["pending_order_id"] is None
 
-    assert (await client.post(sitting_url(fv, fv.t1))).status_code == 201
+    opened = await client.post(sitting_url(fv, fv.t1))
+    assert opened.status_code == 201
     guest(client, s1)
     resp = await client.post(
         "/api/orders",
@@ -354,7 +355,10 @@ async def test_floor_shows_waiting_guests_and_pending_approval(client, db_sessio
     assert resp.status_code == 201, resp.text
     order_id = resp.json()["id"]
     await db_session.execute(
-        update(Order).where(Order.id == uuid.UUID(order_id)).values(status="pending_approval")
+        # Spec: a pending_approval order is always the first order of its sitting.
+        update(Order)
+        .where(Order.id == uuid.UUID(order_id))
+        .values(status="pending_approval", sitting_id=uuid.UUID(opened.json()["sitting_id"]))
     )
     await as_member(client, db_session, fv.r.id, "staff")
     t1 = tile(await floor(client, fv), "T1")
@@ -362,3 +366,61 @@ async def test_floor_shows_waiting_guests_and_pending_approval(client, db_sessio
     assert (t1["sitting_open"], t1["waiting_for_open"]) == (True, False)
     assert t1["pending_order_id"] == order_id
     assert (t1["pending_order_total"], t1["pending_order_items"]) == ("180.00", 3)
+
+
+async def test_open_table_race_answers_409_not_500(client, db_session, fv, monkeypatch):
+    """Two simultaneous opens both pass get_open_sitting; the second insert hits the
+    one-open-sitting-per-table unique index and must answer 409, not 500."""
+    await as_member(client, db_session, fv.r.id, "staff")
+    url = sitting_url(fv, fv.t1)
+    db_session.add(TableSitting(table_id=fv.t1.id))
+    await db_session.flush()
+
+    async def none(db, table_id):
+        return None
+
+    monkeypatch.setattr("src.routers.floor.get_open_sitting", none)
+    resp = await client.post(url)
+    assert (resp.status_code, resp.json()["detail"]) == (409, "Table is already open")
+
+
+async def test_open_table_with_open_bill_is_refused(client, db_session, fv):
+    await as_member(client, db_session, fv.r.id, "staff")
+    db_session.add(Bill(restaurant_id=fv.r.id, table_id=fv.t1.id, bill_no=1))
+    await db_session.flush()
+
+    resp = await client.post(sitting_url(fv, fv.t1))
+    assert (resp.status_code, resp.json()["detail"]) == (409, "Settle the bill first")
+
+
+async def test_pending_order_of_a_closed_sitting_does_not_show_on_the_next_party(
+    client, db_session, fv
+):
+    await as_member(client, db_session, fv.r.id, "staff")
+    old = TableSitting(
+        table_id=fv.t1.id,
+        opened_at=func.now() - timedelta(hours=2),
+        closed_at=func.now() - timedelta(hours=1),
+        close_reason="staff_closed",
+    )
+    db_session.add(old)
+    await db_session.flush()
+    s1 = await seat(db_session, fv, fv.t1, minutes_ago=120)
+    db_session.add(
+        Order(
+            guest_session_id=s1.id,
+            restaurant_id=fv.r.id,
+            table_id=fv.t1.id,
+            sitting_id=old.id,
+            status="pending_approval",
+            total=Decimal("60.00"),
+            idempotency_key=uuid.uuid4().hex,
+            payload_hash=uuid.uuid4().hex,
+        )
+    )
+    await db_session.flush()
+
+    assert (await client.post(sitting_url(fv, fv.t1))).status_code == 201
+    t1 = tile(await floor(client, fv), "T1")
+    assert t1["pending_order_id"] is None
+    assert t1["state"] != "approval_needed"

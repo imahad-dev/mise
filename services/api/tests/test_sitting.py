@@ -6,6 +6,7 @@ from decimal import Decimal
 
 from sqlalchemy import func
 
+from src.models.bill import Bill
 from src.models.dining_table import DiningTable
 from src.models.order import Order
 from src.models.restaurant import Restaurant
@@ -105,4 +106,32 @@ async def test_a_previous_sittings_orders_do_not_leak_into_the_next_ones_idle_ch
 
     assert result is not None
     assert result.id == new_sitting.id
+    assert result.closed_at is None
+
+
+async def test_an_open_unpaid_bill_is_never_idle_closed(db_session):
+    """Spec §1: a sitting with an open bill stays open however long it has been quiet."""
+    r = Restaurant(
+        name="Unpaid Venue",
+        slug=f"unpaid-{uuid.uuid4().hex[:8]}",
+        city="Lahore",
+        currency="PKR",
+        timezone="Asia/Karachi",
+        languages=["en"],
+        default_language="en",
+        tax_jurisdiction="PB",
+    )
+    db_session.add(r)
+    await db_session.flush()
+    table = DiningTable(restaurant_id=r.id, label="T1", qr_token=uuid.uuid4().hex)
+    db_session.add(table)
+    await db_session.flush()
+    sitting = TableSitting(table_id=table.id, opened_at=func.now() - timedelta(hours=3))
+    db_session.add_all([sitting, Bill(restaurant_id=r.id, table_id=table.id, bill_no=1)])
+    await db_session.flush()
+
+    result = await get_open_sitting(db_session, table.id)
+
+    assert result is not None
+    assert result.id == sitting.id
     assert result.closed_at is None

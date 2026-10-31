@@ -7,6 +7,7 @@ from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import and_, func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -130,13 +131,20 @@ async def get_floor(
             )
         ).all()
     }
+    # Newest first, so the dict keeps each table's oldest pending order of its open sitting.
     pending = {
         o.table_id: o
         for o in (
             await db.scalars(
                 select(Order)
+                .join(TableSitting, TableSitting.id == Order.sitting_id)
                 .options(selectinload(Order.items))
-                .where(Order.restaurant_id == rid, Order.status == "pending_approval")
+                .where(
+                    Order.restaurant_id == rid,
+                    Order.status == "pending_approval",
+                    TableSitting.closed_at.is_(None),
+                )
+                .order_by(Order.placed_at.desc(), Order.id.desc())
             )
         ).all()
     }
@@ -319,7 +327,7 @@ async def _table(db: AsyncSession, rid: uuid.UUID, table_id: uuid.UUID) -> Dinin
     status_code=status.HTTP_201_CREATED,
     responses={
         **RESPONSES,
-        409: {"description": "Table is already open, or is a counter"},
+        409: {"description": "Table is already open, is a counter, or has an unpaid bill"},
     },
 )
 async def open_table(
@@ -334,11 +342,23 @@ async def open_table(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT, detail="Counter tables are not opened"
         )
+    # A party seated now would join the previous party's unpaid bill.
+    open_bill = await db.scalar(
+        select(Bill.id).where(Bill.table_id == table.id, Bill.status == "open").limit(1)
+    )
+    if open_bill is not None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Settle the bill first")
     if await get_open_sitting(db, table.id) is not None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Table is already open")
-    sitting = await open_sitting_for_table(
-        db, table.id, access.user.id, access.restaurant.sitting_code_required
-    )
+    try:
+        sitting = await open_sitting_for_table(
+            db, table.id, access.user.id, access.restaurant.sitting_code_required
+        )
+    except IntegrityError:  # a concurrent open won the one-open-sitting-per-table index
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="Table is already open"
+        ) from None
     db.add(
         AuditLog(
             restaurant_id=rid,
