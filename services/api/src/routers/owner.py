@@ -40,6 +40,7 @@ from src.schemas.owner import (
     WhatIfResponse,
 )
 from src.services import pay_forward
+from src.services.bills import lock_open_bill
 from src.services.brief import compute_brief, compute_whatif
 from src.services.menu_ingest import ingest_menu_from_image
 from src.services.payment_details import PaymentDetailsError, validate_payment_details
@@ -674,13 +675,15 @@ async def reset_demo_data(
                             DiningTable.restaurant_id == access.restaurant.id
                         )
                     ),
-                    ~exists().where(Bill.table_id == TableSitting.table_id, Bill.status == "open"),
                 )
             )
         ).all()
         now = await db.scalar(select(func.clock_timestamp()))
         cancelled: list[uuid.UUID] = []
         for table_id in to_free:
+            # Under the bill lock, as close_table: a bill opened meanwhile keeps the table open.
+            if await lock_open_bill(db, access.restaurant.id, table_id) is not None:
+                continue
             cancelled += await close_sitting_for_table(
                 db, table_id, "staff_closed", now, access.user.id
             )
