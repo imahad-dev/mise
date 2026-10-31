@@ -6,7 +6,13 @@ from decimal import Decimal
 from typing import Literal
 
 State = Literal[
-    "free", "seated", "ordered", "served", "paying", "needs_clearing", "called",
+    "free",
+    "seated",
+    "ordered",
+    "served",
+    "paying",
+    "needs_clearing",
+    "called",
     "approval_needed",
 ]
 Level = Literal["none", "amber", "red"]
