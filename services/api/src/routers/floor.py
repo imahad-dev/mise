@@ -8,6 +8,7 @@ from decimal import Decimal
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from src.access import RestaurantAccess, member_access
 from src.database import get_db
@@ -17,13 +18,16 @@ from src.models.dining_table import DiningTable
 from src.models.order import Order
 from src.models.service_call import ServiceCall
 from src.models.session import GuestSession
+from src.models.sitting import TableSitting
 from src.redis_client import publish_event
 from src.schemas.floor import (
     ClearTableRequest,
+    CloseSittingResponse,
     FloorResponse,
     FloorTile,
     GiveRequest,
     GiveResponse,
+    OpenSittingResponse,
     ServiceCallResponse,
     TableClearedResponse,
     call_response,
@@ -31,6 +35,7 @@ from src.schemas.floor import (
 from src.services import pay_forward
 from src.services.bills import CENTS
 from src.services.floor import THRESHOLDS, TableFacts, reason_label, table_state
+from src.services.sitting import close_sitting_for_table, get_open_sitting, open_sitting_for_table
 
 router = APIRouter(prefix="/api/restaurants/{slug}", tags=["floor"])
 
@@ -114,6 +119,27 @@ async def get_floor(
             )
         ).all()
     }
+    sittings = {
+        s.table_id: s
+        for s in (
+            await db.scalars(
+                select(TableSitting).where(
+                    TableSitting.table_id.in_([t.id for t in tables]),
+                    TableSitting.closed_at.is_(None),
+                )
+            )
+        ).all()
+    }
+    pending = {
+        o.table_id: o
+        for o in (
+            await db.scalars(
+                select(Order)
+                .options(selectinload(Order.items))
+                .where(Order.restaurant_id == rid, Order.status == "pending_approval")
+            )
+        ).all()
+    }
 
     extra = access.restaurant.service_extra_label
     tiles: list[FloorTile] = []
@@ -121,6 +147,8 @@ async def get_floor(
         bill = open_bills.get(t.id)
         call = calls.get(t.id)
         total = (bill.total or Decimal("0")).quantize(CENTS) if bill else None
+        sitting = sittings.get(t.id)
+        pend = pending.get(t.id)
         tile = table_state(
             TableFacts(
                 table_id=str(t.id),
@@ -137,6 +165,9 @@ async def get_floor(
                 call_reason=call.reason if call else None,
                 call_since=call.created_at if call else None,
                 running_total=total,
+                sitting_open=sitting is not None,
+                sitting_opened_at=sitting.opened_at if sitting else None,
+                approval_pending=pend.placed_at if pend else None,
             ),
             now,
         )
@@ -154,6 +185,11 @@ async def get_floor(
                 running_total=total,
                 bill_id=bill.id if bill else None,
                 call_id=call.id if call else None,
+                sitting_open=sitting is not None,
+                waiting_for_open=tile.waiting_for_open,
+                pending_order_id=pend.id if pend else None,
+                pending_order_total=pend.total if pend else None,
+                pending_order_items=sum(i.quantity for i in pend.items) if pend else None,
             )
         )
     tiles.sort(key=lambda x: (LEVEL_ORDER[x.level], _natural(x.label)))
@@ -264,6 +300,97 @@ async def clear_table(
         f"kitchen:{rid}", json.dumps({"event": "table_cleared", "table_id": str(table.id)})
     )
     return TableClearedResponse(table_id=table.id, cleared_at=table.cleared_at)
+
+
+async def _table(db: AsyncSession, rid: uuid.UUID, table_id: uuid.UUID) -> DiningTable:
+    table = (
+        await db.execute(
+            select(DiningTable).where(DiningTable.id == table_id, DiningTable.restaurant_id == rid)
+        )
+    ).scalar_one_or_none()
+    if table is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Table not found")
+    return table
+
+
+@router.post(
+    "/tables/{table_id}/sitting",
+    response_model=OpenSittingResponse,
+    status_code=status.HTTP_201_CREATED,
+    responses={
+        **RESPONSES,
+        409: {"description": "Table is already open, or is a counter"},
+    },
+)
+async def open_table(
+    table_id: uuid.UUID,
+    access: RestaurantAccess = Depends(member_access),
+    db: AsyncSession = Depends(get_db),
+) -> OpenSittingResponse:
+    """Staff seat a party: guests at this table may order once it is open."""
+    rid = access.restaurant.id
+    table = await _table(db, rid, table_id)
+    if table.kind != "table":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="Counter tables are not opened"
+        )
+    if await get_open_sitting(db, table.id) is not None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Table is already open")
+    sitting = await open_sitting_for_table(
+        db, table.id, access.user.id, access.restaurant.sitting_code_required
+    )
+    db.add(
+        AuditLog(
+            restaurant_id=rid,
+            event_type="table_opened",
+            actor=f"user:{access.user.id}",
+            payload={"table_id": str(table.id), "sitting_id": str(sitting.id)},
+        )
+    )
+    await db.commit()
+    await publish_event(
+        f"kitchen:{rid}", json.dumps({"event": "table_opened", "table_id": str(table.id)})
+    )
+    return OpenSittingResponse(
+        sitting_id=sitting.id, code=sitting.code, opened_at=sitting.opened_at
+    )
+
+
+@router.delete(
+    "/tables/{table_id}/sitting",
+    response_model=CloseSittingResponse,
+    responses={**RESPONSES, 409: {"description": "Settle the bill first, or no sitting is open"}},
+)
+async def close_table(
+    table_id: uuid.UUID,
+    access: RestaurantAccess = Depends(member_access),
+    db: AsyncSession = Depends(get_db),
+) -> CloseSittingResponse:
+    rid = access.restaurant.id
+    table = await _table(db, rid, table_id)
+    open_bill = await db.scalar(
+        select(Bill.id).where(Bill.table_id == table.id, Bill.status == "open").limit(1)
+    )
+    if open_bill is not None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Settle the bill first")
+    if await get_open_sitting(db, table.id) is None:
+        await db.commit()  # keep an idle close get_open_sitting may have just made
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="No sitting is open")
+    now = await db.scalar(select(func.clock_timestamp()))
+    await close_sitting_for_table(db, table.id, "staff_closed", now)
+    db.add(
+        AuditLog(
+            restaurant_id=rid,
+            event_type="table_closed",
+            actor=f"user:{access.user.id}",
+            payload={"table_id": str(table.id)},
+        )
+    )
+    await db.commit()
+    await publish_event(
+        f"kitchen:{rid}", json.dumps({"event": "table_closed", "table_id": str(table.id)})
+    )
+    return CloseSittingResponse(table_id=table.id, closed_at=now)
 
 
 @router.post(

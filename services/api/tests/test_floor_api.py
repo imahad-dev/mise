@@ -19,6 +19,7 @@ from src.models.menu import MenuItem, MenuTranslation
 from src.models.order import Order
 from src.models.restaurant import Restaurant
 from src.models.session import GuestSession
+from src.models.sitting import TableSitting
 from src.routers.floor import _natural
 
 
@@ -155,7 +156,11 @@ async def test_floor_follows_a_table(client, db_session, fv, monkeypatch):
     assert (d["tiles"][0]["state"], d["tiles"][0]["level"]) == ("seated", "red")
     assert d["counts"] == {"red": 1, "amber": 0}
     assert (tile(d, "T3")["state"], tile(d, "T3")["level"]) == ("seated", "none")
+    assert tile(d, "T1")["waiting_for_open"] is True
 
+    # Guests order once staff open the table.
+    opened = await client.post(f"/api/restaurants/{fv.r.slug}/tables/{fv.t1.id}/sitting")
+    assert opened.status_code == 201, opened.text
     order_id = await order(client, s1, fv.naan)
     t1 = tile(await floor(client, fv), "T1")
     assert t1["state"] == "ordered"
@@ -180,7 +185,10 @@ async def test_floor_follows_a_table(client, db_session, fv, monkeypatch):
     assert cleared.status_code == 200, cleared.text
     assert cleared.json()["table_id"] == str(fv.t1.id)
     assert tile(await floor(client, fv), "T1")["state"] == "free"
-    assert events == [{"event": "table_cleared", "table_id": str(fv.t1.id)}]
+    assert events == [
+        {"event": "table_opened", "table_id": str(fv.t1.id)},
+        {"event": "table_cleared", "table_id": str(fv.t1.id)},
+    ]
 
 
 async def test_clear_refuses_open_bill_and_other_venues(client, db_session, fv):
@@ -213,6 +221,7 @@ async def test_clear_refuses_open_bill_and_other_venues(client, db_session, fv):
 
 
 async def test_cancelled_orders_do_not_drive_the_tile(client, db_session, fv):
+    db_session.add(TableSitting(table_id=fv.t1.id))
     s1 = await seat(db_session, fv, fv.t1)
     cancelled = await order(client, s1, fv.naan)
     kept = await order(client, s1, fv.naan)
@@ -254,3 +263,102 @@ async def test_simulated_bills_without_table_do_not_affect_tiles(client, db_sess
         ("T2", "free"),
         ("T3", "free"),
     ]
+
+
+def sitting_url(venue: FloorVenue, table: DiningTable) -> str:
+    return f"/api/restaurants/{venue.r.slug}/tables/{table.id}/sitting"
+
+
+async def test_open_table_returns_a_code_only_when_required(client, db_session, fv, monkeypatch):
+    events = record_events(monkeypatch, "src.routers.floor.publish_event")
+    await as_member(client, db_session, fv.r.id, "staff")
+
+    resp = await client.post(sitting_url(fv, fv.t1))
+    assert resp.status_code == 201, resp.text
+    assert resp.json()["code"] is None
+    assert events == [{"event": "table_opened", "table_id": str(fv.t1.id)}]
+    t1 = tile(await floor(client, fv), "T1")
+    assert (t1["sitting_open"], t1["waiting_for_open"]) == (True, False)
+
+    fv.r.sitting_code_required = True
+    await db_session.flush()
+    resp = await client.post(sitting_url(fv, fv.t2))
+    assert resp.status_code == 201, resp.text
+    code = resp.json()["code"]
+    assert len(code) == 4 and code.isdigit()
+    assert "code" not in tile(await floor(client, fv), "T2")
+
+
+async def test_open_table_refuses_twice_counters_and_other_venues(client, db_session, fv):
+    other = new_restaurant("Other Venue")
+    db_session.add(other)
+    await db_session.flush()
+    foreign = new_table(other.id, "T1")
+    db_session.add(foreign)
+    await db_session.flush()
+    await as_member(client, db_session, fv.r.id, "staff")
+
+    assert (await client.post(sitting_url(fv, fv.t1))).status_code == 201
+    resp = await client.post(sitting_url(fv, fv.t1))
+    assert (resp.status_code, resp.json()["detail"]) == (409, "Table is already open")
+    resp = await client.post(sitting_url(fv, fv.counter))
+    assert (resp.status_code, resp.json()["detail"]) == (409, "Counter tables are not opened")
+    assert (await client.post(sitting_url(fv, foreign))).status_code == 404
+    assert (await client.delete(sitting_url(fv, foreign))).status_code == 404
+
+
+async def test_close_table(client, db_session, fv, monkeypatch):
+    events = record_events(monkeypatch, "src.routers.floor.publish_event")
+    await as_member(client, db_session, fv.r.id, "staff")
+    assert (await client.post(sitting_url(fv, fv.t1))).status_code == 201
+
+    resp = await client.delete(sitting_url(fv, fv.t1))
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["table_id"] == str(fv.t1.id)
+    assert events[-1] == {"event": "table_closed", "table_id": str(fv.t1.id)}
+    assert tile(await floor(client, fv), "T1")["sitting_open"] is False
+
+    resp = await client.delete(sitting_url(fv, fv.t1))
+    assert (resp.status_code, resp.json()["detail"]) == (409, "No sitting is open")
+
+
+async def test_close_table_with_open_bill_is_refused(client, db_session, fv):
+    await as_member(client, db_session, fv.r.id, "staff")
+    assert (await client.post(sitting_url(fv, fv.t2))).status_code == 201
+    s2 = await seat(db_session, fv, fv.t2)
+    await order(client, s2, fv.naan)
+    await as_member(client, db_session, fv.r.id, "staff")
+
+    resp = await client.delete(sitting_url(fv, fv.t2))
+    assert (resp.status_code, resp.json()["detail"]) == (409, "Settle the bill first")
+    assert tile(await floor(client, fv), "T2")["sitting_open"] is True
+
+
+async def test_floor_shows_waiting_guests_and_pending_approval(client, db_session, fv):
+    s1 = await seat(db_session, fv, fv.t1)
+    await as_member(client, db_session, fv.r.id, "staff")
+    t1 = tile(await floor(client, fv), "T1")
+    assert (t1["state"], t1["sitting_open"], t1["waiting_for_open"]) == ("seated", False, True)
+    assert t1["pending_order_id"] is None
+
+    assert (await client.post(sitting_url(fv, fv.t1))).status_code == 201
+    guest(client, s1)
+    resp = await client.post(
+        "/api/orders",
+        json={
+            "idempotency_key": uuid.uuid4().hex,
+            "items": [{"menu_item_id": str(fv.naan.id), "quantity": 3}],
+            "acknowledge_allergen_risk": True,
+        },
+    )
+    assert resp.status_code == 201, resp.text
+    order_id = resp.json()["id"]
+    await db_session.execute(
+        update(Order).where(Order.id == uuid.UUID(order_id)).values(status="pending_approval")
+    )
+    await as_member(client, db_session, fv.r.id, "staff")
+    t1 = tile(await floor(client, fv), "T1")
+    assert t1["state"] == "approval_needed"
+    assert (t1["sitting_open"], t1["waiting_for_open"]) == (True, False)
+    assert t1["pending_order_id"] == order_id
+    assert (t1["pending_order_total"], t1["pending_order_items"]) == ("180.00", 3)
