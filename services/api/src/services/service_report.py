@@ -12,10 +12,19 @@ Stage waits (averages over the served sittings that have both timestamps):
   kitchen first saw it (approval time when it waited for approval, else placement).
 - bill: bill requested -> settled.
 
-Hours are local hours of opening. Red alerts replay services/floor.py THRESHOLDS per sitting
-(every closed sitting, served or not); a wait that never ended runs to its end: the voiding of
-the order, else the sitting's close. The order-no-bump clock starts at placement, as the
-Floor tile's "ordered" clock does.
+Hours are local hours of opening. The slowest hour is only named among hours that opened at
+least MIN_SITTINGS_FOR_SLOWEST_HOUR (2) served sittings, so one long table can't make an hour
+"slow".
+
+Red alerts replay services/floor.py THRESHOLDS per sitting (every closed sitting, served or not).
+Each clock stops when the Floor tile (table_state: approval, called, paying, ordered, seated)
+would have left that state:
+- seated_no_order: opened -> first order placed, else the close.
+- approval_needed: first order placed -> approved, else voided, else the close.
+- order_no_bump: placed (as the tile's "ordered" clock) -> the earliest of bumped, voided, the
+  sitting's bill request (the tile turns "paying") and the close.
+- bill_not_settled: bill requested -> settled, else the close.
+Calls for staff are not recorded per sitting, so "called" is not replayed.
 """
 
 from __future__ import annotations
@@ -117,7 +126,15 @@ def _alerts(s: SittingRecord) -> set[str]:
     ):
         out.add("approval_needed")
     if any(
-        _red("ordered", o.placed_at, o.bumped_at or o.voided_at or s.closed_at)
+        _red(
+            "ordered",
+            o.placed_at,
+            min(
+                t
+                for t in (o.bumped_at, o.voided_at, s.bill_requested_at, s.closed_at)
+                if t is not None
+            ),
+        )
         for o in s.orders
         if o.on_bill
     ):
@@ -176,19 +193,27 @@ _STAGE_WORDS = {
 }
 
 
-def _minutes(seconds: int | None) -> int | None:
-    return None if seconds is None else round(seconds / 60)
+UNDER_A_MINUTE = "under a minute"
+
+
+def _minutes(seconds: int | None) -> int | str | None:
+    # Words, not a misleading 0 (or a rounded-up 1): the number check has nothing to ground.
+    if seconds is None:
+        return None
+    return UNDER_A_MINUTE if seconds < 60 else round(seconds / 60)
 
 
 def _clock(hour: int | None) -> str | None:
     return None if hour is None else f"{hour:02d}:00"
 
 
-def summary_facts(report: ServiceReport, day: str) -> dict:
-    """The only facts the model sees: report numbers in whole minutes, no tables or guests."""
+def summary_facts(report: ServiceReport) -> dict:
+    """The only facts the model sees: report numbers in whole minutes, no tables or guests.
+
+    The day is left out: its digits would ground any number that happened to match them.
+    """
     slow = report.slowest_hour
     return {
-        "day": day,
         "tables_served": report.tables_served,
         "closed_without_bill": report.closed_without_bill,
         "average_table_minutes": _minutes(report.average_table_seconds),
@@ -205,14 +230,15 @@ def summary_facts(report: ServiceReport, day: str) -> dict:
     }
 
 
-def template_summary(f: dict) -> str:
-    """One sentence from the facts only; used when the model is unavailable or rejected."""
+def template_summary(f: dict, day: str) -> str:
+    """One sentence from the facts and the day; used when the model is unavailable or rejected."""
     if not f["tables_served"]:
-        return f"No tables were served on {f['day']}."
+        return f"No tables were served on {day}."
     n = f["tables_served"]
+    m = f["average_table_minutes"]
     text = (
-        f"On {f['day']}, {n} {'table was' if n == 1 else 'tables were'} served, averaging "
-        f"{f['average_table_minutes']} minutes per table"
+        f"On {day}, {n} {'table was' if n == 1 else 'tables were'} served, averaging "
+        f"{m if m == UNDER_A_MINUTE else f'{m} minutes'} per table"
     )
     if f["busiest_hour"]:
         text += f", busiest at {f['busiest_hour']}"

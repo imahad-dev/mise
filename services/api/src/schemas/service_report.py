@@ -3,7 +3,7 @@
 from datetime import date
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class StageWaits(BaseModel):
@@ -30,7 +30,9 @@ class ServiceReportResponse(BaseModel):
     day: date
     tables_served: int
     closed_without_bill: int
-    simulated_sittings: int
+    simulated_sittings: int = Field(
+        description="Sittings with simulated orders; 0 until the simulator seats tables."
+    )
     average_table_seconds: int | None
     average_wait_seconds: StageWaits
     busiest_hour: int | None

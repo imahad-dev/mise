@@ -19,6 +19,7 @@ from src.models.bill import Bill
 from src.models.order import Order
 from src.models.session import GuestSession
 from src.models.sitting import TableSitting
+from src.routers import owner as owner_router
 
 DAY = "2026-10-20"
 NOON = datetime(2026, 10, 20, 7, 0, tzinfo=UTC)  # 12:00 in Asia/Karachi
@@ -29,8 +30,47 @@ def url(venue) -> str:
     return f"/api/restaurants/{venue.r.slug}/service-report"
 
 
+class FakeRedis:
+    """In-memory stand-in for the router's Redis: records each write's TTL."""
+
+    def __init__(self) -> None:
+        self.store: dict[str, str] = {}
+        self.ttl: dict[str, int | None] = {}
+        self.down = False
+
+    async def get(self, key):
+        if self.down:
+            raise ConnectionError("redis down")
+        return self.store.get(key)
+
+    async def set(self, key, value, ex=None):
+        if self.down:
+            raise ConnectionError("redis down")
+        self.store[key], self.ttl[key] = value, ex
+
+
+@pytest.fixture(autouse=True)
+def cache(monkeypatch) -> FakeRedis:
+    fake = FakeRedis()
+    monkeypatch.setattr(owner_router, "redis_client", fake)
+    return fake
+
+
+@pytest.fixture
+def narrate_calls(monkeypatch) -> list:
+    calls: list = []
+    real = owner_router.narrate
+
+    async def spy(*args, **kwargs):
+        calls.append(args)
+        return await real(*args, **kwargs)
+
+    monkeypatch.setattr(owner_router, "narrate", spy)
+    return calls
+
+
 async def test_a_served_table_shows_in_todays_report(client, db_session, fv):  # noqa: F811
-    await as_member(client, db_session, fv.r.id, "staff")
+    await as_member(client, db_session, fv.r.id, "owner")
     s1 = await seat(db_session, fv, fv.t1)
     opened = await client.post(f"/api/restaurants/{fv.r.slug}/tables/{fv.t1.id}/sitting")
     assert opened.status_code == 201, opened.text
@@ -175,7 +215,7 @@ async def test_report_numbers_for_a_day(client, db_session, fv, day):  # noqa: F
 
 
 async def test_an_empty_day_is_zeros_not_an_error(client, db_session, fv):  # noqa: F811
-    await as_member(client, db_session, fv.r.id, "staff")
+    await as_member(client, db_session, fv.r.id, "owner")
     resp = await client.get(url(fv), params={"day": "2020-01-01"})
     assert resp.status_code == 200, resp.text
     body = resp.json()
@@ -198,6 +238,55 @@ async def test_non_member_gets_404(client, db_session, fv):  # noqa: F811
     await db_session.flush()
     await as_member(client, db_session, other.id, "owner")
     assert (await client.get(url(fv))).status_code == 404
+
+
+async def test_staff_gets_403_like_the_brief(client, db_session, fv):  # noqa: F811
+    await as_member(client, db_session, fv.r.id, "staff")
+    assert (await client.get(url(fv))).status_code == 403
+    assert (await client.get(f"/api/restaurants/{fv.r.slug}/ai/brief")).status_code == 403
+
+
+async def test_report_is_cached_per_day(client, db_session, fv, day, cache, narrate_calls):  # noqa: F811
+    await as_member(client, db_session, fv.r.id, "owner")
+    first = await client.get(url(fv), params={"day": DAY})
+    again = await client.get(url(fv), params={"day": DAY})
+    assert first.json() == again.json()
+    assert len(narrate_calls) == 1  # the second call never reached the model
+    await client.get(url(fv), params={"day": "2026-10-21"})
+    assert len(narrate_calls) == 2  # another day is another entry
+
+    # A past day is final; today can still change.
+    today = (await client.get(url(fv))).json()["day"]
+    ttl = {k.rsplit(":", 1)[1]: v for k, v in cache.ttl.items()}
+    assert ttl[DAY] == ttl["2026-10-21"] == 7 * 24 * 3600
+    assert ttl[today] == 5 * 60
+    assert all(str(fv.r.id) in k for k in cache.ttl)
+
+
+async def test_redis_down_fails_open(client, db_session, fv, day, cache, narrate_calls):  # noqa: F811
+    await as_member(client, db_session, fv.r.id, "owner")
+    cache.down = True
+    resp = await client.get(url(fv), params={"day": DAY})
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["tables_served"] == 1
+    await client.get(url(fv), params={"day": DAY})
+    assert len(narrate_calls) == 2
+
+
+async def test_each_same_day_sitting_uses_its_own_bill(client, db_session, fv):  # noqa: F811
+    """Two parties at T2 on one day, each with its own bill: 2- and 10-minute bill waits."""
+    first = await _sitting(db_session, fv.t2, NOON, NOON + 30 * M, "settled")
+    early = await _bill(db_session, fv, fv.t2, 3, NOON + 20 * M, NOON + 22 * M)
+    await _order(db_session, fv, fv.t2, first, early, NOON + 2 * M, NOON + 10 * M)
+    second = await _sitting(db_session, fv.t2, NOON + 60 * M, NOON + 100 * M, "settled")
+    late = await _bill(db_session, fv, fv.t2, 4, NOON + 80 * M, NOON + 90 * M)
+    await _order(db_session, fv, fv.t2, second, late, NOON + 62 * M, NOON + 70 * M)
+    await as_member(client, db_session, fv.r.id, "owner")
+    body = (await client.get(url(fv), params={"day": DAY})).json()
+    assert body["tables_served"] == 2
+    # One bill for both would give 2 or 10 minutes and 0 or 2 red bill alerts.
+    assert body["average_wait_seconds"]["bill"] == 6 * 60
+    assert body["alerts"]["bill_not_settled"] == 1
 
 
 @pytest.fixture
@@ -228,6 +317,7 @@ async def test_summary_from_the_model_must_pass_the_number_check(
     fv,  # noqa: F811
     day,
     model_says,
+    cache,
 ):
     reply, sent = model_says
     await as_member(client, db_session, fv.r.id, "owner")
@@ -237,9 +327,16 @@ async def test_summary_from_the_model_must_pass_the_number_check(
     assert (body["summary"], body["summary_source"]) == (reply["text"], "llm")
 
     reply["text"] = "3 tables were served in 44 minutes."
+    cache.store.clear()
     body = (await client.get(url(fv), params={"day": DAY})).json()
     assert body["summary_source"] == "template"
     assert body["summary"].startswith(f"On {DAY}, 1 table was served")
+
+    # The day is not a fact: its digits (2026, 10, 20) ground nothing.
+    reply["text"] = "20 tables were served."
+    cache.store.clear()
+    body = (await client.get(url(fv), params={"day": DAY})).json()
+    assert body["summary_source"] == "template"
 
     # The model sees only the report's numbers: no table, guest, order or bill identifiers.
     facts = sent[-1]["messages"][-1]["content"]

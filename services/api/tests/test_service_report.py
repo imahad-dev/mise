@@ -243,7 +243,9 @@ def test_alert_replay_runs_to_the_close_when_the_wait_never_ended():
     # an order never bumped; a bill requested and the table cancelled.
     idle = sitting(0, 90, reason="idle_timeout")
     declined = sitting(0, 30, orders=[order(1, voided=10, on_bill=False)], reason="staff_closed")
-    unbumped = sitting(0, 40, orders=[order(1, approved=2)], requested=10, reason="cancelled")
+    # The bill is requested after the order went red: on the Floor the tile turns "paying" at
+    # the request, so an earlier request would end the "ordered" clock first.
+    unbumped = sitting(0, 40, orders=[order(1, approved=2)], requested=25, reason="cancelled")
     r = build_report([idle, declined, unbumped], TZ)
     assert r.alerts == {
         "seated_no_order": 1,
@@ -259,6 +261,13 @@ def test_order_no_bump_alert_counts_from_placement_like_the_floor_tile():
     r = build_report([sitting(0, 120, orders=[order(1, approved=10, bumped=1 + ordered)])], TZ)
     assert r.alerts["order_no_bump"] == 1
     assert r.average_wait_seconds["kitchen"] == (ordered - 9) * 60
+
+
+def test_order_no_bump_stops_at_the_bill_request_like_the_floor_tile():
+    # Once the bill is requested the tile shows "paying", not "ordered".
+    r = build_report([sitting(0, 120, orders=[order(1)], requested=5)], TZ)
+    assert r.alerts["order_no_bump"] == 0
+    assert r.alerts["bill_not_settled"] == 1  # the paying clock ran from 5 to the close
 
 
 def test_alerts_count_sittings_not_orders_and_skip_simulated():
@@ -282,9 +291,10 @@ def test_alerts_count_sittings_not_orders_and_skip_simulated():
     ],
 )
 def test_template_summary_is_one_sentence_grounded_in_the_facts(records):
-    facts = summary_facts(build_report(records, TZ), "2026-10-31")
-    text = template_summary(facts)
-    assert numbers_grounded(text, facts)
+    facts = summary_facts(build_report(records, TZ))
+    text = template_summary(facts, "2026-10-31")
+    # The day is code's own text, passed beside the facts; every other number is a fact.
+    assert numbers_grounded(text.replace("2026-10-31", ""), facts)
     assert text.count(".") <= 1 and text.endswith(".")
 
 
@@ -296,13 +306,12 @@ def test_summary_facts_carry_only_report_numbers():
         ],
         TZ,
     )
-    facts = summary_facts(report, "2026-10-31")
+    facts = summary_facts(report)
     assert facts["tables_served"] == 2
     assert facts["average_table_minutes"] == 58  # (47 + 68) / 2 = 57.5, rounded half to even
     assert facts["busiest_hour"] == "12:00"
     assert facts["slowest_hour"] == "12:00"
     assert set(facts) == {
-        "day",
         "tables_served",
         "closed_without_bill",
         "average_table_minutes",
@@ -313,3 +322,22 @@ def test_summary_facts_carry_only_report_numbers():
         "red_alerts",
         "red_alerts_total",
     }
+
+
+def test_the_day_is_not_a_fact_so_its_digits_ground_nothing():
+    three = [sitting(0, 40), sitting(0, 40), sitting(0, 40)]
+    facts = summary_facts(build_report(three, TZ))
+    assert numbers_grounded("3 tables were served", facts)
+    assert not numbers_grounded("31 tables were served", facts)
+    assert not numbers_grounded("2026 tables were served", facts)
+    assert template_summary(facts, "2026-10-31").startswith("On 2026-10-31, 3 tables were")
+
+
+def test_waits_under_a_minute_are_words_not_a_zero():
+    facts = summary_facts(build_report([sitting(0, 0, orders=[order(0)])], TZ))
+    assert facts["average_table_minutes"] == "under a minute"
+    assert facts["average_wait_minutes"]["to order"] == "under a minute"
+    assert 0 not in (facts["average_table_minutes"], *facts["average_wait_minutes"].values())
+    text = template_summary(facts, "2026-10-31")
+    assert "averaging under a minute per table" in text
+    assert numbers_grounded(text.replace("2026-10-31", ""), facts)

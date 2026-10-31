@@ -8,7 +8,7 @@ from sqlalchemy import exists, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from src.access import RestaurantAccess, member_access, owner_access
+from src.access import RestaurantAccess, owner_access
 from src.config import settings
 from src.database import get_db
 from src.inference.client import (
@@ -21,6 +21,7 @@ from src.models.bill import Bill
 from src.models.dining_table import DiningTable
 from src.models.menu import MenuItem, MenuItemOption
 from src.models.order import Order
+from src.models.restaurant import Restaurant
 from src.models.sitting import TableSitting
 from src.redis_client import publish_declined, redis_client
 from src.request_limits import enforce_ip_limit
@@ -578,22 +579,46 @@ async def daily_brief(
     status_code=status.HTTP_200_OK,
     responses={
         401: {"description": "Unauthenticated"},
+        403: {"description": "Unauthorized (Owner only)"},
         404: {"description": "Restaurant not found"},
         422: {"description": "Invalid day"},
     },
 )
 async def service_report(
     day: date | None = None,
-    access: RestaurantAccess = Depends(member_access),
+    access: RestaurantAccess = Depends(owner_access),
     db: AsyncSession = Depends(get_db),
     inference: InferenceClient | None = Depends(get_optional_inference_client),
 ) -> ServiceReportResponse:
     """How service went on one local day (default today), from sitting and order timestamps.
 
-    Code computes every number; the model may only phrase the one-line summary.
+    Code computes every number; the model may only phrase the one-line summary. Cached per day:
+    a past day is final (only sittings closed that day count), today can still change.
     """
     restaurant = access.restaurant
-    day = day or local_today(restaurant)
+    today = local_today(restaurant)
+    day = day or today
+    cache_key = f"cache:service-report:v1:{restaurant.id}:{day.isoformat()}"
+    try:
+        cached = await redis_client.get(cache_key)
+        if cached:
+            return ServiceReportResponse.model_validate_json(cached)
+    except Exception as e:
+        logger.warning("Redis error reading service report cache: %s", e)
+
+    resp = await _compute_service_report(db, restaurant, day, inference)
+
+    try:
+        ttl = 7 * 24 * 3600 if day < today else 5 * 60
+        await redis_client.set(cache_key, resp.model_dump_json(), ex=ttl)
+    except Exception as e:
+        logger.warning("Redis error writing service report cache: %s", e)
+    return resp
+
+
+async def _compute_service_report(
+    db: AsyncSession, restaurant: Restaurant, day: date, inference: InferenceClient | None
+) -> ServiceReportResponse:
     bounds = Window(restaurant.id, restaurant.timezone, day, day + timedelta(days=1)).params()
     sittings = (
         await db.execute(
@@ -637,6 +662,9 @@ async def service_report(
                     AuditLog.restaurant_id == restaurant.id,
                     AuditLog.event_type == "order_approved",
                     order_key.in_([str(o.id) for o in orders]),
+                    # An approval can't precede its sitting: bounds the scan of the audit log.
+                    AuditLog.created_at
+                    >= min((s.opened_at for s in sittings), default=bounds["start"]),
                 )
                 .group_by(order_key)
             )
@@ -691,12 +719,12 @@ async def service_report(
             )
         )
     report = build_report(records, restaurant.timezone)
-    facts = summary_facts(report, day.isoformat())
+    facts = summary_facts(report)
     summary, source = await narrate(
         inference,
         db,
         facts,
-        template_summary(facts),
+        template_summary(facts, day.isoformat()),
         task="daily service report summary",
         length="one sentence",
     )
