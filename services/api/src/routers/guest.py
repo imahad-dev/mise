@@ -23,6 +23,7 @@ from src.models.pay_forward import PayForward
 from src.models.restaurant import Restaurant
 from src.models.service_call import ServiceCall
 from src.models.session import GuestSession
+from src.models.sitting import TableSitting
 from src.redis_client import publish_event
 from src.schemas.bills import GuestBillResponse
 from src.schemas.floor import (
@@ -40,6 +41,7 @@ from src.schemas.guest import (
     GuestMenuResponse,
     GuestMenuRestaurant,
     GuestSessionResponse,
+    GuestSessionStatusResponse,
     PatchGuestSessionRequest,
 )
 from src.schemas.payments import (
@@ -114,15 +116,36 @@ async def create_guest_session(
 
 @router.get(
     "/session",
-    response_model=GuestSessionResponse,
+    response_model=GuestSessionStatusResponse,
     status_code=status.HTTP_200_OK,
     responses={401: {"description": "Unauthenticated or expired session"}},
 )
 async def get_guest_session(
     session: GuestSession = Depends(get_current_guest_session),
-) -> GuestSessionResponse:
-    """Retrieve details for the active guest session."""
-    return GuestSessionResponse.model_validate(session)
+    db: AsyncSession = Depends(get_db),
+) -> GuestSessionStatusResponse:
+    """The active guest session, and whether its table is open for this phone to order.
+
+    A plain read, as create_order would judge it: a counter needs no sitting; a phone bound to
+    an earlier sitting must scan again; the code is asked once per phone per sitting.
+    """
+    sitting_open, code_required = True, False
+    kind = await db.scalar(select(DiningTable.kind).where(DiningTable.id == session.table_id))
+    if session.table_id is not None and kind != "counter":
+        sitting = (
+            await db.execute(
+                select(TableSitting.id, TableSitting.code_required).where(
+                    TableSitting.table_id == session.table_id, TableSitting.closed_at.is_(None)
+                )
+            )
+        ).one_or_none()
+        sitting_open = sitting is not None and session.sitting_id in (None, sitting.id)
+        code_required = sitting_open and sitting.code_required and session.sitting_id is None
+    return GuestSessionStatusResponse(
+        **GuestSessionResponse.model_validate(session).model_dump(),
+        sitting_open=sitting_open,
+        code_required=code_required,
+    )
 
 
 @router.patch(

@@ -31,7 +31,6 @@ from src.models.restaurant import Restaurant
 from src.models.session import GuestSession
 from src.models.sitting import TableSitting
 from src.services.bills import (
-    VISIT_ENDED,
     local_date,
     reference_key,
     session_is_current,
@@ -520,8 +519,8 @@ async def test_claim_order_settle_rounds(committed_venue):  # noqa: F811 - the i
             claim, racing, settled = results
             assert claim.status_code in (200, 409), claim.text
             assert racing.status_code in (201, 409), racing.text
-            if racing.status_code == 409:
-                assert racing.json()["detail"] == VISIT_ENDED
+            if racing.status_code == 409:  # after the settle: the table is closed
+                assert racing.json()["detail"] == {"error": "table_not_open"}
             if settled.status_code == 409:
                 fresh = settled.json()["bill"]
                 assert settled.json()["detail"] == "Bill changed"
@@ -944,16 +943,19 @@ async def test_cancelled_bill_resets_the_table(client, db_session, pv):
     cleared = await client.post(url(pv, f"/tables/{pv.t1.id}/clear"))
     assert cleared.status_code == 200, cleared.text
 
-    # Its phone cannot start a new bill.
+    # Its phone cannot start a new bill: the cancel closed the table, and its phone belongs
+    # to that visit even once the table is opened again.
     guest(client, pv.session_t1)
-    again = await client.post(
-        "/api/orders",
-        json={
-            "idempotency_key": uuid.uuid4().hex,
-            "items": [{"menu_item_id": str(pv.naan.id), "quantity": 1}],
-        },
-    )
-    assert (again.status_code, again.json()["detail"]) == (409, VISIT_ENDED)
+    order = {
+        "idempotency_key": uuid.uuid4().hex,
+        "items": [{"menu_item_id": str(pv.naan.id), "quantity": 1}],
+    }
+    again = await client.post("/api/orders", json=order)
+    assert (again.status_code, again.json()["detail"]) == (409, {"error": "table_not_open"})
+    await seat_table(pv.t1.id)
+    order["idempotency_key"] = uuid.uuid4().hex
+    again = await client.post("/api/orders", json=order)
+    assert (again.status_code, again.json()["detail"]) == (409, {"error": "table_not_open"})
 
 
 @pytest.mark.timeout(120)
@@ -991,7 +993,13 @@ async def test_approve_racing_close_never_closes_a_table_with_an_unpaid_bill(com
                 assert (close.status_code, close.json()["detail"]) == (409, "Settle the bill first")
                 assert approve.status_code == 200, approve.text
                 assert (await settle(c.staff, slug, bill_id)).status_code == 200
-                assert (await c.staff.delete(f"{base}/tables/{table_id}/sitting")).is_success
+                async with async_session_factory() as s:  # settling closed the table
+                    assert (
+                        await s.scalar(
+                            select(TableSitting.close_reason).where(TableSitting.id == open_sitting)
+                        )
+                        == "settled"
+                    )
                 outcomes.add("approved")
             else:
                 assert close.status_code == 200, close.text

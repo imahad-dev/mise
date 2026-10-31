@@ -344,7 +344,8 @@ async def test_stale_phone_cannot_touch_the_next_partys_bill(client, db_session,
             "items": [{"menu_item_id": str(pv.naan.id), "quantity": 1}],
         },
     )
-    assert (order.status_code, order.json()["detail"]) == (409, VISIT_ENDED)
+    # A's phone belongs to the closed visit: it may not order into B's.
+    assert (order.status_code, order.json()["detail"]) == (409, {"error": "table_not_open"})
     call = await client.post("/api/guest/service-calls", json={"reason": "help"})
     assert (call.status_code, call.json()["detail"]) == (409, VISIT_ENDED)
 

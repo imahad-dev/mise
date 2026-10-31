@@ -21,7 +21,7 @@ from src.models.dining_table import DiningTable
 from src.models.order import Order
 from src.models.restaurant import Restaurant
 from src.models.user import User
-from src.redis_client import publish_event
+from src.redis_client import publish_declined, publish_event
 from src.schemas.bills import (
     BillDetail,
     BillListResponse,
@@ -56,6 +56,7 @@ from src.services.counter import (
     pickup_label,
     pickup_today,
 )
+from src.services.sitting import close_sitting_for_table
 
 # Prefix stops at the venue so the void route can share it; bill paths are unchanged.
 router = APIRouter(prefix="/api/restaurants/{slug}", tags=["bills"])
@@ -373,11 +374,18 @@ async def settle(
             status_code=status.HTTP_409_CONFLICT,
             content={"detail": "Bill changed", "bill": fresh.model_dump(mode="json")},
         )
+    # Still under the bill lock (bill before sitting): settling ends the table's visit.
+    declined = (
+        await close_sitting_for_table(db, bill.table_id, "settled", bill.settled_at, access.user.id)
+        if bill.table_id is not None
+        else []
+    )
     await db.commit()
     await publish_event(
         f"kitchen:{access.restaurant.id}",
         json.dumps({"event": "bill_settled", "bill_id": str(bill.id)}),
     )
+    await publish_declined(access.restaurant.id, declined)
     for order_id in revived:
         await publish_event(
             f"orders:{order_id}", json.dumps({"event": "order_revived", "order_id": str(order_id)})
@@ -481,6 +489,7 @@ async def void_order(
         )
     )
     events = [{"event": "order_voided", "order_id": str(order.id), "bill_id": str(bill.id)}]
+    declined: list[uuid.UUID] = []
     if empties:
         bill.status = "cancelled"
         bill.cancelled_at = now
@@ -507,9 +516,14 @@ async def void_order(
             )
         )
         events.append({"event": "bill_cancelled", "bill_id": str(bill.id)})
+        if bill.table_id is not None:  # the visit ends with its bill
+            declined = await close_sitting_for_table(
+                db, bill.table_id, "cancelled", now, access.user.id
+            )
     await db.commit()
     for event in events:
         await publish_event(f"kitchen:{rid}", json.dumps(event))
+    await publish_declined(rid, declined)
     return await bill_detail(db, access.restaurant, bill)
 
 

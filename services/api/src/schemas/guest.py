@@ -53,6 +53,12 @@ class GuestSessionResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class GuestSessionStatusResponse(GuestSessionResponse):
+    # Whether this phone may order at its table now; never the code itself.
+    sitting_open: bool
+    code_required: bool
+
+
 class GuestMenuOption(BaseModel):
     id: uuid.UUID
     label: str

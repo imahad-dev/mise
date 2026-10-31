@@ -25,7 +25,7 @@ from src.models.order import Order
 from src.models.restaurant import Restaurant
 from src.models.session import GuestSession
 from src.models.user import User
-from src.services.bills import VISIT_ENDED, session_started_at
+from src.services.bills import session_started_at
 
 
 @dataclass
@@ -470,10 +470,9 @@ async def test_parallel_settle_and_order(committed_venue):
             AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as staff_client,
         ):
             sign_in(staff_client, staff)
-            await seat_table(table_id_of_session)
             accepted = 0
             for n in range(ROUNDS):
-                # Each round is a new party: settling ended the previous session's visit.
+                # Each round is a new party at a newly opened table: settling closed it.
                 async with async_session_factory() as s:
                     party = GuestSession(
                         restaurant_id=restaurant_id,
@@ -484,6 +483,7 @@ async def test_parallel_settle_and_order(committed_venue):
                     )
                     s.add(party)
                     await s.commit()
+                await seat_table(table_id_of_session)
                 guest_client.cookies.set(GUEST_COOKIE_NAME, sign_value(str(party.id)))
                 first = await guest_client.post("/api/orders", json=order_body())
                 assert first.status_code == 201, first.text
@@ -511,10 +511,10 @@ async def test_parallel_settle_and_order(committed_venue):
                     assert racing.status_code == 201
                     settled = await settle(staff_client, slug, bill_id)
                 assert settled.status_code == 200, settled.text
-                # Before the settle it joins the bill; after it, the visit has ended.
+                # Before the settle it joins the bill; after it, the table is closed.
                 assert racing.status_code in (201, 409), racing.text
                 if racing.status_code == 409:
-                    assert racing.json()["detail"] == VISIT_ENDED
+                    assert racing.json()["detail"] == {"error": "table_not_open"}
                 accepted += racing.status_code == 201
     finally:
         if saved_override is not None:

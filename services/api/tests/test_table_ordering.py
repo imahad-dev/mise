@@ -263,7 +263,7 @@ async def test_decline_cancels_without_a_bill_and_the_guest_can_order_again(clie
     assert again.json()["status"] == "pending_approval"
 
 
-async def test_settle_never_includes_a_waiting_order(client, db_session, tv):
+async def test_settle_never_includes_a_waiting_order(client, db_session, tv, monkeypatch):
     sitting = await open_table(db_session, tv.t1.id)
     o1 = (await post_order(client, tv.s1, tv.naan, 2)).json()["id"]
     await staff(client, db_session, tv)
@@ -271,18 +271,17 @@ async def test_settle_never_includes_a_waiting_order(client, db_session, tv):
     bill_id = (await order_row(db_session, o1)).bill_id
     # A waiting order on the same visit, e.g. one that raced the approval.
     other = await new_session(db_session, tv)
-    db_session.add(
-        Order(
-            guest_session_id=other.id,
-            restaurant_id=tv.r.id,
-            table_id=tv.t1.id,
-            sitting_id=sitting.id,
-            status="pending_approval",
-            total=Decimal("1100.00"),
-            idempotency_key="raced",
-            payload_hash="x",
-        )
+    raced = Order(
+        guest_session_id=other.id,
+        restaurant_id=tv.r.id,
+        table_id=tv.t1.id,
+        sitting_id=sitting.id,
+        status="pending_approval",
+        total=Decimal("1100.00"),
+        idempotency_key="raced",
+        payload_hash="x",
     )
+    db_session.add(raced)
     await db_session.flush()
     client.cookies.set(GUEST_COOKIE_NAME, sign_value(str(tv.s1.id)))
     guest_bill = await client.get("/api/guest/bill")
@@ -290,11 +289,16 @@ async def test_settle_never_includes_a_waiting_order(client, db_session, tv):
     assert Decimal(guest_bill.json()["subtotal"]) == Decimal("120.00")
     detail = await client.get(f"/api/restaurants/{tv.r.slug}/bills/{bill_id}")
     assert Decimal(detail.json()["subtotal"]) == Decimal("120.00")
+    events = record_declined(monkeypatch)
     resp = await settle(client, tv.r.slug, bill_id)
     assert resp.status_code == 200, resp.text
     bill = await db_session.get(Bill, bill_id)
     await db_session.refresh(bill)
     assert bill.subtotal == Decimal("120.00")
+    # Settling closes the visit: the waiting order is cancelled, never left behind.
+    row = await order_row(db_session, str(raced.id))
+    assert (row.status, row.void_reason, row.bill_id) == ("cancelled", "Table closed", None)
+    assert declined_for(events, tv, str(raced.id)) == {f"orders:{raced.id}", f"kitchen:{tv.r.id}"}
 
 
 async def test_code_is_asked_once_and_wrong_codes_lock_the_phone(client, db_session, tv):
@@ -566,6 +570,110 @@ async def test_an_idle_close_cancels_the_waiting_orders(client, db_session, tv, 
     assert row.voided_at is not None
     assert declined_for(events, tv, o1) == {f"orders:{o1}", f"kitchen:{tv.r.id}"}
     assert await guest_sees(client, tv, o1) == "cancelled"
+
+
+async def sitting_row(db: AsyncSession, sitting_id: uuid.UUID) -> TableSitting:
+    return await db.get(TableSitting, sitting_id, populate_existing=True)
+
+
+async def approved_order(client, db_session, tv: TV, item: MenuItem, session=None) -> str:
+    order_id = (await post_order(client, session or tv.s1, item)).json()["id"]
+    await staff(client, db_session, tv)
+    assert (await act(client, tv, "approve", [order_id])).status_code == 200
+    return order_id
+
+
+async def test_settling_closes_the_sitting_and_the_table_can_be_opened_again(
+    client, db_session, tv
+):
+    sitting = await open_table(db_session, tv.t1.id)
+    o1 = await approved_order(client, db_session, tv, tv.naan)
+    resp = await settle(client, tv.r.slug, (await order_row(db_session, o1)).bill_id)
+    assert resp.status_code == 200, resp.text
+    row = await sitting_row(db_session, sitting.id)
+    assert row.close_reason == "settled" and row.closed_at is not None
+    assert (await floor_tile(client, tv))["sitting_open"] is False
+    reopen = await client.post(f"/api/restaurants/{tv.r.slug}/tables/{tv.t1.id}/sitting")
+    assert reopen.status_code == 201, reopen.text
+
+
+async def void(client, tv: TV, order_id: str):
+    return await client.post(
+        f"/api/restaurants/{tv.r.slug}/orders/{order_id}/void", json={"reason": "Guest left"}
+    )
+
+
+async def test_voiding_the_last_order_closes_the_sitting(client, db_session, tv):
+    sitting = await open_table(db_session, tv.t1.id)
+    o1 = await approved_order(client, db_session, tv, tv.naan)
+    assert (await void(client, tv, o1)).status_code == 200
+    row = await sitting_row(db_session, sitting.id)
+    assert row.close_reason == "cancelled" and row.closed_at is not None
+
+
+async def test_voiding_one_of_two_orders_keeps_the_sitting_open(client, db_session, tv):
+    sitting = await open_table(db_session, tv.t1.id)
+    o1 = await approved_order(client, db_session, tv, tv.naan)
+    assert (await post_order(client, tv.s1, tv.karahi)).status_code == 201  # placed directly
+    assert (await void(client, tv, o1)).status_code == 200
+    row = await sitting_row(db_session, sitting.id)
+    assert row.closed_at is None
+
+
+async def guest_status(client: AsyncClient, session: GuestSession) -> tuple[bool, bool]:
+    client.cookies.set(GUEST_COOKIE_NAME, sign_value(str(session.id)))
+    resp = await client.get("/api/guest/session")
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert "code" not in body
+    return body["sitting_open"], body["code_required"]
+
+
+async def test_guest_status_follows_the_sitting(client, db_session, tv):
+    assert await guest_status(client, tv.s1) == (False, False)
+    await open_table(db_session, tv.t1.id)
+    assert await guest_status(client, tv.s1) == (True, False)
+    o1 = await approved_order(client, db_session, tv, tv.naan)
+    resp = await settle(client, tv.r.slug, (await order_row(db_session, o1)).bill_id)
+    assert resp.status_code == 200, resp.text
+    assert await guest_status(client, tv.s1) == (False, False)
+
+
+async def test_guest_status_asks_for_the_code_until_the_phone_has_entered_it(
+    client, db_session, tv
+):
+    await open_table(db_session, tv.t1.id, code="4821")
+    await redis_client.delete(f"code_lock:{tv.s1.id}", f"code_attempts:{tv.s1.id}")
+    assert await guest_status(client, tv.s1) == (True, True)
+    assert (await post_order(client, tv.s1, tv.naan, code="4821")).status_code == 201
+    assert await guest_status(client, tv.s1) == (True, False)
+
+
+async def test_guest_status_of_a_phone_from_an_earlier_sitting(client, db_session, tv):
+    first = await open_table(db_session, tv.t1.id)
+    assert (await post_order(client, tv.s1, tv.naan)).status_code == 201
+    first.closed_at = datetime.now(UTC)
+    first.close_reason = "staff_closed"
+    await db_session.flush()
+    await open_table(db_session, tv.t1.id, code="4821")
+    assert await guest_status(client, tv.s1) == (False, False)
+
+
+async def test_guest_status_at_a_counter(client, db_session, tv):
+    counter = DiningTable(
+        restaurant_id=tv.r.id, label="C1", kind="counter", qr_token=uuid.uuid4().hex
+    )
+    db_session.add(counter)
+    await db_session.flush()
+    s = GuestSession(
+        restaurant_id=tv.r.id,
+        table_id=counter.id,
+        language="en",
+        expires_at=datetime.now(UTC) + timedelta(hours=2),
+    )
+    db_session.add(s)
+    await db_session.flush()
+    assert await guest_status(client, s) == (True, False)
 
 
 async def test_a_phone_that_scans_after_a_reset_is_current_even_if_the_clock_stepped_back(
