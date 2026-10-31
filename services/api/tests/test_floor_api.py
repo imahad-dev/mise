@@ -322,7 +322,7 @@ async def test_close_table(client, db_session, fv, monkeypatch):
     assert tile(await floor(client, fv), "T1")["sitting_open"] is False
 
     resp = await client.delete(sitting_url(fv, fv.t1))
-    assert (resp.status_code, resp.json()["detail"]) == (409, "No sitting is open")
+    assert (resp.status_code, resp.json()["detail"]) == (409, "This table is not open")
 
 
 async def test_close_table_with_open_bill_is_refused(client, db_session, fv):

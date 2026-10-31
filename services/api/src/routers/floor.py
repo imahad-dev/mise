@@ -399,7 +399,7 @@ async def close_table(
     if await get_open_sitting(db, table.id, cancelled) is None:
         await db.commit()  # keep an idle close get_open_sitting may have just made
         await publish_declined(rid, cancelled)
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="No sitting is open")
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="This table is not open")
     now = await db.scalar(select(func.clock_timestamp()))
     # Waiting orders (no bill) are allowed: closing the table cancels them.
     cancelled = await close_sitting_for_table(db, table.id, "staff_closed", now, access.user.id)
