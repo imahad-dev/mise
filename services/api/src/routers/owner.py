@@ -1,14 +1,14 @@
 import logging
 import uuid
-from dataclasses import replace
-from datetime import UTC, datetime
+from dataclasses import asdict, replace
+from datetime import UTC, date, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import exists, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from src.access import RestaurantAccess, owner_access
+from src.access import RestaurantAccess, member_access, owner_access
 from src.config import settings
 from src.database import get_db
 from src.inference.client import (
@@ -20,6 +20,7 @@ from src.models.audit import AuditLog
 from src.models.bill import Bill
 from src.models.dining_table import DiningTable
 from src.models.menu import MenuItem, MenuItemOption
+from src.models.order import Order
 from src.models.sitting import TableSitting
 from src.redis_client import publish_declined, redis_client
 from src.request_limits import enforce_ip_limit
@@ -39,11 +40,21 @@ from src.schemas.owner import (
     WhatIfRequest,
     WhatIfResponse,
 )
+from src.schemas.service_report import ServiceReportResponse
 from src.services import pay_forward
+from src.services.analytics import Window
 from src.services.bills import lock_open_bill
-from src.services.brief import compute_brief, compute_whatif
+from src.services.brief import compute_brief, compute_whatif, local_today
 from src.services.menu_ingest import ingest_menu_from_image
+from src.services.narrative import narrate
 from src.services.payment_details import PaymentDetailsError, validate_payment_details
+from src.services.service_report import (
+    OrderRecord,
+    SittingRecord,
+    build_report,
+    summary_facts,
+    template_summary,
+)
 from src.services.simulator import SimAssumptions, persist_simulation
 from src.services.sitting import close_sitting_for_table
 
@@ -559,6 +570,149 @@ async def daily_brief(
             logger.warning("Redis error writing brief cache: %s", e)
 
     return brief_resp
+
+
+@router.get(
+    "/service-report",
+    response_model=ServiceReportResponse,
+    status_code=status.HTTP_200_OK,
+    responses={
+        401: {"description": "Unauthenticated"},
+        404: {"description": "Restaurant not found"},
+        422: {"description": "Invalid day"},
+    },
+)
+async def service_report(
+    day: date | None = None,
+    access: RestaurantAccess = Depends(member_access),
+    db: AsyncSession = Depends(get_db),
+    inference: InferenceClient | None = Depends(get_optional_inference_client),
+) -> ServiceReportResponse:
+    """How service went on one local day (default today), from sitting and order timestamps.
+
+    Code computes every number; the model may only phrase the one-line summary.
+    """
+    restaurant = access.restaurant
+    day = day or local_today(restaurant)
+    bounds = Window(restaurant.id, restaurant.timezone, day, day + timedelta(days=1)).params()
+    sittings = (
+        await db.execute(
+            select(
+                TableSitting.id,
+                TableSitting.opened_at,
+                TableSitting.closed_at,
+                TableSitting.close_reason,
+            )
+            .join(DiningTable, DiningTable.id == TableSitting.table_id)
+            .where(
+                DiningTable.restaurant_id == restaurant.id,
+                TableSitting.closed_at >= bounds["start"],
+                TableSitting.closed_at < bounds["end"],
+            )
+        )
+    ).all()
+    orders = (
+        await db.execute(
+            select(
+                Order.id,
+                Order.sitting_id,
+                Order.status,
+                Order.source,
+                Order.bill_id,
+                Order.placed_at,
+                Order.bumped_at,
+                Order.voided_at,
+            ).where(
+                Order.restaurant_id == restaurant.id,
+                Order.sitting_id.in_([s.id for s in sittings]),
+            )
+        )
+    ).all()
+    order_key = AuditLog.payload["order_id"].astext
+    approved_at = dict(
+        (
+            await db.execute(
+                select(order_key, func.min(AuditLog.created_at))
+                .where(
+                    AuditLog.restaurant_id == restaurant.id,
+                    AuditLog.event_type == "order_approved",
+                    order_key.in_([str(o.id) for o in orders]),
+                )
+                .group_by(order_key)
+            )
+        ).all()
+    )
+    by_sitting: dict[uuid.UUID, list] = {}
+    for o in orders:
+        by_sitting.setdefault(o.sitting_id, []).append(o)
+    # A table has many bills over time: a sitting's bill is the one its orders are on (all its
+    # non-cancelled orders share it), never "the table's bill".
+    bill_of = {
+        sid: next(
+            (o.bill_id for o in sorted(os, key=lambda o: o.status == "cancelled") if o.bill_id),
+            None,
+        )
+        for sid, os in by_sitting.items()
+    }
+    bills = {
+        b.id: b
+        for b in (
+            await db.execute(
+                select(Bill.id, Bill.bill_requested_at, Bill.settled_at).where(
+                    Bill.restaurant_id == restaurant.id,
+                    Bill.id.in_([b for b in bill_of.values() if b is not None]),
+                )
+            )
+        ).all()
+    }
+    records = []
+    for s in sittings:
+        os = by_sitting.get(s.id, [])
+        bill = bills.get(bill_of.get(s.id))
+        records.append(
+            SittingRecord(
+                opened_at=s.opened_at,
+                closed_at=s.closed_at,
+                close_reason=s.close_reason,
+                orders=tuple(
+                    OrderRecord(
+                        placed_at=o.placed_at,
+                        approved_at=approved_at.get(str(o.id)),
+                        bumped_at=o.bumped_at,
+                        voided_at=o.voided_at,
+                        on_bill=o.bill_id is not None,
+                    )
+                    for o in os
+                ),
+                bill_requested_at=bill.bill_requested_at if bill else None,
+                settled_at=bill.settled_at if bill else None,
+                # Simulated orders have no table today, so this stays False until they do.
+                simulated=any(o.source == "simulated" for o in os),
+            )
+        )
+    report = build_report(records, restaurant.timezone)
+    facts = summary_facts(report, day.isoformat())
+    summary, source = await narrate(
+        inference,
+        db,
+        facts,
+        template_summary(facts),
+        task="daily service report summary",
+        length="one sentence",
+    )
+    return ServiceReportResponse(
+        day=day,
+        tables_served=report.tables_served,
+        closed_without_bill=report.closed_without_bill,
+        simulated_sittings=report.simulated_sittings,
+        average_table_seconds=report.average_table_seconds,
+        average_wait_seconds=report.average_wait_seconds,
+        busiest_hour=report.busiest_hour,
+        slowest_hour=asdict(report.slowest_hour) if report.slowest_hour else None,
+        alerts=report.alerts,
+        summary=summary,
+        summary_source=source,
+    )
 
 
 @router.post(
