@@ -292,7 +292,7 @@ async def test_session_is_current_rule(client, db_session, pv):
     assert await session_is_current(db_session, a)  # table never reset
     order_id = await order_2340(client, pv)
     bill_id = await bill_id_of(db_session, order_id)
-    pv.t1.cleared_at = await db_session.scalar(select(func.clock_timestamp()))
+    pv.t1.cleared_at = pv.t1.reset_at = await db_session.scalar(select(func.clock_timestamp()))
     await db_session.flush()
     # Reset after the session began, but it has an active order on the open bill.
     assert await session_is_current(db_session, a)
@@ -372,7 +372,7 @@ async def test_session_with_order_on_open_bill_stays_current(client, db_session,
     a = pv.session_t1
     await order_2340(client, pv)
     # A reset older than the open bill (e.g. a previous party's settle) does not end A's visit.
-    pv.t1.cleared_at = await db_session.scalar(select(func.clock_timestamp()))
+    pv.t1.cleared_at = pv.t1.reset_at = await db_session.scalar(select(func.clock_timestamp()))
     await db_session.flush()
     guest(client, a)
     assert (await client.get("/api/guest/bill")).json()["status"] == "open"

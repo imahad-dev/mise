@@ -483,7 +483,8 @@ async def test_refused_orders_do_not_use_up_the_order_limit(client, db_session, 
 async def test_an_ended_visit_is_told_before_any_code_is_tried(client, db_session, tv):
     await open_table(db_session, tv.t1.id, code="4821")
     await redis_client.delete(f"code_lock:{tv.s1.id}", f"code_attempts:{tv.s1.id}")
-    tv.t1.cleared_at = datetime.now(UTC)  # the phone scanned before the table was cleared
+    # The phone scanned before the table was cleared.
+    tv.t1.cleared_at = tv.t1.reset_at = datetime.now(UTC)
     await db_session.flush()
     resp = await post_order(client, tv.s1, tv.naan, code="0000")
     assert resp.status_code == 409
@@ -680,9 +681,64 @@ async def test_a_phone_that_scans_after_a_reset_is_current_even_if_the_clock_ste
     client, db_session, tv
 ):
     # The wall clock stepped back after the table reset: the reset looks later than "now".
-    tv.t1.cleared_at = datetime.now(UTC) + timedelta(minutes=1)
+    tv.t1.cleared_at = tv.t1.reset_at = datetime.now(UTC) + timedelta(minutes=1)
     await db_session.flush()
     resp = await client.post("/api/guest/sessions", json={"qr_token": tv.t1.qr_token})
     assert resp.status_code == 201, resp.text
     scanned = await db_session.get(GuestSession, uuid.UUID(resp.json()["id"]))
     assert await session_is_current(db_session, scanned)
+
+
+async def scan(client: AsyncClient, db: AsyncSession, tv: TV) -> GuestSession:
+    resp = await client.post("/api/guest/sessions", json={"qr_token": tv.t1.qr_token})
+    assert resp.status_code == 201, resp.text
+    return await db.get(GuestSession, uuid.UUID(resp.json()["id"]))
+
+
+async def test_a_reset_after_the_clock_stepped_back_still_ends_the_earlier_phones(
+    client, db_session, tv
+):
+    # A reset stamped by a clock an hour fast; then the clock steps back to the true time.
+    ahead = datetime.now(UTC) + timedelta(hours=1)
+    tv.t1.cleared_at = tv.t1.reset_at = ahead
+    await db_session.flush()
+    phone = await scan(client, db_session, tv)  # party 2, never orders
+    assert phone.created_at > ahead
+    assert await session_is_current(db_session, phone)
+    await staff(client, db_session, tv)
+    resp = await client.post(
+        f"/api/restaurants/{tv.r.slug}/tables/{tv.t1.id}/clear", json={"force": True}
+    )
+    assert resp.status_code == 200, resp.text
+    reset = await db_session.scalar(select(DiningTable.reset_at).where(DiningTable.id == tv.t1.id))
+    assert reset > phone.created_at  # never stamped before the earlier reset or its phones
+    assert not await session_is_current(db_session, phone)
+    assert await session_is_current(db_session, await scan(client, db_session, tv))
+
+
+async def test_settling_moves_the_reset_forward_even_if_the_clock_stepped_back(
+    client, db_session, tv
+):
+    tv.t1.cleared_at = tv.t1.reset_at = datetime.now(UTC) + timedelta(hours=1)
+    await db_session.flush()
+    await open_table(db_session, tv.t1.id)
+    payer = await scan(client, db_session, tv)
+    bystander = await scan(client, db_session, tv)  # same party, never orders
+    o1 = await approved_order(client, db_session, tv, tv.naan, payer)
+    resp = await settle(client, tv.r.slug, (await order_row(db_session, o1)).bill_id)
+    assert resp.status_code == 200, resp.text
+    assert not await session_is_current(db_session, bystander)
+    assert not await session_is_current(db_session, payer)
+    assert await session_is_current(db_session, await scan(client, db_session, tv))
+
+
+async def test_voiding_every_order_moves_the_reset_forward(client, db_session, tv):
+    tv.t1.cleared_at = tv.t1.reset_at = datetime.now(UTC) + timedelta(hours=1)
+    await db_session.flush()
+    await open_table(db_session, tv.t1.id)
+    payer = await scan(client, db_session, tv)
+    bystander = await scan(client, db_session, tv)
+    o1 = await approved_order(client, db_session, tv, tv.naan, payer)
+    assert (await void(client, tv, o1)).status_code == 200
+    assert not await session_is_current(db_session, bystander)
+    assert await session_is_current(db_session, await scan(client, db_session, tv))

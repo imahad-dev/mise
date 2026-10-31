@@ -579,8 +579,9 @@ async def test_expiry_racing_settle_never_mixes(committed_counter):
 
 async def test_counter_session_is_always_current(db_session, cv):
     s = await seat(db_session, cv.counter)
-    cv.counter.cleared_at = datetime.now(UTC) + timedelta(minutes=1)  # a reset after the scan
-    cv.t1.cleared_at = cv.counter.cleared_at
+    # A reset after the scan.
+    cv.counter.cleared_at = cv.counter.reset_at = datetime.now(UTC) + timedelta(minutes=1)
+    cv.t1.cleared_at = cv.t1.reset_at = cv.counter.cleared_at
     await db_session.flush()
     assert await session_is_current(db_session, s)
     assert not await session_is_current(db_session, await seat(db_session, cv.t1))

@@ -36,7 +36,7 @@ from src.schemas.floor import (
     call_response,
 )
 from src.services import pay_forward
-from src.services.bills import CENTS, lock_open_bill
+from src.services.bills import CENTS, lock_open_bill, mark_table_reset
 from src.services.floor import THRESHOLDS, TableFacts, reason_label, table_state
 from src.services.sitting import (
     approve_pending,
@@ -285,26 +285,17 @@ async def clear_table(
     force = bool(payload and payload.force)
     if not force:
         # A live phone scanned after the last reset: clearing would end the new party's visit.
-        # Same resets as session_is_current: clear, settle, or a bill cancelled by voids.
-        last_closed = (
-            await db.execute(
-                select(
-                    func.max(Bill.settled_at).filter(Bill.status == "settled"),
-                    func.max(Bill.cancelled_at).filter(Bill.status == "cancelled"),
-                ).where(Bill.table_id == table.id)
-            )
-        ).one()
-        resets = [t for t in (table.cleared_at, *last_closed) if t is not None]
         seated = select(GuestSession.id).where(
             GuestSession.table_id == table.id, GuestSession.expires_at > now
         )
-        if resets:
-            seated = seated.where(GuestSession.created_at > max(resets))
+        if table.reset_at is not None:  # same reset as session_is_current
+            seated = seated.where(GuestSession.created_at > table.reset_at)
         if await db.scalar(seated.limit(1)) is not None:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT, detail="New guests are already seated"
             )
     table.cleared_at = now
+    await mark_table_reset(db, table.id)
     db.add(
         AuditLog(
             restaurant_id=rid,

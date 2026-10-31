@@ -42,6 +42,7 @@ from src.services.bills import (
     claim_of,
     is_expired_unpaid,
     local_date,
+    mark_table_reset,
     method_previews,
     open_bill_with_claimed_key,
     previews,
@@ -375,11 +376,12 @@ async def settle(
             content={"detail": "Bill changed", "bill": fresh.model_dump(mode="json")},
         )
     # Still under the bill lock (bill before sitting): settling ends the table's visit.
-    declined = (
-        await close_sitting_for_table(db, bill.table_id, "settled", bill.settled_at, access.user.id)
-        if bill.table_id is not None
-        else []
-    )
+    declined: list[uuid.UUID] = []
+    if bill.table_id is not None:  # counter bills have no table
+        declined = await close_sitting_for_table(
+            db, bill.table_id, "settled", bill.settled_at, access.user.id
+        )
+        await mark_table_reset(db, bill.table_id)
     await db.commit()
     await publish_event(
         f"kitchen:{access.restaurant.id}",
@@ -520,6 +522,7 @@ async def void_order(
             declined = await close_sitting_for_table(
                 db, bill.table_id, "cancelled", now, access.user.id
             )
+            await mark_table_reset(db, bill.table_id)
     await db.commit()
     for event in events:
         await publish_event(f"kitchen:{rid}", json.dumps(event))

@@ -34,14 +34,29 @@ class BillChanged(Exception):  # noqa: N818 - a signal, not an error
 
 def _reset_at(table_id: uuid.UUID):
     """When the table last reset: cleared, or one of its bills settled or cancelled."""
-    return func.greatest(
-        select(DiningTable.cleared_at).where(DiningTable.id == table_id).scalar_subquery(),
-        select(func.max(Bill.settled_at))
-        .where(Bill.table_id == table_id, Bill.status == "settled")
-        .scalar_subquery(),
-        select(func.max(Bill.cancelled_at))
-        .where(Bill.table_id == table_id, Bill.status == "cancelled")
-        .scalar_subquery(),
+    return select(DiningTable.reset_at).where(DiningTable.id == table_id).scalar_subquery()
+
+
+async def mark_table_reset(db: AsyncSession, table_id: uuid.UUID) -> None:
+    """Stamp a reset (clear, settle, or a bill cancelled by voids) on a table. The database
+    clock can step back, so the stamp is also after the last reset and after every phone that
+    scanned (session_started_at may stamp those ahead of the clock): only those that scan from
+    now on are current. Caller commits."""
+    one = timedelta(microseconds=1)
+    last_scan = (
+        select(func.max(GuestSession.created_at))
+        .where(GuestSession.table_id == table_id)
+        .scalar_subquery()
+    )
+    # greatest() skips NULLs: a table never reset, or never scanned.
+    await db.execute(
+        update(DiningTable)
+        .where(DiningTable.id == table_id)
+        .values(
+            reset_at=func.greatest(
+                func.clock_timestamp(), DiningTable.reset_at + one, last_scan + one
+            )
+        )
     )
 
 
