@@ -206,8 +206,6 @@ async def create_order(
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=VISIT_ENDED)
         if sitting.code_required and session.sitting_id != sitting.id:
             await _check_table_code(session, sitting, payload.code)
-        # After the code check: a guest typing the code is not ordering quickly.
-        await enforce_session_limit(str(session.id), "order_create", 3, 300, ORDERING_QUICKLY)
         session.sitting_id = sitting.id
 
     # 2. Fetch menu items for this restaurant
@@ -344,6 +342,11 @@ async def create_order(
         if avg_price is not None:
             cap = avg_price * restaurant.first_order_cap_multiplier
             over_first_order_cap = waiting + total > cap
+
+    if sitting is not None:
+        # Last check before the order exists: code tries, allergen confirmations and refused
+        # orders never use up a slot.
+        await enforce_session_limit(str(session.id), "order_create", 3, 300, ORDERING_QUICKLY)
 
     order = Order(
         guest_session_id=session.id,

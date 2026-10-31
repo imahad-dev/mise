@@ -457,6 +457,24 @@ async def test_a_late_decline_never_cancels_a_fresh_order(client, db_session, tv
     assert (stale.status_code, stale.json()["detail"]) == (409, CHANGED)
 
 
+async def test_refused_orders_do_not_use_up_the_order_limit(client, db_session, tv):
+    await open_table(db_session, tv.t1.id)
+    risky = _item(tv.r.id, "House Curry", "500.00")
+    risky.allergen_verified = False
+    db_session.add(risky)
+    await db_session.flush()
+    asked = await post_order(client, tv.s1, risky)
+    assert asked.status_code == 409
+    assert asked.json()["detail"]["error"] == "allergen_ack_required"
+    confirmed = await post_order(client, tv.s1, risky, acknowledge_allergen_risk=True)
+    assert confirmed.status_code == 201, confirmed.text
+    for _ in range(2):
+        assert (await post_order(client, tv.s1, tv.naan)).status_code == 201
+    fourth = await post_order(client, tv.s1, tv.naan)
+    assert fourth.status_code == 429
+    assert fourth.json()["detail"] == "You're ordering quickly! Please wait a moment and try again."
+
+
 async def test_an_ended_visit_is_told_before_any_code_is_tried(client, db_session, tv):
     await open_table(db_session, tv.t1.id, code="4821")
     await redis_client.delete(f"code_lock:{tv.s1.id}", f"code_attempts:{tv.s1.id}")
