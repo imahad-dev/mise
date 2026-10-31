@@ -4,7 +4,7 @@ from dataclasses import replace
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from sqlalchemy import exists, func, select
+from sqlalchemy import exists, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -20,6 +20,7 @@ from src.models.audit import AuditLog
 from src.models.bill import Bill
 from src.models.dining_table import DiningTable
 from src.models.menu import MenuItem, MenuItemOption
+from src.models.sitting import TableSitting
 from src.redis_client import redis_client
 from src.request_limits import enforce_ip_limit
 from src.schemas.owner import (
@@ -662,6 +663,18 @@ async def reset_demo_data(
 
     try:
         await seed_data(data, db, rotate_qr=False)
+        # A reset demo starts with free tables; an unpaid bill keeps its table open (spec §1).
+        await db.execute(
+            update(TableSitting)
+            .where(
+                TableSitting.closed_at.is_(None),
+                TableSitting.table_id.in_(
+                    select(DiningTable.id).where(DiningTable.restaurant_id == access.restaurant.id)
+                ),
+                ~exists().where(Bill.table_id == TableSitting.table_id, Bill.status == "open"),
+            )
+            .values(closed_at=func.clock_timestamp(), close_reason="staff_closed")
+        )
         await db.commit()
     except Exception as e:
         logger.error("Failed to reset demo data: %s", e)

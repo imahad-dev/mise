@@ -8,9 +8,11 @@ from httpx import AsyncClient
 from scripts.seed import load_seed_data, seed_data, seed_demo_users
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from tests.helpers import as_member, make_user
+from tests.helpers import as_member, make_user, open_table
 
 from src.config import settings
+from src.models.bill import Bill
+from src.models.dining_table import DiningTable
 from src.models.menu import MenuItem
 from src.models.restaurant import Restaurant
 
@@ -288,3 +290,37 @@ async def test_demo_reset_404_without_a_seed_for_the_venue(
         resp = await client.post("/api/restaurants/no-seed-venue/demo/reset")
     assert resp.status_code == 404
     assert resp.json()["detail"] == "No demo seed for this restaurant"
+
+
+@pytest.mark.asyncio
+async def test_demo_reset_frees_open_tables_but_never_one_with_an_unpaid_bill(
+    client: AsyncClient, db_session: AsyncSession
+):
+    """A reset demo starts with free tables; a table with an open bill stays open."""
+    await seed_data(load_seed_data("data/seed/angeethi_house.json"), db_session)
+    mine = (
+        await db_session.execute(select(Restaurant).where(Restaurant.slug == "angeethi-house"))
+    ).scalar_one()
+    t1, t2 = (
+        await db_session.scalars(
+            select(DiningTable)
+            .where(DiningTable.restaurant_id == mine.id, DiningTable.kind == "table")
+            .order_by(DiningTable.label)
+            .limit(2)
+        )
+    ).all()
+    free_me, unpaid = await open_table(db_session, t1.id), await open_table(db_session, t2.id)
+    db_session.add(
+        Bill(restaurant_id=mine.id, table_id=t2.id, bill_no=990001, status="open", source="live")
+    )
+    await db_session.flush()
+
+    await as_member(client, db_session, mine.id, "owner")
+    with patch.object(settings, "demo_mode", True):
+        resp = await client.post("/api/restaurants/angeethi-house/demo/reset")
+    assert resp.status_code == 200, resp.text
+
+    await db_session.refresh(free_me)
+    await db_session.refresh(unpaid)
+    assert (free_me.closed_at is not None, free_me.close_reason) == (True, "staff_closed")
+    assert (unpaid.closed_at, unpaid.close_reason) == (None, None)
