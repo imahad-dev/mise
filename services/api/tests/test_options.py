@@ -9,7 +9,7 @@ import pytest
 import pytest_asyncio
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
-from tests.helpers import as_member
+from tests.helpers import approve_order, as_member, open_table
 
 from src.auth import GUEST_COOKIE_NAME, sign_value
 from src.models.dining_table import DiningTable
@@ -88,6 +88,7 @@ async def karahi_setup(client: AsyncClient, db_session: AsyncSession) -> KarahiS
     )
     db_session.add(session)
     await db_session.flush()
+    await open_table(db_session, table.id)
     client.cookies.set(GUEST_COOKIE_NAME, sign_value(str(session.id)))
     return KarahiSetup(restaurant, karahi, naan, half, full, other_opt)
 
@@ -174,6 +175,7 @@ async def test_kitchen_ticket_shows_option(client, db_session, karahi_setup):
     )
     assert resp.status_code == 201
     order_id = resp.json()["id"]
+    await approve_order(order_id)  # the kitchen sees a table's order once the waiter approves
 
     await as_member(client, db_session, s.restaurant.id, "staff")
     kitchen = await client.get(f"/api/restaurants/{s.restaurant.slug}/kitchen/orders")

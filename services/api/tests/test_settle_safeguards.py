@@ -11,7 +11,7 @@ import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
-from tests.helpers import as_member, settle, sign_in
+from tests.helpers import approve_order, as_member, seat_table, settle, sign_in
 from tests.test_bills import (
     bill_id_of,
     committed_venue,  # noqa: F401 - fixture
@@ -410,7 +410,8 @@ async def _new_committed_party(restaurant_id, table_id) -> uuid.UUID:
         )
         s.add(party)
         await s.commit()
-        return party.id
+    await seat_table(table_id)
+    return party.id
 
 
 async def _bill_of(order_id: str) -> uuid.UUID:
@@ -457,6 +458,7 @@ async def test_two_staff_settle_one_bill(committed_venue):  # noqa: F811 - the i
             c.guest.cookies.set(GUEST_COOKIE_NAME, sign_value(str(party)))
             first = await c.guest.post("/api/orders", json=_order_body(item_id))
             assert first.status_code == 201, first.text
+            await approve_order(first.json()["id"])
             bill_id = await _bill_of(first.json()["id"])
             body = {"payment_method": "cash", "expected_method": "cash", "expected_total": "70.00"}
             a, b = await asyncio.gather(
@@ -486,6 +488,7 @@ async def test_claim_order_settle_rounds(committed_venue):  # noqa: F811 - the i
             c.guest.cookies.set(GUEST_COOKIE_NAME, sign_value(str(party)))
             first = await c.guest.post("/api/orders", json=_order_body(item_id))
             assert first.status_code == 201, first.text
+            await approve_order(first.json()["id"])
             bill_id = await _bill_of(first.json()["id"])
             base = f"/api/restaurants/{slug}/bills/{bill_id}"
             seen = (await c.staff.get(base)).json()["preview_standard"]["total"]
@@ -561,6 +564,7 @@ async def test_void_racing_settle(committed_venue):  # noqa: F811 - the imported
             first = await c.guest.post("/api/orders", json=_order_body(item_id))
             second = await c.guest.post("/api/orders", json=_order_body(item_id))
             assert (first.status_code, second.status_code) == (201, 201)
+            await approve_order(first.json()["id"])
             bill_id = await _bill_of(first.json()["id"])
             base = f"/api/restaurants/{slug}"
             body = {"payment_method": "cash", "expected_method": "cash", "expected_total": "139.00"}
@@ -773,6 +777,7 @@ async def test_bump_and_recall_racing_a_void(committed_venue):  # noqa: F811 - t
             c.guest.cookies.set(GUEST_COOKIE_NAME, sign_value(str(party)))
             first = await c.guest.post("/api/orders", json=_order_body(item_id))
             second = (await c.guest.post("/api/orders", json=_order_body(item_id))).json()["id"]
+            await approve_order(second)
             if n % 2:  # recall race: bumped first
                 assert (await c.staff.post(f"{base}/kitchen/orders/{second}/bump")).is_success
                 kitchen = f"{base}/kitchen/orders/{second}/recall"
@@ -810,6 +815,7 @@ async def test_same_reference_settled_on_two_bills_at_once(committed_venue):  # 
                 c.guest.cookies.set(GUEST_COOKIE_NAME, sign_value(str(party)))
                 placed = await c.guest.post("/api/orders", json=_order_body(item_id))
                 assert placed.status_code == 201, placed.text
+                await approve_order(placed.json()["id"])
                 bills.append((await _bill_of(placed.json()["id"]), ref))
             body = {
                 "payment_method": "raast",

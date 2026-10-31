@@ -12,7 +12,7 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy import delete, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
-from tests.helpers import as_member, make_user, settle, sign_in
+from tests.helpers import approve_order, as_member, make_user, seat_table, settle, sign_in
 
 from src.auth import GUEST_COOKIE_NAME, sign_value
 from src.database import async_session_factory, get_db
@@ -100,7 +100,9 @@ def guest(client: AsyncClient, session: GuestSession) -> None:
 
 
 async def place(client: AsyncClient, session: GuestSession, lines: list[tuple]) -> uuid.UUID:
-    """Post an order as the session's guest; lines are (item, qty) or (item, qty, option)."""
+    """Post an order as the session's guest at an open table, approved by the waiter; lines are
+    (item, qty) or (item, qty, option)."""
+    await seat_table(session.table_id)
     guest(client, session)
     items = [
         {
@@ -119,6 +121,7 @@ async def place(client: AsyncClient, session: GuestSession, lines: list[tuple]) 
         },
     )
     assert resp.status_code == 201, resp.text
+    await approve_order(resp.json()["id"])
     return uuid.UUID(resp.json()["id"])
 
 
@@ -467,6 +470,7 @@ async def test_parallel_settle_and_order(committed_venue):
             AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as staff_client,
         ):
             sign_in(staff_client, staff)
+            await seat_table(table_id_of_session)
             accepted = 0
             for n in range(ROUNDS):
                 # Each round is a new party: settling ended the previous session's visit.
@@ -482,6 +486,7 @@ async def test_parallel_settle_and_order(committed_venue):
                 guest_client.cookies.set(GUEST_COOKIE_NAME, sign_value(str(party.id)))
                 first = await guest_client.post("/api/orders", json=order_body())
                 assert first.status_code == 201, first.text
+                await approve_order(first.json()["id"])
                 bill_id = await committed_bill_of(first.json()["id"])
                 # Staff saw the bill with the first order only (60 + 16% = 70).
                 settle_req = staff_client.post(

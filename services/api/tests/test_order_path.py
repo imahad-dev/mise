@@ -15,7 +15,7 @@ from httpx import ASGITransport, AsyncClient
 from scripts.seed import load_seed_data, seed_data
 from sqlalchemy import delete, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
-from tests.helpers import as_member, make_user, sign_in
+from tests.helpers import as_member, make_user, seat_table, sign_in
 
 from src.auth import AUTH_COOKIE_NAME, GUEST_COOKIE_NAME, sign_value
 from src.database import async_session_factory, get_db
@@ -443,6 +443,7 @@ async def test_concurrent_duplicate_posts_create_one_order(
     try:
         guest_sess_id = concurrent_order_env["guest_session_id"]
         item_id = concurrent_order_env["item_id"]
+        await seat_table(concurrent_order_env["table_id"])
 
         cookie_val = sign_value(str(guest_sess_id))
         cookies = {GUEST_COOKIE_NAME: cookie_val}

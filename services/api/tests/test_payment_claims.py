@@ -11,7 +11,7 @@ import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
-from tests.helpers import as_member, settle
+from tests.helpers import approve_order, as_member, seat_table, settle
 from tests.test_bills import Venue, _item, bill_id_of, guest, place
 
 from src.auth import GUEST_COOKIE_NAME, sign_value
@@ -429,6 +429,7 @@ async def test_parallel_identical_claims():
             base_url="http://test",
             cookies={GUEST_COOKIE_NAME: sign_value(str(sid))},
         ) as c:
+            await seat_table(tid)
             placed = await c.post(
                 "/api/orders",
                 json={
@@ -438,6 +439,7 @@ async def test_parallel_identical_claims():
                 },
             )
             assert placed.status_code == 201, placed.text
+            await approve_order(placed.json()["id"])
             body = {"method": "wallet", "reference": "JC-555"}
             a, b = await asyncio.gather(c.post(PAY, json=body), c.post(PAY, json=body))
         assert (a.status_code, b.status_code) == (200, 200), (a.text, b.text)

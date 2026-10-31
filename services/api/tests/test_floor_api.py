@@ -10,7 +10,7 @@ import pytest_asyncio
 from httpx import AsyncClient
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
-from tests.helpers import as_member, settle
+from tests.helpers import approve_order, as_member, seat_table, settle
 
 from src.auth import GUEST_COOKIE_NAME, sign_value
 from src.models.bill import Bill
@@ -97,6 +97,8 @@ def guest(client: AsyncClient, session: GuestSession) -> None:
 
 
 async def order(client: AsyncClient, session: GuestSession, item: MenuItem) -> uuid.UUID:
+    """An order at an open table, approved by the waiter."""
+    await seat_table(session.table_id)
     guest(client, session)
     resp = await client.post(
         "/api/orders",
@@ -107,6 +109,7 @@ async def order(client: AsyncClient, session: GuestSession, item: MenuItem) -> u
         },
     )
     assert resp.status_code == 201, resp.text
+    await approve_order(resp.json()["id"])
     return uuid.UUID(resp.json()["id"])
 
 

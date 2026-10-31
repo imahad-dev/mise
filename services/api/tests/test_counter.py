@@ -11,7 +11,7 @@ import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
-from tests.helpers import as_member, make_user, settle, sign_in
+from tests.helpers import approve_order, as_member, make_user, open_table, settle, sign_in
 from tests.test_floor_api import record_events
 
 from src.auth import GUEST_COOKIE_NAME, sign_value
@@ -28,6 +28,7 @@ from src.models.user import User
 from src.services import analytics
 from src.services.bills import local_date, session_is_current
 from src.services.counter import pickup_label
+from src.services.sitting import get_open_sitting
 
 ROUNDS = 20
 
@@ -73,6 +74,8 @@ async def cv(db_session: AsyncSession) -> CounterVenue:
 
 
 async def seat(db: AsyncSession, table: DiningTable) -> GuestSession:
+    if table.kind == "table" and await get_open_sitting(db, table.id) is None:
+        await open_table(db, table.id)  # staff open a normal table; a counter is never opened
     s = GuestSession(
         restaurant_id=table.restaurant_id,
         table_id=table.id,
@@ -95,7 +98,10 @@ async def order(client: AsyncClient, cv: CounterVenue, session: GuestSession) ->
         },
     )
     assert resp.status_code == 201, resp.text
-    return resp.json()
+    if resp.json()["status"] != "pending_approval":
+        return resp.json()
+    await approve_order(resp.json()["id"])  # a table order goes on once the waiter approves it
+    return (await client.get(f"/api/orders/{resp.json()['id']}")).json()
 
 
 async def bill_of(db: AsyncSession, order_id: str) -> Bill:
