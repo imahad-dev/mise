@@ -36,7 +36,7 @@ from src.schemas.floor import (
     call_response,
 )
 from src.services import pay_forward
-from src.services.bills import CENTS
+from src.services.bills import CENTS, lock_open_bill
 from src.services.floor import THRESHOLDS, TableFacts, reason_label, table_state
 from src.services.sitting import (
     approve_pending,
@@ -398,10 +398,9 @@ async def close_table(
 ) -> CloseSittingResponse:
     rid = access.restaurant.id
     table = await _table(db, rid, table_id)
-    open_bill = await db.scalar(
-        select(Bill.id).where(Bill.table_id == table.id, Bill.status == "open").limit(1)
-    )
-    if open_bill is not None:
+    # Bill lock before the sitting lock, as create/approve take them: an approval racing this
+    # close has either opened its bill (refused here) or waits until the sitting is closed.
+    if await lock_open_bill(db, rid, table.id) is not None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Settle the bill first")
     if await get_open_sitting(db, table.id) is None:
         await db.commit()  # keep an idle close get_open_sitting may have just made

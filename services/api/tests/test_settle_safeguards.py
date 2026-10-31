@@ -29,6 +29,7 @@ from src.models.dining_table import DiningTable
 from src.models.order import Order
 from src.models.restaurant import Restaurant
 from src.models.session import GuestSession
+from src.models.sitting import TableSitting
 from src.services.bills import VISIT_ENDED, local_date, reference_key, session_is_current
 from src.services.tax import tax_for
 
@@ -946,3 +947,47 @@ async def test_cancelled_bill_resets_the_table(client, db_session, pv):
         },
     )
     assert (again.status_code, again.json()["detail"]) == (409, VISIT_ENDED)
+
+
+@pytest.mark.timeout(120)
+async def test_approve_racing_close_never_closes_a_table_with_an_unpaid_bill(committed_venue):  # noqa: F811
+    restaurant_id, slug, item_id, session_id, staff = committed_venue
+    table_id = await _table_of(session_id)
+    base = f"/api/restaurants/{slug}"
+    outcomes = set()
+    async with _Clients(staff) as c:
+        for n in range(12):
+            party = await _new_committed_party(restaurant_id, table_id)
+            c.guest.cookies.set(GUEST_COOKIE_NAME, sign_value(str(party)))
+            first = await c.guest.post("/api/orders", json=_order_body(item_id))
+            assert first.status_code == 201, first.text
+            ids = {"order_ids": [first.json()["id"]]}
+            # In flight together; every third round neither waits, the others alternate.
+            delay = 0.0 if n % 3 == 0 else 0.02
+            approve, close = await asyncio.gather(
+                _after(
+                    delay * (n % 2), c.staff.post(f"{base}/tables/{table_id}/approve", json=ids)
+                ),
+                _after(delay * (1 - n % 2), c.staff.delete(f"{base}/tables/{table_id}/sitting")),
+            )
+            async with async_session_factory() as s:
+                bill_id = await s.scalar(
+                    select(Bill.id).where(Bill.table_id == table_id, Bill.status == "open")
+                )
+                open_sitting = await s.scalar(
+                    select(TableSitting.id).where(
+                        TableSitting.table_id == table_id, TableSitting.closed_at.is_(None)
+                    )
+                )
+            assert bill_id is None or open_sitting is not None, (approve.text, close.text)
+            if bill_id is not None:
+                assert (close.status_code, close.json()["detail"]) == (409, "Settle the bill first")
+                assert approve.status_code == 200, approve.text
+                assert (await settle(c.staff, slug, bill_id)).status_code == 200
+                assert (await c.staff.delete(f"{base}/tables/{table_id}/sitting")).is_success
+                outcomes.add("approved")
+            else:
+                assert close.status_code == 200, close.text
+                assert approve.status_code == 409, approve.text
+                outcomes.add("closed")
+    assert outcomes  # both orders of arrival are possible; neither may break the invariant
