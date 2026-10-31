@@ -7,7 +7,7 @@ from fastapi import HTTPException
 from starlette.requests import Request
 
 from src.config import settings
-from src.request_limits import client_ip, enforce_ip_limit
+from src.request_limits import client_ip, enforce_ip_limit, enforce_session_limit
 
 
 def _request(peer: str, xff: str | None = None) -> Request:
@@ -61,4 +61,21 @@ async def test_enforce_ip_limit_429_after_limit():
         incr.return_value = 4
         with pytest.raises(HTTPException) as exc:
             await enforce_ip_limit(_request("203.0.113.9"), "t", limit=3, window_s=60, detail="x")
+        assert exc.value.status_code == 429
+
+
+@pytest.mark.asyncio
+async def test_enforce_session_limit_429_after_limit():
+    with (
+        patch("src.request_limits.redis_client.incr", new_callable=AsyncMock) as incr,
+        patch("src.request_limits.redis_client.expire", new_callable=AsyncMock) as expire,
+    ):
+        incr.return_value = 1
+        await enforce_session_limit("sess-1", "t", limit=3, window_s=60, detail="x")
+        incr.assert_awaited_with("rate_limit:t:sess-1")
+        expire.assert_awaited_with("rate_limit:t:sess-1", 60)
+
+        incr.return_value = 4
+        with pytest.raises(HTTPException) as exc:
+            await enforce_session_limit("sess-1", "t", limit=3, window_s=60, detail="x")
         assert exc.value.status_code == 429
