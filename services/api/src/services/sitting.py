@@ -56,7 +56,7 @@ async def get_open_sitting(db: AsyncSession, table_id: uuid.UUID) -> TableSittin
     if sitting is None:
         return None
     now = await db.scalar(select(func.clock_timestamp()))
-    last_activity = await _last_activity(db, sitting.table_id)
+    last_activity = await _last_activity(db, sitting.id, sitting.table_id)
     if is_idle(opened_at=sitting.opened_at, last_activity_at=last_activity, now=now):
         sitting.closed_at = now
         sitting.close_reason = "idle_timeout"
@@ -65,9 +65,11 @@ async def get_open_sitting(db: AsyncSession, table_id: uuid.UUID) -> TableSittin
     return sitting
 
 
-async def _last_activity(db: AsyncSession, table_id: uuid.UUID) -> datetime | None:
+async def _last_activity(
+    db: AsyncSession, sitting_id: uuid.UUID, table_id: uuid.UUID
+) -> datetime | None:
     order_activity = await db.scalar(
-        select(func.max(Order.placed_at)).where(Order.table_id == table_id)
+        select(func.max(Order.placed_at)).where(Order.sitting_id == sitting_id)
     )
     call_activity = await db.scalar(
         select(func.max(ServiceCall.created_at)).where(ServiceCall.table_id == table_id)
