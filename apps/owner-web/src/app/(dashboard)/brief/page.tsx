@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { useSlugRef, useVenue } from "../../../lib/venue";
 import { Card, StatTile } from "ui";
+import { ServiceReportCard } from "../../../components/ServiceReportCard";
 import {
   CLASS_COLORS,
   METHOD_LABELS,
@@ -232,6 +233,8 @@ export default function DailyBriefPage() {
               </div>
               <p className="text-sm leading-relaxed text-ink">{brief.summary}</p>
             </div>
+
+            <ServiceReportCard slug={slug} />
 
             <div className="space-y-4">
               <h3 className="text-base font-bold text-ink">Ranked actions</h3>
