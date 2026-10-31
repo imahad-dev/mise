@@ -130,3 +130,36 @@ def test_needs_clearing_runs_from_the_later_of_settle_and_cancel():
     assert (s.state, s.since) == ("needs_clearing", m(30))
     s = table_state(facts(last_settled_at=m(30), last_cancelled_at=m(10)), m(31))
     assert (s.state, s.since) == ("needs_clearing", m(30))
+
+
+def test_guests_waiting_badge_before_table_opened():
+    f = facts(last_session_at=m(0), sitting_open=False)
+    result = table_state(f, m(2))
+    assert result.state == "seated"
+    assert result.waiting_for_open is True
+    assert result.level == "amber"  # guests_waiting: amber at 1, red at 3
+
+
+def test_approval_needed_outranks_everything_and_times_from_pending_order():
+    f = facts(
+        last_session_at=m(-100),
+        open_bill=True,
+        sitting_open=True,
+        approval_pending=m(0),
+    )
+    result = table_state(f, m(2))
+    assert result.state == "approval_needed"
+    assert result.level == "red"  # approval_needed: amber at 1, red at 2
+
+
+def test_seated_timer_starts_from_sitting_open_not_last_session():
+    f = facts(
+        last_session_at=m(-60),  # long ago, irrelevant once a sitting is open
+        open_bill=True,
+        sitting_open=True,
+        sitting_opened_at=m(0),
+    )
+    result = table_state(f, m(6))
+    assert result.state == "seated"
+    assert result.since == m(0)
+    assert result.level == "red"  # seated: amber at 3, red at 5 -> 6 minutes since open
