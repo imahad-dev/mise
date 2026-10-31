@@ -751,7 +751,7 @@ async def test_guest_status_of_a_phone_left_from_the_last_party(client, db_sessi
     resp = await settle(client, tv.r.slug, (await order_row(db_session, o1)).bill_id)
     assert resp.status_code == 200, resp.text
     await open_table(db_session, tv.t1.id, code="4821")
-    # As create_order would judge it: the visit ended, so no table and no code to ask for.
+    # By the same rules create_order uses: the visit ended, so no table and no code to ask for.
     assert await guest_status(client, leftover) == (False, False)
     assert (await post_order(client, leftover, tv.naan, code="4821")).status_code == 409
 

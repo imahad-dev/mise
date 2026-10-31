@@ -321,7 +321,7 @@
           "guest"
         ],
         "summary": "Get Guest Session",
-        "description": "The active guest session, and whether its table is open for this phone to order.\n\nA plain read, as create_order would judge it: a counter needs no sitting; a phone bound to\nan earlier sitting must scan again; the code is asked once per phone per sitting.",
+        "description": "The active guest session, and whether its table is open for this phone to order.\n\nA plain read, by the same rules create_order uses: a counter needs no sitting; a phone bound to\nan earlier sitting must scan again; the code is asked once per phone per sitting.",
         "operationId": "get_guest_session_api_guest_session_get",
         "responses": {
           "200": {

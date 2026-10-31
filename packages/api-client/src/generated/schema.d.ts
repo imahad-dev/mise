@@ -229,7 +229,7 @@ export interface paths {
          * Get Guest Session
          * @description The active guest session, and whether its table is open for this phone to order.
          *
-         *     A plain read, as create_order would judge it: a counter needs no sitting; a phone bound to
+         *     A plain read, by the same rules create_order uses: a counter needs no sitting; a phone bound to
          *     an earlier sitting must scan again; the code is asked once per phone per sitting.
          */
         get: operations["get_guest_session_api_guest_session_get"];
