@@ -32,6 +32,30 @@ class BillChanged(Exception):  # noqa: N818 - a signal, not an error
     """The staff member's expected total no longer matches the server's recomputation."""
 
 
+def _reset_at(table_id: uuid.UUID):
+    """When the table last reset: cleared, or one of its bills settled or cancelled."""
+    return func.greatest(
+        select(DiningTable.cleared_at).where(DiningTable.id == table_id).scalar_subquery(),
+        select(func.max(Bill.settled_at))
+        .where(Bill.table_id == table_id, Bill.status == "settled")
+        .scalar_subquery(),
+        select(func.max(Bill.cancelled_at))
+        .where(Bill.table_id == table_id, Bill.status == "cancelled")
+        .scalar_subquery(),
+    )
+
+
+async def session_started_at(db: AsyncSession, table_id: uuid.UUID) -> datetime:
+    """created_at for a new session at the table: the database clock, but always after the
+    table's last reset. The wall clock can step back (time sync), and a phone that scans after a
+    settle must never look like it scanned before it (session_is_current)."""
+    return await db.scalar(
+        select(
+            func.greatest(func.clock_timestamp(), _reset_at(table_id) + timedelta(microseconds=1))
+        )
+    )
+
+
 async def session_is_current(db: AsyncSession, session: GuestSession) -> bool:
     """Whether a table session still belongs to the party at the table.
 
@@ -45,21 +69,7 @@ async def session_is_current(db: AsyncSession, session: GuestSession) -> bool:
     kind = await db.scalar(select(DiningTable.kind).where(DiningTable.id == session.table_id))
     if kind == "counter":
         return True
-    reset = await db.scalar(
-        select(
-            func.greatest(
-                select(DiningTable.cleared_at)
-                .where(DiningTable.id == session.table_id)
-                .scalar_subquery(),
-                select(func.max(Bill.settled_at))
-                .where(Bill.table_id == session.table_id, Bill.status == "settled")
-                .scalar_subquery(),
-                select(func.max(Bill.cancelled_at))
-                .where(Bill.table_id == session.table_id, Bill.status == "cancelled")
-                .scalar_subquery(),
-            )
-        )
-    )
+    reset = await db.scalar(select(_reset_at(session.table_id)))
     if reset is None or session.created_at > reset:
         return True
     return bool(

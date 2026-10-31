@@ -9,7 +9,7 @@ from decimal import Decimal
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from tests.helpers import approve_order, as_member, make_user, seat_table, settle, sign_in
@@ -25,7 +25,7 @@ from src.models.order import Order
 from src.models.restaurant import Restaurant
 from src.models.session import GuestSession
 from src.models.user import User
-from src.services.bills import VISIT_ENDED
+from src.services.bills import VISIT_ENDED, session_started_at
 
 
 @dataclass
@@ -270,7 +270,7 @@ async def test_settle_by_card_snapshots_tax_and_next_order_opens_new_bill(
         table_id=venue.t1.id,
         language="en",
         expires_at=datetime.now(UTC) + timedelta(hours=2),
-        created_at=await db_session.scalar(select(func.clock_timestamp())),
+        created_at=await session_started_at(db_session, venue.t1.id),
     )
     db_session.add(next_party)
     await db_session.flush()
@@ -480,6 +480,7 @@ async def test_parallel_settle_and_order(committed_venue):
                         table_id=table_id_of_session,
                         language="en",
                         expires_at=datetime.now(UTC) + timedelta(hours=2),
+                        created_at=await session_started_at(s, table_id_of_session),
                     )
                     s.add(party)
                     await s.commit()

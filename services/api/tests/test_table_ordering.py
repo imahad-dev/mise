@@ -22,7 +22,7 @@ from src.models.restaurant import Restaurant
 from src.models.session import GuestSession
 from src.models.sitting import TableSitting
 from src.redis_client import redis_client
-from src.services.bills import VISIT_ENDED
+from src.services.bills import VISIT_ENDED, session_is_current
 
 CHANGED = "The order changed. Please check the table again."
 
@@ -566,3 +566,15 @@ async def test_an_idle_close_cancels_the_waiting_orders(client, db_session, tv, 
     assert row.voided_at is not None
     assert declined_for(events, tv, o1) == {f"orders:{o1}", f"kitchen:{tv.r.id}"}
     assert await guest_sees(client, tv, o1) == "cancelled"
+
+
+async def test_a_phone_that_scans_after_a_reset_is_current_even_if_the_clock_stepped_back(
+    client, db_session, tv
+):
+    # The wall clock stepped back after the table reset: the reset looks later than "now".
+    tv.t1.cleared_at = datetime.now(UTC) + timedelta(minutes=1)
+    await db_session.flush()
+    resp = await client.post("/api/guest/sessions", json={"qr_token": tv.t1.qr_token})
+    assert resp.status_code == 201, resp.text
+    scanned = await db_session.get(GuestSession, uuid.UUID(resp.json()["id"]))
+    assert await session_is_current(db_session, scanned)

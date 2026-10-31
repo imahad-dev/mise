@@ -60,6 +60,7 @@ from src.services.bills import (
     method_previews,
     revive_expired,
     session_is_current,
+    session_started_at,
 )
 from src.services.counter import order_status as counter_order_status
 from src.services.counter import pickup_label
@@ -101,6 +102,7 @@ async def create_guest_session(
         dietary_preferences=list(payload.dietary_preferences),
         allergens_to_avoid=list(payload.allergens_to_avoid),
         expires_at=expires_at,
+        created_at=await session_started_at(db, table.id),
     )
     db.add(guest_session)
     await db.commit()

@@ -21,7 +21,7 @@ from src.models.order import Order
 from src.models.session import GuestSession
 from src.services import analytics
 from src.services.analytics import Window
-from src.services.bills import method_previews, previews
+from src.services.bills import method_previews, previews, session_started_at
 from src.services.tax import PAYMENT_METHODS, payment_class, tax_for
 
 CASES = 2000
@@ -129,7 +129,7 @@ async def test_sample_bills_agree_from_guest_to_analytics(client, db_session, mv
             table_id=mv.t1.id,
             language="en",
             expires_at=datetime.now(UTC) + timedelta(hours=2),
-            created_at=await db_session.scalar(select(func.clock_timestamp())),
+            created_at=await session_started_at(db_session, mv.t1.id),
         )
         db_session.add(party)
         await db_session.flush()
@@ -187,7 +187,7 @@ async def test_revenue_counts_only_settled_bills(client, db_session, mv):
             table_id=table.id,
             language="en",
             expires_at=datetime.now(UTC) + timedelta(hours=2),
-            created_at=await db_session.scalar(select(func.clock_timestamp())),
+            created_at=await session_started_at(db_session, table.id),
         )
         db_session.add(party)
         parties.append(party)

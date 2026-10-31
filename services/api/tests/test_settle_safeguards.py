@@ -30,7 +30,13 @@ from src.models.order import Order
 from src.models.restaurant import Restaurant
 from src.models.session import GuestSession
 from src.models.sitting import TableSitting
-from src.services.bills import VISIT_ENDED, local_date, reference_key, session_is_current
+from src.services.bills import (
+    VISIT_ENDED,
+    local_date,
+    reference_key,
+    session_is_current,
+    session_started_at,
+)
 from src.services.tax import tax_for
 
 
@@ -408,6 +414,7 @@ async def _new_committed_party(restaurant_id, table_id) -> uuid.UUID:
             table_id=table_id,
             language="en",
             expires_at=datetime.now(UTC) + timedelta(hours=2),
+            created_at=await session_started_at(s, table_id),
         )
         s.add(party)
         await s.commit()

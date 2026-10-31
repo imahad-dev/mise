@@ -30,7 +30,7 @@ from src.models.restaurant import Restaurant
 from src.models.session import GuestSession
 from src.models.user import User
 from src.services import analytics
-from src.services.bills import local_date
+from src.services.bills import local_date, session_started_at
 from src.services.simulator import SimAssumptions, persist_simulation
 
 ROUNDS = 3
@@ -263,7 +263,7 @@ async def test_flag_is_read_when_ordered_not_when_settled(client, db_session, pf
         table_id=pf.t1.id,
         language="en",
         expires_at=datetime.now(UTC) + timedelta(hours=2),
-        created_at=await db_session.scalar(select(func.clock_timestamp())),
+        created_at=await session_started_at(db_session, pf.t1.id),
     )
     db_session.add(party2)
     await db_session.flush()
