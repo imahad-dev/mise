@@ -227,7 +227,10 @@ export interface paths {
         };
         /**
          * Get Guest Session
-         * @description Retrieve details for the active guest session.
+         * @description The active guest session, and whether its table is open for this phone to order.
+         *
+         *     A plain read, as create_order would judge it: a counter needs no sitting; a phone bound to
+         *     an earlier sitting must scan again; the code is asked once per phone per sitting.
          */
         get: operations["get_guest_session_api_guest_session_get"];
         put?: never;
@@ -735,6 +738,67 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/restaurants/{slug}/tables/{table_id}/sitting": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Open Table
+         * @description Staff seat a party: guests at this table may order once it is open.
+         */
+        post: operations["open_table_api_restaurants__slug__tables__table_id__sitting_post"];
+        /** Close Table */
+        delete: operations["close_table_api_restaurants__slug__tables__table_id__sitting_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/restaurants/{slug}/tables/{table_id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Approve Table
+         * @description Send the waiting orders the waiter saw to the kitchen; a repeated tap replays.
+         */
+        post: operations["approve_table_api_restaurants__slug__tables__table_id__approve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/restaurants/{slug}/tables/{table_id}/decline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Decline Table
+         * @description Cancel the waiting orders the waiter saw ("Not now"); the table stays open.
+         */
+        post: operations["decline_table_api_restaurants__slug__tables__table_id__decline_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/restaurants/{slug}/service-calls/{call_id}/resolve": {
         parameters: {
             query?: never;
@@ -988,6 +1052,26 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** ApprovalRequest */
+        ApprovalRequest: {
+            /** Order Ids */
+            order_ids: string[];
+        };
+        /** ApprovalResponse */
+        ApprovalResponse: {
+            /**
+             * Table Id
+             * Format: uuid
+             */
+            table_id: string;
+            /** Order Ids */
+            order_ids: string[];
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "placed" | "cancelled";
+        };
         /** AuthConfigResponse */
         AuthConfigResponse: {
             /** Demo Mode */
@@ -1239,6 +1323,19 @@ export interface components {
              */
             force: boolean;
         };
+        /** CloseSittingResponse */
+        CloseSittingResponse: {
+            /**
+             * Table Id
+             * Format: uuid
+             */
+            table_id: string;
+            /**
+             * Closed At
+             * Format: date-time
+             */
+            closed_at: string;
+        };
         /** CollectResponse */
         CollectResponse: {
             /**
@@ -1283,6 +1380,8 @@ export interface components {
              * @default false
              */
             acknowledge_allergen_risk: boolean;
+            /** Code */
+            code?: string | null;
         };
         /** CurrentCallResponse */
         CurrentCallResponse: {
@@ -1417,6 +1516,18 @@ export interface components {
             bill_id: string | null;
             /** Call Id */
             call_id: string | null;
+            /** Sitting Open */
+            sitting_open: boolean;
+            /** Waiting For Open */
+            waiting_for_open: boolean;
+            /** Pending Order Id */
+            pending_order_id: string | null;
+            /** Pending Order Ids */
+            pending_order_ids: string[];
+            /** Pending Order Total */
+            pending_order_total: string | null;
+            /** Pending Order Items */
+            pending_order_items: number | null;
         };
         /** ForecastPoint */
         ForecastPoint: {
@@ -1643,6 +1754,36 @@ export interface components {
              * Format: date-time
              */
             expires_at: string;
+        };
+        /** GuestSessionStatusResponse */
+        GuestSessionStatusResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Restaurant Id
+             * Format: uuid
+             */
+            restaurant_id: string;
+            /** Table Id */
+            table_id: string | null;
+            /** Language */
+            language: string;
+            /** Dietary Preferences */
+            dietary_preferences: string[];
+            /** Allergens To Avoid */
+            allergens_to_avoid: string[];
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /** Sitting Open */
+            sitting_open: boolean;
+            /** Code Required */
+            code_required: boolean;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -1899,6 +2040,21 @@ export interface components {
             /** Restaurants */
             restaurants: components["schemas"]["MyRestaurant"][];
         };
+        /** OpenSittingResponse */
+        OpenSittingResponse: {
+            /**
+             * Sitting Id
+             * Format: uuid
+             */
+            sitting_id: string;
+            /** Code */
+            code: string | null;
+            /**
+             * Opened At
+             * Format: date-time
+             */
+            opened_at: string;
+        };
         /** OrderItemRequest */
         OrderItemRequest: {
             /**
@@ -1988,6 +2144,11 @@ export interface components {
             bumped_at: string | null;
             /** Items */
             items: components["schemas"]["OrderItemResponse"][];
+            /**
+             * Over First Order Cap
+             * @default false
+             */
+            over_first_order_cap: boolean;
         };
         /** OwnerMenuItemResponse */
         OwnerMenuItemResponse: {
@@ -2761,7 +2922,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["GuestSessionResponse"];
+                    "application/json": components["schemas"]["GuestSessionStatusResponse"];
                 };
             };
             /** @description Unauthenticated or expired session */
@@ -3137,7 +3298,14 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Idempotency conflict, unavailable items, or allergen ack required */
+            /** @description The table code is required or wrong */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Table not open, idempotency conflict, unavailable items, or allergen ack required */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -3152,6 +3320,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+            /** @description Too many orders or wrong table codes from this phone */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -3962,6 +4137,226 @@ export interface operations {
                 content?: never;
             };
             /** @description Settle the bill first, or new guests are already seated */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    open_table_api_restaurants__slug__tables__table_id__sitting_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                table_id: string;
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpenSittingResponse"];
+                };
+            };
+            /** @description Unauthenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Restaurant, table or call not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Table is already open, is a counter, or has an unpaid bill */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    close_table_api_restaurants__slug__tables__table_id__sitting_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                table_id: string;
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloseSittingResponse"];
+                };
+            };
+            /** @description Unauthenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Restaurant, table or call not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Settle the bill first, or no sitting is open */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    approve_table_api_restaurants__slug__tables__table_id__approve_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                table_id: string;
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApprovalRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalResponse"];
+                };
+            };
+            /** @description Unauthenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Restaurant, table or call not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The waiting orders changed, or already handled */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    decline_table_api_restaurants__slug__tables__table_id__decline_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                table_id: string;
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApprovalRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalResponse"];
+                };
+            };
+            /** @description Unauthenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Restaurant, table or call not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The waiting orders changed, or already handled */
             409: {
                 headers: {
                     [name: string]: unknown;

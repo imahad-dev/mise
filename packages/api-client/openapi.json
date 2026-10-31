@@ -321,7 +321,7 @@
           "guest"
         ],
         "summary": "Get Guest Session",
-        "description": "Retrieve details for the active guest session.",
+        "description": "The active guest session, and whether its table is open for this phone to order.\n\nA plain read, as create_order would judge it: a counter needs no sitting; a phone bound to\nan earlier sitting must scan again; the code is asked once per phone per sitting.",
         "operationId": "get_guest_session_api_guest_session_get",
         "responses": {
           "200": {
@@ -329,7 +329,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/GuestSessionResponse"
+                  "$ref": "#/components/schemas/GuestSessionStatusResponse"
                 }
               }
             }
@@ -715,8 +715,14 @@
           "400": {
             "description": "Invalid order items"
           },
+          "403": {
+            "description": "The table code is required or wrong"
+          },
           "409": {
-            "description": "Idempotency conflict, unavailable items, or allergen ack required"
+            "description": "Table not open, idempotency conflict, unavailable items, or allergen ack required"
+          },
+          "429": {
+            "description": "Too many orders or wrong table codes from this phone"
           },
           "422": {
             "description": "Validation Error",
@@ -1714,6 +1720,271 @@
         }
       }
     },
+    "/api/restaurants/{slug}/tables/{table_id}/sitting": {
+      "post": {
+        "tags": [
+          "floor"
+        ],
+        "summary": "Open Table",
+        "description": "Staff seat a party: guests at this table may order once it is open.",
+        "operationId": "open_table_api_restaurants__slug__tables__table_id__sitting_post",
+        "parameters": [
+          {
+            "name": "table_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Table Id"
+            }
+          },
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Slug"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenSittingResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "404": {
+            "description": "Restaurant, table or call not found"
+          },
+          "409": {
+            "description": "Table is already open, is a counter, or has an unpaid bill"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "floor"
+        ],
+        "summary": "Close Table",
+        "operationId": "close_table_api_restaurants__slug__tables__table_id__sitting_delete",
+        "parameters": [
+          {
+            "name": "table_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Table Id"
+            }
+          },
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Slug"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CloseSittingResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "404": {
+            "description": "Restaurant, table or call not found"
+          },
+          "409": {
+            "description": "Settle the bill first, or no sitting is open"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/restaurants/{slug}/tables/{table_id}/approve": {
+      "post": {
+        "tags": [
+          "floor"
+        ],
+        "summary": "Approve Table",
+        "description": "Send the waiting orders the waiter saw to the kitchen; a repeated tap replays.",
+        "operationId": "approve_table_api_restaurants__slug__tables__table_id__approve_post",
+        "parameters": [
+          {
+            "name": "table_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Table Id"
+            }
+          },
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Slug"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApprovalRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovalResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "404": {
+            "description": "Restaurant, table or call not found"
+          },
+          "409": {
+            "description": "The waiting orders changed, or already handled"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/restaurants/{slug}/tables/{table_id}/decline": {
+      "post": {
+        "tags": [
+          "floor"
+        ],
+        "summary": "Decline Table",
+        "description": "Cancel the waiting orders the waiter saw (\"Not now\"); the table stays open.",
+        "operationId": "decline_table_api_restaurants__slug__tables__table_id__decline_post",
+        "parameters": [
+          {
+            "name": "table_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Table Id"
+            }
+          },
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Slug"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApprovalRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovalResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "404": {
+            "description": "Restaurant, table or call not found"
+          },
+          "409": {
+            "description": "The waiting orders changed, or already handled"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/restaurants/{slug}/service-calls/{call_id}/resolve": {
       "post": {
         "tags": [
@@ -2511,6 +2782,57 @@
   },
   "components": {
     "schemas": {
+      "ApprovalRequest": {
+        "properties": {
+          "order_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Order Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "order_ids"
+        ],
+        "title": "ApprovalRequest"
+      },
+      "ApprovalResponse": {
+        "properties": {
+          "table_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Table Id"
+          },
+          "order_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Order Ids"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "placed",
+              "cancelled"
+            ],
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "table_id",
+          "order_ids",
+          "status"
+        ],
+        "title": "ApprovalResponse"
+      },
       "AuthConfigResponse": {
         "properties": {
           "demo_mode": {
@@ -3395,6 +3717,26 @@
         "type": "object",
         "title": "ClearTableRequest"
       },
+      "CloseSittingResponse": {
+        "properties": {
+          "table_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Table Id"
+          },
+          "closed_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Closed At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "table_id",
+          "closed_at"
+        ],
+        "title": "CloseSittingResponse"
+      },
       "CollectResponse": {
         "properties": {
           "order_id": {
@@ -3506,6 +3848,18 @@
             "type": "boolean",
             "title": "Acknowledge Allergen Risk",
             "default": false
+          },
+          "code": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[0-9]{4}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code"
           }
         },
         "type": "object",
@@ -3917,6 +4271,56 @@
               }
             ],
             "title": "Call Id"
+          },
+          "sitting_open": {
+            "type": "boolean",
+            "title": "Sitting Open"
+          },
+          "waiting_for_open": {
+            "type": "boolean",
+            "title": "Waiting For Open"
+          },
+          "pending_order_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pending Order Id"
+          },
+          "pending_order_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Pending Order Ids"
+          },
+          "pending_order_total": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pending Order Total"
+          },
+          "pending_order_items": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pending Order Items"
           }
         },
         "type": "object",
@@ -3930,7 +4334,13 @@
           "reason_label",
           "running_total",
           "bill_id",
-          "call_id"
+          "call_id",
+          "sitting_open",
+          "waiting_for_open",
+          "pending_order_id",
+          "pending_order_ids",
+          "pending_order_total",
+          "pending_order_items"
         ],
         "title": "FloorTile"
       },
@@ -4606,6 +5016,76 @@
         ],
         "title": "GuestSessionResponse"
       },
+      "GuestSessionStatusResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "restaurant_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Restaurant Id"
+          },
+          "table_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Table Id"
+          },
+          "language": {
+            "type": "string",
+            "title": "Language"
+          },
+          "dietary_preferences": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Dietary Preferences"
+          },
+          "allergens_to_avoid": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Allergens To Avoid"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Expires At"
+          },
+          "sitting_open": {
+            "type": "boolean",
+            "title": "Sitting Open"
+          },
+          "code_required": {
+            "type": "boolean",
+            "title": "Code Required"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "restaurant_id",
+          "table_id",
+          "language",
+          "dietary_preferences",
+          "allergens_to_avoid",
+          "expires_at",
+          "sitting_open",
+          "code_required"
+        ],
+        "title": "GuestSessionStatusResponse"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -5276,6 +5756,38 @@
         ],
         "title": "MyRestaurantsResponse"
       },
+      "OpenSittingResponse": {
+        "properties": {
+          "sitting_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Sitting Id"
+          },
+          "code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code"
+          },
+          "opened_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Opened At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "sitting_id",
+          "code",
+          "opened_at"
+        ],
+        "title": "OpenSittingResponse"
+      },
       "OrderItemRequest": {
         "properties": {
           "menu_item_id": {
@@ -5503,6 +6015,11 @@
             },
             "type": "array",
             "title": "Items"
+          },
+          "over_first_order_cap": {
+            "type": "boolean",
+            "title": "Over First Order Cap",
+            "default": false
           }
         },
         "additionalProperties": false,
