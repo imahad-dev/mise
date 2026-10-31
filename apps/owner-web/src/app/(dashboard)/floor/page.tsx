@@ -72,7 +72,7 @@ export default function FloorPage() {
     setCodes({});
   }, [slug]);
 
-  /** POST (or DELETE) and reload; null when the venue changed meanwhile or the network failed. */
+  /** POST (or DELETE) and wait for the reload; null when the venue changed meanwhile or the network failed. */
   const post = async (key: string, path: string, body?: object, method = "POST"): Promise<Response | null> => {
     const forSlug = slug;
     setBusy(key);
@@ -84,7 +84,7 @@ export default function FloorPage() {
         ...(body ? { headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) } : {}),
       });
       if (slugRef.current !== forSlug) return null;
-      void refetch();
+      await refetch(); // keep the buttons disabled until the Floor shows the result
       return res;
     } catch {
       if (slugRef.current === forSlug) setActionError("Network error. Try again.");
@@ -197,7 +197,9 @@ export default function FloorPage() {
                     {level && <span className="text-xs font-semibold uppercase tracking-wider">{level}</span>}
                   </div>
                   {t.waiting_for_open ? (
-                    <p className="text-sm font-semibold">{waitingText(time)}</p>
+                    <p>
+                      <span className="chip chip-unverified motion-safe:animate-pulse">{waitingText(time)}</span>
+                    </p>
                   ) : (
                     <p className="flex items-center gap-2 text-sm font-semibold">
                       <span aria-hidden="true">{stateIcon(t.state)}</span>
@@ -215,7 +217,12 @@ export default function FloorPage() {
                       <p className="text-sm">Table code</p>
                       <p className="font-mono text-4xl font-bold tracking-widest">{codes[t.table_id]}</p>
                       <p className="text-sm">Tell the guests at this table.</p>
-                      <Button variant="outline" className="mt-2" onClick={() => dismissCode(t.table_id)}>
+                      <Button
+                        variant="outline"
+                        className="mt-2"
+                        aria-label={`Done with code, ${t.label}`}
+                        onClick={() => dismissCode(t.table_id)}
+                      >
                         Done
                       </Button>
                     </div>
