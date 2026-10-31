@@ -11,6 +11,7 @@ from src.models.pay_forward import PayForward
 from src.models.restaurant import Restaurant
 from src.models.service_call import ServiceCall
 from src.models.session import GuestSession
+from src.models.sitting import TableSitting
 from src.models.user import Membership, User
 
 __all__ = [
@@ -29,5 +30,6 @@ __all__ = [
     "PayForward",
     "Restaurant",
     "ServiceCall",
+    "TableSitting",
     "User",
 ]

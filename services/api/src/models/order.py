@@ -27,7 +27,7 @@ class Order(Base):
     __tablename__ = "orders"
     __table_args__ = (
         CheckConstraint(
-            "status IN ('awaiting_payment', 'placed', 'bumped', 'cancelled')",
+            "status IN ('awaiting_payment', 'pending_approval', 'placed', 'bumped', 'cancelled')",
             name="chk_orders_status",
         ),
         CheckConstraint("total >= 0", name="chk_orders_total"),
@@ -56,6 +56,7 @@ class Order(Base):
         Index("idx_orders_kitchen_query", "restaurant_id", "status", "placed_at"),
         Index("idx_orders_analytics", "restaurant_id", "source", "placed_at"),
         Index("idx_orders_bill_id", "bill_id"),
+        Index("idx_orders_sitting_id", "sitting_id"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -81,6 +82,11 @@ class Order(Base):
     bill_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("bills.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    sitting_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("table_sitting.id", ondelete="SET NULL"),
         nullable=True,
     )
     status: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'placed'"))
@@ -136,6 +142,7 @@ class Order(Base):
     )
     guest_session: Mapped["GuestSession"] = relationship("GuestSession", lazy="raise")  # noqa: F821
     table: Mapped["DiningTable | None"] = relationship("DiningTable", lazy="raise")  # noqa: F821
+    sitting: Mapped["TableSitting | None"] = relationship("TableSitting", lazy="raise")  # noqa: F821
     items: Mapped[list["OrderItem"]] = relationship(
         "OrderItem",
         back_populates="order",
