@@ -42,7 +42,10 @@ async def open_sitting_for_table(
 
 
 async def get_open_sitting(db: AsyncSession, table_id: uuid.UUID) -> TableSitting | None:
-    """The table's open sitting, lazily closing it first if it has gone idle."""
+    """The table's open sitting, lazily closing it first if it has gone idle.
+
+    Caller owns the txn.
+    """
     sitting = (
         await db.execute(
             select(TableSitting)
@@ -53,7 +56,7 @@ async def get_open_sitting(db: AsyncSession, table_id: uuid.UUID) -> TableSittin
     if sitting is None:
         return None
     now = await db.scalar(select(func.clock_timestamp()))
-    last_activity = await _last_activity(db, sitting.id)
+    last_activity = await _last_activity(db, sitting.table_id)
     if is_idle(opened_at=sitting.opened_at, last_activity_at=last_activity, now=now):
         sitting.closed_at = now
         sitting.close_reason = "idle_timeout"
@@ -62,15 +65,12 @@ async def get_open_sitting(db: AsyncSession, table_id: uuid.UUID) -> TableSittin
     return sitting
 
 
-async def _last_activity(db: AsyncSession, sitting_id: uuid.UUID) -> datetime | None:
+async def _last_activity(db: AsyncSession, table_id: uuid.UUID) -> datetime | None:
     order_activity = await db.scalar(
-        select(func.max(Order.placed_at)).where(Order.sitting_id == sitting_id)
+        select(func.max(Order.placed_at)).where(Order.table_id == table_id)
     )
     call_activity = await db.scalar(
-        select(func.max(ServiceCall.created_at)).where(
-            ServiceCall.table_id
-            == select(TableSitting.table_id).where(TableSitting.id == sitting_id).scalar_subquery()
-        )
+        select(func.max(ServiceCall.created_at)).where(ServiceCall.table_id == table_id)
     )
     candidates = [t for t in (order_activity, call_activity) if t is not None]
     return max(candidates) if candidates else None
@@ -81,7 +81,7 @@ async def close_sitting_for_table(
 ) -> None:
     """Close the table's open sitting, if any. No-op for counter tables (never have one) and
     for a table with no open sitting (settle/void paths call this unconditionally — it's a
-    no-op, not an error, when there's nothing to close)."""
+    no-op, not an error, when there's nothing to close). Caller owns the txn."""
     sitting = (
         await db.execute(
             select(TableSitting)
