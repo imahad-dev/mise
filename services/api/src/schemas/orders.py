@@ -4,7 +4,9 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+MAX_ITEMS_PER_ORDER = 30  # portions across all lines
 
 
 class OrderItemRequest(BaseModel):
@@ -18,6 +20,14 @@ class CreateOrderRequest(BaseModel):
     idempotency_key: str = Field(..., min_length=1)
     items: list[OrderItemRequest] = Field(..., min_length=1, max_length=50)
     acknowledge_allergen_risk: bool = False
+    # The table's 4-digit code, read aloud by the waiter; only asked once per phone and visit.
+    code: str | None = Field(default=None, pattern=r"^[0-9]{4}$")
+
+    @model_validator(mode="after")
+    def _within_item_cap(self) -> "CreateOrderRequest":
+        if sum(i.quantity for i in self.items) > MAX_ITEMS_PER_ORDER:
+            raise ValueError("That's a big order! Please ask your waiter.")
+        return self
 
 
 class OrderItemResponse(BaseModel):
@@ -52,5 +62,7 @@ class OrderResponse(BaseModel):
     placed_at: datetime
     bumped_at: datetime | None
     items: list[OrderItemResponse]
+    # The visit's orders waiting for the waiter add up to more than the venue's first-order cap.
+    over_first_order_cap: bool = False
 
     model_config = ConfigDict(from_attributes=True, extra="forbid")

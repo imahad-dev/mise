@@ -22,6 +22,7 @@ from src.models.session import GuestSession
 from src.models.sitting import TableSitting
 from src.redis_client import publish_event
 from src.schemas.floor import (
+    ApprovalResponse,
     ClearTableRequest,
     CloseSittingResponse,
     FloorResponse,
@@ -36,7 +37,14 @@ from src.schemas.floor import (
 from src.services import pay_forward
 from src.services.bills import CENTS
 from src.services.floor import THRESHOLDS, TableFacts, reason_label, table_state
-from src.services.sitting import close_sitting_for_table, get_open_sitting, open_sitting_for_table
+from src.services.sitting import (
+    APPROVED,
+    approve_pending,
+    close_sitting_for_table,
+    decline_pending,
+    get_open_sitting,
+    open_sitting_for_table,
+)
 
 router = APIRouter(prefix="/api/restaurants/{slug}", tags=["floor"])
 
@@ -131,23 +139,22 @@ async def get_floor(
             )
         ).all()
     }
-    # Newest first, so the dict keeps each table's oldest pending order of its open sitting.
-    pending = {
-        o.table_id: o
-        for o in (
-            await db.scalars(
-                select(Order)
-                .join(TableSitting, TableSitting.id == Order.sitting_id)
-                .options(selectinload(Order.items))
-                .where(
-                    Order.restaurant_id == rid,
-                    Order.status == "pending_approval",
-                    TableSitting.closed_at.is_(None),
-                )
-                .order_by(Order.placed_at.desc(), Order.id.desc())
+    # Every waiting order of each open sitting, oldest first: the waiter approves them together.
+    pending: dict[uuid.UUID, list[Order]] = {}
+    for o in (
+        await db.scalars(
+            select(Order)
+            .join(TableSitting, TableSitting.id == Order.sitting_id)
+            .options(selectinload(Order.items))
+            .where(
+                Order.restaurant_id == rid,
+                Order.status == "pending_approval",
+                TableSitting.closed_at.is_(None),
             )
-        ).all()
-    }
+            .order_by(Order.placed_at, Order.id)
+        )
+    ).all():
+        pending.setdefault(o.table_id, []).append(o)
 
     extra = access.restaurant.service_extra_label
     tiles: list[FloorTile] = []
@@ -156,7 +163,7 @@ async def get_floor(
         call = calls.get(t.id)
         total = (bill.total or Decimal("0")).quantize(CENTS) if bill else None
         sitting = sittings.get(t.id)
-        pend = pending.get(t.id)
+        pend = pending.get(t.id, [])
         tile = table_state(
             TableFacts(
                 table_id=str(t.id),
@@ -175,7 +182,7 @@ async def get_floor(
                 running_total=total,
                 sitting_open=sitting is not None,
                 sitting_opened_at=sitting.opened_at if sitting else None,
-                approval_pending=pend.placed_at if pend else None,
+                approval_pending=pend[0].placed_at if pend else None,
             ),
             now,
         )
@@ -195,9 +202,11 @@ async def get_floor(
                 call_id=call.id if call else None,
                 sitting_open=sitting is not None,
                 waiting_for_open=tile.waiting_for_open,
-                pending_order_id=pend.id if pend else None,
-                pending_order_total=pend.total if pend else None,
-                pending_order_items=sum(i.quantity for i in pend.items) if pend else None,
+                pending_order_id=pend[0].id if pend else None,
+                pending_order_total=sum((o.total for o in pend), Decimal("0")) if pend else None,
+                pending_order_items=sum(i.quantity for o in pend for i in o.items)
+                if pend
+                else None,
             )
         )
     tiles.sort(key=lambda x: (LEVEL_ORDER[x.level], _natural(x.label)))
@@ -411,6 +420,79 @@ async def close_table(
         f"kitchen:{rid}", json.dumps({"event": "table_closed", "table_id": str(table.id)})
     )
     return CloseSittingResponse(table_id=table.id, closed_at=now)
+
+
+ALREADY_HANDLED = "Already handled"
+
+
+@router.post(
+    "/tables/{table_id}/approve",
+    response_model=ApprovalResponse,
+    responses={**RESPONSES, 409: {"description": "Already handled: nothing is waiting"}},
+)
+async def approve_table(
+    table_id: uuid.UUID,
+    access: RestaurantAccess = Depends(member_access),
+    db: AsyncSession = Depends(get_db),
+) -> ApprovalResponse:
+    """Send the table's waiting orders to the kitchen; a repeated tap returns the approved ones."""
+    rid = access.restaurant.id
+    table = await _table(db, rid, table_id)
+    ids, bill, created = await approve_pending(db, rid, table.id, f"user:{access.user.id}")
+    if not ids:
+        # Replay: the visit is approved and nothing waits. Otherwise a decline got there first.
+        approved = list(
+            (
+                await db.scalars(
+                    select(Order.id)
+                    .join(TableSitting, TableSitting.id == Order.sitting_id)
+                    .where(
+                        TableSitting.table_id == table.id,
+                        TableSitting.closed_at.is_(None),
+                        Order.status.in_(APPROVED),
+                    )
+                    .order_by(Order.placed_at, Order.id)
+                )
+            ).all()
+        )
+        await db.commit()  # keep an idle close get_open_sitting may have just made
+        if not approved:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=ALREADY_HANDLED)
+        return ApprovalResponse(table_id=table.id, order_ids=approved, status="placed")
+    await db.commit()
+    for order_id in ids:
+        placed = json.dumps({"event": "order_placed", "order_id": str(order_id)})
+        await publish_event(f"kitchen:{rid}", placed)
+        await publish_event(f"orders:{order_id}", placed)
+    if created:
+        await publish_event(
+            f"kitchen:{rid}", json.dumps({"event": "bill_opened", "bill_id": str(bill.id)})
+        )
+    return ApprovalResponse(table_id=table.id, order_ids=ids, status="placed")
+
+
+@router.post(
+    "/tables/{table_id}/decline",
+    response_model=ApprovalResponse,
+    responses={**RESPONSES, 409: {"description": "Already handled: nothing is waiting"}},
+)
+async def decline_table(
+    table_id: uuid.UUID,
+    access: RestaurantAccess = Depends(member_access),
+    db: AsyncSession = Depends(get_db),
+) -> ApprovalResponse:
+    """Cancel the table's waiting orders ("Not now"); the table stays open for a new order."""
+    rid = access.restaurant.id
+    table = await _table(db, rid, table_id)
+    ids = await decline_pending(db, rid, table.id, access.user.id)
+    await db.commit()
+    if not ids:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=ALREADY_HANDLED)
+    for order_id in ids:
+        declined = json.dumps({"event": "order_declined", "order_id": str(order_id)})
+        await publish_event(f"kitchen:{rid}", declined)  # the Floor reloads on kitchen events
+        await publish_event(f"orders:{order_id}", declined)
+    return ApprovalResponse(table_id=table.id, order_ids=ids, status="cancelled")
 
 
 @router.post(

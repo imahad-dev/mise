@@ -7,10 +7,12 @@ from datetime import datetime, timedelta
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.models.audit import AuditLog
 from src.models.bill import Bill
 from src.models.order import Order
 from src.models.service_call import ServiceCall
 from src.models.sitting import TableSitting
+from src.services.bills import lock_open_bill, open_bill_for_table
 
 IDLE_TIMEOUT = timedelta(minutes=90)
 
@@ -103,3 +105,85 @@ async def close_sitting_for_table(
         return
     sitting.closed_at = now
     sitting.close_reason = reason
+
+
+# An order of these statuses means a waiter has approved the sitting: later orders skip approval.
+APPROVED = ("placed", "bumped")
+
+
+async def has_approved_order(db: AsyncSession, sitting_id: uuid.UUID) -> bool:
+    return (
+        await db.scalar(
+            select(Order.id)
+            .where(Order.sitting_id == sitting_id, Order.status.in_(APPROVED))
+            .limit(1)
+        )
+    ) is not None
+
+
+async def _pending(db: AsyncSession, sitting_id: uuid.UUID) -> list[Order]:
+    return list(
+        (
+            await db.scalars(
+                select(Order)
+                .where(Order.sitting_id == sitting_id, Order.status == "pending_approval")
+                .order_by(Order.placed_at, Order.id)
+                .with_for_update()
+            )
+        ).all()
+    )
+
+
+async def approve_pending(
+    db: AsyncSession, restaurant_id: uuid.UUID, table_id: uuid.UUID, actor: str
+) -> tuple[list[uuid.UUID], Bill | None, bool]:
+    """Send every pending order of the table's open sitting to the kitchen on the table's bill.
+
+    Returns (approved order ids, bill, bill created?); no ids when nothing was pending.
+    Caller commits.
+    """
+    await lock_open_bill(db, restaurant_id, table_id)  # bill lock before the sitting lock
+    sitting = await get_open_sitting(db, table_id)
+    pending = await _pending(db, sitting.id) if sitting else []
+    if not pending:
+        return [], None, False
+    bill, created = await open_bill_for_table(db, restaurant_id, table_id)
+    for order in pending:
+        order.bill_id = bill.id
+        order.status = "placed"
+        db.add(
+            AuditLog(
+                restaurant_id=restaurant_id,
+                event_type="order_approved",
+                actor=actor,
+                payload={"order_id": str(order.id), "bill_id": str(bill.id)},
+            )
+        )
+    await db.flush()
+    return [o.id for o in pending], bill, created
+
+
+async def decline_pending(
+    db: AsyncSession, restaurant_id: uuid.UUID, table_id: uuid.UUID, user_id: uuid.UUID
+) -> list[uuid.UUID]:
+    """Cancel every pending order of the table's open sitting (never on a bill, so no money
+    moves); the table stays open. Returns the declined ids, none when nothing was pending.
+    Caller commits."""
+    sitting = await get_open_sitting(db, table_id)
+    pending = await _pending(db, sitting.id) if sitting else []
+    now = await db.scalar(select(func.clock_timestamp()))
+    for order in pending:
+        order.status = "cancelled"
+        order.voided_at = now
+        order.voided_by = user_id
+        order.void_reason = "Declined by waiter"
+        db.add(
+            AuditLog(
+                restaurant_id=restaurant_id,
+                event_type="order_declined",
+                actor=f"user:{user_id}",
+                payload={"order_id": str(order.id)},
+            )
+        )
+    await db.flush()
+    return [o.id for o in pending]

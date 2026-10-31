@@ -77,14 +77,15 @@ async def session_is_current(db: AsyncSession, session: GuestSession) -> bool:
     )
 
 
-async def open_bill_for_table(
+async def lock_open_bill(
     db: AsyncSession, restaurant_id: uuid.UUID, table_id: uuid.UUID
-) -> tuple[Bill, bool]:
-    """(The table's open bill locked FOR UPDATE, or a new one; created?). Caller owns the txn."""
+) -> Bill | None:
+    """The table's open bill locked FOR UPDATE (None if there is none), under the restaurant's
+    bill lock. Take it before the table's sitting lock: bill first, then sitting, everywhere."""
     # Serialises bill numbering per restaurant. A concurrent settle holds the bill row lock;
     # FOR UPDATE re-checks status once it commits, so a settled bill is skipped here.
     await db.execute(select(func.pg_advisory_xact_lock(func.hashtext(f"bill:{restaurant_id}"))))
-    bill = (
+    return (
         await db.execute(
             select(Bill)
             .where(
@@ -95,6 +96,13 @@ async def open_bill_for_table(
             .with_for_update()
         )
     ).scalar_one_or_none()
+
+
+async def open_bill_for_table(
+    db: AsyncSession, restaurant_id: uuid.UUID, table_id: uuid.UUID
+) -> tuple[Bill, bool]:
+    """(The table's open bill locked FOR UPDATE, or a new one; created?). Caller owns the txn."""
+    bill = await lock_open_bill(db, restaurant_id, table_id)
     if bill is not None:
         return bill, False
     last = (

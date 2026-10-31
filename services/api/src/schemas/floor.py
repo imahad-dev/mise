@@ -26,15 +26,23 @@ class FloorTile(BaseModel):
     call_id: uuid.UUID | None
     sitting_open: bool
     waiting_for_open: bool  # guests scanned but staff haven't opened the table
-    pending_order_id: uuid.UUID | None  # set when state == "approval_needed"
-    pending_order_total: Decimal | None
-    pending_order_items: int | None  # sum of item quantities, not line count
+    # Set when state == "approval_needed": the oldest waiting order, a key only; the waiter
+    # approves or declines the whole table's waiting orders at once.
+    pending_order_id: uuid.UUID | None
+    pending_order_total: Decimal | None  # sum over every waiting order of the open sitting
+    pending_order_items: int | None  # sum of item quantities over those orders, not lines
 
 
 class OpenSittingResponse(BaseModel):
     sitting_id: uuid.UUID
     code: str | None  # shown to staff once, to read aloud; never sent to any guest endpoint
     opened_at: datetime
+
+
+class ApprovalResponse(BaseModel):
+    table_id: uuid.UUID
+    order_ids: list[uuid.UUID]
+    status: Literal["placed", "cancelled"]
 
 
 class CloseSittingResponse(BaseModel):
