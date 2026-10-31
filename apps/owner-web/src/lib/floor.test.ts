@@ -5,16 +5,19 @@ import {
   isStale,
   keepGiveKey,
   newGiveKey,
+  orderSummary,
   levelClass,
   payForwardText,
   sortTiles,
   stateLabel,
+  waitingText,
   type FloorTile,
 } from "./floor";
 
 const tile = (label: string, level: FloorTile["level"]): FloorTile => ({
   table_id: label, label, state: "seated", level, since: null, reason: null, reason_label: null,
-  running_total: null, bill_id: null, call_id: null,
+  running_total: null, bill_id: null, call_id: null, sitting_open: true, waiting_for_open: false,
+  pending_order_id: null, pending_order_ids: [], pending_order_total: null, pending_order_items: null,
 });
 
 describe("floor helpers", () => {
@@ -45,6 +48,15 @@ describe("floor helpers", () => {
     expect(stateLabel("seated")).toBe("Seated, no order");
     expect(stateLabel("needs_clearing")).toBe("Needs clearing");
     expect(stateLabel("called")).toBe("Waiter called");
+    expect(stateLabel("approval_needed")).toBe("Approve order");
+  });
+  it("says guests are waiting, with the timer when there is one", () => {
+    expect(waitingText("1:05")).toBe("Guests waiting to order · 1:05");
+    expect(waitingText(null)).toBe("Guests waiting to order");
+  });
+  it("sums up a waiting order in plain words", () => {
+    expect(orderSummary(1, "Rs 300")).toBe("1 item · Rs 300");
+    expect(orderSummary(3, "Rs 1,200")).toBe("3 items · Rs 1,200");
   });
   it("keeps red, amber, none order and the label order inside a level", () => {
     const sorted = sortTiles([tile("T1", "none"), tile("T2", "amber"), tile("T3", "red"), tile("T4", "amber")]);

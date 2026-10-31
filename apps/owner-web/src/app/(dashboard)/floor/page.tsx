@@ -13,10 +13,12 @@ import {
   isStale,
   levelClass,
   levelText,
+  orderSummary,
   sortTiles,
   stateIcon,
   stateLabel,
   type FloorResponse,
+  waitingText,
   type FloorTile,
 } from "../../../lib/floor";
 
@@ -37,6 +39,8 @@ export default function FloorPage() {
   const [actionError, setActionError] = useState<string | null>(null);
   // A refused "Mark cleared": the server's reason, and whether clearing anyway is allowed.
   const [refusedClear, setRefusedClear] = useState<{ table: FloorTile; message: string } | null>(null);
+  // Table codes from "Open table", by table id. The server returns a code only once, so it lives here until "Done".
+  const [codes, setCodes] = useState<Record<string, string>>({});
 
   const fetchFloor = useCallback(async (): Promise<Loaded> => {
     const res = await fetch(`/api/restaurants/${slug}/floor`);
@@ -65,17 +69,18 @@ export default function FloorPage() {
   useEffect(() => {
     setActionError(null);
     setRefusedClear(null);
+    setCodes({});
   }, [slug]);
 
-  /** POST and reload; null when the venue changed meanwhile or the network failed. */
-  const post = async (key: string, path: string, body?: object): Promise<Response | null> => {
+  /** POST (or DELETE) and reload; null when the venue changed meanwhile or the network failed. */
+  const post = async (key: string, path: string, body?: object, method = "POST"): Promise<Response | null> => {
     const forSlug = slug;
     setBusy(key);
     setActionError(null);
     setRefusedClear(null);
     try {
       const res = await fetch(`/api/restaurants/${forSlug}${path}`, {
-        method: "POST",
+        method,
         ...(body ? { headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) } : {}),
       });
       if (slugRef.current !== forSlug) return null;
@@ -101,6 +106,32 @@ export default function FloorPage() {
     if (res.status === 409) setRefusedClear({ table: t, message: await apiError(res) });
     else setActionError(await apiError(res));
   };
+
+  const openTable = async (t: FloorTile) => {
+    const res = await post(t.table_id, `/tables/${t.table_id}/sitting`);
+    if (!res) return;
+    if (!res.ok) return setActionError(`${t.label}: ${await apiError(res)}`);
+    const { code } = (await res.json()) as { code: string | null };
+    if (code) setCodes((c) => ({ ...c, [t.table_id]: code }));
+  };
+
+  const closeTable = async (t: FloorTile) => {
+    const res = await post(t.table_id, `/tables/${t.table_id}/sitting`, undefined, "DELETE");
+    if (res && !res.ok) setActionError(`${t.label}: ${await apiError(res)}`);
+  };
+
+  // 409 means the order changed or someone else handled it: the server's words, and post() already reloads.
+  const answerOrder = async (t: FloorTile, answer: "approve" | "decline") => {
+    const res = await post(t.table_id, `/tables/${t.table_id}/${answer}`, { order_ids: t.pending_order_ids });
+    if (res && !res.ok) setActionError(`${t.label}: ${await apiError(res)}`);
+  };
+
+  const dismissCode = (tableId: string) =>
+    setCodes((c) => {
+      const next = { ...c };
+      delete next[tableId];
+      return next;
+    });
 
   const currency = venue?.currency ?? "PKR";
   const tiles = data ? sortTiles(data.floor.tiles) : [];
@@ -165,16 +196,64 @@ export default function FloorPage() {
                     <span className="font-serif text-2xl font-bold">{t.label}</span>
                     {level && <span className="text-xs font-semibold uppercase tracking-wider">{level}</span>}
                   </div>
-                  <p className="flex items-center gap-2 text-sm font-semibold">
-                    <span aria-hidden="true">{stateIcon(t.state)}</span>
-                    {stateLabel(t.state)}
-                    {time && <span className="ml-auto font-mono tabular-nums">{time}</span>}
-                  </p>
+                  {t.waiting_for_open ? (
+                    <p className="text-sm font-semibold">{waitingText(time)}</p>
+                  ) : (
+                    <p className="flex items-center gap-2 text-sm font-semibold">
+                      <span aria-hidden="true">{stateIcon(t.state)}</span>
+                      {stateLabel(t.state)}
+                      {time && <span className="ml-auto font-mono tabular-nums">{time}</span>}
+                    </p>
+                  )}
+                  {t.state === "approval_needed" && t.pending_order_items !== null && t.pending_order_total !== null && (
+                    <p className="text-sm">
+                      {orderSummary(t.pending_order_items, formatPrice(Number(t.pending_order_total), currency))}
+                    </p>
+                  )}
+                  {codes[t.table_id] && (
+                    <div role="status" className="rounded-xl border border-line bg-paper-2 p-3 text-ink">
+                      <p className="text-sm">Table code</p>
+                      <p className="font-mono text-4xl font-bold tracking-widest">{codes[t.table_id]}</p>
+                      <p className="text-sm">Tell the guests at this table.</p>
+                      <Button variant="outline" className="mt-2" onClick={() => dismissCode(t.table_id)}>
+                        Done
+                      </Button>
+                    </div>
+                  )}
                   {t.reason_label && <p className="text-sm">{t.reason_label}</p>}
                   {t.running_total !== null && (
                     <p className="text-sm">{formatPrice(Number(t.running_total), currency)}</p>
                   )}
                   <div className="mt-auto flex flex-wrap gap-2 pt-1">
+                    {!t.sitting_open && (t.state === "free" || t.waiting_for_open) && (
+                      <Button
+                        aria-label={`Open table, ${t.label}`}
+                        className="w-full text-base"
+                        disabled={busy !== null}
+                        onClick={() => openTable(t)}
+                      >
+                        Open table
+                      </Button>
+                    )}
+                    {t.state === "approval_needed" && (
+                      <>
+                        <Button
+                          aria-label={`Approve, ${t.label}`}
+                          disabled={busy !== null}
+                          onClick={() => answerOrder(t, "approve")}
+                        >
+                          Approve
+                        </Button>
+                        <Button
+                          variant="outline"
+                          aria-label={`Not now, ${t.label}`}
+                          disabled={busy !== null}
+                          onClick={() => answerOrder(t, "decline")}
+                        >
+                          Not now
+                        </Button>
+                      </>
+                    )}
                     {t.state === "called" && t.call_id && (
                       <Button
                         aria-label={`Done, ${t.label}`}
@@ -197,6 +276,22 @@ export default function FloorPage() {
                       <Link href={`/bills?bill=${t.bill_id}`} aria-label={`Open bill, ${t.label}`} className="btn-ghost">
                         Open bill
                       </Link>
+                    )}
+                    {t.sitting_open && (
+                      <Button
+                        variant="outline"
+                        aria-label={`Close table, ${t.label}`}
+                        aria-describedby={t.bill_id ? `close-hint-${t.table_id}` : undefined}
+                        disabled={busy !== null || t.bill_id !== null}
+                        onClick={() => closeTable(t)}
+                      >
+                        Close table
+                      </Button>
+                    )}
+                    {t.sitting_open && t.bill_id && (
+                      <p id={`close-hint-${t.table_id}`} className="w-full text-xs">
+                        Settle the bill first
+                      </p>
                     )}
                   </div>
                 </Card>

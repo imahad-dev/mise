@@ -1,5 +1,5 @@
 /** Mirrors services/api/src/schemas/floor.py. Decimals arrive as strings. */
-export type FloorState = "free" | "seated" | "ordered" | "served" | "paying" | "needs_clearing" | "called";
+export type FloorState = "free" | "seated" | "ordered" | "served" | "paying" | "needs_clearing" | "called" | "approval_needed";
 export type FloorLevel = "none" | "amber" | "red";
 
 export interface FloorTile {
@@ -13,6 +13,12 @@ export interface FloorTile {
   running_total: string | null;
   bill_id: string | null;
   call_id: string | null;
+  sitting_open: boolean;
+  waiting_for_open: boolean; // guests scanned before staff opened the table
+  pending_order_id: string | null;
+  pending_order_ids: string[]; // sent back as-is to approve or decline exactly what the tile showed
+  pending_order_total: string | null;
+  pending_order_items: number | null; // sum of quantities
 }
 
 export interface FloorResponse {
@@ -43,10 +49,18 @@ const STATES: Record<FloorState, { label: string; icon: string }> = {
   paying: { label: "Paying", icon: "▤" },
   needs_clearing: { label: "Needs clearing", icon: "↺" },
   called: { label: "Waiter called", icon: "!" },
+  approval_needed: { label: "Approve order", icon: "△" },
 };
 
 export const stateLabel = (state: FloorState) => STATES[state]?.label ?? state;
 export const stateIcon = (state: FloorState) => STATES[state]?.icon ?? "?";
+
+/** Guests scanned before the table was opened; `time` is the tile's m:ss timer. */
+export const waitingText = (time: string | null) =>
+  time ? `Guests waiting to order · ${time}` : "Guests waiting to order";
+
+/** The waiting order in plain words, e.g. "3 items · Rs 1,200". */
+export const orderSummary = (items: number, total: string) => `${items} ${items === 1 ? "item" : "items"} · ${total}`;
 
 const LEVEL_ORDER: Record<FloorLevel, number> = { red: 0, amber: 1, none: 2 };
 
