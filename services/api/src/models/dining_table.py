@@ -31,6 +31,8 @@ class DiningTable(Base):
     qr_token: Mapped[str] = mapped_column(Text, unique=True, nullable=False)
     kind: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'table'"))
     cleared_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Last clear, settle or cancel; only ever moves forward (mark_table_reset).
+    reset_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
