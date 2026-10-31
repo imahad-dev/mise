@@ -2582,6 +2582,68 @@
         }
       }
     },
+    "/api/restaurants/{slug}/service-report": {
+      "get": {
+        "tags": [
+          "owner"
+        ],
+        "summary": "Service Report",
+        "description": "How service went on one local day (default today), from sitting and order timestamps.\n\nCode computes every number; the model may only phrase the one-line summary. Cached per day:\na past day is final (only sittings closed that day count), today can still change.",
+        "operationId": "service_report_api_restaurants__slug__service_report_get",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Slug"
+            }
+          },
+          {
+            "name": "day",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Day"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceReportResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "description": "Unauthorized (Owner only)"
+          },
+          "404": {
+            "description": "Restaurant not found"
+          },
+          "422": {
+            "description": "Invalid day"
+          }
+        }
+      }
+    },
     "/api/restaurants/{slug}/ai/simulate": {
       "post": {
         "tags": [
@@ -6748,6 +6810,34 @@
         ],
         "title": "PeakHour"
       },
+      "RedAlerts": {
+        "properties": {
+          "seated_no_order": {
+            "type": "integer",
+            "title": "Seated No Order"
+          },
+          "approval_needed": {
+            "type": "integer",
+            "title": "Approval Needed"
+          },
+          "order_no_bump": {
+            "type": "integer",
+            "title": "Order No Bump"
+          },
+          "bill_not_settled": {
+            "type": "integer",
+            "title": "Bill Not Settled"
+          }
+        },
+        "type": "object",
+        "required": [
+          "seated_no_order",
+          "approval_needed",
+          "order_no_bump",
+          "bill_not_settled"
+        ],
+        "title": "RedAlerts"
+      },
       "ServiceCallRequest": {
         "properties": {
           "reason": {
@@ -6808,6 +6898,93 @@
           "resolved_at"
         ],
         "title": "ServiceCallResponse"
+      },
+      "ServiceReportResponse": {
+        "properties": {
+          "day": {
+            "type": "string",
+            "format": "date",
+            "title": "Day"
+          },
+          "tables_served": {
+            "type": "integer",
+            "title": "Tables Served"
+          },
+          "closed_without_bill": {
+            "type": "integer",
+            "title": "Closed Without Bill"
+          },
+          "simulated_sittings": {
+            "type": "integer",
+            "title": "Simulated Sittings",
+            "description": "Sittings with simulated orders; 0 until the simulator seats tables."
+          },
+          "average_table_seconds": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Average Table Seconds"
+          },
+          "average_wait_seconds": {
+            "$ref": "#/components/schemas/StageWaits"
+          },
+          "busiest_hour": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Busiest Hour"
+          },
+          "slowest_hour": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SlowestHour"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "alerts": {
+            "$ref": "#/components/schemas/RedAlerts"
+          },
+          "summary": {
+            "type": "string",
+            "title": "Summary"
+          },
+          "summary_source": {
+            "type": "string",
+            "enum": [
+              "llm",
+              "template"
+            ],
+            "title": "Summary Source"
+          }
+        },
+        "type": "object",
+        "required": [
+          "day",
+          "tables_served",
+          "closed_without_bill",
+          "simulated_sittings",
+          "average_table_seconds",
+          "average_wait_seconds",
+          "busiest_hour",
+          "slowest_hour",
+          "alerts",
+          "summary",
+          "summary_source"
+        ],
+        "title": "ServiceReportResponse"
       },
       "SettingsResponse": {
         "properties": {
@@ -6964,6 +7141,98 @@
           "assumptions"
         ],
         "title": "SimulateOrdersResponse"
+      },
+      "SlowestHour": {
+        "properties": {
+          "hour": {
+            "type": "integer",
+            "title": "Hour"
+          },
+          "average_table_seconds": {
+            "type": "integer",
+            "title": "Average Table Seconds"
+          },
+          "slowest_stage": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "first_order",
+                  "approval",
+                  "kitchen",
+                  "bill"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slowest Stage"
+          }
+        },
+        "type": "object",
+        "required": [
+          "hour",
+          "average_table_seconds",
+          "slowest_stage"
+        ],
+        "title": "SlowestHour"
+      },
+      "StageWaits": {
+        "properties": {
+          "first_order": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Order"
+          },
+          "approval": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approval"
+          },
+          "kitchen": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kitchen"
+          },
+          "bill": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bill"
+          }
+        },
+        "type": "object",
+        "required": [
+          "first_order",
+          "approval",
+          "kitchen",
+          "bill"
+        ],
+        "title": "StageWaits"
       },
       "StatusOkResponse": {
         "properties": {

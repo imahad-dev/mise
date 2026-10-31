@@ -968,6 +968,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/restaurants/{slug}/service-report": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Service Report
+         * @description How service went on one local day (default today), from sitting and order timestamps.
+         *
+         *     Code computes every number; the model may only phrase the one-line summary. Cached per day:
+         *     a past day is final (only sittings closed that day count), today can still change.
+         */
+        get: operations["service_report_api_restaurants__slug__service_report_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/restaurants/{slug}/ai/simulate": {
         parameters: {
             query?: never;
@@ -2369,6 +2392,17 @@ export interface components {
             /** Avg Revenue Per Day */
             avg_revenue_per_day: number;
         };
+        /** RedAlerts */
+        RedAlerts: {
+            /** Seated No Order */
+            seated_no_order: number;
+            /** Approval Needed */
+            approval_needed: number;
+            /** Order No Bump */
+            order_no_bump: number;
+            /** Bill Not Settled */
+            bill_not_settled: number;
+        };
         /** ServiceCallRequest */
         ServiceCallRequest: {
             /**
@@ -2395,6 +2429,37 @@ export interface components {
             created_at: string;
             /** Resolved At */
             resolved_at: string | null;
+        };
+        /** ServiceReportResponse */
+        ServiceReportResponse: {
+            /**
+             * Day
+             * Format: date
+             */
+            day: string;
+            /** Tables Served */
+            tables_served: number;
+            /** Closed Without Bill */
+            closed_without_bill: number;
+            /**
+             * Simulated Sittings
+             * @description Sittings with simulated orders; 0 until the simulator seats tables.
+             */
+            simulated_sittings: number;
+            /** Average Table Seconds */
+            average_table_seconds: number | null;
+            average_wait_seconds: components["schemas"]["StageWaits"];
+            /** Busiest Hour */
+            busiest_hour: number | null;
+            slowest_hour: components["schemas"]["SlowestHour"] | null;
+            alerts: components["schemas"]["RedAlerts"];
+            /** Summary */
+            summary: string;
+            /**
+             * Summary Source
+             * @enum {string}
+             */
+            summary_source: "llm" | "template";
         };
         /** SettingsResponse */
         SettingsResponse: {
@@ -2461,6 +2526,26 @@ export interface components {
             assumptions: {
                 [key: string]: unknown;
             };
+        };
+        /** SlowestHour */
+        SlowestHour: {
+            /** Hour */
+            hour: number;
+            /** Average Table Seconds */
+            average_table_seconds: number;
+            /** Slowest Stage */
+            slowest_stage: ("first_order" | "approval" | "kitchen" | "bill") | null;
+        };
+        /** StageWaits */
+        StageWaits: {
+            /** First Order */
+            first_order: number | null;
+            /** Approval */
+            approval: number | null;
+            /** Kitchen */
+            kitchen: number | null;
+            /** Bill */
+            bill: number | null;
         };
         /** StatusOkResponse */
         StatusOkResponse: {
@@ -4933,6 +5018,58 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+        };
+    };
+    service_report_api_restaurants__slug__service_report_get: {
+        parameters: {
+            query?: {
+                day?: string | null;
+            };
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServiceReportResponse"];
+                };
+            };
+            /** @description Unauthenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized (Owner only) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Restaurant not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid day */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
