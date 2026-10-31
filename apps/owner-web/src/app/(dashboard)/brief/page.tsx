@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { useSlugRef, useVenue } from "../../../lib/venue";
 import { Card, StatTile } from "ui";
-import { ServiceReportCard } from "../../../components/ServiceReportCard";
+import { ServiceReportCard, SummarySourceChip } from "../../../components/ServiceReportCard";
 import {
   CLASS_COLORS,
   METHOD_LABELS,
@@ -225,16 +225,12 @@ export default function DailyBriefPage() {
             <div className="mise-card p-6 space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <h2 className="text-lg font-bold text-ink">Summary — {brief.date}</h2>
-                <span className={`chip ${brief.summary_source === "llm" ? "chip-safe" : "chip-unverified"}`}>
-                  {brief.summary_source === "llm"
-                    ? "AI-written, numbers checked against facts"
-                    : "Template summary"}
-                </span>
+                <SummarySourceChip source={brief.summary_source} />
               </div>
               <p className="text-sm leading-relaxed text-ink">{brief.summary}</p>
             </div>
 
-            <ServiceReportCard slug={slug} />
+            <ServiceReportCard key={slug} slug={slug} />
 
             <div className="space-y-4">
               <h3 className="text-base font-bold text-ink">Ranked actions</h3>

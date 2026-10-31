@@ -12,7 +12,16 @@ import {
   type Stage,
 } from "../lib/service-report";
 
-/** How service went on one day. Owners only: a staff 403 hides the card. */
+/** Where a summary's words came from; shared with the Brief's own summary. */
+export function SummarySourceChip({ source }: { source: "llm" | "template" }) {
+  return (
+    <span className={`chip ${source === "llm" ? "chip-safe" : "chip-unverified"}`}>
+      {source === "llm" ? "AI-written, numbers checked against facts" : "Template summary"}
+    </span>
+  );
+}
+
+/** How service went on one day. Mount with key={slug} so a venue switch starts fresh. Owners only: a staff 403 hides the card. */
 export function ServiceReportCard({ slug }: { slug: string | undefined }) {
   // "" asks the server for the venue's today; the answer's day then fills the picker.
   const [day, setDay] = useState("");
@@ -22,13 +31,8 @@ export function ServiceReportCard({ slug }: { slug: string | undefined }) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    setDay("");
-    setToday("");
-    setHidden(false);
-  }, [slug]);
-
-  useEffect(() => {
-    if (!slug) return;
+    // The first answer fills `day`; that report is already loaded, so don't fetch it again.
+    if (!slug || (report && report.day === day)) return;
     let live = true; // drop answers for a venue or day no longer shown
     setError(null);
     fetch(`/api/restaurants/${slug}/service-report${day ? `?day=${day}` : ""}`)
@@ -49,7 +53,7 @@ export function ServiceReportCard({ slug }: { slug: string | undefined }) {
     return () => {
       live = false;
     };
-  }, [slug, day]);
+  }, [slug, day, report]);
 
   if (hidden) return null;
   const r = report && report.day === day ? report : null;
@@ -85,7 +89,10 @@ export function ServiceReportCard({ slug }: { slug: string | undefined }) {
         <p className="text-sm text-ink-muted">No tables served on this day.</p>
       ) : (
         <>
-          <p className="text-sm leading-relaxed text-ink">{r.summary}</p>
+          <div className="space-y-2">
+            <SummarySourceChip source={r.summary_source} />
+            <p className="text-sm leading-relaxed text-ink">{r.summary}</p>
+          </div>
           <div className="grid gap-4 sm:grid-cols-3">
             <StatTile label="Tables served" value={String(r.tables_served)} />
             <StatTile label="Average time per table" value={formatDuration(r.average_table_seconds)} />
@@ -127,6 +134,13 @@ export function ServiceReportCard({ slug }: { slug: string | undefined }) {
             </dl>
           </div>
         </>
+      )}
+
+      {r && (r.simulated_sittings > 0 || r.closed_without_bill > 0) && (
+        <div className="text-xs text-ink-muted">
+          {r.simulated_sittings > 0 && <p>Simulated tables: {r.simulated_sittings}</p>}
+          {r.closed_without_bill > 0 && <p>Closed without a bill: {r.closed_without_bill}</p>}
+        </div>
       )}
     </Card>
   );
