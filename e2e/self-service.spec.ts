@@ -4,6 +4,7 @@ import {
   GUEST,
   KEHWA,
   OWNER,
+  approveOrder,
   billOf,
   clearDemoLimits,
   confirmOrder,
@@ -11,10 +12,12 @@ import {
   demoApi,
   floorTile,
   nextPickupLabel,
+  openTable,
   openTableMenu,
   orderOne,
   placeOrder,
   resetVenue,
+  shown,
   sql,
   staffPage,
   venueTables,
@@ -40,8 +43,9 @@ async function staffBrowser(browser: Browser, venue: string, path: string): Prom
   return page;
 }
 
-/** A guest phone at an Angeethi table, on the menu. */
+/** A guest phone at an open Angeethi table, on the menu. */
 async function guestAt(browser: Browser, label: string): Promise<Page> {
+  await openTable(ANGEETHI, label);
   const page = await (await browser.newContext()).newPage();
   await openTableMenu(page, T[label].qr_token);
   return page;
@@ -395,6 +399,7 @@ test.describe.serial("9. Guest screens at 360 px on slow 3G", () => {
       await page.screenshot({ path: `test-results/screens/slow3g-${screen}.png` });
     };
 
+    await openTable(ANGEETHI, "T6");
     await page.goto(`${GUEST}/q/${T.T6.qr_token}`, slow);
     await expect(page.getByRole("button", { name: "View Menu" })).toBeVisible(slow);
     await fits("welcome");
@@ -412,7 +417,9 @@ test.describe.serial("9. Guest screens at 360 px on slow 3G", () => {
     await page.getByRole("button", { name: "Confirm Order" }).click();
     await expect(page).toHaveURL(/\/en\/orders\/[0-9a-f-]{36}$/, slow);
     const orderId = page.url().split("/").pop()!;
-    await expect(page.getByText("Confirmed — it's being cooked")).toBeVisible(slow);
+    await expect(shown(page, "Sent! Your waiter is confirming your order.")).toBeVisible(slow);
+    await approveOrder(orderId);
+    await expect(shown(page, "Confirmed — it's being cooked")).toBeVisible(slow);
     await expect(page.getByRole("button", { name: "Pay bill" })).toBeVisible(slow);
     await fits("order");
 

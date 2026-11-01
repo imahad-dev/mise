@@ -7,6 +7,7 @@ import {
   confirmOrder,
   demoApi,
   demoInfo,
+  openTable,
   openTableMenu,
   resetVenue,
   staffPage,
@@ -26,6 +27,7 @@ test.describe.serial("two venues: guest, kitchen, bills, owner", () => {
 
   test("guest at Angeethi House orders a sized karahi and requests the bill", async ({ page }) => {
     const venue = (await demoInfo()).venues.find((v) => v.slug === ANGEETHI)!;
+    await openTable(ANGEETHI, venue.table_label);
     await openTableMenu(page, venue.qr_token);
     await expect(page.getByRole("heading", { name: "Angeethi House" })).toBeVisible();
     await expect(page.getByText(`Table: ${venue.table_label}`)).toBeVisible();
@@ -131,6 +133,8 @@ test.describe.serial("two venues: guest, kitchen, bills, owner", () => {
     await page.goto(`${OWNER}/brief`);
     await expect(switcher).toHaveValue(KEHWA);
     await expect(page.getByRole("heading", { name: /Revenue Brief/ })).toBeVisible();
+    // The first brief after fresh demo data fits and backtests the forecast: seconds, not instant.
+    await expect(page.getByText("Crunching order history…")).toBeHidden({ timeout: 60_000 });
     await expect(page.getByRole("heading", { name: "Payments and tax" })).toBeVisible();
     await expect(page.getByText("Average order value")).toBeVisible();
     await expect(page.getByRole("heading", { name: "Ranked actions" })).toBeVisible();
@@ -146,6 +150,7 @@ test.describe.serial("two venues: guest, kitchen, bills, owner", () => {
 
   test("café guest orders a regular cappuccino; Kehwa kitchen shows it", async ({ page, browser }) => {
     const venue = (await demoInfo()).venues.find((v) => v.slug === KEHWA)!;
+    await openTable(KEHWA, venue.table_label);
     await openTableMenu(page, venue.qr_token);
     await expect(page.getByRole("heading", { name: "Kehwa & Crumb" })).toBeVisible();
     await page.getByRole("button", { name: "Add Cappuccino", exact: true }).click();

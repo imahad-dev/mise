@@ -35,19 +35,31 @@ export async function openTableMenu(page: Page, qrToken: string) {
   await expect(page).toHaveURL(/\/en\/menu$/);
 }
 
-/** Confirm the cart; returns the order id from the order page's URL. */
-export async function placeOrder(page: Page) {
+/** Tick the allergen acknowledgement when the open order sheet asks for it. */
+export async function acknowledgeAllergens(page: Page) {
   const ack = page.getByText("I have spoken with staff and understand the allergen risks");
   if (await ack.isVisible()) await ack.click();
+}
+
+/** Confirm the cart; returns the order id from the order page's URL. */
+export async function placeOrder(page: Page) {
+  await acknowledgeAllergens(page);
   await page.getByRole("button", { name: "Confirm Order" }).click();
   await expect(page).toHaveURL(/\/en\/orders\/[0-9a-f-]{36}$/);
   return page.url().split("/").pop() ?? "";
 }
 
-/** Confirm a table order and wait until the kitchen has it. */
+/** Text on screen, not its copy in the order page's screen-reader live region (`sr-only`). */
+export const shown = (page: Page, text: string) => page.getByText(text).and(page.locator(":not(.sr-only)"));
+
+/** Confirm a table order and wait until the kitchen has it; a visit's first order is approved by staff first. */
 export async function confirmOrder(page: Page) {
   const id = await placeOrder(page);
-  await expect(page.getByText("Confirmed — it's being cooked")).toBeVisible();
+  if (sql(`SELECT status FROM orders WHERE id = '${id}'`) === "pending_approval") {
+    await expect(shown(page, "Sent! Your waiter is confirming your order.")).toBeVisible();
+    await approveOrder(id);
+  }
+  await expect(shown(page, "Confirmed — it's being cooked")).toBeVisible();
   return id;
 }
 
@@ -63,7 +75,7 @@ const docker = (args: string[]) => execFileSync("docker", ["compose", ...args], 
 /**
  * One SQL statement against the stack's database, as in scripts/verify_phase1.sh: credentials
  * come from the postgres container's own environment (compose defaults), never from .env.
- * Used only to backdate rows; there are no test-only endpoints.
+ * Used to read and backdate rows; there are no test-only endpoints.
  */
 export const sql = (query: string) =>
   docker(["exec", "-T", "postgres", "sh", "-c", 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -tAc "$0"', query]);
@@ -107,7 +119,8 @@ export const billOf = (orderId: string) => sql(`SELECT bill_id FROM orders WHERE
 /**
  * Put a venue back to a quiet service through the staff API: cancel unpaid counter orders,
  * settle open table bills at their cash total, optionally hand out every waiting pay-it-forward
- * chai, bump every kitchen ticket, collect ready pickups, resolve calls and clear every table.
+ * chai, bump every kitchen ticket, collect ready pickups, resolve calls, close every open table
+ * and clear every table.
  */
 export async function resetVenue(slug: string, opts: { drainPayForward?: boolean } = {}) {
   clearDemoLimits(); // stories run back to back: a fresh demo-login budget for each
@@ -146,13 +159,60 @@ export async function resetVenue(slug: string, opts: { drainPayForward?: boolean
       await staff.post(`${base}/orders/${b.order_id}/collect`);
     }
   }
-  for (const t of (await json("/floor")).tiles) {
+  for (const t of await floorTiles(staff, slug)) {
     if (t.call_id) await staff.post(`${base}/service-calls/${t.call_id}/resolve`);
+    if (t.sitting_open) {
+      // Settled bills closed their sittings; this closes the rest and cancels their waiting orders.
+      const res = await staff.delete(`${base}/tables/${t.table_id}/sitting`);
+      expect(res.ok(), `close table ${t.label}`).toBeTruthy();
+    }
     if (t.state !== "free") {
       const res = await staff.post(`${base}/tables/${t.table_id}/clear`, { data: { force: true } });
       expect(res.ok(), `clear table ${t.label}`).toBeTruthy();
     }
   }
+  await staff.dispose();
+}
+
+interface Tile {
+  table_id: string;
+  label: string;
+  state: string;
+  sitting_open: boolean;
+  pending_order_ids: string[];
+  call_id: string | null;
+}
+
+/** The Floor tiles of a venue (staff route). */
+export async function floorTiles(staff: APIRequestContext, slug: string): Promise<Tile[]> {
+  const res = await staff.get(`/api/restaurants/${slug}/floor`);
+  expect(res.ok(), "GET floor").toBeTruthy();
+  return (await res.json()).tiles;
+}
+
+/** Staff open a table for ordering, as "Open table" on the Floor; an already open table stays open. */
+export async function openTable(slug: string, label: string) {
+  const staff = await demoApi("staff", slug);
+  const tile = (await floorTiles(staff, slug)).find((t) => t.label === label)!;
+  if (!tile.sitting_open) {
+    const res = await staff.post(`/api/restaurants/${slug}/tables/${tile.table_id}/sitting`);
+    expect(res.ok(), `open table ${label}`).toBeTruthy();
+  }
+  await staff.dispose();
+}
+
+/** Staff approve a waiting first order, as "Approve" on its Floor tile (every order the tile shows). */
+export async function approveOrder(orderId: string) {
+  const [slug, tableId] = sql(
+    `SELECT r.slug || '|' || o.table_id FROM orders o JOIN restaurant r ON r.id = o.restaurant_id WHERE o.id = '${orderId}'`,
+  ).split("|");
+  const staff = await demoApi("staff", slug);
+  const tile = (await floorTiles(staff, slug)).find((t) => t.table_id === tableId)!;
+  expect(tile.pending_order_ids).toContain(orderId);
+  const res = await staff.post(`/api/restaurants/${slug}/tables/${tableId}/approve`, {
+    data: { order_ids: tile.pending_order_ids },
+  });
+  expect(res.ok(), `approve ${orderId}`).toBeTruthy();
   await staff.dispose();
 }
 

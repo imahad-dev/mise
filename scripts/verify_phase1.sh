@@ -171,9 +171,11 @@ step_brief_whatif() {
 }
 
 step_live_order_survives() {
-  local token
-  token=$(curl -sf -b "$OWNER_JAR" "$API/api/restaurants/$SLUG/tables" |
-    python3 -c "import json,sys; print(json.load(sys.stdin)[0]['qr_token'])") || return 1
+  local token table
+  read -r token table < <(curl -sf -b "$OWNER_JAR" "$API/api/restaurants/$SLUG/tables" |
+    python3 -c "import json,sys; t = json.load(sys.stdin)[0]; print(t['qr_token'], t['id'])" | tr -d '\r') || return 1
+  # Staff open the table, as "Open table" on the Floor: guests order only at an open table.
+  curl -sf -b "$OWNER_JAR" -X POST "$API/api/restaurants/$SLUG/tables/$table/sitting" >/dev/null || return 1
   curl -sf -c "$GUEST_JAR" -H "Content-Type: application/json" -X POST "$API/api/guest/sessions" \
     -d "{\"qr_token\": \"$token\", \"language\": \"en\"}" >/dev/null || return 1
   local line # first dish, with its first size when it has sizes
@@ -189,6 +191,10 @@ print(json.dumps(line))") || return 1
          \"items\": [$line]}" -o "$TMP/order.json" || return 1
   local order_id
   order_id=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['id'])" "$TMP/order.json")
+  # The visit's first order waits for staff approval ("Approve" on the Floor) before it has a bill.
+  curl -sf -b "$OWNER_JAR" -H "Content-Type: application/json" \
+    -X POST "$API/api/restaurants/$SLUG/tables/$table/approve" -d "{\"order_ids\": [\"$order_id\"]}" \
+    >/dev/null || return 1
   local bill_id; bill_id=$(sql "SELECT bill_id FROM orders WHERE id = '$order_id'")
   [ -n "$bill_id" ] || { echo "live order $order_id has no bill"; return 1; }
   local expected # settle confirms the cash total the bill shows
@@ -313,7 +319,7 @@ run_step "seed twice: identical counts, two venues, demo users" step_seed_twice
 run_step "simulate-orders: sequential and parallel runs give identical counts" step_simulate
 run_step "brief, what-if and floor: structure, grounded numbers, stored backtest, pay-forward" step_brief_whatif
 run_step "live order survives demo data regeneration; counter order and pay-forward give" step_live_order_survives
-run_step "browser tests: two venues and the nine self-service stories" step_e2e
+run_step "browser tests: two venues, the self-service stories and safer table ordering" step_e2e
 run_step "edge proxy (Caddy) ignores spoofed X-Forwarded-For" step_edge_proxy
 run_step "make ci" step_ci
 echo "PASS verify-f: all steps"
