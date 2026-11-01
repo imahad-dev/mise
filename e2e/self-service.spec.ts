@@ -4,6 +4,7 @@ import {
   GUEST,
   KEHWA,
   OWNER,
+  acknowledgeAllergens,
   approveOrder,
   billOf,
   clearDemoLimits,
@@ -11,6 +12,7 @@ import {
   counterTable,
   demoApi,
   floorTile,
+  floorTiles,
   nextPickupLabel,
   openTable,
   openTableMenu,
@@ -484,5 +486,219 @@ test.describe.serial("9. Guest screens at 360 px on slow 3G", () => {
     await expect(page.getByText(PAID)).toBeVisible(slow);
     await fits("paid");
     await context.close();
+  });
+});
+
+// Safer table ordering (spec 2026-10-31 §6): staff open the table, approve the first order of
+// the visit, and a waiting order never reaches the kitchen or a bill.
+const WAITING = "Your table will be ready in a moment. A waiter is on the way.";
+const CONFIRMING = "Sent! Your waiter is confirming your order.";
+const COOKING = "Confirmed — it's being cooked";
+// The menu checks the table's status every 5 s while it waits; the order page polls every 4 s.
+const LIVE = { timeout: 20_000 };
+
+/** A 375 px guest phone that scanned a table's QR, on the menu (the table may still be closed). */
+async function phoneAt(browser: Browser, label: string): Promise<Page> {
+  const page = await (await browser.newContext({ viewport: { width: 375, height: 812 } })).newPage();
+  await openTableMenu(page, T[label].qr_token);
+  return page;
+}
+
+async function addAndView(page: Page, dish: string) {
+  await page.getByRole("button", { name: `Add ${dish}`, exact: true }).click();
+  await page.getByRole("button", { name: /View order/ }).click();
+}
+
+/** The waiting orders on one Angeethi table's Floor tile. */
+async function pendingOrderIds(label: string): Promise<string[]> {
+  const api = await demoApi("staff", ANGEETHI);
+  const tile = (await floorTiles(api, ANGEETHI)).find((t) => t.label === label)!;
+  await api.dispose();
+  return tile.pending_order_ids;
+}
+
+test.describe.serial("10. A table opens, its first order is approved, the visit ends", () => {
+  test.beforeAll(async () => {
+    await resetVenue(ANGEETHI);
+    T = await venueTables(ANGEETHI);
+  });
+
+  test("scan before open, Open table, Approve, a second round, pay, settle, Open table again", async ({ browser }) => {
+    test.setTimeout(120_000);
+    const guest = await phoneAt(browser, "T1");
+    await expect(shown(guest, WAITING)).toBeVisible();
+    await addAndView(guest, "Naan");
+    const sheet = guest.getByRole("dialog", { name: "Your Order" });
+    await expect(sheet.getByText(WAITING)).toBeVisible();
+    await expect(sheet.getByRole("button", { name: "Confirm Order" })).toHaveCount(0);
+    await guest.keyboard.press("Escape");
+
+    const staff = await staffBrowser(browser, ANGEETHI, "/floor");
+    const tile = floorTile(staff, "T1");
+    await expect(tile.getByText(/^Guests waiting to order/)).toBeVisible();
+    await tile.getByRole("button", { name: "Open table, T1" }).click();
+    await expect(tile.getByRole("button", { name: "Close table, T1" })).toBeVisible();
+
+    // No reload: the waiting bar goes once the phone's next status check sees the open table.
+    // (The bar comes before the closed order sheet, whose footer says the same, in the page.)
+    await expect(shown(guest, WAITING).first()).toBeHidden(LIVE);
+    await guest.getByRole("button", { name: /View order/ }).click();
+    const first = await placeOrder(guest);
+    await expect(shown(guest, CONFIRMING)).toBeVisible();
+    expect(billOf(first)).toBe(""); // a waiting order is on no bill
+
+    await expect(tile.getByText(/^1 item · /)).toBeVisible(LIVE);
+    await tile.getByRole("button", { name: "Approve, T1" }).click();
+    await expect(tile.getByRole("button", { name: "Approve, T1" })).toHaveCount(0);
+    await expect(shown(guest, COOKING)).toBeVisible(LIVE);
+
+    // The second round goes straight to the kitchen.
+    await guest.getByRole("link", { name: /Back to Menu/ }).click();
+    await addAndView(guest, "Raita");
+    const second = await placeOrder(guest);
+    await expect(shown(guest, COOKING)).toBeVisible();
+    await expect(shown(guest, CONFIRMING)).toHaveCount(0);
+    expect(sql(`SELECT status FROM orders WHERE id = '${second}'`)).toBe("placed");
+
+    const kitchen = await staffBrowser(browser, ANGEETHI, "/kitchen");
+    await expect(kitchen.getByRole("button", { name: "BUMP" })).toHaveCount(2);
+    await expect(kitchen.getByText("Naan", { exact: true })).toBeVisible();
+    await expect(kitchen.getByText("Raita", { exact: true })).toBeVisible();
+
+    await guest.getByRole("button", { name: "Pay bill" }).click();
+    const pay = guest.getByRole("dialog", { name: "Pay bill" });
+    await pay.getByRole("button", { name: /^Cash/ }).click();
+    await expect(pay.getByRole("status")).toHaveText(/^A waiter is coming to collect Rs\s[\d,]+\.$/);
+    await guest.keyboard.press("Escape");
+
+    await staff.goto(`${OWNER}/bills`);
+    const dialog = await openTableBill(staff, "T1");
+    await dialog.getByRole("button", { name: "Confirm received" }).click();
+    await expect(staff).toHaveURL(PRINT);
+    await expect(guest.getByText(PAID)).toBeVisible(POLL);
+
+    // Settling ended the visit: the table is cleared, then free to open for the next party.
+    await staff.goto(`${OWNER}/floor`);
+    await expect(tile.getByText("Needs clearing")).toBeVisible();
+    await expect(tile.getByRole("button", { name: "Close table, T1" })).toHaveCount(0);
+    await tile.getByRole("button", { name: "Mark cleared, T1" }).click();
+    await expect(tile.getByRole("button", { name: "Open table, T1" })).toBeVisible();
+
+    await guest.goto(`${GUEST}/en/menu`);
+    await expect(shown(guest, "Thanks for visiting!")).toBeVisible();
+  });
+});
+
+test.describe.serial("11. Staff answer Not now to a first order", () => {
+  test.beforeAll(async () => {
+    await resetVenue(ANGEETHI);
+    T = await venueTables(ANGEETHI);
+  });
+
+  test("the guest is back on the menu with the notice and the dish still in the cart", async ({ browser }) => {
+    await openTable(ANGEETHI, "T2");
+    const guest = await phoneAt(browser, "T2");
+    await addAndView(guest, "Naan");
+    const order = await placeOrder(guest);
+    await expect(shown(guest, CONFIRMING)).toBeVisible();
+
+    const staff = await staffBrowser(browser, ANGEETHI, "/floor");
+    const tile = floorTile(staff, "T2");
+    await tile.getByRole("button", { name: "Not now, T2" }).click();
+    await expect(tile.getByRole("button", { name: "Not now, T2" })).toHaveCount(0);
+    await expect(tile.getByRole("button", { name: "Close table, T2" })).toBeVisible(); // still open
+
+    await expect(guest).toHaveURL(/\/en\/menu$/, LIVE);
+    await expect(shown(guest, "Your waiter will come to your table to help.")).toBeVisible();
+    await expect(guest.getByRole("button", { name: /View order · 1/ })).toBeVisible();
+    expect(sql(`SELECT status || ' ' || void_kind FROM orders WHERE id = '${order}'`)).toBe("cancelled declined");
+  });
+});
+
+test.describe.serial("12. A dropped connection never sends the first order twice", () => {
+  test.beforeAll(async () => {
+    await resetVenue(ANGEETHI);
+    T = await venueTables(ANGEETHI);
+  });
+
+  test("offline, then a lost answer, then a retry: one waiting order", async ({ browser }) => {
+    await openTable(ANGEETHI, "T3");
+    const guest = await phoneAt(browser, "T3");
+    await addAndView(guest, "Naan");
+    await acknowledgeAllergens(guest);
+    const confirm = guest.getByRole("button", { name: "Confirm Order" });
+    const failed = guest.getByText("Your order didn't go through. Please try again or call a waiter.");
+
+    // Offline: the tap never leaves the phone; the cart stays.
+    await guest.context().setOffline(true);
+    await confirm.click();
+    await expect(failed).toBeVisible();
+    await guest.context().setOffline(false);
+    expect(await pendingOrderIds("T3")).toHaveLength(0);
+
+    // Back online, but the answer is lost: the order lands, the phone sees an error.
+    await guest.route(
+      "**/api/orders",
+      async (route) => {
+        await route.fetch();
+        await route.abort("connectionreset");
+      },
+      { times: 1 },
+    );
+    await confirm.click();
+    await expect.poll(() => pendingOrderIds("T3")).toHaveLength(1);
+    await expect(failed).toBeVisible();
+
+    // The guest taps again: the same order, not a second one.
+    await confirm.click();
+    await expect(guest).toHaveURL(/\/en\/orders\/[0-9a-f-]{36}$/);
+    await expect(shown(guest, CONFIRMING)).toBeVisible();
+    expect(await pendingOrderIds("T3")).toEqual([guest.url().split("/").pop()]);
+
+    await guest.reload();
+    await expect(shown(guest, CONFIRMING)).toBeVisible();
+    const staff = await staffBrowser(browser, ANGEETHI, "/floor");
+    await expect(floorTile(staff, "T3").getByText(/^1 item · /)).toBeVisible();
+    expect(await pendingOrderIds("T3")).toHaveLength(1);
+  });
+});
+
+test.describe.serial("13. A venue that asks for the table number", () => {
+  test.beforeAll(async () => {
+    await resetVenue(ANGEETHI);
+    T = await venueTables(ANGEETHI);
+    // No settings screen for this yet: the venue flag is set directly, and put back after.
+    sql(`UPDATE restaurant SET sitting_code_required = true WHERE slug = '${ANGEETHI}'`);
+  });
+
+  test.afterAll(async () => {
+    sql(`UPDATE restaurant SET sitting_code_required = false WHERE slug = '${ANGEETHI}'`);
+    await resetVenue(ANGEETHI); // closes the table opened with a number
+  });
+
+  test("a wrong number is refused, the right one sends the order", async ({ browser }) => {
+    const staff = await staffBrowser(browser, ANGEETHI, "/floor");
+    const tile = floorTile(staff, "T4");
+    await tile.getByRole("button", { name: "Open table, T4" }).click();
+    const panel = tile.getByRole("status").filter({ hasText: "Table code" });
+    await expect(panel).toBeVisible();
+    const code = (await panel.textContent())!.match(/\d{4}/)![0];
+    await tile.getByRole("button", { name: "Done with code, T4" }).click();
+    await expect(panel).toHaveCount(0);
+
+    const guest = await phoneAt(browser, "T4");
+    await addAndView(guest, "Naan");
+    await acknowledgeAllergens(guest);
+    await guest.getByRole("button", { name: "Confirm Order" }).click();
+    const sheet = guest.getByRole("dialog", { name: "Enter the 4-digit number" });
+    const wrong = `${(Number(code[0]) + 1) % 10}${code.slice(1)}`;
+    await sheet.getByLabel("Number 1 of 4").fill(wrong);
+    await expect(sheet.getByRole("alert")).toHaveText("That number didn't match. Please ask your waiter.");
+    expect(await pendingOrderIds("T4")).toHaveLength(0);
+
+    await sheet.getByLabel("Number 1 of 4").fill(code);
+    await expect(guest).toHaveURL(/\/en\/orders\/[0-9a-f-]{36}$/);
+    await expect(shown(guest, CONFIRMING)).toBeVisible();
+    expect(await pendingOrderIds("T4")).toHaveLength(1);
   });
 });
