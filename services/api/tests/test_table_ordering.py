@@ -253,7 +253,7 @@ async def test_decline_cancels_without_a_bill_and_the_guest_can_order_again(clie
     row = await order_row(db_session, o1)
     assert row.status == "cancelled"
     assert row.voided_at is not None
-    assert row.void_reason == "Declined by waiter"
+    assert (row.void_reason, row.void_kind) == ("Declined by waiter", "declined")
     client.cookies.set(GUEST_COOKIE_NAME, sign_value(str(tv.s1.id)))
     seen = (await client.get(f"/api/orders/{o1}")).json()
     assert (seen["status"], seen["cancel_reason"]) == ("cancelled", "declined")
@@ -550,6 +550,7 @@ async def test_closing_the_table_cancels_its_waiting_orders(client, db_session, 
     assert resp.status_code == 200, resp.text
     row = await order_row(db_session, o1)
     assert (row.status, row.void_reason, row.voided_by) == ("cancelled", "Table closed", user.id)
+    assert row.void_kind == "table_closed"
     assert row.voided_at is not None and row.bill_id is None
     assert declined_for(events, tv, o1) == {f"orders:{o1}", f"kitchen:{tv.r.id}"}
     assert await guest_sees(client, tv, o1) == "cancelled"
@@ -619,6 +620,21 @@ async def test_voiding_the_last_order_closes_the_sitting(client, db_session, tv)
     seen = (await client.get(f"/api/orders/{o1}")).json()
     assert seen["cancel_reason"] == "voided"  # never the staff's own words ("Guest left")
     assert "Guest left" not in json.dumps(seen)
+    assert (await order_row(db_session, o1)).void_kind == "staff"
+
+
+async def test_a_staff_void_reason_that_reads_like_a_decline_is_still_a_void(
+    client, db_session, tv
+):
+    await open_table(db_session, tv.t1.id)
+    o1 = await approved_order(client, db_session, tv, tv.naan)
+    resp = await client.post(
+        f"/api/restaurants/{tv.r.slug}/orders/{o1}/void", json={"reason": "Declined by waiter"}
+    )
+    assert resp.status_code == 200, resp.text
+    assert (await order_row(db_session, o1)).void_kind == "staff"
+    client.cookies.set(GUEST_COOKIE_NAME, sign_value(str(tv.s1.id)))
+    assert (await client.get(f"/api/orders/{o1}")).json()["cancel_reason"] == "voided"
 
 
 async def test_voiding_one_of_two_orders_keeps_the_sitting_open(client, db_session, tv):

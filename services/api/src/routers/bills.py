@@ -482,6 +482,7 @@ async def void_order(
     order.voided_at = now
     order.voided_by = access.user.id
     order.void_reason = payload.reason
+    order.void_kind = "staff"
     db.add(
         AuditLog(
             restaurant_id=rid,

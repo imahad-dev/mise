@@ -250,6 +250,30 @@ async def test_orders_bad_status(db_session: AsyncSession):
 
 
 @pytest.mark.asyncio
+async def test_orders_bad_void_kind(db_session: AsyncSession):
+    """CHECK constraint: void_kind in ('staff', 'declined', 'table_closed')."""
+    rest_id = await _create_test_restaurant(db_session)
+    session_id = await _create_test_session(db_session, rest_id)
+
+    sql = """
+    INSERT INTO orders (
+        guest_session_id, restaurant_id, status, total,
+        idempotency_key, payload_hash, void_kind
+    )
+    VALUES (
+        :session_id, :restaurant_id, 'cancelled', 10.00,
+        'idem-key-vk', 'hash-123', 'guest'
+    )
+    """
+    await assert_violates(
+        db_session,
+        sql,
+        {"session_id": session_id, "restaurant_id": rest_id},
+        "chk_orders_void_kind",
+    )
+
+
+@pytest.mark.asyncio
 async def test_order_item_bad_allergen_status(db_session: AsyncSession):
     """CHECK constraint: allergen_status IN ('contains', 'unverified', 'no_declared_match')."""
     rest_id = await _create_test_restaurant(db_session)

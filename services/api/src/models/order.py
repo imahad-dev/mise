@@ -46,6 +46,9 @@ class Order(Base):
         ),
         CheckConstraint("source IN ('live', 'simulated', 'pay_forward')", name="chk_orders_source"),
         CheckConstraint("voided_at IS NULL OR status = 'cancelled'", name="chk_orders_void"),
+        CheckConstraint(
+            "void_kind IN ('staff', 'declined', 'table_closed')", name="chk_orders_void_kind"
+        ),
         CheckConstraint("collected_at IS NULL OR status = 'bumped'", name="chk_orders_collected"),
         UniqueConstraint(
             "guest_session_id", "idempotency_key", name="orders_guest_idempotency_key"
@@ -120,6 +123,8 @@ class Order(Base):
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     void_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Who cancelled it, for the guest: void_reason is free text typed by staff.
+    void_kind: Mapped[str | None] = mapped_column(Text, nullable=True)
     collected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     collected_by: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True

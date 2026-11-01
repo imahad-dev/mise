@@ -134,6 +134,7 @@ async def _close(
         order.voided_at = now
         order.voided_by = user_id
         order.void_reason = TABLE_CLOSED
+        order.void_kind = "table_closed"
     await db.flush()
     return [o.id for o in pending]
 
@@ -239,7 +240,7 @@ async def decline_pending(
     so no money moves); the table stays open. False on a replay. Caller commits."""
     sitting = await get_open_sitting(db, table_id)
     pending = await _waiting_as_seen(
-        db, sitting, order_ids, Order.status == "cancelled", Order.void_reason == DECLINED
+        db, sitting, order_ids, Order.status == "cancelled", Order.void_kind == "declined"
     )
     if pending is None:
         return False
@@ -249,6 +250,7 @@ async def decline_pending(
         order.voided_at = now
         order.voided_by = user_id
         order.void_reason = DECLINED
+        order.void_kind = "declined"
         db.add(
             AuditLog(
                 restaurant_id=restaurant_id,

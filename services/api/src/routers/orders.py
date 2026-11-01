@@ -38,7 +38,7 @@ from src.services.bills import (
 )
 from src.services.counter import open_counter_bill
 from src.services.order_snapshot import line_total, snapshot_order_item
-from src.services.sitting import DECLINED, TABLE_CLOSED, get_open_sitting, has_approved_order
+from src.services.sitting import get_open_sitting, has_approved_order
 
 logger = logging.getLogger(__name__)
 
@@ -84,12 +84,10 @@ def is_idempotency_unique_violation(err: IntegrityError) -> bool:
 
 
 def cancel_reason(order: Order) -> str | None:
-    """Guest-safe reason for a cancelled order, from the staff's void_reason."""
+    """Guest-safe reason for a cancelled order, from void_kind (never the staff's words)."""
     if order.status != "cancelled":
         return None
-    return {DECLINED: "declined", TABLE_CLOSED: "table_closed"}.get(
-        order.void_reason or "", "voided"
-    )
+    return {"declined": "declined", "table_closed": "table_closed"}.get(order.void_kind, "voided")
 
 
 async def order_response(
