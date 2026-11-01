@@ -719,7 +719,7 @@
             "description": "The table code is required or wrong"
           },
           "409": {
-            "description": "Table not open, idempotency conflict, unavailable items, or allergen ack required"
+            "description": "Table not open, already sent under this key (with its order_id), unavailable items, or allergen ack required"
           },
           "429": {
             "description": "Too many orders or wrong table codes from this phone"
@@ -5125,9 +5125,15 @@
             "format": "date-time",
             "title": "Expires At"
           },
-          "sitting_open": {
-            "type": "boolean",
-            "title": "Sitting Open"
+          "table_state": {
+            "type": "string",
+            "enum": [
+              "open",
+              "waiting",
+              "closed",
+              "ended"
+            ],
+            "title": "Table State"
           },
           "code_required": {
             "type": "boolean",
@@ -5143,7 +5149,7 @@
           "dietary_preferences",
           "allergens_to_avoid",
           "expires_at",
-          "sitting_open",
+          "table_state",
           "code_required"
         ],
         "title": "GuestSessionStatusResponse"

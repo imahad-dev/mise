@@ -129,7 +129,7 @@ async def get_guest_session(
     A plain read, by the same rules create_order uses: a counter needs no sitting; a phone bound to
     an earlier sitting must scan again; the code is asked once per phone per sitting.
     """
-    sitting_open, code_required = True, False
+    table_state, code_required = "open", False
     kind = await db.scalar(select(DiningTable.kind).where(DiningTable.id == session.table_id))
     if session.table_id is not None and kind != "counter":
         sitting = (
@@ -139,15 +139,17 @@ async def get_guest_session(
                 )
             )
         ).one_or_none()
-        sitting_open = (
-            sitting is not None
-            and session.sitting_id in (None, sitting.id)
-            and await session_is_current(db, session)  # a phone left from the last party
-        )
-        code_required = sitting_open and sitting.code_required and session.sitting_id is None
+        if session.sitting_id is not None and (sitting is None or session.sitting_id != sitting.id):
+            table_state = "closed"  # it ordered on a visit that has ended (one open per table)
+        elif not await session_is_current(db, session):
+            table_state = "ended"  # a phone left from the last party
+        elif sitting is None:
+            table_state = "waiting"
+        else:
+            code_required = sitting.code_required and session.sitting_id is None
     return GuestSessionStatusResponse(
         **GuestSessionResponse.model_validate(session).model_dump(),
-        sitting_open=sitting_open,
+        table_state=table_state,
         code_required=code_required,
     )
 

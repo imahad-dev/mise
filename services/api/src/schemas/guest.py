@@ -55,7 +55,9 @@ class GuestSessionResponse(BaseModel):
 
 class GuestSessionStatusResponse(GuestSessionResponse):
     # Whether this phone may order at its table now; never the code itself.
-    sitting_open: bool
+    # open: may order; waiting: the waiter has not opened the table yet; closed: this phone
+    # ordered on a visit that has ended; ended: scanned before the table reset, scan again.
+    table_state: Literal["open", "waiting", "closed", "ended"]
     code_required: bool
 
 

@@ -1803,8 +1803,11 @@ export interface components {
              * Format: date-time
              */
             expires_at: string;
-            /** Sitting Open */
-            sitting_open: boolean;
+            /**
+             * Table State
+             * @enum {string}
+             */
+            table_state: "open" | "waiting" | "closed" | "ended";
             /** Code Required */
             code_required: boolean;
         };
@@ -3392,7 +3395,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Table not open, idempotency conflict, unavailable items, or allergen ack required */
+            /** @description Table not open, already sent under this key (with its order_id), unavailable items, or allergen ack required */
             409: {
                 headers: {
                     [name: string]: unknown;

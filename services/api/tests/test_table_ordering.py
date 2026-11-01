@@ -650,23 +650,25 @@ async def test_voiding_one_of_two_orders_keeps_the_sitting_open(client, db_sessi
     assert row.closed_at is None
 
 
-async def guest_status(client: AsyncClient, session: GuestSession) -> tuple[bool, bool]:
+async def guest_status(client: AsyncClient, session: GuestSession) -> tuple[str, bool]:
     client.cookies.set(GUEST_COOKIE_NAME, sign_value(str(session.id)))
     resp = await client.get("/api/guest/session")
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert "code" not in body
-    return body["sitting_open"], body["code_required"]
+    return body["table_state"], body["code_required"]
 
 
 async def test_guest_status_follows_the_sitting(client, db_session, tv):
-    assert await guest_status(client, tv.s1) == (False, False)
+    assert await guest_status(client, tv.s1) == ("waiting", False)
     await open_table(db_session, tv.t1.id)
-    assert await guest_status(client, tv.s1) == (True, False)
+    assert await guest_status(client, tv.s1) == ("open", False)
     o1 = await approved_order(client, db_session, tv, tv.naan)
+    assert await guest_status(client, tv.s1) == ("open", False)
     resp = await settle(client, tv.r.slug, (await order_row(db_session, o1)).bill_id)
     assert resp.status_code == 200, resp.text
-    assert await guest_status(client, tv.s1) == (False, False)
+    # It ordered on the visit that just ended.
+    assert await guest_status(client, tv.s1) == ("closed", False)
 
 
 async def test_guest_status_asks_for_the_code_until_the_phone_has_entered_it(
@@ -674,9 +676,9 @@ async def test_guest_status_asks_for_the_code_until_the_phone_has_entered_it(
 ):
     await open_table(db_session, tv.t1.id, code="4821")
     await redis_client.delete(f"code_lock:{tv.s1.id}", f"code_attempts:{tv.s1.id}")
-    assert await guest_status(client, tv.s1) == (True, True)
+    assert await guest_status(client, tv.s1) == ("open", True)
     assert (await post_order(client, tv.s1, tv.naan, code="4821")).status_code == 201
-    assert await guest_status(client, tv.s1) == (True, False)
+    assert await guest_status(client, tv.s1) == ("open", False)
 
 
 async def test_guest_status_of_a_phone_from_an_earlier_sitting(client, db_session, tv):
@@ -685,8 +687,9 @@ async def test_guest_status_of_a_phone_from_an_earlier_sitting(client, db_sessio
     first.closed_at = datetime.now(UTC)
     first.close_reason = "staff_closed"
     await db_session.flush()
+    assert await guest_status(client, tv.s1) == ("closed", False)
     await open_table(db_session, tv.t1.id, code="4821")
-    assert await guest_status(client, tv.s1) == (False, False)
+    assert await guest_status(client, tv.s1) == ("closed", False)
 
 
 async def test_guest_status_at_a_counter(client, db_session, tv):
@@ -703,7 +706,7 @@ async def test_guest_status_at_a_counter(client, db_session, tv):
     )
     db_session.add(s)
     await db_session.flush()
-    assert await guest_status(client, s) == (True, False)
+    assert await guest_status(client, s) == ("open", False)
 
 
 async def test_a_phone_that_scans_after_a_reset_is_current_even_if_the_clock_stepped_back(
@@ -779,9 +782,11 @@ async def test_guest_status_of_a_phone_left_from_the_last_party(client, db_sessi
     o1 = await approved_order(client, db_session, tv, tv.naan)
     resp = await settle(client, tv.r.slug, (await order_row(db_session, o1)).bill_id)
     assert resp.status_code == 200, resp.text
+    # Never ordered, scanned before the reset: scan again, with or without a new visit.
+    assert await guest_status(client, leftover) == ("ended", False)
     await open_table(db_session, tv.t1.id, code="4821")
     # By the same rules create_order uses: the visit ended, so no table and no code to ask for.
-    assert await guest_status(client, leftover) == (False, False)
+    assert await guest_status(client, leftover) == ("ended", False)
     assert (await post_order(client, leftover, tv.naan, code="4821")).status_code == 409
 
 
