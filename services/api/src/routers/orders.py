@@ -142,6 +142,11 @@ async def _check_table_code(session: GuestSession, sitting: TableSitting, code: 
             if tries >= CODE_TRIES:
                 await redis_client.set(lock_key, "1", ex=CODE_LOCK_S)
                 await redis_client.delete(tries_key)
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=TOO_MANY_TRIES
+                )
+        except HTTPException:
+            raise
         except Exception as e:
             logger.warning("Redis error counting %s: %s", tries_key, e)
     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail={"error": "code_required"})

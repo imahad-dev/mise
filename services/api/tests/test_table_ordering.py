@@ -311,10 +311,14 @@ async def test_code_is_asked_once_and_wrong_codes_lock_the_phone(client, db_sess
     missing = await post_order(client, tv.s1, tv.naan)
     assert missing.status_code == 403
     assert missing.json()["detail"]["error"] == "code_required"
-    for _ in range(5):
+    for _ in range(4):
         wrong = await post_order(client, tv.s1, tv.naan, code="0000")
         assert wrong.status_code == 403
         assert wrong.json()["detail"]["error"] == "code_required"
+    # The try that locks the phone already says so.
+    fifth = await post_order(client, tv.s1, tv.naan, code="0000")
+    assert fifth.status_code == 429
+    assert fifth.json()["detail"] == "Too many tries. Please wait a minute and ask your waiter."
     locked = await post_order(client, tv.s1, tv.naan, code="4821")
     assert locked.status_code == 429
     assert locked.json()["detail"] == "Too many tries. Please wait a minute and ask your waiter."
