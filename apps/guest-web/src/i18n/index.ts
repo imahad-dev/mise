@@ -94,5 +94,9 @@ export function getDictionary(locale: string | undefined | null): TranslationDic
       ...en.counter,
       ...(raw.counter || {}),
     },
+    order: {
+      ...en.order,
+      ...(raw.order || {}),
+    },
   };
 }

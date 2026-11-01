@@ -1,12 +1,25 @@
 "use client";
 
-import React, { use, useEffect, useRef, useState } from "react";
+import React, { use, useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AllergenChip } from "../../../components/allergen-chip";
 import { CallWaiter } from "../../../components/CallWaiter";
+import { CodeEntry } from "../../../components/CodeEntry";
 import { ChatPanel } from "../../../components/chat-panel";
 import { getDictionary } from "../../../i18n";
-import { VISIT_ENDED } from "../../../lib/pay";
+import {
+  MAX_ITEMS_PER_ORDER,
+  cartQuantity,
+  claimRestore,
+  hasOrdered,
+  markOrdered,
+  orderOutcome,
+  orderStage,
+  rememberNumber,
+  rememberedNumber,
+  tableMode,
+  type GuestStatus,
+} from "../../../lib/ordering";
 import { Badge, Button, Sheet, formatPrice as formatAmount } from "ui";
 import {
   addToCart,
@@ -80,6 +93,51 @@ export default function GuestMenuPage({
   const pickerItem = sizePickerItem ?? lastPickedItem.current;
   const [submittingOrder, setSubmittingOrder] = useState(false);
   const [orderError, setOrderError] = useState<string | null>(null);
+  const [status, setStatus] = useState<GuestStatus | null>(null);
+  const [codeOpen, setCodeOpen] = useState(false);
+  const [code, setCode] = useState("");
+  const [codeMessage, setCodeMessage] = useState<string | null>(null);
+  const [lockedUntil, setLockedUntil] = useState(0);
+  const [now, setNow] = useState(() => Date.now());
+  const [notice, setNotice] = useState<string | null>(null);
+  // Unknown status reads as open: the server still refuses an order the table can't take.
+  const mode = status ? tableMode(status, hasOrdered(status.id)) : "open";
+
+  const loadStatus = useCallback(async () => {
+    try {
+      const res = await fetch("/api/guest/session");
+      if (res.ok) setStatus((await res.json()) as GuestStatus);
+    } catch {
+      // network blip: the next check retries
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadStatus();
+  }, [loadStatus]);
+
+  // Waiting for a waiter to open the table: check every 5 s while the guest is looking.
+  useEffect(() => {
+    if (mode !== "waiting") return;
+    const timer = setInterval(() => {
+      if (document.visibilityState === "visible") void loadStatus();
+    }, 5000);
+    const visible = () => {
+      if (document.visibilityState === "visible") void loadStatus();
+    };
+    document.addEventListener("visibilitychange", visible);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", visible);
+    };
+  }, [mode, loadStatus]);
+
+  const lockedFor = Math.max(0, Math.ceil((lockedUntil - now) / 1000));
+  useEffect(() => {
+    if (lockedUntil <= Date.now()) return;
+    const tick = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(tick);
+  }, [lockedUntil]);
 
   // Load menu from /api/guest/menu
   useEffect(() => {
@@ -103,6 +161,49 @@ export default function GuestMenuPage({
     }
     loadMenu();
   }, [router]);
+
+  // Back from a declined first order: its dishes go back in the cart, once.
+  useEffect(() => {
+    if (!menu) return;
+    const orderId = new URLSearchParams(window.location.search).get("restore");
+    if (!orderId) return;
+    router.replace(`/${lang}/menu`);
+    void (async () => {
+      try {
+        const res = await fetch(`/api/orders/${encodeURIComponent(orderId)}`);
+        if (!res.ok) return;
+        const order = (await res.json()) as {
+          status: string;
+          cancel_reason?: string | null;
+          items: { menu_item_id: string; option_id?: string | null; quantity: number; notes?: string | null }[];
+        };
+        if (orderStage(order.status, order.cancel_reason) !== "declined") return;
+        setNotice(dict.order.declined);
+        if (!claimRestore(orderId)) return;
+        let updated: CartState | null = null;
+        for (const line of order.items) {
+          const item = menu.items.find((i) => i.id === line.menu_item_id);
+          const option = item?.options?.find((o) => o.id === line.option_id);
+          if (!item || item.available === false || (line.option_id && !option)) continue;
+          updated = addToCart(
+            {
+              menuItemId: item.id,
+              name: item.name,
+              price: Number(item.price),
+              notes: line.notes ?? undefined,
+              allergenStatus: item.allergen_status,
+              matchedAllergens: item.matched_allergens || [],
+            },
+            line.quantity,
+            option && { id: option.id, label: option.label, price: Number(option.price) },
+          );
+        }
+        if (updated) setCart({ ...updated });
+      } catch {
+        // the guest can still add the dishes again by hand
+      }
+    })();
+  }, [menu, lang, router, dict.order.declined]);
 
   const handleAddToCart = (item: MenuItem, option?: MenuOption) => {
     const updated = addToCart(
@@ -134,12 +235,37 @@ export default function GuestMenuPage({
     setCart({ ...updated });
   };
 
-  const handleCheckout = async () => {
+  const showCode = (message: string | null) => {
+    setCode("");
+    setCodeMessage(message);
+    setCartOpen(false);
+    setCodeOpen(true);
+  };
+
+  const showError = (message: string) => {
+    setCodeOpen(false);
+    setOrderError(message);
+    setCartOpen(true);
+  };
+
+  const handleCheckout = async (typedNumber?: string) => {
     if (cart.items.length === 0) return;
+
+    if (cartQuantity(cart.items) > MAX_ITEMS_PER_ORDER) {
+      showError(dict.order.tooBig);
+      return;
+    }
 
     const risk = hasAllergenRisk(cart);
     if (risk && !cart.acknowledged) {
-      setOrderError(dict.ui.allergenAckCheckbox);
+      showError(dict.ui.allergenAckCheckbox);
+      return;
+    }
+
+    // Asked once per phone, on the first order only; a retry resends the number already typed.
+    const number = typedNumber ?? rememberedNumber();
+    if (status?.code_required && !number) {
+      showCode(null);
       return;
     }
 
@@ -147,57 +273,73 @@ export default function GuestMenuPage({
     setOrderError(null);
 
     try {
-      const payload = toOrderPayload(cart);
-
       const res = await fetch("/api/orders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ ...toOrderPayload(cart), ...(number && { code: number }) }),
       });
 
-      if (res.status === 409) {
-        const errJson = await res.json().catch(() => null);
-        if (errJson?.detail?.error === "allergen_ack_required") {
-          setOrderError(dict.ui.allergenWarningDescription);
-          setCart((c) => {
-            const next = { ...c, acknowledged: false };
-            saveCart(next);
-            return next;
-          });
-          return;
-        }
-        const conflictMsg =
-          errJson?.detail === VISIT_ENDED
-            ? dict.pay.visitEnded
-            : typeof errJson?.detail === "string"
-              ? errJson.detail
-              : "Order conflict. Please retry.";
-        throw new Error(conflictMsg);
+      if (res.ok) {
+        const orderData = await res.json();
+        markOrdered(orderData.guest_session_id);
+        clearCart();
+        router.push(`/${lang}/orders/${orderData.id}${orderData.over_first_order_cap ? "?big=1" : ""}`);
+        return;
       }
 
-      if (!res.ok) {
-        const errJson = await res.json().catch(() => null);
-        const generalMsg =
-          typeof errJson?.detail === "string"
-            ? errJson.detail
-            : `Failed to place order (${res.status})`;
-        throw new Error(generalMsg);
+      const body = await res.json().catch(() => null);
+      const outcome = orderOutcome(res.status, body);
+      if (outcome === "code") {
+        rememberNumber(null);
+        showCode(number ? dict.order.numberWrong : null);
+      } else if (outcome === "locked") {
+        rememberNumber(null);
+        setLockedUntil(Date.now() + 60_000);
+        setNow(Date.now());
+        showCode(dict.order.tooManyTries);
+      } else if (outcome === "not_open") {
+        // The waiting bar (a new phone) or "thanks for visiting" (a phone that ordered) takes over.
+        setCodeOpen(false);
+        setCartOpen(false);
+        setStatus((s) => (s ? { ...s, sitting_open: false } : s));
+      } else if (outcome === "allergen") {
+        showError(dict.ui.allergenWarningDescription);
+        setCart((c) => {
+          const next = { ...c, acknowledged: false };
+          saveCart(next);
+          return next;
+        });
+      } else {
+        showError(
+          {
+            ended: dict.pay.visitEnded,
+            too_fast: dict.order.tooFast,
+            too_big: dict.order.tooBig,
+            unavailable: dict.order.unavailable,
+            failed: dict.order.failed,
+          }[outcome],
+        );
       }
-
-      const orderData = await res.json();
-      clearCart();
-      router.push(`/${lang}/orders/${orderData.id}`);
-    } catch (err: unknown) {
-      setOrderError(err instanceof Error ? err.message : String(err));
+    } catch {
+      showError(dict.order.failed);
     } finally {
       setSubmittingOrder(false);
+    }
+  };
+
+  const handleCodeChange = (next: string) => {
+    setCode(next);
+    setCodeMessage(null);
+    if (next.length === 4) {
+      rememberNumber(next);
+      void handleCheckout(next);
     }
   };
 
   // Group items by category
   const categories = Array.from(new Set(menu?.items.map((i) => i.category) || []));
   const cartTotal = calculateCartTotal(cart);
-  const cartCount = cart.items.reduce((s, i) => s + i.quantity, 0);
+  const cartCount = cartQuantity(cart.items);
   const requiresAck = hasAllergenRisk(cart);
 
   const formatPrice = (amount: number) =>
@@ -236,7 +378,7 @@ export default function GuestMenuPage({
   const catId = (cat: string) => `cat-${cat.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
 
   return (
-    <div className="min-h-screen bg-paper pb-28 text-ink">
+    <div className={`min-h-screen bg-paper text-ink ${mode === "open" && !notice ? "pb-28" : "pb-56"}`}>
       <header className="sticky top-0 z-30 border-b border-line bg-paper/95 px-4 pt-4 backdrop-blur sm:px-6">
         <div className="mx-auto max-w-3xl">
           <div className="flex items-start justify-between gap-3">
@@ -251,7 +393,7 @@ export default function GuestMenuPage({
                 <p className="mt-0.5 text-sm font-semibold text-terracotta">{dict.counter.header}</p>
               )}
             </div>
-            <CallWaiter lang={lang} />
+            {mode !== "waiting" && <CallWaiter lang={lang} />}
           </div>
           <p className="mt-0.5 text-xs text-ink-muted">{dict.menu.taxNote}</p>
           <nav aria-label={dict.ui.menuTitle} className="-mx-1 mt-3 flex gap-2 overflow-x-auto pb-3">
@@ -329,14 +471,28 @@ export default function GuestMenuPage({
         ))}
       </main>
 
-      {cartCount > 0 && (
-        <div className="fixed inset-x-4 bottom-4 z-20 mx-auto max-w-md">
-          <Button className="w-full justify-between py-3.5 text-base" onClick={() => setCartOpen(true)}>
-            <span>
-              {dict.ui.checkout} · {cartCount}
-            </span>
-            <span className="tabular-nums">{formatPrice(cartTotal)}</span>
-          </Button>
+      {(cartCount > 0 || mode !== "open" || notice) && (
+        <div className="fixed inset-x-4 bottom-4 z-20 mx-auto max-w-md space-y-2">
+          {(mode !== "open" || notice) && (
+            <div className="space-y-3 rounded-2xl border border-line bg-card p-4 shadow-lg">
+              <p role="status" className="text-base font-semibold text-ink">
+                {mode === "waiting" ? dict.order.waiting : mode === "closed" ? dict.order.thanks : notice}
+              </p>
+              {mode === "waiting" && (
+                <div className="[&_button]:min-h-12 [&_button]:w-full [&_button]:text-base">
+                  <CallWaiter lang={lang} />
+                </div>
+              )}
+            </div>
+          )}
+          {cartCount > 0 && (
+            <Button className="min-h-12 w-full justify-between py-3.5 text-base" onClick={() => setCartOpen(true)}>
+              <span>
+                {dict.ui.checkout} · {cartCount}
+              </span>
+              <span className="tabular-nums">{formatPrice(cartTotal)}</span>
+            </Button>
+          )}
         </div>
       )}
 
@@ -353,20 +509,26 @@ export default function GuestMenuPage({
                   {formatPrice(cartTotal)}
                 </span>
               </div>
-              <Button
-                className="w-full"
-                onClick={handleCheckout}
-                disabled={submittingOrder || (requiresAck && !cart.acknowledged)}
-              >
-                {submittingOrder ? dict.ui.placingOrder : dict.ui.placeOrder}
-              </Button>
+              {mode === "open" ? (
+                <Button
+                  className="min-h-12 w-full text-base"
+                  onClick={() => void handleCheckout()}
+                  disabled={submittingOrder || (requiresAck && !cart.acknowledged)}
+                >
+                  {submittingOrder ? dict.ui.placingOrder : dict.ui.placeOrder}
+                </Button>
+              ) : (
+                <p role="status" className="text-base font-semibold text-ink">
+                  {mode === "waiting" ? dict.order.waiting : dict.order.thanks}
+                </p>
+              )}
               <p className="text-[11px] leading-relaxed text-ink-muted">{dict.staffNotice}</p>
             </>
           )
         }
       >
         {orderError && (
-          <div role="alert" className="rounded-xl bg-danger-bg p-3 text-xs text-danger-fg">
+          <div role="alert" className="rounded-xl bg-danger-bg p-3 text-base text-danger-fg">
             {orderError}
           </div>
         )}
@@ -467,7 +629,20 @@ export default function GuestMenuPage({
         </ul>
       </Sheet>
 
-      <ChatPanel locale={lang} />
+      <Sheet open={codeOpen} onClose={() => setCodeOpen(false)} title={dict.order.numberTitle}>
+        {codeOpen && (
+          <CodeEntry
+            lang={lang}
+            code={code}
+            onChange={handleCodeChange}
+            message={codeMessage}
+            lockedFor={lockedFor}
+            busy={submittingOrder}
+          />
+        )}
+      </Sheet>
+
+      <ChatPanel locale={lang} raised={mode !== "open" || Boolean(notice)} />
     </div>
   );
 }

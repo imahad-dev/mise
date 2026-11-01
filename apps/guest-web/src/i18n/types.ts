@@ -137,4 +137,24 @@ export interface TranslationDict {
     already: string;
     failed: string;
   };
+  /** Ordering at a table: waiting for a waiter, the 4-digit number, and what happens after sending. */
+  order: {
+    waiting: string;
+    thanks: string;
+    numberTitle: string;
+    numberHelp: string;
+    /** Contains {n}. */
+    numberDigit: string;
+    numberWrong: string;
+    tooManyTries: string;
+    /** Contains {seconds}. */
+    tryAgainIn: string;
+    tooFast: string;
+    tooBig: string;
+    bigFirst: string;
+    confirming: string;
+    declined: string;
+    unavailable: string;
+    failed: string;
+  };
 }
