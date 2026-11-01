@@ -20,7 +20,7 @@ IDLE_TIMEOUT = timedelta(minutes=90)
 
 def is_idle(*, opened_at: datetime, last_activity_at: datetime | None, now: datetime) -> bool:
     """No order, call or payment activity for IDLE_TIMEOUT since the sitting opened."""
-    since = last_activity_at or opened_at
+    since = max(opened_at, last_activity_at) if last_activity_at else opened_at
     return now - since >= IDLE_TIMEOUT
 
 
@@ -70,7 +70,7 @@ async def get_open_sitting(
     if open_bill is not None:
         return sitting
     now = await db.scalar(select(func.clock_timestamp()))
-    last_activity = await _last_activity(db, sitting.id, sitting.table_id)
+    last_activity = await _last_activity(db, sitting)
     if is_idle(opened_at=sitting.opened_at, last_activity_at=last_activity, now=now):
         ids = await _close(db, sitting, "idle_timeout", now, None)
         if cancelled is not None:
@@ -79,14 +79,15 @@ async def get_open_sitting(
     return sitting
 
 
-async def _last_activity(
-    db: AsyncSession, sitting_id: uuid.UUID, table_id: uuid.UUID
-) -> datetime | None:
+async def _last_activity(db: AsyncSession, sitting: TableSitting) -> datetime | None:
     order_activity = await db.scalar(
-        select(func.max(Order.placed_at)).where(Order.sitting_id == sitting_id)
+        select(func.max(Order.placed_at)).where(Order.sitting_id == sitting.id)
     )
+    # Calls carry no sitting: only those since this sitting opened are this party's.
     call_activity = await db.scalar(
-        select(func.max(ServiceCall.created_at)).where(ServiceCall.table_id == table_id)
+        select(func.max(ServiceCall.created_at)).where(
+            ServiceCall.table_id == sitting.table_id, ServiceCall.created_at >= sitting.opened_at
+        )
     )
     candidates = [t for t in (order_activity, call_activity) if t is not None]
     return max(candidates) if candidates else None

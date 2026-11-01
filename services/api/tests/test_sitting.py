@@ -10,6 +10,7 @@ from src.models.bill import Bill
 from src.models.dining_table import DiningTable
 from src.models.order import Order
 from src.models.restaurant import Restaurant
+from src.models.service_call import ServiceCall
 from src.models.session import GuestSession
 from src.models.sitting import TableSitting
 from src.services.sitting import IDLE_TIMEOUT, generate_code, get_open_sitting, is_idle
@@ -30,6 +31,16 @@ def test_not_idle_with_recent_activity_even_if_opened_long_ago():
     opened = NOW - timedelta(hours=3)
     recent = NOW - timedelta(minutes=10)
     assert is_idle(opened_at=opened, last_activity_at=recent, now=NOW) is False
+
+
+def test_a_call_before_the_table_opened_does_not_count_as_this_partys_activity():
+    """A waiter call at 11:00 from the previous party must not make a table opened at 12:00
+    look idle at 12:30; the new party is idle only 90 minutes after the open."""
+    opened, call = NOW, NOW - timedelta(hours=1)
+    assert (
+        is_idle(opened_at=opened, last_activity_at=call, now=NOW + timedelta(minutes=30)) is False
+    )
+    assert is_idle(opened_at=opened, last_activity_at=call, now=NOW + timedelta(minutes=90)) is True
 
 
 def test_idle_timeout_is_90_minutes():
@@ -135,3 +146,43 @@ async def test_an_open_unpaid_bill_is_never_idle_closed(db_session):
     assert result is not None
     assert result.id == sitting.id
     assert result.closed_at is None
+
+
+async def _venue_table(db_session) -> tuple[Restaurant, DiningTable]:
+    r = Restaurant(
+        name="Idle Venue",
+        slug=f"idle-{uuid.uuid4().hex[:8]}",
+        city="Lahore",
+        currency="PKR",
+        timezone="Asia/Karachi",
+        languages=["en"],
+        default_language="en",
+        tax_jurisdiction="PB",
+    )
+    db_session.add(r)
+    await db_session.flush()
+    table = DiningTable(restaurant_id=r.id, label="T1", qr_token=uuid.uuid4().hex)
+    db_session.add(table)
+    await db_session.flush()
+    return r, table
+
+
+async def test_the_previous_partys_waiter_call_does_not_idle_close_a_new_sitting(db_session):
+    """A call made 2h ago (before this sitting opened 30 min ago) is not this party's activity."""
+    r, table = await _venue_table(db_session)
+    db_session.add(
+        ServiceCall(
+            restaurant_id=r.id,
+            table_id=table.id,
+            reason="help",
+            created_at=func.now() - timedelta(hours=2),
+            resolved_at=func.now() - timedelta(hours=2),
+        )
+    )
+    sitting = TableSitting(table_id=table.id, opened_at=func.now() - timedelta(minutes=30))
+    db_session.add(sitting)
+    await db_session.flush()
+
+    result = await get_open_sitting(db_session, table.id)
+
+    assert result is not None and result.id == sitting.id
