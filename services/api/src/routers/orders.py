@@ -164,8 +164,8 @@ async def _check_table_code(session: GuestSession, sitting: TableSitting, code: 
         400: {"description": "Invalid order items"},
         403: {"description": "The table code is required or wrong"},
         409: {
-            "description": "Table not open, idempotency conflict, unavailable items, "
-            "or allergen ack required"
+            "description": "Table not open, already sent under this key (with its order_id), "
+            "unavailable items, or allergen ack required"
         },
         429: {"description": "Too many orders or wrong table codes from this phone"},
     },
@@ -195,9 +195,10 @@ async def create_order(
         if existing_order.payload_hash == payload_hash:
             response.status_code = status.HTTP_200_OK
             return await order_response(db, existing_order)
+        # This phone already sent an order under this key: send it there, never a second one.
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="Idempotency key mismatch with different payload",
+            detail={"error": "already_sent", "order_id": str(existing_order.id)},
         )
 
     # 1b. A table order needs an open table (and its code); counters and replays don't.
@@ -420,7 +421,9 @@ async def create_order(
             return await order_response(db, conc_order)
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="Order conflict",
+            detail={"error": "already_sent", "order_id": str(conc_order.id)}
+            if conc_order is not None
+            else "Order conflict",
         ) from err
 
     # Re-fetch order with items eager-loaded

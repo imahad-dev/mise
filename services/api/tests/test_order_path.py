@@ -319,6 +319,8 @@ async def test_order_idempotency_201_200_409(
     }
     r3 = await client.post("/api/orders", json=payload_diff)
     assert r3.status_code == 409
+    # The phone already sent an order under this key: point it there, never a new one.
+    assert r3.json()["detail"] == {"error": "already_sent", "order_id": order1["id"]}
 
 
 @pytest_asyncio.fixture
