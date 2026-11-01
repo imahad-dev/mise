@@ -2,12 +2,14 @@
 
 import React, { use, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { CallWaiter } from "../../../../components/CallWaiter";
 import { PaySheet } from "../../../../components/PaySheet";
 import { ChatPanel } from "../../../../components/chat-panel";
 import { useSse } from "../../../../hooks/use-sse";
 import { getDictionary } from "../../../../i18n";
 import { Button, formatPrice } from "ui";
+import { orderStage } from "../../../../lib/ordering";
 import { VISIT_ENDED, billState, claimMessage, counterState, paidText, payForwardThanks, type GuestBill } from "../../../../lib/pay";
 
 interface OrderItem {
@@ -64,7 +66,8 @@ function useGuestBill(orderId: string) {
 interface OrderDetails {
   id: string;
   table_label?: string | null;
-  status: "placed" | "bumped" | "cancelled" | string;
+  status: "pending_approval" | "placed" | "bumped" | "cancelled" | string;
+  cancel_reason?: "declined" | "table_closed" | "voided" | null;
   total: string | number;
   currency: string;
   placed_at: string;
@@ -79,6 +82,10 @@ export default function OrderStatusPage({
 }) {
   const { lang, id } = use(params);
   const dict = getDictionary(lang);
+  const router = useRouter();
+  // Set by the menu when the first order was over the venue's cap: the waiter will check it.
+  const [big, setBig] = useState(false);
+  useEffect(() => setBig(new URLSearchParams(window.location.search).has("big")), []);
   const { bill, setBill, ended, setEnded, reload } = useGuestBill(id);
   const [paying, setPaying] = useState(false);
   const state = billState(bill, ended);
@@ -109,6 +116,12 @@ export default function OrderStatusPage({
     // Paid, ready, collected, cancelled or revived: the bill tells the guest, so reload it now.
     onMessage: () => void reload(),
   });
+
+  const stage = order ? orderStage(order.status, order.cancel_reason) : null;
+  // Declined: back to the menu with the dishes in the cart, so nothing is lost.
+  useEffect(() => {
+    if (stage === "declined") router.replace(`/${lang}/menu?restore=${encodeURIComponent(id)}`);
+  }, [stage, router, lang, id]);
 
   const getStatusBadge = (status?: string) => {
     switch (status) {
@@ -162,7 +175,9 @@ export default function OrderStatusPage({
             </div>
             <CallWaiter lang={lang} />
           </div>
-          {order && !counter && <div>{getStatusBadge(order.status)}</div>}
+          {order && !counter && stage !== "confirming" && stage !== "declined" && stage !== "closed" && (
+            <div aria-live="polite">{getStatusBadge(order.status)}</div>
+          )}
         </header>
 
         {error && !order && (
@@ -171,8 +186,26 @@ export default function OrderStatusPage({
           </div>
         )}
 
-        {order ? (
+        {stage === "closed" || stage === "declined" ? (
+          <div className="p-6 rounded-2xl bg-card border border-line text-center space-y-4">
+            <p aria-live="polite" className="text-xl font-semibold text-ink">
+              {stage === "closed" ? dict.order.thanks : dict.order.declined}
+            </p>
+            <Link
+              href={`/${lang}/menu`}
+              className="btn-primary inline-flex min-h-12 items-center justify-center px-6 text-base"
+            >
+              {dict.ui.backToMenu}
+            </Link>
+          </div>
+        ) : order ? (
           <div className="space-y-6">
+            {stage === "confirming" && (
+              <div aria-live="polite" className="p-5 rounded-2xl bg-card border border-terracotta/60 space-y-2">
+                <p className="text-lg font-semibold text-ink">{dict.order.confirming}</p>
+                {big && <p className="text-base text-ink">{dict.order.bigFirst}</p>}
+              </div>
+            )}
             {/* Status Summary Card */}
             <div className="p-5 rounded-2xl bg-card border border-line space-y-4">
               {order.table_label && !counter && (
@@ -189,7 +222,7 @@ export default function OrderStatusPage({
               </div>
             </div>
 
-            {bill && counter ? (
+            {stage === "confirming" ? null : bill && counter ? (
               <div className="p-5 rounded-2xl bg-card border border-line text-center text-ink space-y-3">
                 <p className="text-xs font-bold uppercase tracking-wider text-ink-muted">{dict.counter.pickupNumber}</p>
                 <p className="font-serif text-6xl font-bold tabular-nums text-ink">{bill.pickup_label}</p>
@@ -300,6 +333,7 @@ export default function OrderStatusPage({
           </div>
         )}
 
+        {stage !== "closed" && stage !== "declined" && (
         <div className="pt-4 text-center">
           <Link
             href={`/${lang}/menu`}
@@ -308,6 +342,7 @@ export default function OrderStatusPage({
             ← {dict.ui.backToMenu}
           </Link>
         </div>
+        )}
       </main>
 
       {/* Floating Chat Assistant */}

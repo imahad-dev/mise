@@ -412,7 +412,7 @@ test.describe.serial("9. Guest screens at 360 px on slow 3G", () => {
     await page.getByRole("button", { name: "Confirm Order" }).click();
     await expect(page).toHaveURL(/\/en\/orders\/[0-9a-f-]{36}$/, slow);
     const orderId = page.url().split("/").pop()!;
-    await expect(page.getByText("Received by Kitchen")).toBeVisible(slow);
+    await expect(page.getByText("Confirmed — it's being cooked")).toBeVisible(slow);
     await expect(page.getByRole("button", { name: "Pay bill" })).toBeVisible(slow);
     await fits("order");
 

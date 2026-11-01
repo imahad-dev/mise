@@ -47,7 +47,7 @@ export async function placeOrder(page: Page) {
 /** Confirm a table order and wait until the kitchen has it. */
 export async function confirmOrder(page: Page) {
   const id = await placeOrder(page);
-  await expect(page.getByText("Received by Kitchen")).toBeVisible();
+  await expect(page.getByText("Confirmed — it's being cooked")).toBeVisible();
   return id;
 }
 
