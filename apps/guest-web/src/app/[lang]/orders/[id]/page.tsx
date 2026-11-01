@@ -118,6 +118,18 @@ export default function OrderStatusPage({
   });
 
   const stage = order ? orderStage(order.status, order.cancel_reason) : null;
+  // A counter order's progress is told by its pickup card instead.
+  const stageText =
+    !stage || counter || order?.status === "awaiting_payment"
+      ? null
+      : {
+          confirming: dict.order.confirming,
+          cooking: dict.ui.statusPlaced,
+          ready: dict.ui.statusBumped,
+          declined: dict.order.declined,
+          closed: dict.order.thanks,
+          cancelled: dict.ui.statusCancelled,
+        }[stage];
   // Declined: back to the menu with the dishes in the cart, so nothing is lost.
   useEffect(() => {
     if (stage === "declined") router.replace(`/${lang}/menu?restore=${encodeURIComponent(id)}`);
@@ -167,6 +179,10 @@ export default function OrderStatusPage({
 
       {/* Main Content */}
       <main className="max-w-xl w-full mx-auto p-4 sm:p-6 space-y-6">
+        {/* Always mounted, so a screen reader hears each change of the order's status. */}
+        <p aria-live="polite" className="sr-only">
+          {stageText}
+        </p>
         <header className="border-b border-line pb-4 space-y-2">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
@@ -176,7 +192,7 @@ export default function OrderStatusPage({
             <CallWaiter lang={lang} />
           </div>
           {order && !counter && stage !== "confirming" && stage !== "declined" && stage !== "closed" && (
-            <div aria-live="polite">{getStatusBadge(order.status)}</div>
+            <div>{getStatusBadge(order.status)}</div>
           )}
         </header>
 
@@ -188,7 +204,7 @@ export default function OrderStatusPage({
 
         {stage === "closed" || stage === "declined" ? (
           <div className="p-6 rounded-2xl bg-card border border-line text-center space-y-4">
-            <p aria-live="polite" className="text-xl font-semibold text-ink">
+            <p className="text-xl font-semibold text-ink">
               {stage === "closed" ? dict.order.thanks : dict.order.declined}
             </p>
             <Link
@@ -201,7 +217,7 @@ export default function OrderStatusPage({
         ) : order ? (
           <div className="space-y-6">
             {stage === "confirming" && (
-              <div aria-live="polite" className="p-5 rounded-2xl bg-card border border-terracotta/60 space-y-2">
+              <div className="p-5 rounded-2xl bg-card border border-terracotta/60 space-y-2">
                 <p className="text-lg font-semibold text-ink">{dict.order.confirming}</p>
                 {big && <p className="text-base text-ink">{dict.order.bigFirst}</p>}
               </div>
