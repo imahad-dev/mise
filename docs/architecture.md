@@ -188,6 +188,7 @@ Immutable guest order header record.
 - `placed_at` (TIMESTAMPTZ, NOT NULL DEFAULT now())
 - `bumped_at` (TIMESTAMPTZ, Nullable)
 - `voided_at`, `voided_by` (FK → users.id), `void_reason` — staff void; `CHECK (voided_at IS NULL OR status = 'cancelled')`
+- `void_kind` — `staff` | `declined` | `table_closed`; the guest's cancel reason comes from this, never from the free-text `void_reason`
 - `collected_at`, `collected_by` (FK → users.id) — counter pickup handed over; `CHECK (collected_at IS NULL OR status = 'bumped')`
 - `created_at`, `updated_at` (TIMESTAMPTZ)
 *Constraint*: `UNIQUE (guest_session_id, idempotency_key)`
@@ -399,7 +400,7 @@ unreachable the limits fail open and log a warning.
 
 ### Guest Ordering (`guest-web`)
 - `POST /api/guest/sessions` — Initializes guest session from table QR token and dietary preferences.
-- `GET /api/guest/session` — Returns the active session.
+- `GET /api/guest/session` — Returns the active session, its `table_state` (`open`, `waiting` for a waiter to open the table, `closed` for a phone that ordered on a visit that has ended, `ended` for a phone scanned before the last reset) and whether the table number is still needed (`code_required`).
 - `PATCH /api/guest/session` — Updates active session preferences and language.
 - `GET /api/guest/menu` — Localized menu with dynamic allergen status flags. Excludes `unit_cost`.
 - `POST /api/orders` — Idempotent order placement with mandatory allergen acknowledgment checks.
