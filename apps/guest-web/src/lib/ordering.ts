@@ -6,19 +6,27 @@ export const MAX_ITEMS_PER_ORDER = 30;
 /** The API's 429 detail while a phone is locked out after wrong table numbers (routers/orders.py). */
 export const TOO_MANY_TRIES = "Too many tries. Please wait a minute and ask your waiter.";
 
+/**
+ * What the order bar shows (GuestSessionStatusResponse.table_state): normal ordering, waiting for a
+ * waiter to open the table, thanks for visiting (this phone ordered on a visit that ended), or scan again.
+ */
+export type TableMode = "open" | "waiting" | "closed" | "ended";
+
 /** Mirrors GuestSessionStatusResponse: whether this phone may order at its table now. */
 export interface GuestStatus {
   id: string;
-  sitting_open: boolean;
+  table_state: TableMode;
   code_required: boolean;
 }
 
-/** What the order bar shows: normal ordering, waiting for a waiter to open the table, or the visit is over. */
-export type TableMode = "open" | "waiting" | "closed";
-
-/** A closed table means "thanks for visiting" to a phone that ordered this visit, "a waiter is coming" to a new one. */
-export const tableMode = (status: GuestStatus, ordered: boolean): TableMode =>
-  status.sitting_open ? "open" : ordered ? "closed" : "waiting";
+/**
+ * Milliseconds until the next table status check, or null to stop. Only a waiting table (or an
+ * unknown one) is checked again; errors back off 5, 10, 20, then 30 s.
+ */
+export function nextStatusCheck(r: { state?: TableMode; failures: number; signedOut?: boolean }): number | null {
+  if (r.signedOut || (r.state && r.state !== "waiting")) return null;
+  return Math.min(5000 * 2 ** r.failures, 30_000);
+}
 
 export type OrderOutcome =
   | "not_open"
@@ -29,6 +37,7 @@ export type OrderOutcome =
   | "ended"
   | "allergen"
   | "unavailable"
+  | "already_sent"
   | "failed";
 
 /** What a refused POST /api/orders means for the guest; never a raw status or error code on screen. */
@@ -41,12 +50,28 @@ export function orderOutcome(status: number, body: unknown): OrderOutcome {
     if (error === "table_not_open") return "not_open";
     if (error === "allergen_ack_required") return "allergen";
     if (error === "unavailable_items") return "unavailable";
+    if (error === "already_sent") return "already_sent";
     if (detail === VISIT_ENDED) return "ended";
   }
   if (status === 422 && Array.isArray(detail) && detail.some((d) => String(d?.msg).includes("big order"))) {
     return "too_big";
   }
   return "failed";
+}
+
+const detailOf = (body: unknown) =>
+  ((body as { detail?: unknown } | null)?.detail ?? null) as Record<string, unknown> | null;
+
+/** The order this phone already sent under the cart's key (409 already_sent). */
+export function sentOrderId(body: unknown): string | null {
+  const id = detailOf(body)?.order_id;
+  return typeof id === "string" ? id : null;
+}
+
+/** The dishes the server refused as sold out (409 unavailable_items). */
+export function soldOutIds(body: unknown): string[] {
+  const items = detailOf(body)?.unavailable_items;
+  return Array.isArray(items) ? items.map((i) => String(i?.menu_item_id)) : [];
 }
 
 export const cartQuantity = (items: { quantity: number }[]) => items.reduce((s, i) => s + i.quantity, 0);
@@ -67,34 +92,23 @@ export const rememberNumber = (n: string | null) => {
   tableNumber = n;
 };
 
-const ORDERED_KEY = "mise_ordered_session";
+const RESTORED_KEY = "mise_restored_orders";
+// Order ids only (never a session id); memory backs up storage in private mode.
+const restored = new Set<string>();
 
-/** Marks that this phone ordered in guest session `sessionId`; a new scan is a new session. */
-export function markOrdered(sessionId: string): void {
-  try {
-    localStorage.setItem(ORDERED_KEY, sessionId);
-  } catch {
-    // private mode: the closed-table screen falls back to the waiting bar
-  }
-}
-
-export function hasOrdered(sessionId: string): boolean {
-  try {
-    return localStorage.getItem(ORDERED_KEY) === sessionId;
-  } catch {
-    return false;
-  }
-}
-
-const RESTORED_KEY = "mise_restored_order";
-
-/** True once per declined order, so going back to its page never adds the dishes twice. */
+/** True once per declined order, so going back to any of their pages never adds the dishes twice. */
 export function claimRestore(orderId: string): boolean {
   try {
-    if (localStorage.getItem(RESTORED_KEY) === orderId) return false;
-    localStorage.setItem(RESTORED_KEY, orderId);
+    for (const id of JSON.parse(sessionStorage.getItem(RESTORED_KEY) ?? "[]") as string[]) restored.add(id);
   } catch {
-    // no storage: restore anyway
+    // no storage or a bad value: memory alone
+  }
+  if (restored.has(orderId)) return false;
+  restored.add(orderId);
+  try {
+    sessionStorage.setItem(RESTORED_KEY, JSON.stringify([...restored].slice(-20)));
+  } catch {
+    // no storage: memory alone
   }
   return true;
 }

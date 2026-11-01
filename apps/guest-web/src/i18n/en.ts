@@ -156,6 +156,7 @@ export const en: TranslationDict = {
     confirming: "Sent! Your waiter is confirming your order.",
     declined: "Your waiter will come to your table to help.",
     unavailable: "Some dishes have just sold out. Please check your order.",
+    soldOut: "Sorry, sold out today: {names}. We took it off your order.",
     failed: "Your order didn't go through. Please try again or call a waiter.",
   },
 };

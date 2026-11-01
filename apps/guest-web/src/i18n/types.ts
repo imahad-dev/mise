@@ -155,6 +155,8 @@ export interface TranslationDict {
     confirming: string;
     declined: string;
     unavailable: string;
+    /** Contains {names}. */
+    soldOut: string;
     failed: string;
   };
 }

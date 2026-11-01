@@ -156,6 +156,7 @@ export const it: TranslationDict = {
     confirming: "Inviato! Il cameriere sta confermando il tuo ordine.",
     declined: "Il cameriere verrà al tuo tavolo per aiutarti.",
     unavailable: "Alcuni piatti sono appena finiti. Controlla il tuo ordine.",
+    soldOut: "Ci dispiace, finito per oggi: {names}. L'abbiamo tolto dal tuo ordine.",
     failed: "L'ordine non è partito. Riprova o chiama un cameriere.",
   },
 };

@@ -1,17 +1,43 @@
 import { describe, expect, it } from "vitest";
 import { VISIT_ENDED } from "./pay";
-import { TOO_MANY_TRIES, cartQuantity, orderOutcome, orderStage, tableMode, typeDigits } from "./ordering";
+import {
+  TOO_MANY_TRIES,
+  cartQuantity,
+  claimRestore,
+  nextStatusCheck,
+  orderOutcome,
+  orderStage,
+  sentOrderId,
+  soldOutIds,
+  typeDigits,
+} from "./ordering";
 
-const status = (sitting_open: boolean) => ({ id: "s1", sitting_open, code_required: false });
-
-describe("table mode", () => {
-  it("lets an open table order", () => {
-    expect(tableMode(status(true), false)).toBe("open");
-    expect(tableMode(status(true), true)).toBe("open");
+describe("checking whether the table is open", () => {
+  it("checks every 5 s while the guest waits for the waiter", () => {
+    expect(nextStatusCheck({ state: "waiting", failures: 0 })).toBe(5000);
   });
-  it("tells a new phone a waiter is coming and a phone that ordered thanks for visiting", () => {
-    expect(tableMode(status(false), false)).toBe("waiting");
-    expect(tableMode(status(false), true)).toBe("closed");
+  it("keeps trying when the status is not known yet", () => {
+    expect(nextStatusCheck({ failures: 0 })).toBe(5000);
+  });
+  it("backs off on errors: 5, 10, 20, then every 30 s", () => {
+    expect([1, 2, 3, 4, 9].map((failures) => nextStatusCheck({ failures }))).toEqual([
+      10_000, 20_000, 30_000, 30_000, 30_000,
+    ]);
+  });
+  it("stops once the table is open, closed or the visit ended, and when signed out", () => {
+    for (const state of ["open", "closed", "ended"] as const) {
+      expect(nextStatusCheck({ state, failures: 0 })).toBeNull();
+    }
+    expect(nextStatusCheck({ failures: 1, signedOut: true })).toBeNull();
+  });
+});
+
+describe("restoring a declined order", () => {
+  it("restores each order once, even an older one after a newer", () => {
+    expect(claimRestore("o1")).toBe(true);
+    expect(claimRestore("o2")).toBe(true);
+    expect(claimRestore("o1")).toBe(false);
+    expect(claimRestore("o2")).toBe(false);
   });
 });
 
@@ -28,6 +54,17 @@ describe("order outcome", () => {
       "unavailable",
     );
     expect(orderOutcome(409, { detail: VISIT_ENDED })).toBe("ended");
+    expect(orderOutcome(409, { detail: { error: "already_sent", order_id: "o1" } })).toBe("already_sent");
+  });
+  it("reads the order this phone already sent", () => {
+    expect(sentOrderId({ detail: { error: "already_sent", order_id: "o1" } })).toBe("o1");
+    expect(sentOrderId({ detail: "Order conflict" })).toBeNull();
+    expect(sentOrderId(null)).toBeNull();
+  });
+  it("reads which dishes sold out", () => {
+    const body = { detail: { error: "unavailable_items", unavailable_items: [{ menu_item_id: "m1", category: "mains" }] } };
+    expect(soldOutIds(body)).toEqual(["m1"]);
+    expect(soldOutIds({ detail: "x" })).toEqual([]);
   });
   it("recognises the server's 30-item refusal", () => {
     const body = { detail: [{ type: "value_error", msg: "Value error, That's a big order! Please ask your waiter." }] };
