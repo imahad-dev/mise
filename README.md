@@ -1,6 +1,6 @@
 # Mise — Restaurant Revenue Copilot & Kitchen Operations Platform
 
-Mise is an ordering, kitchen and revenue analytics platform for independent restaurants. Guests scan table QR codes to open a web menu with deterministic allergen filtering, English and Italian localization, and ordering. Dishes can have sizes (half / full, ½ kg / 1 kg, regular / large). Orders flow in real time to a Server-Sent Events (SSE) kitchen display system (KDS), and each table's orders gather on one bill that staff settle and print as a sample bill with illustrative Pakistani sales tax. Owners and staff sign in with their own accounts and see only the restaurants they belong to. Owners get a daily revenue brief computed from order history (KPIs, menu engineering, a backtested 7-day demand forecast and ranked actions), a deterministic what-if calculator, and visual menu ingestion. The language model only writes plain-language summaries of numbers that were already computed.
+Mise is an ordering, kitchen and revenue analytics platform for independent restaurants. Guests scan table QR codes to open a web menu with deterministic allergen filtering, English and Italian localization, and ordering. Dishes can have sizes (half / full, ½ kg / 1 kg, regular / large). Staff open a table before its guests can order and approve the first order of each visit with one tap; orders then flow in real time to a Server-Sent Events (SSE) kitchen display system (KDS), and each table's orders gather on one bill that staff settle and print as a sample bill with illustrative Pakistani sales tax. Owners and staff sign in with their own accounts and see only the restaurants they belong to. Owners get a daily revenue brief computed from order history (KPIs, menu engineering, a backtested 7-day demand forecast and ranked actions), a deterministic what-if calculator, and visual menu ingestion. The language model only writes plain-language summaries of numbers that were already computed.
 
 ---
 
@@ -11,7 +11,8 @@ Mise is an ordering, kitchen and revenue analytics platform for independent rest
   - English and Italian (only these two languages are supported).
   - Deterministic EU-14 allergen cross-referencing with explicit acknowledgment guards.
   - Size picker for dishes with sizes; prices in PKR (`Rs 2,100`) with the note "Prices exclude sales tax, which is added to your bill."
-  - **Table self-service**: guests at a table order more rounds onto the table's one open bill from any phone, call a waiter and choose how to pay, without staff having to come over first.
+  - **Opening a table and the first order**: a phone that scans a table staff have not opened sees "Your table will be ready in a moment. A waiter is on the way." and no Confirm Order button; the menu checks again every 5 s and switches to ordering without a reload once staff tap Open table. The first order of each visit shows "Sent! Your waiter is confirming your order." and reaches the kitchen only when staff approve it ("Confirmed — it's being cooked"); a waiting order is on no bill. If staff answer Not now, the phone goes back to the menu with "Your waiter will come to your table to help." and the dishes back in the cart. Later orders of the visit go straight to the kitchen. A venue can also ask for a 4-digit table number, which staff read out when they open the table; a phone types it once per visit ("That number didn't match. Please ask your waiter.", and a one-minute wait after 5 wrong tries). An open table with no order, call or payment for 90 minutes closes by itself, never while its bill is unpaid. Limits: 3 orders per phone per 5 minutes and 30 items per order; a first order above four times the venue's average dish price says "That's a big order! Your waiter will confirm it with you." Once the bill is settled, the phone's menu says "Thanks for visiting!".
+  - **Table self-service**: at an open table, guests order more rounds onto the table's one open bill from any phone, call a waiter and choose how to pay.
   - **Call waiter** (menu and order pages, tables only): "Need help", "Water, please" or the venue's own extra reason ("More naan / roti" at Angeethi House, "More napkins / cutlery" at Kehwa & Crumb). The button then reads "Waiter called · m:ss" until staff tap Done. One open call per table; a new call is refused for 60 s after the previous one.
   - **Pay from the table** ("Pay bill" on the order page): lines, subtotal and the total for each of the five payment methods with its tax rate. Cash → "A waiter is coming to collect Rs X."; Card → "A waiter is bringing the card machine."; JazzCash / Easypaisa, Raast QR and Bank transfer show the venue's payment details with copy buttons, and the guest pays in their own app, enters the transaction id and taps "I've paid" → "Payment sent — waiting for staff to confirm." Choosing a method records a claim and counts as asking for the bill; the latest claim wins until staff confirm. A retried "I've paid" after a dropped connection records the same claim, not a second one. Demo venues show sample details (`0000 SAMPLE`) under "Sample payment details — demo only. Do not send money." Orders staff voided show "Removed by staff: {item} ×{qty}" and leave the total. **Guests never settle a bill**: staff confirm, and the page then shows "Paid · Bill no. 0042 · thank you".
   - **Counter pickup** (Kehwa & Crumb "Counter", Angeethi House "Takeaway"): the counter QR's menu says "Counter order — pay first, then collect". After ordering the guest sees a large pickup number (`K-001`, `P-001`, per venue per local day, never wrapping) and the same Pay sheet. The order reaches the kitchen only once staff confirm payment ("Paid — preparing your order"), then "Ready — collect K-001 at the counter" and "Collected · enjoy!". No Call waiter at the counter; unpaid, unclaimed counter orders are cancelled after 30 minutes.
@@ -25,7 +26,7 @@ Mise is an ordering, kitchen and revenue analytics platform for independent rest
   - Real-time SSE order streaming with automatic reconnection and polling fallbacks.
   - High-visibility allergy alert banners extracted from immutable order item snapshots.
   - Each ticket line shows the chosen size ("Chicken Karahi — 1 kg").
-  - Counter tickets read "PICKUP K-001" in large type; pay-it-forward handouts read "PAY-IT-FORWARD · Chai". Unpaid counter orders never appear.
+  - Counter tickets read "PICKUP K-001" in large type; pay-it-forward handouts read "PAY-IT-FORWARD · Chai". Unpaid counter orders and first orders waiting for staff approval never appear.
   - Color-coded ticket aging (green under 10 minutes, amber from 10 minutes, red from 20 minutes).
   - Idempotent ticket bump workflow with a 60-second undo recall safety window.
 
@@ -41,6 +42,8 @@ Mise is an ordering, kitchen and revenue analytics platform for independent rest
     | State | When | Amber / red after |
     |---|---|---|
     | Free | nobody scanned since the table was cleared and no open bill | — |
+    | Guests waiting to order | a guest scanned but staff have not opened the table | 1 / 3 min |
+    | Approve order | the visit's first order waits for staff, with its item count and total ("1 item · Rs 300") | 1 / 2 min |
     | Seated, no order | a guest scanned since the last clear, settle or cancelled bill, no order yet | 3 / 5 min |
     | Ordered | open bill with an order the kitchen has not bumped | 12 / 18 min from the oldest such order |
     | Served | open bill, every active order bumped | timer only |
@@ -48,8 +51,8 @@ Mise is an ordering, kitchen and revenue analytics platform for independent rest
     | Needs clearing | bill settled or cancelled (every order voided) since the last clear, no newer open bill | 2 / 5 min from the settle or cancel |
     | Waiter called | an open call; overrides every other state | red at once |
 
-    Precedence: Waiter called > Paying > Ordered > Served > Seated > Needs clearing > Free, so dessert ordered after paying shows Ordered. The thresholds and states come from [docs/research/2026-10-25-floor-view-notes.md](docs/research/2026-10-25-floor-view-notes.md).
-  - Actions: Done (resolve the call), Mark cleared (refused while a bill is open, and while new guests are already seated unless staff choose "Clear anyway"), Open bill. A pay-it-forward tile shows "Pay-it-forward chai: N waiting" with **Give one**, which sends a free "PAY-IT-FORWARD · Chai" ticket to the kitchen and is disabled when none is waiting.
+    Precedence: Approve order > Waiter called > Guests waiting to order > Paying > Ordered > Served > Seated > Needs clearing > Free, so dessert ordered after paying shows Ordered. The thresholds and states come from [docs/research/2026-10-25-floor-view-notes.md](docs/research/2026-10-25-floor-view-notes.md).
+  - Actions: Open table (on a free table or one with guests waiting; when the venue asks for a table number, the tile shows it once in large type until Done), Approve / Not now (the waiting orders the tile shows; Not now leaves the table open), Close table (refused until the bill is settled; cancels any waiting orders), Done (resolve the call), Mark cleared (refused while a bill is open, and while new guests are already seated unless staff choose "Clear anyway"), Open bill. A pay-it-forward tile shows "Pay-it-forward chai: N waiting" with **Give one**, which sends a free "PAY-IT-FORWARD · Chai" ticket to the kitchen and is disabled when none is waiting.
 
 - **Bills and sample bill (`owner-web`, staff and owner)**
   - Bills page: Tables and Counter tabs, live over SSE, requested first, with the guest's claim on each row ("Guest paying: Raast QR · ref …", "Guest paying: cash", "Card machine requested"); a Cancelled tab.
@@ -61,6 +64,7 @@ Mise is an ordering, kitchen and revenue analytics platform for independent rest
 
 - **Owner Revenue Copilot (`owner-web`)**
   - Revenue brief (`/brief`) over the last 28 days: revenue, average order value and contribution margin from order snapshots; menu-engineering quadrant (star, plowhorse, puzzle, dog by median units and median unit margin) with one row per dish and size; top item pairings by lift; peak hours; payments and tax (cash vs digital share of bills and revenue, tax per rate, and the tax saved by digital payments).
+  - Service report (owner only, on the Brief page) for a chosen local day, over the tables closed that day: tables served, average time per table, busiest hour, the average wait for each step (first order, waiter confirming the first order, kitchen, bill), the slowest hour (among hours with at least 2 tables) and its slowest step, and how many tables went red on the Floor at each step. Tables closed without a bill and simulated tables are counted apart. Code computes every number; the one-line summary is model-written or a template, checked against the numbers.
   - 7-day forecast per item and daypart (lunch/dinner): seasonal-naive and 4-week-mean baselines plus a gradient-boosting model, compared in a 14-day rolling-origin backtest; the lowest-WAPE method is used and its WAPE is shown next to the naive baseline. Under 14 days of history it uses the baseline and is flagged low confidence. No weather, holidays or reservations are modeled.
   - 3 to 5 ranked actions (promote puzzles, reprice plowhorses, review dogs, prep targets) with evidence numbers and estimated weekly impact from documented formulas.
   - What-if calculator (`/ai`): price change, promotion or demand surge on recent sales with stated elasticity assumptions; returns weekly revenue and margin deltas. Cannibalization, capacity and staffing are not modeled.
@@ -313,8 +317,12 @@ bash scripts/check_branding.sh
 # Raast then cash at 16%, chai ordered during a pending payment, the café counter (K-001, paid
 # before the kitchen sees it, Ready, Collected, Undo), counter expiry, device labels / Joined late /
 # void, two staff confirming one bill, pay-it-forward chai, and every guest screen at 360 px on
-# slow 3G with "I've paid" surviving a dropped connection. Rows are backdated with psql in the
-# postgres container; there are no test-only endpoints.
+# slow 3G with "I've paid" surviving a dropped connection; then safer table ordering: a phone that
+# scans before staff open the table, Open table, Approve, a second round straight to the kitchen,
+# settle and Open table again; Not now; a dropped first order sent once; a wrong then right table
+# number. Tables are opened and first orders approved through the staff API where a story is not
+# about them. Rows are read and backdated (and the table-number flag set) with psql in the postgres
+# container; there are no test-only endpoints.
 LLM_PROVIDER=mock DEMO_MODE=true make up && make e2e
 
 # Complete CI pipeline
@@ -323,7 +331,7 @@ make ci
 # End-to-end Phase 1 check on a fresh stack (wipes dev volumes; mock LLM only):
 # migrations up/down/check, seed twice (two venues, demo users), demo data for both venues
 # (sequential + parallel), brief and what-if in PKR (with pay_forward) and Floor tiles for both
-# venues, a live order and its settled bill surviving regeneration, a café counter order (not in
+# venues, a live order (table opened, first order approved) and its settled bill surviving regeneration, a café counter order (not in
 # the kitchen until a settle with the right expected total) and a pay-it-forward give, browser
 # tests, edge proxy, then make ci
 LLM_PROVIDER=mock DEMO_MODE=true make verify-f

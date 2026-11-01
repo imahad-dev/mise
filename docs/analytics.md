@@ -14,7 +14,7 @@ Code: `services/api/src/services/` — `analytics.py`, `forecast.py`, `brief.py`
   taken when the order was placed. Later menu price or cost edits do not rewrite history.
 - Status filter: only `placed` and `bumped` orders count. `cancelled` orders (including staff
   voids and expired counter orders) and `awaiting_payment` counter orders (not paid yet) are
-  excluded.
+  excluded, as are `pending_approval` first orders waiting for staff (on no bill).
 - Paid filter: an order counts only once its bill is `settled`, so orders on an `open` or
   `cancelled` bill are never revenue; a void before settlement removes the order before it ever
   counts. A settled order is dated by its own placement time (`placed_at`), not by the settle
@@ -154,6 +154,30 @@ used. `summary_source` says which one was used.
 
 Only aggregate business data goes to the model. No guest, allergen, dietary or personal data is
 included.
+
+## Service report
+
+Code: `services/api/src/services/service_report.py` (pure), `GET …/service-report?day=` (owner
+only), shown on the Brief page. It reads one local day's table sittings (visits staff opened),
+those that closed that day, and their orders' timestamps.
+
+- **Tables served**: sittings closed by a settled or cancelled bill. Sittings closed by staff or
+  by the 90-minute idle timeout are only counted ("closed without a bill") and kept out of every
+  average; simulated sittings are counted apart and kept out of everything else.
+- **Average time per table**: opened to closed, over served sittings. **Busiest hour**: the local
+  hour in which most served sittings opened.
+- **Average wait per step**, over served sittings that have both timestamps: first order (opened
+  → earliest order placed), waiter confirming the first order (placed → its approval), kitchen
+  (per bumped order, from approval, or placement when it did not wait, to bump) and bill (bill
+  requested → settled).
+- **Slowest hour**: the hour with the longest average time per table, named only among hours
+  with at least 2 served sittings, with its slowest step.
+- **Red alerts**: every closed sitting replays the Floor thresholds (`floor.py` `THRESHOLDS`):
+  seated with no order, first order waiting for the waiter, order waiting for the kitchen and
+  bill waiting to be paid each count once when that clock passes red. Waiter calls are not
+  recorded per sitting, so they are not replayed.
+- The one-sentence summary is narrated like the brief's (numbers guard above), else a template.
+  A past day is cached for 7 days, today for 5 minutes.
 
 ## What-if calculator
 
