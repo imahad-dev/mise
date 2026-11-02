@@ -38,9 +38,10 @@ sql() { # sql "<query>" -> single value / rows, tab-separated
   docker compose exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -tAc "$0"' "$1"
 }
 
-clear_demo_limits() { # per-IP demo limits would block repeated runs from one machine
+clear_demo_limits() { # per-IP demo and guest-session limits would block repeated runs from one machine
   docker compose exec -T redis sh -c \
-    "redis-cli --scan --pattern 'rate_limit:demo*' | xargs -r redis-cli DEL" >/dev/null
+    "redis-cli --scan --pattern 'rate_limit:demo*' | xargs -r redis-cli DEL;
+     redis-cli --scan --pattern 'rate_limit:guest_session:*' | xargs -r redis-cli DEL" >/dev/null
 }
 
 counts() { sql "SELECT (SELECT count(*) FROM orders) || ' ' || (SELECT count(*) FROM order_item)"; }
