@@ -186,3 +186,20 @@ async def test_the_previous_partys_waiter_call_does_not_idle_close_a_new_sitting
     result = await get_open_sitting(db_session, table.id)
 
     assert result is not None and result.id == sitting.id
+
+
+async def test_an_idle_close_is_stamped_when_the_table_went_idle_not_when_it_was_noticed(
+    db_session,
+):
+    """The service report times the visit from closed_at: an idle close noticed 3h after the
+    open is stamped at opened_at + IDLE_TIMEOUT (or last activity + IDLE_TIMEOUT)."""
+    _, table = await _venue_table(db_session)
+    sitting = TableSitting(table_id=table.id, opened_at=func.now() - timedelta(hours=3))
+    db_session.add(sitting)
+    await db_session.flush()
+    await db_session.refresh(sitting)
+
+    assert await get_open_sitting(db_session, table.id) is None
+
+    assert sitting.close_reason == "idle_timeout"
+    assert sitting.closed_at == sitting.opened_at + IDLE_TIMEOUT

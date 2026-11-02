@@ -72,7 +72,10 @@ async def get_open_sitting(
     now = await db.scalar(select(func.clock_timestamp()))
     last_activity = await _last_activity(db, sitting)
     if is_idle(opened_at=sitting.opened_at, last_activity_at=last_activity, now=now):
-        ids = await _close(db, sitting, "idle_timeout", now, None)
+        # Stamped when the table went idle, not when someone noticed: the service report
+        # times the visit from closed_at.
+        since = max(sitting.opened_at, last_activity) if last_activity else sitting.opened_at
+        ids = await _close(db, sitting, "idle_timeout", min(now, since + IDLE_TIMEOUT), None)
         if cancelled is not None:
             cancelled.extend(ids)
         return None
