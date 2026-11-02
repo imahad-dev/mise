@@ -919,9 +919,11 @@ export interface paths {
         head?: never;
         /**
          * Patch Settings
-         * @description Update payment details, the extra call reason and the pickup prefix.
+         * @description Update payment details, the extra call reason, the pickup prefix and whether guests are
+         *     asked for a table number.
          *
-         *     Omitted fields stay as they are; a given `payment_details` replaces the whole object;
+         *     Omitted (or null) `payment_details` and `sitting_code_required` stay as they are; a given
+         *     `payment_details` replaces the whole object;
          *     `pickup_prefix: null` clears the prefix (pickup numbers then print K-…);
          *     `service_extra_label: null` or "" clears the extra call reason.
          */
@@ -2320,6 +2322,8 @@ export interface components {
             service_extra_label?: string | null;
             /** Pickup Prefix */
             pickup_prefix?: string | null;
+            /** Sitting Code Required */
+            sitting_code_required?: boolean | null;
         };
         /** PayForwardTotals */
         PayForwardTotals: {
@@ -2476,6 +2480,8 @@ export interface components {
             service_extra_label: string | null;
             /** Pickup Prefix */
             pickup_prefix: string | null;
+            /** Sitting Code Required */
+            sitting_code_required: boolean;
         };
         /** SettleBillRequest */
         SettleBillRequest: {
@@ -2994,6 +3000,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+            /** @description Too many new sessions from this address */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

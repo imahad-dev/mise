@@ -22,6 +22,7 @@ interface VenueSettingsBody {
   payment_details: Partial<Record<PaymentField, string>> & { sample?: boolean };
   service_extra_label: string | null;
   pickup_prefix: string | null;
+  sitting_code_required: boolean;
 }
 
 const PAYMENT_FIELDS = [
@@ -35,7 +36,7 @@ type PaymentField = (typeof PAYMENT_FIELDS)[number]["key"];
 const INPUT =
   "w-full rounded-lg border border-line bg-paper px-3 py-2 focus:border-terracotta focus:outline-none focus:ring-1 focus:ring-terracotta";
 
-/** Payment details guests pay into, the pickup prefix and the extra call reason (owner only). */
+/** Payment details guests pay into, the pickup prefix, the extra call reason and the table number (owner only). */
 function VenueSettings({ slug }: { slug: string }) {
   const [loaded, setLoaded] = useState<VenueSettingsBody | null>(null);
   const [form, setForm] = useState<Record<string, string>>({});
@@ -50,6 +51,7 @@ function VenueSettings({ slug }: { slug: string }) {
       ...Object.fromEntries(PAYMENT_FIELDS.map((f) => [f.key, body.payment_details[f.key] ?? ""])),
       pickup_prefix: body.pickup_prefix ?? "",
       service_extra_label: body.service_extra_label ?? "",
+      sitting_code_required: body.sitting_code_required ? "on" : "",
     });
   };
 
@@ -145,6 +147,23 @@ function VenueSettings({ slug }: { slug: string }) {
           {field("pickup_prefix", "Pickup prefix", "1–3 capital letters, e.g. K for K-042. Empty uses K.", { maxLength: 3 })}
           {field("service_extra_label", "Extra call reason", "Shown on Call waiter, e.g. Extra naan. Empty removes it.", { maxLength: 40 })}
         </div>
+        <label className="flex items-start gap-2 text-sm text-ink">
+          <input
+            type="checkbox"
+            checked={form.sitting_code_required === "on"}
+            onChange={(e) => {
+              setForm({ ...form, sitting_code_required: e.target.checked ? "on" : "" });
+              setSaved(false);
+            }}
+            className="mt-0.5 h-4 w-4 accent-terracotta"
+          />
+          <span>
+            <span className="font-semibold">Ask guests for a 4-digit table number before their first order</span>
+            <span className="block text-xs text-ink-muted">
+              When you open a table, the Floor shows the number to tell the guests. Tables already open keep their setting.
+            </span>
+          </span>
+        </label>
         {other.map(([k, message]) => (
           <p key={k} role="alert" className="text-sm text-danger-fg">
             {k === "form" ? message : `${k}: ${message}`}

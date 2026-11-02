@@ -302,6 +302,9 @@
           "404": {
             "description": "Unknown QR token"
           },
+          "429": {
+            "description": "Too many new sessions from this address"
+          },
           "422": {
             "description": "Validation Error",
             "content": {
@@ -2413,7 +2416,7 @@
           "owner"
         ],
         "summary": "Patch Settings",
-        "description": "Update payment details, the extra call reason and the pickup prefix.\n\nOmitted fields stay as they are; a given `payment_details` replaces the whole object;\n`pickup_prefix: null` clears the prefix (pickup numbers then print K-\u2026);\n`service_extra_label: null` or \"\" clears the extra call reason.",
+        "description": "Update payment details, the extra call reason, the pickup prefix and whether guests are\nasked for a table number.\n\nOmitted (or null) `payment_details` and `sitting_code_required` stay as they are; a given\n`payment_details` replaces the whole object;\n`pickup_prefix: null` clears the prefix (pickup numbers then print K-\u2026);\n`service_extra_label: null` or \"\" clears the extra call reason.",
         "operationId": "patch_settings_api_restaurants__slug__settings_patch",
         "parameters": [
           {
@@ -6613,6 +6616,17 @@
               }
             ],
             "title": "Pickup Prefix"
+          },
+          "sitting_code_required": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sitting Code Required"
           }
         },
         "type": "object",
@@ -7036,13 +7050,18 @@
               }
             ],
             "title": "Pickup Prefix"
+          },
+          "sitting_code_required": {
+            "type": "boolean",
+            "title": "Sitting Code Required"
           }
         },
         "type": "object",
         "required": [
           "payment_details",
           "service_extra_label",
-          "pickup_prefix"
+          "pickup_prefix",
+          "sitting_code_required"
         ],
         "title": "SettingsResponse"
       },

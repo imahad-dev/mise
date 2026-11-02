@@ -176,12 +176,17 @@ describe("counter helpers", () => {
       payment_details: { raast_id: null, jazzcash: "03001234567", easypaisa: null, iban: null, account_title: "Kehwa", sample: false },
       pickup_prefix: null,
       service_extra_label: null,
+      sitting_code_required: false,
     });
     expect(settingsBody({ pickup_prefix: "P", service_extra_label: "Extra naan" }, true)).toMatchObject({
       payment_details: { sample: true },
       pickup_prefix: "P",
       service_extra_label: "Extra naan",
     });
+  });
+  it("sends the table-number choice from its checkbox", () => {
+    expect(settingsBody({ sitting_code_required: "on" }, false).sitting_code_required).toBe(true);
+    expect(settingsBody({ sitting_code_required: "" }, false).sitting_code_required).toBe(false);
   });
   it("tags yesterday's pickup numbers", () => {
     expect(pickupText(row({}))).toBe("K-042");

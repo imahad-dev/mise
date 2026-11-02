@@ -213,13 +213,14 @@ export const collectedUndoLeft = (row: Pick<BillSummary, "pickup_label" | "colle
 
 export const SETTINGS_PAYMENT_FIELDS = ["raast_id", "jazzcash", "easypaisa", "iban", "account_title"] as const;
 
-/** The PATCH /settings body: every field, always; empty text clears (null). */
+/** The PATCH /settings body: every field, always; empty text clears (null); a checkbox is "on" or "". */
 export function settingsBody(form: Record<string, string | undefined>, sample: boolean) {
   const value = (key: string) => form[key]?.trim() || null;
   return {
     payment_details: { ...Object.fromEntries(SETTINGS_PAYMENT_FIELDS.map((k) => [k, value(k)])), sample },
     pickup_prefix: value("pickup_prefix"),
     service_extra_label: value("service_extra_label"),
+    sitting_code_required: form.sitting_code_required === "on",
   };
 }
 
