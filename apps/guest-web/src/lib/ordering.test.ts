@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { VISIT_ENDED } from "./pay";
 import {
+  ASK_WAITER,
   TOO_MANY_TRIES,
   cartQuantity,
   claimRestore,
@@ -45,6 +46,7 @@ describe("order outcome", () => {
   it("maps each refusal to a guest screen", () => {
     expect(orderOutcome(403, { detail: { error: "code_required" } })).toBe("code");
     expect(orderOutcome(429, { detail: TOO_MANY_TRIES })).toBe("locked");
+    expect(orderOutcome(429, { detail: ASK_WAITER })).toBe("ask_waiter");
     expect(orderOutcome(429, { detail: "You're ordering quickly! Please wait a moment and try again." })).toBe(
       "too_fast",
     );

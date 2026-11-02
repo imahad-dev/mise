@@ -149,6 +149,7 @@ export interface TranslationDict {
     tooManyTries: string;
     /** Contains {seconds}. */
     tryAgainIn: string;
+    askWaiter: string;
     tooFast: string;
     tooBig: string;
     bigFirst: string;

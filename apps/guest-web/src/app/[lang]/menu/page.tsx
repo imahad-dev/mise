@@ -303,6 +303,7 @@ export default function GuestMenuPage({
         showError(
           {
             ended: dict.pay.visitEnded,
+            ask_waiter: dict.order.askWaiter,
             too_fast: dict.order.tooFast,
             too_big: dict.order.tooBig,
             unavailable: dict.order.unavailable,

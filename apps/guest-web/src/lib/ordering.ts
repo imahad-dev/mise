@@ -5,6 +5,8 @@ export const MAX_ITEMS_PER_ORDER = 30;
 
 /** The API's 429 detail while a phone is locked out after wrong table numbers (routers/orders.py). */
 export const TOO_MANY_TRIES = "Too many tries. Please wait a minute and ask your waiter.";
+/** The API's 429 detail once a visit has had too many wrong table numbers from all phones. */
+export const ASK_WAITER = "Please ask your waiter to help you order.";
 
 /**
  * What the order bar shows (GuestSessionStatusResponse.table_state): normal ordering, waiting for a
@@ -32,6 +34,7 @@ export type OrderOutcome =
   | "not_open"
   | "code"
   | "locked"
+  | "ask_waiter"
   | "too_fast"
   | "too_big"
   | "ended"
@@ -45,7 +48,7 @@ export function orderOutcome(status: number, body: unknown): OrderOutcome {
   const detail = (body as { detail?: unknown } | null)?.detail;
   const error = (detail as { error?: unknown } | null)?.error;
   if (status === 403 && error === "code_required") return "code";
-  if (status === 429) return detail === TOO_MANY_TRIES ? "locked" : "too_fast";
+  if (status === 429) return detail === TOO_MANY_TRIES ? "locked" : detail === ASK_WAITER ? "ask_waiter" : "too_fast";
   if (status === 409) {
     if (error === "table_not_open") return "not_open";
     if (error === "allergen_ack_required") return "allergen";

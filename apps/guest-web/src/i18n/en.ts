@@ -150,6 +150,7 @@ export const en: TranslationDict = {
     numberWrong: "That number didn't match. Please ask your waiter.",
     tooManyTries: "Too many tries. Please wait a minute and ask your waiter.",
     tryAgainIn: "You can try again in {seconds} s",
+    askWaiter: "Please ask your waiter to help you order.",
     tooFast: "You're ordering quickly! Please wait a moment and try again.",
     tooBig: "That's a big order! Please ask your waiter.",
     bigFirst: "That's a big order! Your waiter will confirm it with you.",

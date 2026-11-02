@@ -150,6 +150,7 @@ export const it: TranslationDict = {
     numberWrong: "Il numero non corrisponde. Chiedi al cameriere.",
     tooManyTries: "Troppi tentativi. Aspetta un minuto e chiedi al cameriere.",
     tryAgainIn: "Puoi riprovare tra {seconds} s",
+    askWaiter: "Chiedi al cameriere di aiutarti a ordinare.",
     tooFast: "Stai ordinando molto in fretta! Aspetta un momento e riprova.",
     tooBig: "È un ordine grande! Chiedi al cameriere.",
     bigFirst: "È un ordine grande! Il cameriere lo confermerà con te.",
