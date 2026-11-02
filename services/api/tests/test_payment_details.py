@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from tests.helpers import as_member
 
 from src.config import settings
+from src.models.dining_table import DiningTable
 from src.models.restaurant import Restaurant
 from src.services.payment_details import PaymentDetailsError, validate_payment_details
 
@@ -146,6 +147,7 @@ async def test_owner_saves_and_reads_settings(client: AsyncClient, db_session: A
         "payment_details": {"iban": GOOD_IBAN, "account_title": "Venue"},
         "service_extra_label": "More naan",
         "pickup_prefix": "P",
+        "sitting_code_required": False,
     }
     got = await client.get(f"/api/restaurants/{r.slug}/settings")
     assert got.json() == resp.json()
@@ -229,3 +231,37 @@ def test_invisible_only_title_rejected(title):
             {"jazzcash": "03001234567", "account_title": title}, allow_sample=False
         )
     assert e.value.field == "account_title"
+
+
+async def test_owner_turns_the_table_number_on_and_off(
+    client: AsyncClient, db_session: AsyncSession
+):
+    """Off by default; on, every table opened after it gets a 4-digit number for guests."""
+    r = await _venue(db_session)
+    table = DiningTable(restaurant_id=r.id, label="T1", qr_token=uuid.uuid4().hex)
+    db_session.add(table)
+    await db_session.flush()
+    await as_member(client, db_session, r.id, "owner")
+    url = f"/api/restaurants/{r.slug}/settings"
+    assert (await client.get(url)).json()["sitting_code_required"] is False
+
+    resp = await client.patch(url, json={"sitting_code_required": True})
+    assert (resp.status_code, resp.json()["sitting_code_required"]) == (200, True)
+    assert (await client.patch(url, json={})).json()["sitting_code_required"] is True
+    opened = await client.post(f"/api/restaurants/{r.slug}/tables/{table.id}/sitting")
+    assert opened.status_code == 201
+    assert len(opened.json()["code"]) == 4
+
+    resp = await client.patch(url, json={"sitting_code_required": False})
+    assert resp.json()["sitting_code_required"] is False
+
+
+async def test_table_number_setting_is_404_for_non_members(
+    client: AsyncClient, db_session: AsyncSession
+):
+    r, other = await _venue(db_session), await _venue(db_session)
+    await as_member(client, db_session, other.id, "owner")
+    resp = await client.patch(
+        f"/api/restaurants/{r.slug}/settings", json={"sitting_code_required": True}
+    )
+    assert resp.status_code == 404

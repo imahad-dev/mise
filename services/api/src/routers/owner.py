@@ -409,6 +409,7 @@ async def get_settings(access: RestaurantAccess = Depends(owner_access)) -> Sett
         payment_details=r.payment_details,
         service_extra_label=r.service_extra_label,
         pickup_prefix=r.pickup_prefix,
+        sitting_code_required=r.sitting_code_required,
     )
 
 
@@ -429,9 +430,11 @@ async def patch_settings(
     access: RestaurantAccess = Depends(owner_access),
     db: AsyncSession = Depends(get_db),
 ) -> SettingsResponse:
-    """Update payment details, the extra call reason and the pickup prefix.
+    """Update payment details, the extra call reason, the pickup prefix and whether guests are
+    asked for a table number.
 
-    Omitted fields stay as they are; a given `payment_details` replaces the whole object;
+    Omitted (or null) `payment_details` and `sitting_code_required` stay as they are; a given
+    `payment_details` replaces the whole object;
     `pickup_prefix: null` clears the prefix (pickup numbers then print K-…);
     `service_extra_label: null` or "" clears the extra call reason.
     """
@@ -459,6 +462,8 @@ async def patch_settings(
         restaurant.payment_details = cleaned
     if "service_extra_label" in payload.model_fields_set:
         restaurant.service_extra_label = payload.service_extra_label
+    if payload.sitting_code_required is not None:  # tables already open keep their own rule
+        restaurant.sitting_code_required = payload.sitting_code_required
     if (
         "pickup_prefix" in payload.model_fields_set
         and payload.pickup_prefix != restaurant.pickup_prefix
@@ -485,6 +490,7 @@ async def patch_settings(
         payment_details=restaurant.payment_details,
         service_extra_label=restaurant.service_extra_label,
         pickup_prefix=restaurant.pickup_prefix,
+        sitting_code_required=restaurant.sitting_code_required,
     )
 
 

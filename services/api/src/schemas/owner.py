@@ -74,6 +74,8 @@ class PatchSettingsRequest(BaseModel):
     ) = None
     # Pickup numbers print as "<prefix>-042": 1-3 uppercase ASCII letters.
     pickup_prefix: Annotated[str, StringConstraints(pattern=r"^[A-Z]{1,3}$")] | None = None
+    # Ask guests for a 4-digit table number before their first order (tables opened from now on).
+    sitting_code_required: bool | None = None
 
     @field_validator("service_extra_label", mode="before")
     @classmethod
@@ -86,6 +88,7 @@ class SettingsResponse(BaseModel):
     payment_details: dict[str, Any]
     service_extra_label: str | None
     pickup_prefix: str | None
+    sitting_code_required: bool
 
 
 class StatusOkResponse(BaseModel):
