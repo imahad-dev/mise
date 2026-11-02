@@ -123,8 +123,8 @@ def table_state(f: TableFacts, now: datetime) -> TileState | None:
         (t for t in (f.last_settled_at, f.last_cancelled_at) if t is not None), default=None
     )
     reset = max((t for t in (f.cleared_at, ended, f.reset_at) if t is not None), default=None)
-    # An open bill is never Free.
-    if f.open_bill or _after(f.last_session_at, reset):
+    # An open bill or an open table is never Free (nor needs clearing: staff opened it).
+    if f.open_bill or f.sitting_opened_at is not None or _after(f.last_session_at, reset):
         seated_since = f.sitting_opened_at or f.last_session_at
         return TileState("seated", seated_since, _level("seated", seated_since, now))
     if _after(ended, f.cleared_at):

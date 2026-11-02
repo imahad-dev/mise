@@ -474,3 +474,14 @@ async def test_an_idle_close_ends_the_visit_but_not_a_phone_that_scanned_after_i
     t1 = tile(await floor(client, fv), "T1")
     assert (t1["state"], t1["waiting_for_open"]) == ("free", False)
     assert await guest_table_state(client, new) == "ended"
+
+
+async def test_an_open_table_nobody_has_scanned_is_seated_and_can_be_closed(client, db_session, fv):
+    await as_member(client, db_session, fv.r.id, "staff")
+    assert (await client.post(sitting_url(fv, fv.t3))).status_code == 201
+
+    t3 = tile(await floor(client, fv), "T3")
+    assert (t3["state"], t3["sitting_open"], t3["waiting_for_open"]) == ("seated", True, False)
+    assert t3["since"] is not None
+    assert (await client.delete(sitting_url(fv, fv.t3))).status_code == 200
+    assert tile(await floor(client, fv), "T3")["state"] == "free"

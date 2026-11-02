@@ -163,3 +163,22 @@ def test_seated_timer_starts_from_sitting_open_not_last_session():
     assert result.state == "seated"
     assert result.since == m(0)
     assert result.level == "red"  # seated: amber at 3, red at 5 -> 6 minutes since open
+
+
+def test_an_open_table_nobody_has_scanned_is_seated_from_the_open():
+    s = table_state(facts(sitting_open=True, sitting_opened_at=m(0)), m(4))
+    assert (s.state, s.since, s.level, s.waiting_for_open) == ("seated", m(0), "amber", False)
+
+
+def test_a_table_opened_after_a_settle_is_seated_not_needs_clearing():
+    f = facts(
+        last_session_at=m(0), last_settled_at=m(40), sitting_open=True, sitting_opened_at=m(41)
+    )
+    s = table_state(f, m(42))
+    assert (s.state, s.since) == ("seated", m(41))
+
+
+def test_a_closed_table_with_a_scan_after_the_reset_is_still_waiting_for_open():
+    f = facts(last_session_at=m(5), reset_at=m(4), sitting_open=False)
+    s = table_state(f, m(6))
+    assert (s.state, s.waiting_for_open) == ("seated", True)
