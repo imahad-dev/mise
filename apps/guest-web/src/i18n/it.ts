@@ -53,7 +53,7 @@ export const it: TranslationDict = {
     orderSuccess: "Ordine inviato con successo!",
     orderId: "Ordine #",
     orderStatus: "Stato Ordine",
-    statusPlaced: "Confermato: lo stiamo cucinando",
+    statusPlaced: "Confermato: lo stiamo preparando",
     statusBumped: "In preparazione",
     statusCancelled: "Annullato",
     reconnecting: "Riconnessione agli aggiornamenti live...",
@@ -143,7 +143,7 @@ export const it: TranslationDict = {
   },
   order: {
     waiting: "Il tuo tavolo sarà pronto tra un momento. Un cameriere sta arrivando.",
-    thanks: "Grazie della visita!",
+    thanks: "Grazie per la visita!",
     numberTitle: "Inserisci il numero di 4 cifre",
     numberHelp: "Il cameriere ti dirà il numero del tuo tavolo.",
     numberDigit: "Cifra {n} di 4",
@@ -157,7 +157,7 @@ export const it: TranslationDict = {
     confirming: "Inviato! Il cameriere sta confermando il tuo ordine.",
     declined: "Il cameriere verrà al tuo tavolo per aiutarti.",
     unavailable: "Alcuni piatti sono appena finiti. Controlla il tuo ordine.",
-    soldOut: "Ci dispiace, finito per oggi: {names}. L'abbiamo tolto dal tuo ordine.",
-    failed: "L'ordine non è partito. Riprova o chiama un cameriere.",
+    soldOut: "Ci dispiace, oggi non abbiamo più: {names}. Abbiamo aggiornato il tuo ordine.",
+    failed: "L'ordine non è stato inviato. Riprova o chiama un cameriere.",
   },
 };
