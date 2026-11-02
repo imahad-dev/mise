@@ -118,6 +118,8 @@ def upgrade() -> None:
 def downgrade() -> None:
     op.drop_index("idx_guest_session_sitting_id", table_name="guest_session")
     op.drop_column("guest_session", "sitting_id")
+    # The old constraint has no waiting status: a waiting order (never on a bill) is cancelled.
+    op.execute("UPDATE orders SET status = 'cancelled' WHERE status = 'pending_approval'")
     op.drop_constraint("chk_orders_status", "orders", type_="check")
     op.create_check_constraint(
         "chk_orders_status",
