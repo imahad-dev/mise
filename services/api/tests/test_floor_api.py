@@ -427,3 +427,50 @@ async def test_pending_order_of_a_closed_sitting_does_not_show_on_the_next_party
     t1 = tile(await floor(client, fv), "T1")
     assert t1["pending_order_id"] is None
     assert t1["state"] != "approval_needed"
+
+
+async def guest_table_state(client: AsyncClient, session: GuestSession) -> str:
+    guest(client, session)
+    resp = await client.get("/api/guest/session")
+    assert resp.status_code == 200, resp.text
+    return resp.json()["table_state"]
+
+
+async def test_closing_a_table_ends_the_visit_of_phones_that_scanned_during_it(
+    client, db_session, fv
+):
+    """A phone that scanned but never ordered must not keep the tile on "Guests waiting"
+    after staff close the table: closing resets the table like a settle."""
+    s1 = await seat(db_session, fv, fv.t1, minutes_ago=5)
+    await as_member(client, db_session, fv.r.id, "staff")
+    assert (await client.post(sitting_url(fv, fv.t1))).status_code == 201
+    assert (await client.delete(sitting_url(fv, fv.t1))).status_code == 200
+
+    t1 = tile(await floor(client, fv), "T1")
+    assert (t1["state"], t1["waiting_for_open"]) == ("free", False)
+    assert await guest_table_state(client, s1) == "ended"
+
+
+async def test_an_idle_close_ends_the_visit_but_not_a_phone_that_scanned_after_it(
+    client, db_session, fv
+):
+    """The idle close is stamped at opened + 90 min: a phone from that visit is ended, a phone
+    from the next party (scanned after the stamp, before anyone noticed) is still waiting."""
+    db_session.add(TableSitting(table_id=fv.t1.id, opened_at=func.now() - timedelta(hours=3)))
+    old = await seat(db_session, fv, fv.t1, minutes_ago=170)
+    new = await seat(db_session, fv, fv.t1, minutes_ago=10)
+    await as_member(client, db_session, fv.r.id, "staff")
+    resp = await client.delete(sitting_url(fv, fv.t1))  # finds it idle and closes it
+    assert (resp.status_code, resp.json()["detail"]) == (409, "This table is not open")
+
+    t1 = tile(await floor(client, fv), "T1")
+    assert (t1["state"], t1["sitting_open"], t1["waiting_for_open"]) == ("seated", False, True)
+    assert await guest_table_state(client, old) == "ended"
+    assert await guest_table_state(client, new) == "waiting"
+
+    await as_member(client, db_session, fv.r.id, "staff")
+    assert (await client.post(sitting_url(fv, fv.t1))).status_code == 201
+    assert (await client.delete(sitting_url(fv, fv.t1))).status_code == 200
+    t1 = tile(await floor(client, fv), "T1")
+    assert (t1["state"], t1["waiting_for_open"]) == ("free", False)
+    assert await guest_table_state(client, new) == "ended"

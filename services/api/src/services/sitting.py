@@ -13,7 +13,7 @@ from src.models.bill import Bill
 from src.models.order import Order
 from src.models.service_call import ServiceCall
 from src.models.sitting import TableSitting
-from src.services.bills import lock_open_bill, open_bill_for_table
+from src.services.bills import lock_open_bill, mark_table_reset, open_bill_for_table
 
 IDLE_TIMEOUT = timedelta(minutes=90)
 
@@ -104,9 +104,9 @@ async def close_sitting_for_table(
     user_id: uuid.UUID | None = None,
 ) -> list[uuid.UUID]:
     """Close the table's open sitting, if any, cancelling its waiting orders (`user_id` is the
-    staff member closing it, None for a system close). No-op for counter tables (never have
-    one) and for a table with no open sitting (settle/void paths call this unconditionally —
-    it's a no-op, not an error, when there's nothing to close).
+    staff member closing it, None for a system close). Either way the table resets: phones that
+    scanned until now belong to the visit that ended. Settle/void paths call this for every
+    table bill, including one opened before tables had sittings. Never called for counters.
 
     Returns the cancelled order ids; the caller commits, then publishes them
     (publish_declined)."""
@@ -118,6 +118,7 @@ async def close_sitting_for_table(
         )
     ).scalar_one_or_none()
     if sitting is None:
+        await mark_table_reset(db, table_id)
         return []
     return await _close(db, sitting, reason, now, user_id)
 
@@ -129,9 +130,12 @@ async def _close(
     now: datetime,
     user_id: uuid.UUID | None,
 ) -> list[uuid.UUID]:
-    """Close a locked sitting; its waiting orders (never on a bill) are cancelled with it."""
+    """Close a locked sitting and reset its table; its waiting orders (never on a bill) are
+    cancelled with it."""
     sitting.closed_at = now
     sitting.close_reason = reason
+    # An idle close is found late: phones that scanned after `now` are the next party's.
+    await mark_table_reset(db, sitting.table_id, now if reason == "idle_timeout" else None)
     pending = await _pending(db, sitting.id)
     for order in pending:
         order.status = "cancelled"

@@ -170,6 +170,7 @@ async def get_floor(
                 label=t.label,
                 kind=t.kind,
                 cleared_at=t.cleared_at,
+                reset_at=t.reset_at,
                 last_session_at=last_session.get(t.id),
                 open_bill=bill is not None,
                 paying_since=bill.bill_requested_at if bill else None,

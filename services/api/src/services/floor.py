@@ -51,6 +51,7 @@ class TableFacts:
     sitting_open: bool = True
     sitting_opened_at: datetime | None = None
     approval_pending: datetime | None = None  # placed_at of the sitting's unapproved first order
+    reset_at: datetime | None = None  # last clear, settle, cancel or closed table (any reason)
 
 
 @dataclass(frozen=True)
@@ -92,7 +93,7 @@ def table_state(f: TableFacts, now: datetime) -> TileState | None:
             max(
                 (
                     t
-                    for t in (f.last_settled_at, f.last_cancelled_at, f.cleared_at)
+                    for t in (f.last_settled_at, f.last_cancelled_at, f.cleared_at, f.reset_at)
                     if t is not None
                 ),
                 default=None,
@@ -121,7 +122,7 @@ def table_state(f: TableFacts, now: datetime) -> TileState | None:
     ended = max(
         (t for t in (f.last_settled_at, f.last_cancelled_at) if t is not None), default=None
     )
-    reset = max((t for t in (f.cleared_at, ended) if t is not None), default=None)
+    reset = max((t for t in (f.cleared_at, ended, f.reset_at) if t is not None), default=None)
     # An open bill is never Free.
     if f.open_bill or _after(f.last_session_at, reset):
         seated_since = f.sitting_opened_at or f.last_session_at
