@@ -4,6 +4,8 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
+import pytest
+from fastapi import HTTPException
 from sqlalchemy import func
 
 from src.models.bill import Bill
@@ -13,6 +15,7 @@ from src.models.restaurant import Restaurant
 from src.models.service_call import ServiceCall
 from src.models.session import GuestSession
 from src.models.sitting import TableSitting
+from src.services import sitting as svc
 from src.services.sitting import IDLE_TIMEOUT, generate_code, get_open_sitting, is_idle
 
 NOW = datetime(2026, 10, 31, 12, 0, 0, tzinfo=UTC)
@@ -203,3 +206,29 @@ async def test_an_idle_close_is_stamped_when_the_table_went_idle_not_when_it_was
 
     assert sitting.close_reason == "idle_timeout"
     assert sitting.closed_at == sitting.opened_at + IDLE_TIMEOUT
+
+
+async def test_approve_and_decline_lock_the_bill_before_the_sitting(db_session, monkeypatch):
+    """Bill before sitting everywhere, so no two paths can wait on each other's lock."""
+    r, table = await _venue_table(db_session)
+    calls: list[str] = []
+    real_bill, real_sitting = svc.lock_open_bill, svc.get_open_sitting
+
+    async def bill(*a, **kw):
+        calls.append("bill")
+        return await real_bill(*a, **kw)
+
+    async def sitting(*a, **kw):
+        calls.append("sitting")
+        return await real_sitting(*a, **kw)
+
+    monkeypatch.setattr(svc, "lock_open_bill", bill)
+    monkeypatch.setattr(svc, "get_open_sitting", sitting)
+    for act in (
+        lambda: svc.approve_pending(db_session, r.id, table.id, "user:test", [uuid.uuid4()]),
+        lambda: svc.decline_pending(db_session, r.id, table.id, uuid.uuid4(), [uuid.uuid4()]),
+    ):
+        calls.clear()
+        with pytest.raises(HTTPException):  # nothing waits: 409, after both locks
+            await act()
+        assert calls == ["bill", "sitting"]

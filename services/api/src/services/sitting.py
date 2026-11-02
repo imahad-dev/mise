@@ -246,6 +246,7 @@ async def decline_pending(
 ) -> bool:
     """Cancel the table's waiting orders if they are the ones the waiter saw (never on a bill,
     so no money moves); the table stays open. False on a replay. Caller commits."""
+    await lock_open_bill(db, restaurant_id, table_id)  # bill lock before the sitting lock
     sitting = await get_open_sitting(db, table_id)
     pending = await _waiting_as_seen(
         db, sitting, order_ids, Order.status == "cancelled", Order.void_kind == "declined"
