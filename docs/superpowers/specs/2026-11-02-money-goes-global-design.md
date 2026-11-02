@@ -85,8 +85,8 @@ meaning (no tax configured, previews absent, settle refused).
 
 ### The sums
 
-`tax_for(...)` stays one pure function and returns `(rate, tax, total)` for a subtotal (the sum of
-menu-price lines):
+One pure function, `charge_for(...)`, returns `(rate, tax, total, pricing)` for a subtotal (the
+sum of menu-price lines); the existing `tax_for(...)` keeps its `(rate, tax)` shape on top of it:
 
 - `on_top`: `tax = round(subtotal × rate)`, `total = subtotal + tax`. Identical to today.
 - `included`: `total = subtotal`; `tax = round(total × rate ÷ (1 + rate))`. The guest pays the
@@ -113,8 +113,9 @@ Examples: £24.00 at 20% → VAT £4.00, total £24.00. AED 105.00 at 5% → VAT
   a mismatch is refused. The request gains `service_included: bool` (default false).
 - **Reports.** Every sales figure built from order lines (revenue, margin, average order value,
   menu engineering, forecast inputs, what-if, the morning brief and the service report) is
-  reported **excluding VAT** for `included` venues: each local day's amount is divided by
-  `1 + rate` in force that day. One helper does this. Pakistan figures are unchanged (tax was
+  reported **excluding VAT** for `included` venues: each order's money is divided by
+  `1 + tax_rate` from its settled bill's snapshot (current menu prices in what-if use the rate
+  in force today). Pakistan figures are unchanged (tax was
   never in them). Labels say "excl. VAT" where it applies.
 - The cash-versus-digital tax card is shown only where the jurisdiction splits by method.
 - Pay-forward amounts stay at menu prices; nothing about pay-forward changes.
