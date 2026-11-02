@@ -152,6 +152,10 @@ APPROVED = ("placed", "bumped")
 
 
 async def has_approved_order(db: AsyncSession, sitting_id: uuid.UUID) -> bool:
+    # A voided order is cancelled, so it stops counting here. That cannot put an open sitting back
+    # into approval today: voiding the last active order on a bill cancels the bill, and that
+    # closes the sitting (routers/bills.py), so the next order needs a newly opened table anyway.
+    # Revisit if a bill can ever be emptied without being cancelled.
     return (
         await db.scalar(
             select(Order.id)
