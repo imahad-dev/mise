@@ -5,7 +5,7 @@ import math
 import uuid
 from datetime import UTC, datetime, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -25,6 +25,7 @@ from src.models.service_call import ServiceCall
 from src.models.session import GuestSession
 from src.models.sitting import TableSitting
 from src.redis_client import publish_event
+from src.request_limits import enforce_ip_limit
 from src.schemas.bills import GuestBillResponse
 from src.schemas.floor import (
     CurrentCallResponse,
@@ -75,10 +76,14 @@ router = APIRouter(prefix="/api/guest", tags=["guest"])
     "/sessions",
     response_model=GuestSessionResponse,
     status_code=status.HTTP_201_CREATED,
-    responses={404: {"description": "Unknown QR token"}},
+    responses={
+        404: {"description": "Unknown QR token"},
+        429: {"description": "Too many new sessions from this address"},
+    },
 )
 async def create_guest_session(
     payload: CreateGuestSessionRequest,
+    request: Request,
     response: Response,
     db: AsyncSession = Depends(get_db),
 ) -> GuestSessionResponse:
@@ -86,6 +91,11 @@ async def create_guest_session(
 
     Sets a 4-hour signed httpOnly mise_guest cookie.
     """
+    # Each new session gets fresh table-code tries. Generous: a whole venue's guests may share
+    # one Wi-Fi address.
+    await enforce_ip_limit(
+        request, "guest_session", 60, 600, "Please ask your waiter to help you order."
+    )
     stmt_table = select(DiningTable).where(DiningTable.qr_token == payload.qr_token)
     res_table = await db.execute(stmt_table)
     table = res_table.scalar_one_or_none()

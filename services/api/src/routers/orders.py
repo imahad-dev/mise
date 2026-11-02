@@ -110,24 +110,33 @@ async def order_response(
 
 CODE_TRIES = 5  # wrong table codes in a row before the phone waits CODE_LOCK_S
 CODE_LOCK_S = 60
+# Fresh phones each get CODE_TRIES, so the visit also counts wrong codes from every phone.
+VISIT_CODE_TRIES = 20  # wrong table codes at one sitting before no new phone may join it
+VISIT_LOCK_S = 600  # staff closing and reopening the table gives a new sitting (and code) sooner
 TOO_MANY_TRIES = "Too many tries. Please wait a minute and ask your waiter."
+ASK_WAITER = "Please ask your waiter to help you order."
 ORDERING_QUICKLY = "You're ordering quickly! Please wait a moment and try again."
 
 
 async def _check_table_code(session: GuestSession, sitting: TableSitting, code: str | None) -> None:
     """403 unless `code` is the visit's table code; 429 while the phone is locked out.
 
-    Redis errors skip the lockout (fail open, like the other limits); the code comparison
+    Redis errors skip the lockouts (fail open, like the other limits); the code comparison
     itself never does.
     """
     lock_key, tries_key = f"code_lock:{session.id}", f"code_attempts:{session.id}"
-    try:
-        locked = await redis_client.exists(lock_key)
-    except Exception as e:
-        logger.warning("Redis error reading %s: %s", lock_key, e)
-        locked = False
-    if locked:
-        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=TOO_MANY_TRIES)
+    visit_lock, visit_tries = (
+        f"code_lock:sitting:{sitting.id}",
+        f"code_attempts:sitting:{sitting.id}",
+    )
+    for key, detail in ((lock_key, TOO_MANY_TRIES), (visit_lock, ASK_WAITER)):
+        try:
+            locked = await redis_client.exists(key)
+        except Exception as e:
+            logger.warning("Redis error reading %s: %s", key, e)
+            locked = False
+        if locked:
+            raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=detail)
     if code is not None and sitting.code is not None and secrets.compare_digest(code, sitting.code):
         try:
             await redis_client.delete(tries_key)
@@ -135,6 +144,19 @@ async def _check_table_code(session: GuestSession, sitting: TableSitting, code: 
             logger.warning("Redis error clearing %s: %s", tries_key, e)
         return
     if code is not None:  # a missing code is a prompt, not a wrong try
+        try:
+            # The visit's count outlives any phone; a closed sitting is never asked again.
+            if await redis_client.incr(visit_tries) >= VISIT_CODE_TRIES:
+                await redis_client.set(visit_lock, "1", ex=VISIT_LOCK_S)
+                await redis_client.expire(visit_tries, 86400)
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=ASK_WAITER
+                )
+            await redis_client.expire(visit_tries, 86400)
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.warning("Redis error counting %s: %s", visit_tries, e)
         try:
             tries = await redis_client.incr(tries_key)
             if tries == 1:

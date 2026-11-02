@@ -22,7 +22,7 @@ from src.models.restaurant import Restaurant
 from src.models.session import GuestSession
 from src.models.sitting import TableSitting
 from src.redis_client import redis_client
-from src.services.bills import VISIT_ENDED, session_is_current
+from src.services.bills import VISIT_ENDED, session_is_current, session_started_at
 
 CHANGED = "The order changed. Please check the table again."
 
@@ -823,3 +823,75 @@ async def test_approving_an_order_of_another_table_is_refused(client, db_session
             resp = await act(client, tv, what, ids)
             assert (resp.status_code, resp.json()["detail"]) == (409, CHANGED)
     assert [(await order_row(db_session, o)).status for o in (o1, o2)] == ["pending_approval"] * 2
+
+
+ASK_WAITER = "Please ask your waiter to help you order."
+
+
+async def test_twenty_wrong_codes_across_phones_stop_new_phones_until_the_table_reopens(
+    client, db_session, tv
+):
+    """Fresh phones each get 5 tries; the visit itself gets 20 wrong tries in total, then no new
+    phone may join it (even with the right code) until staff close and reopen the table."""
+    tv.r.sitting_code_required = True
+    await db_session.flush()
+    await staff(client, db_session, tv)
+    opened = await client.post(f"/api/restaurants/{tv.r.slug}/tables/{tv.t1.id}/sitting")
+    assert opened.status_code == 201, opened.text
+    sitting_id, code = opened.json()["sitting_id"], opened.json()["code"]
+    wrong = "0000" if code != "0000" else "1111"
+    await redis_client.delete(
+        f"code_attempts:sitting:{sitting_id}", f"code_lock:sitting:{sitting_id}"
+    )
+
+    for phone in range(5):
+        s = await new_session(db_session, tv)
+        for attempt in range(4):
+            resp = await post_order(client, s, tv.naan, code=wrong)
+            if phone == 4 and attempt == 3:  # the 20th wrong try at this visit
+                assert (resp.status_code, resp.json()["detail"]) == (429, ASK_WAITER)
+            else:
+                assert resp.status_code == 403, resp.text
+
+    late = await new_session(db_session, tv)
+    resp = await post_order(client, late, tv.naan, code=code)
+    assert (resp.status_code, resp.json()["detail"]) == (429, ASK_WAITER)
+    assert (
+        await db_session.scalar(select(Order.id).where(Order.guest_session_id == late.id))
+    ) is None
+
+    # Staff close and reopen: a new visit with a new code, and nothing counted against it.
+    await staff(client, db_session, tv)
+    url = f"/api/restaurants/{tv.r.slug}/tables/{tv.t1.id}/sitting"
+    assert (await client.delete(url)).status_code == 200
+    reopened = await client.post(url)
+    assert reopened.status_code == 201
+    fresh = await new_session(db_session, tv)
+    fresh.created_at = await session_started_at(db_session, tv.t1.id)  # scanned after the close
+    await db_session.flush()
+    ok = await post_order(client, fresh, tv.naan, code=reopened.json()["code"])
+    assert ok.status_code == 201, ok.text
+
+
+async def test_redis_down_never_lets_a_wrong_code_through(client, db_session, tv, monkeypatch):
+    await open_table(db_session, tv.t1.id, code="4821")
+
+    async def down(*args, **kwargs):
+        raise ConnectionError("redis down")
+
+    for name in ("exists", "incr", "expire", "set", "delete"):
+        monkeypatch.setattr(redis_client, name, down)
+    resp = await post_order(client, tv.s1, tv.naan, code="0000")
+    assert resp.status_code == 403
+    ok = await post_order(client, tv.s1, tv.naan, code="4821")
+    assert ok.status_code == 201, ok.text
+
+
+async def test_new_guest_sessions_are_limited_per_ip(client, tv):
+    await redis_client.delete("rate_limit:guest_session:127.0.0.1")
+    body = {"qr_token": tv.t1.qr_token, "language": "en"}
+    for _ in range(60):
+        assert (await client.post("/api/guest/sessions", json=body)).status_code == 201
+    resp = await client.post("/api/guest/sessions", json=body)
+    assert (resp.status_code, resp.json()["detail"]) == (429, ASK_WAITER)
+    await redis_client.delete("rate_limit:guest_session:127.0.0.1")
