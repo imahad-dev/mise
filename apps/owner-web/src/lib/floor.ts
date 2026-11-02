@@ -15,7 +15,6 @@ export interface FloorTile {
   call_id: string | null;
   sitting_open: boolean;
   waiting_for_open: boolean; // guests scanned before staff opened the table
-  pending_order_id: string | null;
   pending_order_ids: string[]; // sent back as-is to approve or decline exactly what the tile showed
   pending_order_total: string | null;
   pending_order_items: number | null; // sum of quantities

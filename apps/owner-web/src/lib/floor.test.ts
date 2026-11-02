@@ -17,7 +17,7 @@ import {
 const tile = (label: string, level: FloorTile["level"]): FloorTile => ({
   table_id: label, label, state: "seated", level, since: null, reason: null, reason_label: null,
   running_total: null, bill_id: null, call_id: null, sitting_open: true, waiting_for_open: false,
-  pending_order_id: null, pending_order_ids: [], pending_order_total: null, pending_order_items: null,
+  pending_order_ids: [], pending_order_total: null, pending_order_items: null,
 });
 
 describe("floor helpers", () => {

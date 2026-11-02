@@ -188,8 +188,8 @@ async def test_second_order_while_the_first_waits_also_waits_and_floor_sums_both
     assert second.json()["status"] == "pending_approval"
     await staff(client, db_session, tv)
     t = await floor_tile(client, tv)
-    assert t["pending_order_id"] == first["id"]  # the oldest
-    assert t["pending_order_ids"] == [first["id"], second.json()["id"]]
+    assert t["pending_order_ids"] == [first["id"], second.json()["id"]]  # oldest first
+    assert "pending_order_id" not in t  # the ids list says it all
     assert Decimal(t["pending_order_total"]) == Decimal("3360.00")
     assert t["pending_order_items"] == 4
 
@@ -209,7 +209,7 @@ async def test_approve_sends_every_waiting_order_to_the_kitchen_on_one_bill(clie
     assert {o1, o2} <= {o["id"] for o in kitchen.json()["orders"]}
     t = await floor_tile(client, tv)
     assert Decimal(t["running_total"]) == Decimal("1160.00")
-    assert t["pending_order_id"] is None
+    assert t["pending_order_ids"] == []
 
     # Once approved, the visit's later orders go straight to the kitchen on the same bill.
     later = await post_order(client, tv.s1, tv.naan, 2)

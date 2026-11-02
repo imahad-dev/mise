@@ -26,8 +26,6 @@ class FloorTile(BaseModel):
     call_id: uuid.UUID | None
     sitting_open: bool
     waiting_for_open: bool  # guests scanned but staff haven't opened the table
-    # Set when state == "approval_needed": the oldest waiting order, a key only (the timer).
-    pending_order_id: uuid.UUID | None
     # Every waiting order the tile shows, oldest first: approve/decline send them back and act
     # only while they are still exactly what waits.
     pending_order_ids: list[uuid.UUID]

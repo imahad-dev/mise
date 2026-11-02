@@ -342,7 +342,7 @@ async def test_floor_shows_waiting_guests_and_pending_approval(client, db_sessio
     await as_member(client, db_session, fv.r.id, "staff")
     t1 = tile(await floor(client, fv), "T1")
     assert (t1["state"], t1["sitting_open"], t1["waiting_for_open"]) == ("seated", False, True)
-    assert t1["pending_order_id"] is None
+    assert t1["pending_order_ids"] == []
 
     opened = await client.post(sitting_url(fv, fv.t1))
     assert opened.status_code == 201
@@ -367,7 +367,7 @@ async def test_floor_shows_waiting_guests_and_pending_approval(client, db_sessio
     t1 = tile(await floor(client, fv), "T1")
     assert t1["state"] == "approval_needed"
     assert (t1["sitting_open"], t1["waiting_for_open"]) == (True, False)
-    assert t1["pending_order_id"] == order_id
+    assert t1["pending_order_ids"] == [order_id]
     assert (t1["pending_order_total"], t1["pending_order_items"]) == ("180.00", 3)
 
 
@@ -425,7 +425,7 @@ async def test_pending_order_of_a_closed_sitting_does_not_show_on_the_next_party
 
     assert (await client.post(sitting_url(fv, fv.t1))).status_code == 201
     t1 = tile(await floor(client, fv), "T1")
-    assert t1["pending_order_id"] is None
+    assert t1["pending_order_ids"] == []
     assert t1["state"] != "approval_needed"
 
 

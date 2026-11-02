@@ -4345,18 +4345,6 @@
             "type": "boolean",
             "title": "Waiting For Open"
           },
-          "pending_order_id": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "uuid"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Pending Order Id"
-          },
           "pending_order_ids": {
             "items": {
               "type": "string",
@@ -4402,7 +4390,6 @@
           "call_id",
           "sitting_open",
           "waiting_for_open",
-          "pending_order_id",
           "pending_order_ids",
           "pending_order_total",
           "pending_order_items"

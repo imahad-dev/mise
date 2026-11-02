@@ -8,7 +8,7 @@ import FloorPage from "./page";
 const tile: FloorTile = {
   table_id: "t1", label: "T1", state: "approval_needed", level: "amber", since: null, reason: null,
   reason_label: null, running_total: null, bill_id: null, call_id: null, sitting_open: true,
-  waiting_for_open: false, pending_order_id: "o1", pending_order_ids: ["o1"], pending_order_total: "500.00",
+  waiting_for_open: false, pending_order_ids: ["o1"], pending_order_total: "500.00",
   pending_order_items: 2,
 };
 const floor: FloorResponse = {

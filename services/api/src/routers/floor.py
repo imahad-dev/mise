@@ -203,7 +203,6 @@ async def get_floor(
                 call_id=call.id if call else None,
                 sitting_open=sitting is not None,
                 waiting_for_open=tile.waiting_for_open,
-                pending_order_id=pend[0].id if pend else None,
                 pending_order_ids=[o.id for o in pend],
                 pending_order_total=sum((o.total for o in pend), Decimal("0")) if pend else None,
                 pending_order_items=sum(i.quantity for o in pend for i in o.items)

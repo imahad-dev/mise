@@ -1545,8 +1545,6 @@ export interface components {
             sitting_open: boolean;
             /** Waiting For Open */
             waiting_for_open: boolean;
-            /** Pending Order Id */
-            pending_order_id: string | null;
             /** Pending Order Ids */
             pending_order_ids: string[];
             /** Pending Order Total */
