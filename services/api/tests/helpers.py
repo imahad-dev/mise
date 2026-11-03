@@ -4,6 +4,7 @@ import time
 import uuid
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from decimal import Decimal
 
 from httpx import AsyncClient
 from sqlalchemy import select
@@ -65,6 +66,10 @@ async def settle(
         "expected_total": preview["total"] if preview else "0",
         **extra,
     }
+    if preview and extra.get("service_included"):
+        body["expected_total"] = str(
+            Decimal(preview["total"]) + Decimal(detail.json()["service_charge_amount"])
+        )
     return await client.post(f"{base}/settle", json=body)
 
 

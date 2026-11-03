@@ -11,6 +11,7 @@
       "tax_rate": "0.16",
       "tax_amount": "0.00",
       "total": "0.00",
+      "tax_included": false,
       "method": "cash",
       "label": "Cash"
     },
@@ -23,6 +24,7 @@
       "tax_rate": "0.05",
       "tax_amount": "1.00",
       "total": "11.00",
+      "tax_included": false,
       "method": "card",
       "label": "Card"
     },
@@ -35,6 +37,7 @@
       "tax_rate": "0.15",
       "tax_amount": "5.00",
       "total": "35.00",
+      "tax_included": false,
       "method": "cash",
       "label": "Cash"
     },
@@ -47,6 +50,7 @@
       "tax_rate": "0.05",
       "tax_amount": "117.00",
       "total": "2457.00",
+      "tax_included": false,
       "method": "card",
       "label": "Card"
     },
@@ -59,6 +63,7 @@
       "tax_rate": "0.08",
       "tax_amount": "187.00",
       "total": "2527.00",
+      "tax_included": false,
       "method": "card",
       "label": "Card"
     },
@@ -71,6 +76,7 @@
       "tax_rate": "0.16",
       "tax_amount": "3802.00",
       "total": "27563.00",
+      "tax_included": false,
       "method": "cash",
       "label": "Cash"
     },
@@ -83,6 +89,7 @@
       "tax_rate": "0.16",
       "tax_amount": "4128.00",
       "total": "29928.00",
+      "tax_included": false,
       "method": "cash",
       "label": "Cash"
     },
@@ -95,6 +102,7 @@
       "tax_rate": "0.16",
       "tax_amount": "1292.00",
       "total": "9369.00",
+      "tax_included": false,
       "method": "cash",
       "label": "Cash"
     },
@@ -107,6 +115,7 @@
       "tax_rate": "0.15",
       "tax_amount": "19041.00",
       "total": "145983.00",
+      "tax_included": false,
       "method": "bank_transfer",
       "label": "Bank transfer"
     },
@@ -119,6 +128,7 @@
       "tax_rate": "0.05",
       "tax_amount": "1197.00",
       "total": "25127.00",
+      "tax_included": false,
       "method": "card",
       "label": "Card"
     },
@@ -131,6 +141,7 @@
       "tax_rate": "0.16",
       "tax_amount": "21101.00",
       "total": "152981.00",
+      "tax_included": false,
       "method": "cash",
       "label": "Cash"
     },
@@ -143,6 +154,7 @@
       "tax_rate": "0.16",
       "tax_amount": "27987.00",
       "total": "202904.00",
+      "tax_included": false,
       "method": "cash",
       "label": "Cash"
     },
@@ -155,6 +167,7 @@
       "tax_rate": "0.15",
       "tax_amount": "23651.00",
       "total": "181321.00",
+      "tax_included": false,
       "method": "cash",
       "label": "Cash"
     },
@@ -167,6 +180,7 @@
       "tax_rate": "0.16",
       "tax_amount": "24285.00",
       "total": "176067.00",
+      "tax_included": false,
       "method": "bank_transfer",
       "label": "Bank transfer"
     },
@@ -179,6 +193,7 @@
       "tax_rate": "0.15",
       "tax_amount": "2480.00",
       "total": "19015.00",
+      "tax_included": false,
       "method": "bank_transfer",
       "label": "Bank transfer"
     },
@@ -191,6 +206,7 @@
       "tax_rate": "0.05",
       "tax_amount": "4656.00",
       "total": "97779.00",
+      "tax_included": false,
       "method": "raast",
       "label": "Raast QR"
     },
@@ -203,6 +219,7 @@
       "tax_rate": "0.05",
       "tax_amount": "5943.00",
       "total": "124795.00",
+      "tax_included": false,
       "method": "card",
       "label": "Card"
     },
@@ -215,6 +232,7 @@
       "tax_rate": "0.16",
       "tax_amount": "2961.00",
       "total": "21465.00",
+      "tax_included": false,
       "method": "bank_transfer",
       "label": "Bank transfer"
     },
@@ -227,6 +245,7 @@
       "tax_rate": "0.05",
       "tax_amount": "9306.00",
       "total": "195431.00",
+      "tax_included": false,
       "method": "card",
       "label": "Card"
     },
@@ -239,6 +258,7 @@
       "tax_rate": "0.05",
       "tax_amount": "710.00",
       "total": "14911.00",
+      "tax_included": false,
       "method": "card",
       "label": "Card"
     },
@@ -251,6 +271,7 @@
       "tax_rate": "0.05",
       "tax_amount": "987.00",
       "total": "20732.00",
+      "tax_included": false,
       "method": "card",
       "label": "Card"
     },
@@ -263,6 +284,7 @@
       "tax_rate": "0.08",
       "tax_amount": "569.00",
       "total": "7680.00",
+      "tax_included": false,
       "method": "card",
       "label": "Card"
     },
@@ -275,6 +297,7 @@
       "tax_rate": "0.16",
       "tax_amount": "5924.00",
       "total": "42946.00",
+      "tax_included": false,
       "method": "bank_transfer",
       "label": "Bank transfer"
     },
@@ -287,6 +310,7 @@
       "tax_rate": "0.05",
       "tax_amount": "519.00",
       "total": "10897.00",
+      "tax_included": false,
       "method": "raast",
       "label": "Raast QR"
     },
@@ -299,6 +323,7 @@
       "tax_rate": "0.15",
       "tax_amount": "6973.00",
       "total": "53462.00",
+      "tax_included": false,
       "method": "cash",
       "label": "Cash"
     },
@@ -311,6 +336,7 @@
       "tax_rate": "0.05",
       "tax_amount": "2026.00",
       "total": "42540.00",
+      "tax_included": false,
       "method": "wallet",
       "label": "JazzCash / Easypaisa"
     },
@@ -323,6 +349,7 @@
       "tax_rate": "0.16",
       "tax_amount": "16198.00",
       "total": "117433.00",
+      "tax_included": false,
       "method": "bank_transfer",
       "label": "Bank transfer"
     },
@@ -335,6 +362,7 @@
       "tax_rate": "0.05",
       "tax_amount": "7640.00",
       "total": "160433.00",
+      "tax_included": false,
       "method": "wallet",
       "label": "JazzCash / Easypaisa"
     },
@@ -347,6 +375,7 @@
       "tax_rate": "0.15",
       "tax_amount": "18514.00",
       "total": "141941.00",
+      "tax_included": false,
       "method": "cash",
       "label": "Cash"
     },
@@ -359,6 +388,7 @@
       "tax_rate": "0.08",
       "tax_amount": "15384.00",
       "total": "207678.00",
+      "tax_included": false,
       "method": "raast",
       "label": "Raast QR"
     },
@@ -371,6 +401,7 @@
       "tax_rate": "0.05",
       "tax_amount": "3605.00",
       "total": "75705.00",
+      "tax_included": false,
       "method": "wallet",
       "label": "JazzCash / Easypaisa"
     },
@@ -383,6 +414,7 @@
       "tax_rate": "0.05",
       "tax_amount": "5716.00",
       "total": "120026.00",
+      "tax_included": false,
       "method": "raast",
       "label": "Raast QR"
     },
@@ -395,6 +427,7 @@
       "tax_rate": "0.05",
       "tax_amount": "4939.00",
       "total": "103720.00",
+      "tax_included": false,
       "method": "raast",
       "label": "Raast QR"
     },
@@ -407,6 +440,7 @@
       "tax_rate": "0.05",
       "tax_amount": "4527.00",
       "total": "95058.00",
+      "tax_included": false,
       "method": "card",
       "label": "Card"
     },
@@ -419,6 +453,7 @@
       "tax_rate": "0.16",
       "tax_amount": "11296.00",
       "total": "81899.00",
+      "tax_included": false,
       "method": "bank_transfer",
       "label": "Bank transfer"
     },
@@ -431,6 +466,7 @@
       "tax_rate": "0.05",
       "tax_amount": "9446.00",
       "total": "198369.00",
+      "tax_included": false,
       "method": "raast",
       "label": "Raast QR"
     },
@@ -443,6 +479,7 @@
       "tax_rate": "0.05",
       "tax_amount": "2807.00",
       "total": "58945.00",
+      "tax_included": false,
       "method": "raast",
       "label": "Raast QR"
     },
@@ -455,6 +492,7 @@
       "tax_rate": "0.15",
       "tax_amount": "8627.00",
       "total": "66139.00",
+      "tax_included": false,
       "method": "cash",
       "label": "Cash"
     },
@@ -467,6 +505,7 @@
       "tax_rate": "0.08",
       "tax_amount": "6409.00",
       "total": "86526.00",
+      "tax_included": false,
       "method": "wallet",
       "label": "JazzCash / Easypaisa"
     },
@@ -479,6 +518,7 @@
       "tax_rate": "0.16",
       "tax_amount": "10797.00",
       "total": "78280.00",
+      "tax_included": false,
       "method": "bank_transfer",
       "label": "Bank transfer"
     },
@@ -491,6 +531,7 @@
       "tax_rate": "0.05",
       "tax_amount": "1328.00",
       "total": "27881.00",
+      "tax_included": false,
       "method": "card",
       "label": "Card"
     },
@@ -503,6 +544,7 @@
       "tax_rate": "0.08",
       "tax_amount": "10497.00",
       "total": "141704.00",
+      "tax_included": false,
       "method": "raast",
       "label": "Raast QR"
     },
@@ -515,6 +557,7 @@
       "tax_rate": "0.05",
       "tax_amount": "6751.00",
       "total": "141764.00",
+      "tax_included": false,
       "method": "card",
       "label": "Card"
     },
@@ -527,6 +570,7 @@
       "tax_rate": "0.16",
       "tax_amount": "8525.00",
       "total": "61808.00",
+      "tax_included": false,
       "method": "bank_transfer",
       "label": "Bank transfer"
     },
@@ -539,6 +583,7 @@
       "tax_rate": "0.05",
       "tax_amount": "7004.00",
       "total": "147078.00",
+      "tax_included": false,
       "method": "wallet",
       "label": "JazzCash / Easypaisa"
     },
@@ -551,6 +596,7 @@
       "tax_rate": "0.15",
       "tax_amount": "18577.00",
       "total": "142423.00",
+      "tax_included": false,
       "method": "bank_transfer",
       "label": "Bank transfer"
     },
@@ -563,6 +609,7 @@
       "tax_rate": "0.05",
       "tax_amount": "630.00",
       "total": "13231.00",
+      "tax_included": false,
       "method": "card",
       "label": "Card"
     },
@@ -575,6 +622,7 @@
       "tax_rate": "0.08",
       "tax_amount": "11452.00",
       "total": "154599.00",
+      "tax_included": false,
       "method": "card",
       "label": "Card"
     },
@@ -587,6 +635,7 @@
       "tax_rate": "0.05",
       "tax_amount": "22.00",
       "total": "469.00",
+      "tax_included": false,
       "method": "card",
       "label": "Card"
     },
@@ -599,6 +648,7 @@
       "tax_rate": "0.16",
       "tax_amount": "31789.00",
       "total": "230470.00",
+      "tax_included": false,
       "method": "cash",
       "label": "Cash"
     }

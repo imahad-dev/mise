@@ -209,12 +209,14 @@ async def test_detail_groups_lines_and_previews_both_rates(client, db_session, v
         "tax_rate": "0.16",
         "tax_amount": "394.00",
         "total": "2854.00",
+        "tax_included": False,
     }
     assert d["preview_digital"] == {
         "payment_class": "digital",
         "tax_rate": "0.08",
         "tax_amount": "197.00",
         "total": "2657.00",
+        "tax_included": False,
     }
     assert (d["restaurant_name"], d["restaurant_city"], d["currency"]) == (
         "Bills Venue",

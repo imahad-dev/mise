@@ -279,6 +279,16 @@ def tax_for(
     return c.rate, c.tax
 
 
+def service_charge_for(
+    jurisdiction: str | None, rate: Decimal, subtotal: Decimal, is_table: bool
+) -> tuple[Decimal, Decimal]:
+    """(rate, amount) of the optional service charge; (0, 0) where it does not apply."""
+    j = jurisdiction_of(jurisdiction)
+    if j is None or j.service_charge is None or not is_table or rate <= 0:
+        return Decimal("0.0000"), Decimal("0.00")  # same scale as the stored columns
+    return rate.quantize(Decimal("0.0001")), round_money(subtotal * rate, j.rounding)
+
+
 def methods_for(jurisdiction: str | None) -> tuple[str, ...]:
     """Methods a venue may settle with; all of them when it has no jurisdiction (no tax)."""
     j = jurisdiction_of(jurisdiction)

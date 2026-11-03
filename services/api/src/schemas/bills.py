@@ -27,6 +27,8 @@ class TaxPreview(BaseModel):
     tax_rate: Decimal
     tax_amount: Decimal
     total: Decimal
+    # True where the menu price already includes the tax (UK, UAE): total == subtotal.
+    tax_included: bool = False
 
 
 class MethodPreview(TaxPreview):
@@ -39,6 +41,7 @@ class PaymentClaim(BaseModel):
     reference: str | None
     total: Decimal
     claimed_at: datetime
+    service_included: bool = False
 
 
 class BillSummary(BaseModel):
@@ -86,6 +89,10 @@ class BillDetail(BillSummary):
     payment_method: str | None
     payment_reference: str | None
     tax_jurisdiction: str | None
+    tax_pricing: str | None
+    # The optional service charge: the rate offered and its amount on this bill (open: live).
+    service_charge_rate: Decimal
+    service_charge_amount: Decimal
     tax_rate: Decimal | None
     tax_amount: Decimal | None
     total: Decimal | None
@@ -114,6 +121,7 @@ class SettleBillRequest(BaseModel):
     expected_total: Decimal
     expected_method: Method
     acknowledge_reused_reference: bool = False
+    service_included: bool = False
 
     @field_validator("payment_reference")
     @classmethod
