@@ -24,7 +24,7 @@ from src.models.menu import MenuItem, MenuItemOption, MenuTranslation
 from src.models.order import Order
 from src.models.restaurant import Restaurant
 from src.models.session import GuestSession
-from src.services.bills import VISIT_ENDED, session_is_current
+from src.services.bills import VISIT_ENDED, session_is_current, session_started_at
 
 SAMPLE = {"sample": True, "raast_id": "0000 SAMPLE", "account_title": "Sample account"}
 PAY = "/api/guest/bill/payment"
@@ -274,13 +274,14 @@ async def test_brief_facts_never_contain_a_claimed_reference(client, db_session,
 
 
 async def new_session(db: AsyncSession, v: Venue) -> GuestSession:
-    """A phone scanning table 1 now (clock time: the test runs in one transaction)."""
+    """A phone scanning table 1 now, stamped as the scan route does: the database clock can
+    step back, so a raw clock reading could fall before the last reset."""
     s = GuestSession(
         restaurant_id=v.r.id,
         table_id=v.t1.id,
         language="en",
         expires_at=datetime.now(UTC) + timedelta(hours=2),
-        created_at=await db.scalar(select(func.clock_timestamp())),
+        created_at=await session_started_at(db, v.t1.id),
     )
     db.add(s)
     await db.flush()
