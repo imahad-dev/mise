@@ -82,7 +82,7 @@ async def test_uk_bill_includes_vat_and_offers_cash_and_card_only(client, db_ses
     assert (d["service_charge_rate"], d["service_charge_amount"]) == ("0.1250", "2.63")
 
 
-async def test_uk_settle_with_and_without_service(client, db_session, uk):
+async def test_uk_settle_with_service(client, db_session, uk):
     r, _, dish, side, s = uk
     o = await _order(client, s, [(dish, 1), (side, 2)])
     bill_id = await bill_id_of(db_session, o)
@@ -155,3 +155,118 @@ async def test_dubai_bill_no_service_and_vat_included(client, db_session, dubai)
     assert resp.status_code == 200, resp.text
     d = resp.json()
     assert (d["total"], d["tax_amount"], d["service_charge_amount"]) == ("12.00", "0.57", "0.00")
+
+
+async def _counter_order(client, db, r, dish):
+    counter = DiningTable(
+        restaurant_id=r.id, label="Counter", kind="counter", qr_token=uuid.uuid4().hex
+    )
+    db.add(counter)
+    await db.flush()
+    s = GuestSession(
+        restaurant_id=r.id,
+        table_id=counter.id,
+        language="en",
+        expires_at=datetime.now(UTC) + timedelta(hours=2),
+    )
+    db.add(s)
+    await db.flush()
+    guest(client, s)
+    resp = await client.post(
+        "/api/orders",
+        json={
+            "idempotency_key": uuid.uuid4().hex,
+            "items": [{"menu_item_id": str(dish.id), "quantity": 1}],
+            "acknowledge_allergen_risk": True,
+        },
+    )
+    assert resp.status_code == 201, resp.text
+    return uuid.UUID(resp.json()["id"])
+
+
+async def test_uk_counter_bill_has_no_service_charge(client, db_session, uk):
+    r, _, dish, _, _ = uk
+    bill_id = await bill_id_of(db_session, await _counter_order(client, db_session, r, dish))
+    await as_member(client, db_session, r.id, "staff")
+    d = (await client.get(f"/api/restaurants/{r.slug}/bills/{bill_id}")).json()
+    assert (d["service_charge_rate"], d["service_charge_amount"]) == ("0.0000", "0.00")
+    resp = await settle(client, r.slug, bill_id, "card", service_included=True)
+    assert resp.status_code == 200, resp.text
+    assert (resp.json()["total"], resp.json()["service_charge_amount"]) == ("12.00", "0.00")
+    b = (await db_session.execute(select(Bill).where(Bill.id == bill_id))).scalar_one()
+    await db_session.refresh(b)
+    assert (b.service_charge_amount, b.total) == (Decimal("0.00"), Decimal("12.00"))
+
+
+async def test_pakistan_venue_ignores_a_service_charge_rate(client, db_session):
+    r, _, dish, _, s = await _venue(db_session, "PB", "PKR", "Asia/Karachi", service="0.10")
+    o = await _order(client, s, [(dish, 1)])
+    bill_id = await bill_id_of(db_session, o)
+    await as_member(client, db_session, r.id, "staff")
+    d = (await client.get(f"/api/restaurants/{r.slug}/bills/{bill_id}")).json()
+    assert d["service_charge_amount"] == "0.00"
+    cash = next(m for m in d["methods"] if m["method"] == "cash")
+    resp = await settle(client, r.slug, bill_id, "cash", service_included=True)
+    assert resp.status_code == 200, resp.text
+    assert (resp.json()["total"], resp.json()["service_charge_amount"]) == (cash["total"], "0.00")
+
+
+async def test_service_rate_change_before_settle_is_bill_changed(client, db_session, uk):
+    r, _, dish, _, s = uk
+    o = await _order(client, s, [(dish, 1)])
+    bill_id = await bill_id_of(db_session, o)
+    await as_member(client, db_session, r.id, "staff")
+    d = (await client.get(f"/api/restaurants/{r.slug}/bills/{bill_id}")).json()
+    assert d["service_charge_amount"] == "1.50"
+    r.service_charge_rate = Decimal("0.10")
+    await db_session.flush()
+    resp = await client.post(
+        f"/api/restaurants/{r.slug}/bills/{bill_id}/settle",
+        json={
+            "payment_method": "card",
+            "expected_method": "card",
+            "expected_total": "13.50",
+            "service_included": True,
+        },
+    )
+    assert resp.status_code == 409, resp.text
+    assert resp.json()["detail"] == "Bill changed"
+    fresh = resp.json()["bill"]
+    assert (fresh["service_charge_rate"], fresh["service_charge_amount"]) == ("0.1000", "1.20")
+
+
+async def test_settled_bill_keeps_its_service_snapshot(client, db_session, uk):
+    r, _, dish, _, s = uk
+    o = await _order(client, s, [(dish, 1)])
+    bill_id = await bill_id_of(db_session, o)
+    await as_member(client, db_session, r.id, "staff")
+    resp = await settle(client, r.slug, bill_id, "card", service_included=True)
+    assert resp.status_code == 200, resp.text
+    r.service_charge_rate = Decimal("0.05")
+    await db_session.flush()
+    d = (await client.get(f"/api/restaurants/{r.slug}/bills/{bill_id}")).json()
+    assert (d["service_charge_rate"], d["service_charge_amount"], d["total"]) == (
+        "0.1250",
+        "1.50",
+        "13.50",
+    )
+
+
+async def test_void_after_a_uk_claim_names_pounds(client, db_session, uk):
+    r, _, dish, _, s = uk
+    o = await _order(client, s, [(dish, 1)])
+    assert (await client.post("/api/guest/bill/payment", json={"method": "card"})).is_success
+    await as_member(client, db_session, r.id, "staff")
+    resp = await client.post(f"/api/restaurants/{r.slug}/orders/{o}/void", json={"reason": "Left"})
+    assert resp.status_code == 409, resp.text
+    assert resp.json()["detail"].startswith("Guest says they paid by Card (GBP 12.00) — ")
+
+
+async def test_cancel_after_a_uk_counter_claim_names_pounds(client, db_session, uk):
+    r, _, dish, _, _ = uk
+    bill_id = await bill_id_of(db_session, await _counter_order(client, db_session, r, dish))
+    assert (await client.post("/api/guest/bill/payment", json={"method": "card"})).is_success
+    await as_member(client, db_session, r.id, "staff")
+    resp = await client.post(f"/api/restaurants/{r.slug}/bills/{bill_id}/cancel", json={})
+    assert resp.status_code == 422, resp.text
+    assert resp.json()["detail"].startswith("Guest says they paid by Card (GBP 12.00) — ")

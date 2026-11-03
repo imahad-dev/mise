@@ -71,6 +71,11 @@ ALL_VOIDED = "All orders voided"
 CANCELLED_BY_STAFF = "Cancelled by staff"
 
 
+def _money(currency: str, amount: Decimal) -> str:
+    """Staff text for an amount: "Rs 2527.00" in Pakistan, else "GBP 12.00"."""
+    return f"{'Rs' if currency == 'PKR' else currency} {amount}"
+
+
 async def _order_cancelled(order_id: uuid.UUID) -> None:
     """Tell the guest following this order that it will not be made."""
     await publish_event(
@@ -486,7 +491,8 @@ async def void_order(
         return JSONResponse(
             status_code=status.HTTP_409_CONFLICT,
             content={
-                "detail": f"Guest says they paid by {label} (Rs {claim.total}) — any refund "
+                "detail": f"Guest says they paid by {label} "
+                f"({_money(access.restaurant.currency, claim.total)}) — any refund "
                 "happens outside Mise. Confirm to void and cancel the bill.",
                 "claim": claim.model_dump(mode="json"),
             },
@@ -585,7 +591,8 @@ async def cancel_bill(
         label = METHOD_LABELS.get(claim.method, claim.method)
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail=f"Guest says they paid by {label} (Rs {claim.total}) — any refund happens "
+            detail=f"Guest says they paid by {label} "
+            f"({_money(access.restaurant.currency, claim.total)}) — any refund happens "
             "outside Mise. Give a reason to cancel.",
         )
     reason = payload.reason or CANCELLED_BY_STAFF
