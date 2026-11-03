@@ -30,9 +30,18 @@ from src.models.order import Order
 from src.models.restaurant import Restaurant
 from src.models.session import GuestSession
 from src.services.order_snapshot import line_total, snapshot_order_item
-from src.services.tax import PAYMENT_METHODS, TaxRate, TaxRateError, default_rates, tax_for
+from src.services.tax import (
+    PAYMENT_METHODS,
+    TaxRate,
+    TaxRateError,
+    charge_for,
+    default_rates,
+    methods_for,
+)
 
 if TYPE_CHECKING:
+    from collections.abc import Collection
+
     from sqlalchemy.ext.asyncio import AsyncSession
 
 DAYPARTS = ("lunch", "dinner")
@@ -41,7 +50,6 @@ PROMOTION_EVENT = "promotion"
 SEED_ITEM_NAMESPACE = uuid.UUID("a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d")
 # Keys of a stored venue profile that are per-item data, not SimAssumptions fields.
 PROFILE_DATA_KEYS = frozenset({"weights", "option_weights"})
-CENTS = Decimal("0.01")
 
 
 @dataclass(frozen=True)
@@ -147,8 +155,11 @@ def generate_orders(
     start: date,
     a: SimAssumptions,
     tz: ZoneInfo,
+    allowed_methods: Collection[str] | None = None,
 ) -> list[SimOrder]:
     """Generate `a.days` days of orders starting at local date `start`. Pure and seeded.
+
+    Only payment methods in `allowed_methods` are drawn (weights renormalised); None allows all.
 
     Arrival times, party sizes and dishes come from `default_rng(seed)`; option, payment and
     settle-time draws come from a second generator seeded `[seed, 1]`, so options or the
@@ -164,8 +175,9 @@ def generate_orders(
     option_p = {i.id: _probabilities([w for _, w in i.options]) for i in ranked if i.options}
     sizes = np.arange(1, len(a.party_size_weights) + 1)
     size_p = np.asarray(a.party_size_weights) / sum(a.party_size_weights)
-    methods = [m for m, _ in a.payment_mix]
-    method_p = _probabilities([share for _, share in a.payment_mix])
+    mix = [(m, s) for m, s in a.payment_mix if allowed_methods is None or m in allowed_methods]
+    methods = [m for m, _ in mix]
+    method_p = _probabilities([share for _, share in mix])
     settle_lo, settle_hi = a.settle_minutes
     window = promo_window(a, start)
     promo_idx = min(a.promo_item_rank, len(ranked) - 1) if window else None
@@ -277,7 +289,7 @@ def _simulated_bill(
     (no jurisdiction, or a date before the first configured rate)."""
     settled_at = so.placed_at + timedelta(minutes=so.settle_after)
     try:
-        rate, tax = tax_for(
+        c = charge_for(
             restaurant.tax_jurisdiction or "",
             so.payment_method,
             settled_at.astimezone(tz).date(),
@@ -286,7 +298,6 @@ def _simulated_bill(
         )
     except TaxRateError:
         return None
-    tax = tax.quantize(CENTS)
     return Bill(
         id=uuid.uuid4(),
         restaurant_id=restaurant.id,
@@ -297,9 +308,10 @@ def _simulated_bill(
         payment_method=so.payment_method,
         subtotal=subtotal,
         tax_jurisdiction=restaurant.tax_jurisdiction,
-        tax_rate=rate,
-        tax_amount=tax,
-        total=subtotal + tax,
+        tax_rate=c.rate,
+        tax_amount=c.tax,
+        tax_pricing=c.pricing,
+        total=c.total,
         opened_at=so.placed_at,
         settled_at=settled_at,
         created_at=so.placed_at,
@@ -346,7 +358,9 @@ async def persist_simulation(
     by_id = {i.id: i for i in items}
     options = {o.id: o for i in items for o in i.options}
     simulated_items = sim_items(restaurant, items)
-    sim_orders = generate_orders(simulated_items, start, a, tz)
+    sim_orders = generate_orders(
+        simulated_items, start, a, tz, methods_for(restaurant.tax_jurisdiction)
+    )
 
     # One synthetic, already-expired session holds all simulated orders (no guest data).
     session = GuestSession(
