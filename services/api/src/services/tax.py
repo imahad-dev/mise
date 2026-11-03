@@ -148,7 +148,11 @@ def load_jurisdictions(path: Path | None = None) -> dict[str, Jurisdiction]:
             raise TaxRateError(f"Bad jurisdiction {code!r}: currency {j.currency!r}")
         if j.pricing not in ("on_top", "included"):
             raise TaxRateError(f"Bad jurisdiction {code!r}: unknown pricing {j.pricing!r}")
-        if not (j.rounding.is_finite() and j.rounding >= CENTS and j.rounding % CENTS == 0):
+        if not (
+            j.rounding.is_finite()
+            and CENTS <= j.rounding <= Decimal("1000")  # bounds keep % from overflowing
+            and j.rounding % CENTS == 0
+        ):
             raise TaxRateError(f"Bad jurisdiction {code!r}: rounding must be whole cents")
         if (
             not j.methods
@@ -165,7 +169,7 @@ def load_jurisdictions(path: Path | None = None) -> dict[str, Jurisdiction]:
 def check_rates_against(
     rates: tuple[TaxRate, ...] | list[TaxRate], jurisdictions: dict[str, Jurisdiction]
 ) -> None:
-    """Every rate names a known jurisdiction; no jurisdiction mixes "any" with a split."""
+    """Rates name known jurisdictions, never mix "any" with a split, and cover the methods."""
     classes: dict[str, set[str]] = {}
     for r in rates:
         if r.jurisdiction not in jurisdictions:
@@ -194,6 +198,54 @@ def jurisdictions(rates: tuple[TaxRate, ...] | list[TaxRate] | None = None) -> s
     return {r.jurisdiction for r in (rates if rates is not None else default_rates())}
 
 
+def round_money(amount: Decimal, unit: Decimal) -> Decimal:
+    """Half up to the jurisdiction's money unit, stored with two decimals."""
+    return ((amount / unit).quantize(Decimal("1"), rounding=ROUND_HALF_UP) * unit).quantize(CENTS)
+
+
+@dataclass(frozen=True)
+class Charge:
+    rate: Decimal
+    tax: Decimal  # on_top: added to the subtotal; included: the part of the total that is tax
+    total: Decimal  # what the guest pays before any optional service charge
+    pricing: Pricing
+
+
+def jurisdiction_of(code: str | None) -> Jurisdiction | None:
+    return default_jurisdictions().get(code or "")
+
+
+def charge_for(
+    jurisdiction: str,
+    method: str,
+    on_date: date,
+    subtotal: Decimal,
+    rates: tuple[TaxRate, ...] | list[TaxRate] | None = None,
+) -> Charge:
+    """Rate, tax and total for a bill of menu-price lines settled on on_date."""
+    j = jurisdiction_of(jurisdiction)
+    if j is None:
+        raise TaxRateError(f"Unknown tax jurisdiction {jurisdiction!r}")
+    if method not in j.methods:
+        raise TaxRateError(f"Payment method {method!r} is not accepted in {jurisdiction}")
+    cls = payment_class(method)
+    candidates = [
+        r
+        for r in (rates if rates is not None else default_rates())
+        if r.jurisdiction == jurisdiction
+        and r.payment_class in (cls, "any")
+        and r.effective_from <= on_date
+    ]
+    if not candidates:
+        raise TaxRateError(f"No tax rate configured for {jurisdiction}/{cls} on {on_date}")
+    rate = max(candidates, key=lambda r: r.effective_from).rate
+    if j.pricing == "on_top":
+        tax = round_money(subtotal * rate, j.rounding)
+        return Charge(rate, tax, subtotal + tax, "on_top")
+    tax = round_money(subtotal * rate / (1 + rate), j.rounding)
+    return Charge(rate, tax, subtotal, "included")
+
+
 def tax_for(
     jurisdiction: str,
     method: str,
@@ -201,14 +253,28 @@ def tax_for(
     subtotal: Decimal,
     rates: tuple[TaxRate, ...] | list[TaxRate] | None = None,
 ) -> tuple[Decimal, Decimal]:
-    """(rate, tax amount rounded half-up to whole rupees) for a bill settled on on_date."""
-    cls = payment_class(method)
-    candidates = [
-        r
-        for r in (rates if rates is not None else default_rates())
-        if r.jurisdiction == jurisdiction and r.payment_class == cls and r.effective_from <= on_date
-    ]
-    if not candidates:
-        raise TaxRateError(f"No tax rate configured for {jurisdiction}/{cls} on {on_date}")
-    rate = max(candidates, key=lambda r: r.effective_from).rate
-    return rate, (subtotal * rate).quantize(Decimal("1"), rounding=ROUND_HALF_UP)
+    """(rate, tax amount) for a bill settled on on_date; see charge_for for the total."""
+    c = charge_for(jurisdiction, method, on_date, subtotal, rates)
+    return c.rate, c.tax
+
+
+def methods_for(jurisdiction: str | None) -> tuple[str, ...]:
+    """Methods a venue may settle with; all of them when it has no jurisdiction (no tax)."""
+    j = jurisdiction_of(jurisdiction)
+    return j.methods if j else PAYMENT_METHODS
+
+
+def splits_by_method(jurisdiction: str | None) -> bool:
+    """True where cash and digital payments carry different rates (Pakistan)."""
+    return any(r.jurisdiction == jurisdiction and r.payment_class != "any" for r in default_rates())
+
+
+def price_tax_factor(jurisdiction: str | None, on_date: date) -> Decimal:
+    """Menu price / factor = price excluding VAT; 1 where tax sits on top or is unknown."""
+    j = jurisdiction_of(jurisdiction)
+    if j is None or j.pricing != "included":
+        return Decimal(1)
+    try:
+        return 1 + charge_for(j.code, j.methods[0], on_date, Decimal(0)).rate
+    except TaxRateError:
+        return Decimal(1)

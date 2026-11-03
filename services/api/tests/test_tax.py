@@ -1,15 +1,18 @@
 """Sales tax by jurisdiction, payment method and date."""
 
 import json
+import random
 from datetime import date
 from decimal import Decimal
 
 import pytest
 
 from src.services.tax import (
+    Charge,
     Jurisdiction,
     TaxRate,
     TaxRateError,
+    charge_for,
     check_rates_against,
     default_jurisdictions,
     load_jurisdictions,
@@ -144,6 +147,7 @@ def test_good_jurisdiction_loads(tmp_path):
         ({"rounding": "-1"}, "rounding"),
         ({"rounding": "0.001"}, "rounding"),
         ({"rounding": "0.015"}, "rounding"),
+        ({"rounding": "1E+30"}, "rounding"),
         ({"methods": []}, "methods"),
         ({"methods": ["cash", "cheque"]}, "methods"),
         ({"methods": ["cash", "cash"]}, "methods"),
@@ -222,3 +226,52 @@ def test_rates_must_cover_methods():
 def test_default_jurisdictions_is_read_only():
     with pytest.raises(TypeError):
         default_jurisdictions()["ZZ"] = None  # type: ignore[index]
+
+
+NOV = date(2026, 11, 2)
+
+
+@pytest.mark.parametrize(
+    ("jur", "method", "subtotal", "rate", "tax", "total"),
+    [
+        ("GB", "card", "24.00", "0.20", "4.00", "24.00"),
+        ("GB", "cash", "10.99", "0.20", "1.83", "10.99"),  # 1.8316… -> 1.83
+        ("AE-DU", "card", "105.00", "0.05", "5.00", "105.00"),
+        ("PB", "cash", "5490.00", "0.16", "878.00", "6368.00"),  # unchanged Pakistan maths
+        ("ICT", "wallet", "2310.00", "0.05", "116.00", "2426.00"),
+    ],
+)
+def test_charge_for(jur, method, subtotal, rate, tax, total):
+    on = NOV if jur in ("GB", "AE-DU") else JULY
+    c = charge_for(jur, method, on, Decimal(subtotal))
+    assert c == Charge(
+        Decimal(rate),
+        Decimal(tax),
+        Decimal(total),
+        "included" if jur in ("GB", "AE-DU") else "on_top",
+    )
+
+
+def test_included_vat_always_adds_up():
+    rng = random.Random(7)
+    for _ in range(2000):
+        sub = Decimal(rng.randint(1, 500_000)) / 100
+        for jur in ("GB", "AE-DU"):
+            c = charge_for(jur, "card", NOV, sub)
+            assert c.total == sub  # the guest pays the menu price
+            assert (c.total - c.tax) + c.tax == c.total
+            assert c.tax == (sub * c.rate / (1 + c.rate)).quantize(Decimal("0.01"), "ROUND_HALF_UP")
+
+
+def test_method_not_accepted_in_jurisdiction():
+    with pytest.raises(TaxRateError, match="not accepted"):
+        charge_for("GB", "raast", NOV, Decimal("10"))
+
+
+def test_unknown_jurisdiction():
+    with pytest.raises(TaxRateError):
+        charge_for("SD", "cash", NOV, Decimal("10"))
+
+
+def test_tax_for_keeps_its_shape():
+    assert tax_for("GB", "card", NOV, Decimal("24.00")) == (Decimal("0.20"), Decimal("4.00"))
