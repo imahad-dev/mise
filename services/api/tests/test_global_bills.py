@@ -519,3 +519,41 @@ async def test_settings_service_charge(client, db_session, uk, dubai):
     assert got["service_charge_allowed"] is False
     # Turning it off is always allowed.
     assert (await client.patch(durl, json={"service_charge_rate": "0"})).status_code == 200
+
+
+async def test_settings_service_charge_persists_audits_and_normalises(client, db_session, uk):
+    r, *_ = uk
+    await as_member(client, db_session, r.id, "owner")
+    url = f"/api/restaurants/{r.slug}/settings"
+
+    async def edits():
+        rows = await db_session.scalars(
+            select(AuditLog).where(
+                AuditLog.restaurant_id == r.id, AuditLog.event_type == "owner_service_charge_edit"
+            )
+        )
+        return [x.payload for x in rows]
+
+    assert (await client.patch(url, json={"service_charge_rate": "0.10"})).status_code == 200
+    assert (await client.get(url)).json()["service_charge_rate"] == "0.1000"
+    assert await edits() == [{"before": "0.1250", "after": "0.1000"}]
+    assert (await client.patch(url, json={"service_charge_rate": "0.10"})).status_code == 200
+    assert len(await edits()) == 1
+    neg = await client.patch(url, json={"service_charge_rate": "-0"})
+    assert (neg.status_code, neg.json()["service_charge_rate"]) == (200, "0.0000")
+
+
+async def test_settings_pakistan_and_no_jurisdiction(client, db_session):
+    pk, *_ = await _venue(db_session, "PB", "PKR", "Asia/Karachi")
+    await as_member(client, db_session, pk.id, "owner")
+    s = (await client.get(f"/api/restaurants/{pk.slug}/settings")).json()
+    assert s["tax_rule"] == {"name": "Punjab, Pakistan", "rate": "0.16", "pricing": "on_top"}
+    assert s["service_charge_allowed"] is False
+
+    none, *_ = await _venue(db_session, None, "PKR", "Asia/Karachi")
+    await as_member(client, db_session, none.id, "owner")
+    resp = await client.patch(
+        f"/api/restaurants/{none.slug}/settings", json={"service_charge_rate": "0.10"}
+    )
+    assert resp.status_code == 422
+    assert resp.json()["detail"] == "An optional service charge is not offered at this venue"

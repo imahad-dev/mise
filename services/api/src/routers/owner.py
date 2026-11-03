@@ -439,7 +439,10 @@ async def get_settings(access: RestaurantAccess = Depends(owner_access)) -> Sett
         403: {"description": "Unauthorized (Owner only)"},
         404: {"description": "Restaurant not found"},
         409: {"description": "Pickup prefix changed while counter orders are open"},
-        422: {"description": "Invalid setting; detail.field names it"},
+        422: {
+            "description": "Invalid setting; payment details: detail.field names it; "
+            "service charge: detail is a message"
+        },
     },
 )
 async def patch_settings(
@@ -483,10 +486,21 @@ async def patch_settings(
     if rate is not None:
         j = jurisdiction_of(restaurant.tax_jurisdiction)
         if rate > 0 and (j is None or j.service_charge is None):  # 0 (off) is always allowed
-            where = j.name if j else "this venue"
+            where = f"in {j.name}" if j else "at this venue"
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                detail=f"An optional service charge is not offered in {where}",
+                detail=f"An optional service charge is not offered {where}",
+            )
+        rate = rate.quantize(Decimal("0.0001")) + 0  # "-0" becomes 0
+        old = restaurant.service_charge_rate.quantize(Decimal("0.0001"))
+        if rate != old:
+            db.add(
+                AuditLog(
+                    restaurant_id=restaurant.id,
+                    event_type="owner_service_charge_edit",
+                    actor=f"user:{access.user.id}",
+                    payload={"before": str(old), "after": str(rate)},
+                )
             )
         restaurant.service_charge_rate = rate
     if payload.sitting_code_required is not None:  # tables already open keep their own rule
