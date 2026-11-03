@@ -101,7 +101,7 @@ class Bill(Base):
         Numeric(4, 4), nullable=False, server_default=text("0")
     )
     service_charge_amount: Mapped[Decimal] = mapped_column(
-        Numeric(12, 2), nullable=False, server_default=text("0")
+        Numeric(10, 2), nullable=False, server_default=text("0")
     )
     # The guest's choice on the optional service charge, with their payment claim.
     claimed_service_included: Mapped[bool] = mapped_column(

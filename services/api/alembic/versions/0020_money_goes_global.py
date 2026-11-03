@@ -38,7 +38,7 @@ def upgrade() -> None:
     )
     op.add_column(
         "bills",
-        sa.Column("service_charge_amount", sa.Numeric(12, 2), nullable=False, server_default="0"),
+        sa.Column("service_charge_amount", sa.Numeric(10, 2), nullable=False, server_default="0"),
     )
     op.add_column(
         "bills",
