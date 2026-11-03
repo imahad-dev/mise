@@ -296,7 +296,7 @@ async def get_guest_menu(
             id=restaurant.id,
             name=restaurant.name,
             currency=restaurant.currency,
-            # Table bills only, so the notice says "table bills"; counter phones see it too.
+            # The rate applies to table bills only; counter phones see the notice too.
             service_charge_rate=service_charge_for(
                 restaurant.tax_jurisdiction, restaurant.service_charge_rate, Decimal(0), True
             )[0],
@@ -573,31 +573,38 @@ async def claim_payment(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Bill is not open")
     # Service is recorded only where this bill can carry it, so a repeat compares equal.
     include = payload.service_included and bill_service(restaurant, bill, Decimal(0))[0] > 0
-    changed = (bill.claimed_method, bill.claimed_reference, bill.claimed_service_included) != (
-        payload.method,
-        payload.reference,
-        include,
-    )
-    if changed:
-        now = await db.scalar(select(func.clock_timestamp()))
-        orders = await active_orders(db, bill.id)
-        if not orders:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="No active orders"
-            )
+    now = await db.scalar(select(func.clock_timestamp()))
+    orders = await active_orders(db, bill.id)
+    total = None
+    if orders:
         _, subtotal = bill_lines(orders)
         preview = method_preview(
             restaurant.tax_jurisdiction, payload.method, subtotal, local_date(restaurant, now)
         )
-        if preview is None:
+        if preview is not None:
+            _, sc_amount = bill_service(restaurant, bill, subtotal)
+            total = preview.total + (sc_amount if include else 0)
+    # A repeat after new orders refreshes the claimed total; an identical one changes nothing.
+    changed = (
+        bill.claimed_method,
+        bill.claimed_reference,
+        bill.claimed_service_included,
+    ) != (payload.method, payload.reference, include) or (
+        total is not None and bill.claimed_total != total
+    )
+    if changed:
+        if not orders:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="No active orders"
+            )
+        if total is None:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="No tax rate configured"
             )
         bill.claimed_method = payload.method
         bill.claimed_reference = payload.reference
-        _, sc_amount = bill_service(restaurant, bill, subtotal)
         bill.claimed_service_included = include
-        bill.claimed_total = preview.total + (sc_amount if include else 0)
+        bill.claimed_total = total
         bill.claimed_at = now
         if bill.bill_requested_at is None:
             bill.bill_requested_at = now

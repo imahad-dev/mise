@@ -8,7 +8,10 @@ import pytest_asyncio
 from sqlalchemy import select
 from tests.helpers import approve_order, as_member, seat_table, settle
 from tests.test_bills import _item, bill_id_of, guest
+from tests.test_counter import _backdate
+from tests.test_floor_api import record_events
 
+from src.models.audit import AuditLog
 from src.models.bill import Bill
 from src.models.dining_table import DiningTable
 from src.models.restaurant import Restaurant
@@ -368,3 +371,126 @@ async def test_menu_shows_the_service_rate(client, db_session, uk, dubai):
         guest(client, s)
         menu = (await client.get("/api/guest/menu")).json()
         assert menu["restaurant"]["service_charge_rate"] == rate
+
+
+async def _claim_audits(db, r):
+    rows = await db.scalars(
+        select(AuditLog.payload)
+        .where(AuditLog.restaurant_id == r.id, AuditLog.event_type == "payment_claimed")
+        .order_by(AuditLog.created_at)
+    )
+    return list(rows.all())
+
+
+async def test_repeat_claim_after_a_new_order_refreshes_the_total(client, db_session, uk):
+    r, _, dish, side, s = uk
+    o = await _order(client, s, [(dish, 1)])
+    claim = {"method": "card", "service_included": True}
+    assert (await client.post("/api/guest/bill/payment", json=claim)).json()["claim"][
+        "total"
+    ] == "13.50"
+    await _order(client, s, [(side, 1)])  # 16.50 + 2.06 service
+    resp = await client.post("/api/guest/bill/payment", json=claim)
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["claim"]["total"] == "18.56"
+    d = await _staff_due(client, db_session, r, o)
+    assert d["amount_due_after_claim"] == "0.00"
+    assert [a["total"] for a in await _claim_audits(db_session, r)] == ["13.50", "18.56"]
+
+
+async def test_identical_repeat_claim_adds_no_audit_row(client, db_session, uk, monkeypatch):
+    r, _, dish, _, s = uk
+    await _order(client, s, [(dish, 1)])
+    claim = {"method": "card", "service_included": True}
+    assert (await client.post("/api/guest/bill/payment", json=claim)).is_success
+    events = record_events(monkeypatch, "src.routers.guest.publish_event")
+    assert (await client.post("/api/guest/bill/payment", json=claim)).is_success
+    assert events == []
+    audits = await _claim_audits(db_session, r)
+    assert audits == [
+        {
+            "bill_id": audits[0]["bill_id"],
+            "method": "card",
+            "reference_last4": None,
+            "service_included": True,
+            "total": "13.50",
+        }
+    ]
+
+
+async def test_uk_counter_claim_never_carries_service(client, db_session, uk):
+    r, _, dish, _, _ = uk
+    bill_id = await bill_id_of(db_session, await _counter_order(client, db_session, r, dish))
+    resp = await client.post(
+        "/api/guest/bill/payment", json={"method": "card", "service_included": True}
+    )
+    assert resp.status_code == 200, resp.text
+    assert (resp.json()["claim"]["total"], resp.json()["claim"]["service_included"]) == (
+        "12.00",
+        False,
+    )
+    b = (await db_session.execute(select(Bill).where(Bill.id == bill_id))).scalar_one()
+    await db_session.refresh(b)
+    assert (b.claimed_service_included, b.claimed_total) == (False, Decimal("12.00"))
+
+
+async def test_pakistan_claim_never_carries_service(client, db_session):
+    _, _, dish, _, s = await _venue(db_session, "PB", "PKR", "Asia/Karachi", service="0.10")
+    o = await _order(client, s, [(dish, 1)])
+    guest(client, s)
+    bill = (await client.get("/api/guest/bill")).json()
+    cash = next(m["total"] for m in bill["methods"] if m["method"] == "cash")
+    resp = await client.post(
+        "/api/guest/bill/payment", json={"method": "cash", "service_included": True}
+    )
+    assert resp.status_code == 200, resp.text
+    assert (resp.json()["claim"]["total"], resp.json()["claim"]["service_included"]) == (
+        cash,
+        False,
+    )
+    b = await db_session.execute(select(Bill).where(Bill.id == await bill_id_of(db_session, o)))
+    b = b.scalar_one()
+    await db_session.refresh(b)
+    assert b.claimed_service_included is False
+
+
+async def test_refused_method_does_not_revive_an_expired_counter_bill(client, db_session, uk):
+    r, _, dish, _, _ = uk
+    o = await _counter_order(client, db_session, r, dish)
+    bill_id = await bill_id_of(db_session, o)
+    await _backdate(db_session, str(o), 31)
+    await as_member(client, db_session, r.id, "staff")
+    await client.get(f"/api/restaurants/{r.slug}/bills")  # a list read expires it
+    b = (await db_session.execute(select(Bill).where(Bill.id == bill_id))).scalar_one()
+    await db_session.refresh(b)
+    assert b.status == "cancelled"
+    resp = await client.post("/api/guest/bill/payment", json={"method": "raast", "reference": "R1"})
+    assert resp.status_code == 422
+    assert resp.json()["detail"] == "Payment method not accepted here"
+    await db_session.refresh(b)
+    assert (b.status, b.claimed_method) == ("cancelled", None)
+
+
+async def test_guest_claim_with_service_settles_at_the_claimed_total(client, db_session, uk):
+    r, _, dish, side, s = uk
+    o = await _order(client, s, [(dish, 1), (side, 2)])
+    claim = (
+        await client.post(
+            "/api/guest/bill/payment", json={"method": "card", "service_included": True}
+        )
+    ).json()["claim"]
+    assert claim["total"] == "23.63"
+    await as_member(client, db_session, r.id, "staff")
+    resp = await client.post(
+        f"/api/restaurants/{r.slug}/bills/{await bill_id_of(db_session, o)}/settle",
+        json={
+            "payment_method": "card",
+            "expected_method": "card",
+            "expected_total": claim["total"],
+            "service_included": True,
+        },
+    )
+    assert resp.status_code == 200, resp.text
+    assert (resp.json()["total"], resp.json()["service_charge_amount"]) == ("23.63", "2.63")
+    [audit] = await _claim_audits(db_session, r)
+    assert (audit["service_included"], audit["total"]) == (True, "23.63")
