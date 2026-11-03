@@ -5,6 +5,7 @@ from datetime import date, datetime
 from decimal import Decimal
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     Date,
     DateTime,
@@ -58,6 +59,7 @@ class Bill(Base):
             "payment_reference IS NULL OR length(payment_reference) <= 64",
             name="chk_bills_reference_len",
         ),
+        CheckConstraint("tax_pricing IN ('on_top', 'included')", name="chk_bills_tax_pricing"),
         CheckConstraint("(pickup_no IS NULL) = (pickup_day IS NULL)", name="chk_bills_pickup_pair"),
         UniqueConstraint("restaurant_id", "bill_no", name="uq_bills_restaurant_bill_no"),
         UniqueConstraint("restaurant_id", "pickup_day", "pickup_no", name="uq_bills_pickup_no"),
@@ -94,6 +96,17 @@ class Bill(Base):
     subtotal: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
     tax_jurisdiction: Mapped[str | None] = mapped_column(Text, nullable=True)
     tax_rate: Mapped[Decimal | None] = mapped_column(Numeric(5, 4), nullable=True)
+    tax_pricing: Mapped[str | None] = mapped_column(Text, nullable=True)  # on_top | included
+    service_charge_rate: Mapped[Decimal] = mapped_column(
+        Numeric(4, 4), nullable=False, server_default=text("0")
+    )
+    service_charge_amount: Mapped[Decimal] = mapped_column(
+        Numeric(12, 2), nullable=False, server_default=text("0")
+    )
+    # The guest's choice on the optional service charge, with their payment claim.
+    claimed_service_included: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("false")
+    )
     tax_amount: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
     total: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
     claimed_method: Mapped[str | None] = mapped_column(Text, nullable=True)

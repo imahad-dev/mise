@@ -18,6 +18,10 @@ class Restaurant(Base):
         CheckConstraint(
             "(default_language = ANY(languages)) IS TRUE", name="chk_restaurant_default_language"
         ),
+        CheckConstraint(
+            "service_charge_rate >= 0 AND service_charge_rate <= 0.20",
+            name="chk_restaurant_service_charge_rate",
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -40,6 +44,10 @@ class Restaurant(Base):
     )
     first_order_cap_multiplier: Mapped[Decimal] = mapped_column(
         Numeric(5, 2), nullable=False, server_default=text("4")
+    )
+    # Optional service charge on table bills, 0-0.20; only where the jurisdiction allows it.
+    service_charge_rate: Mapped[Decimal] = mapped_column(
+        Numeric(4, 4), nullable=False, server_default=text("0")
     )
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"))
     languages: Mapped[list[str]] = mapped_column(

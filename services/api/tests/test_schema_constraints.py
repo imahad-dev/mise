@@ -830,3 +830,32 @@ async def test_bill_pickup_number_unique_per_day_and_paired(db_session: AsyncSes
         {"rid": rid, "day": date(2026, 10, 27), "no": None},
         "chk_bills_pickup_pair",
     )
+
+
+@pytest.mark.asyncio
+async def test_restaurant_service_charge_rate_bounds(db_session: AsyncSession):
+    await assert_violates(
+        db_session,
+        "INSERT INTO restaurant (name, slug, service_charge_rate) VALUES ('x', 'sc-bound', 0.25)",
+        {},
+        "chk_restaurant_service_charge_rate",
+    )
+
+
+@pytest.mark.asyncio
+async def test_bill_tax_pricing_checked(db_session: AsyncSession):
+    rid = await _create_test_restaurant(db_session)
+    await assert_violates(
+        db_session,
+        "INSERT INTO bills (restaurant_id, source, tax_pricing) "
+        "VALUES (:rid, 'simulated', 'sometimes')",
+        {"rid": rid},
+        "chk_bills_tax_pricing",
+    )
+    await db_session.execute(
+        text(
+            "INSERT INTO bills (restaurant_id, source, tax_pricing) "
+            "VALUES (:rid, 'simulated', 'included')"
+        ),
+        {"rid": rid},
+    )
