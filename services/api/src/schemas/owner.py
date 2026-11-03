@@ -76,6 +76,10 @@ class PatchSettingsRequest(BaseModel):
     pickup_prefix: Annotated[str, StringConstraints(pattern=r"^[A-Z]{1,3}$")] | None = None
     # Ask guests for a 4-digit table number before their first order (tables opened from now on).
     sitting_code_required: bool | None = None
+    # Optional service charge; the router refuses a non-zero rate where it is not offered.
+    service_charge_rate: Decimal | None = Field(
+        default=None, ge=0, le=Decimal("0.20"), decimal_places=4
+    )
 
     @field_validator("service_extra_label", mode="before")
     @classmethod
@@ -84,11 +88,20 @@ class PatchSettingsRequest(BaseModel):
         return None if isinstance(v, str) and not v.strip() else v
 
 
+class TaxRule(BaseModel):
+    name: str
+    rate: Decimal
+    pricing: Literal["on_top", "included"]
+
+
 class SettingsResponse(BaseModel):
     payment_details: dict[str, Any]
     service_extra_label: str | None
     pickup_prefix: str | None
     sitting_code_required: bool
+    service_charge_rate: Decimal
+    service_charge_allowed: bool
+    tax_rule: TaxRule | None
 
 
 class StatusOkResponse(BaseModel):

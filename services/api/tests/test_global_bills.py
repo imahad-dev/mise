@@ -494,3 +494,28 @@ async def test_guest_claim_with_service_settles_at_the_claimed_total(client, db_
     assert (resp.json()["total"], resp.json()["service_charge_amount"]) == ("23.63", "2.63")
     [audit] = await _claim_audits(db_session, r)
     assert (audit["service_included"], audit["total"]) == (True, "23.63")
+
+
+async def test_settings_service_charge(client, db_session, uk, dubai):
+    r, *_ = uk
+    await as_member(client, db_session, r.id, "owner")
+    s = (await client.get(f"/api/restaurants/{r.slug}/settings")).json()
+    assert s["tax_rule"] == {"name": "United Kingdom", "rate": "0.20", "pricing": "included"}
+    assert (s["service_charge_allowed"], s["service_charge_rate"]) == (True, "0.1250")
+    url = f"/api/restaurants/{r.slug}/settings"
+    ok = await client.patch(url, json={"service_charge_rate": "0.10"})
+    assert ok.status_code == 200 and ok.json()["service_charge_rate"] == "0.1000"
+    assert (await client.patch(url, json={"service_charge_rate": "0.25"})).status_code == 422
+    assert (await client.patch(url, json={"service_charge_rate": "-0.01"})).status_code == 422
+    assert (await client.patch(url, json={"service_charge_rate": "0.12345"})).status_code == 422
+
+    d, *_ = dubai
+    await as_member(client, db_session, d.id, "owner")
+    durl = f"/api/restaurants/{d.slug}/settings"
+    refused = await client.patch(durl, json={"service_charge_rate": "0.10"})
+    assert refused.status_code == 422
+    assert refused.json()["detail"] == "An optional service charge is not offered in Dubai, UAE"
+    got = (await client.get(durl)).json()
+    assert got["service_charge_allowed"] is False
+    # Turning it off is always allowed.
+    assert (await client.patch(durl, json={"service_charge_rate": "0"})).status_code == 200
