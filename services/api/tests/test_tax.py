@@ -14,6 +14,7 @@ from src.services.tax import (
     TaxRateError,
     charge_for,
     check_rates_against,
+    check_venue_tax,
     default_jurisdictions,
     load_jurisdictions,
     load_rates,
@@ -278,3 +279,12 @@ def test_tax_for_keeps_its_shape_and_refuses_included_vat():
     assert tax_for("PB", "cash", JULY, Decimal("1000")) == (Decimal("0.16"), Decimal("160"))
     with pytest.raises(TaxRateError, match="charge_for"):
         tax_for("GB", "card", NOV, Decimal("24.00"))
+
+
+def test_check_venue_tax():
+    check_venue_tax("GB", "GBP")
+    check_venue_tax(None, "EUR")  # no tax configured: allowed, as today
+    with pytest.raises(TaxRateError, match="currency"):
+        check_venue_tax("GB", "PKR")
+    with pytest.raises(TaxRateError, match="Unknown"):
+        check_venue_tax("XX", "GBP")

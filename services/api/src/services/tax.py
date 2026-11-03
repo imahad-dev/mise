@@ -215,6 +215,19 @@ def jurisdiction_of(code: str | None) -> Jurisdiction | None:
     return default_jurisdictions().get(code or "")
 
 
+def check_venue_tax(jurisdiction: str | None, currency: str) -> None:
+    """A venue's jurisdiction must exist and use the venue's currency."""
+    if jurisdiction is None:
+        return
+    j = jurisdiction_of(jurisdiction)
+    if j is None:
+        raise TaxRateError(f"Unknown tax jurisdiction {jurisdiction!r}")
+    if j.currency != currency:
+        raise TaxRateError(
+            f"{jurisdiction} bills in {j.currency}; the venue's currency is {currency}"
+        )
+
+
 def charge_for(
     jurisdiction: str,
     method: str,

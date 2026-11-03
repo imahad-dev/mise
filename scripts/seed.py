@@ -27,6 +27,7 @@ from src.models.user import Membership, User
 from src.passwords import hash_password
 from src.services.payment_details import validate_payment_details
 from src.services.simulator import SEED_ITEM_NAMESPACE, SimAssumptions
+from src.services.tax import check_venue_tax
 
 logger = logging.getLogger(__name__)
 
@@ -122,6 +123,8 @@ async def seed_data(
         rest_data.get("payment_details", {}),
         allow_sample=rest_data["slug"] in settings.demo_restaurant_slugs,
     )
+
+    check_venue_tax(rest_data.get("tax_jurisdiction"), rest_data.get("currency", "PKR"))
 
     # 1. Upsert Restaurant
     stmt_rest = select(Restaurant).where(Restaurant.slug == rest_data["slug"])
