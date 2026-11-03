@@ -98,6 +98,8 @@ class GuestMenuRestaurant(BaseModel):
     id: uuid.UUID
     name: str
     currency: str
+    # The optional table service charge; 0 where the jurisdiction has none.
+    service_charge_rate: Decimal
 
 
 class GuestMenuResponse(BaseModel):

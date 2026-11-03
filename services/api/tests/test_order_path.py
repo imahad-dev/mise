@@ -187,6 +187,7 @@ async def test_guest_session_flow_and_no_unit_cost(
         "id": str(seeded_restaurant.id),
         "name": seeded_restaurant.name,
         "currency": seeded_restaurant.currency,
+        "service_charge_rate": "0.0000",
     }
     assert menu_data["table_id"] == str(table.id)
     assert menu_data["table_label"] == table.label
