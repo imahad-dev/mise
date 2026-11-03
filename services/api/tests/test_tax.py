@@ -1,11 +1,22 @@
 """Sales tax by jurisdiction, payment method and date."""
 
+import json
 from datetime import date
 from decimal import Decimal
 
 import pytest
 
-from src.services.tax import TaxRate, TaxRateError, load_rates, payment_class, tax_for
+from src.services.tax import (
+    Jurisdiction,
+    TaxRate,
+    TaxRateError,
+    check_rates_against,
+    default_jurisdictions,
+    load_jurisdictions,
+    load_rates,
+    payment_class,
+    tax_for,
+)
 
 JULY = date(2026, 7, 1)
 
@@ -78,10 +89,98 @@ def test_invalid_files_are_rejected(tmp_path, bad):
 
 def test_shipped_rates_file_loads():
     rates = load_rates()
-    assert len(rates) == 6
+    assert len(rates) == 8
     assert {(r.jurisdiction, r.payment_class) for r in rates} == {
         ("PB", "standard"),
         ("PB", "digital"),
         ("ICT", "standard"),
         ("ICT", "digital"),
+        ("GB", "any"),
+        ("AE-DU", "any"),
     }
+
+
+def _write(tmp_path, name, data):
+    p = tmp_path / name
+    p.write_text(json.dumps(data), encoding="utf-8")
+    return p
+
+
+def test_shipped_jurisdictions_load_and_match_rates():
+    js = default_jurisdictions()
+    assert js["GB"] == Jurisdiction(
+        code="GB",
+        name="United Kingdom",
+        currency="GBP",
+        pricing="included",
+        rounding=Decimal("0.01"),
+        methods=("cash", "card"),
+        service_charge="optional_outside_tax",
+    )
+    assert js["PB"].pricing == "on_top" and js["PB"].rounding == Decimal("1")
+    assert js["AE-DU"].service_charge is None
+
+
+GOOD = {
+    "name": "X",
+    "currency": "GBP",
+    "pricing": "included",
+    "rounding": "0.01",
+    "methods": ["cash"],
+    "service_charge": None,
+}
+
+
+@pytest.mark.parametrize(
+    "patch",
+    [
+        {"pricing": "sometimes"},
+        {"rounding": "0"},
+        {"rounding": "-1"},
+        {"methods": []},
+        {"methods": ["cash", "cheque"]},
+        {"service_charge": "compulsory"},
+        {"currency": ""},
+    ],
+)
+def test_bad_jurisdiction_refused(tmp_path, patch):
+    with pytest.raises(TaxRateError):
+        load_jurisdictions(_write(tmp_path, "j.json", {"XX": {**GOOD, **patch}}))
+
+
+def _xx():
+    return {"XX": Jurisdiction("XX", "X", "GBP", "included", Decimal("0.01"), ("cash",), None)}
+
+
+def test_rate_without_jurisdiction_refused():
+    rates = [TaxRate("ZZ", "any", Decimal("0.1"), JULY, "s")]
+    with pytest.raises(TaxRateError, match="ZZ"):
+        check_rates_against(rates, _xx())
+
+
+def test_any_and_split_rates_cannot_mix():
+    rates = [
+        TaxRate("XX", "any", Decimal("0.2"), JULY, "s"),
+        TaxRate("XX", "standard", Decimal("0.2"), JULY, "s"),
+    ]
+    with pytest.raises(TaxRateError, match="mixes"):
+        check_rates_against(rates, _xx())
+
+
+def test_any_payment_class_accepted_by_rate_loader(tmp_path):
+    rates = load_rates(
+        _write(
+            tmp_path,
+            "r.json",
+            [
+                {
+                    "jurisdiction": "GB",
+                    "payment_class": "any",
+                    "rate": "0.20",
+                    "effective_from": "2011-01-04",
+                    "source": "s",
+                }
+            ],
+        )
+    )
+    assert rates[0].payment_class == "any"

@@ -36,17 +36,21 @@ def payment_class(method: str) -> PaymentClass:
     return "digital" if method in _DIGITAL else "standard"
 
 
-def _default_path() -> Path:
-    if settings.tax_rates_path:
-        return Path(settings.tax_rates_path)
+def _data_path(name: str, override: str | None) -> Path:
+    if override:
+        return Path(override)
     here = Path(__file__).resolve()
     # /app/data in the container (parents[2]), <repo>/data in a checkout (parents[4]);
     # slicing never raises when the path is shorter than expected.
     for base in here.parents[2:5:2]:
-        candidate = base / "data" / "tax_rates.json"
+        candidate = base / "data" / name
         if candidate.is_file():
             return candidate
-    raise TaxRateError("data/tax_rates.json not found")
+    raise TaxRateError(f"data/{name} not found")
+
+
+def _default_path() -> Path:
+    return _data_path("tax_rates.json", settings.tax_rates_path)
 
 
 def load_rates(path: Path | None = None) -> list[TaxRate]:
@@ -75,7 +79,7 @@ def load_rates(path: Path | None = None) -> list[TaxRate]:
             raise TaxRateError(f"Bad tax rate entry {entry!r}: empty source")
         if not r.rate.is_finite():
             raise TaxRateError(f"Rate must be finite: {r.rate}")
-        if r.payment_class not in ("standard", "digital"):
+        if r.payment_class not in ("standard", "digital", "any"):
             raise TaxRateError(f"Unknown payment class {r.payment_class!r}")
         if not Decimal("0") <= r.rate <= Decimal("1"):
             raise TaxRateError(f"Rate out of range: {r.rate}")
@@ -90,6 +94,77 @@ def load_rates(path: Path | None = None) -> list[TaxRate]:
 @lru_cache(maxsize=1)
 def default_rates() -> tuple[TaxRate, ...]:
     return tuple(load_rates())
+
+
+Pricing = Literal["on_top", "included"]
+
+
+@dataclass(frozen=True)
+class Jurisdiction:
+    code: str
+    name: str
+    currency: str
+    pricing: Pricing
+    rounding: Decimal  # every tax, service and total amount rounds half up to this unit
+    methods: tuple[str, ...]
+    service_charge: Literal["optional_outside_tax"] | None
+
+
+def load_jurisdictions(path: Path | None = None) -> dict[str, Jurisdiction]:
+    try:
+        path = path or _data_path("tax_jurisdictions.json", settings.tax_jurisdictions_path)
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as e:
+        raise TaxRateError(f"Cannot read tax jurisdictions: {e}") from e
+    if not isinstance(raw, dict) or not raw:
+        raise TaxRateError("Tax jurisdictions file must be a non-empty object")
+    out: dict[str, Jurisdiction] = {}
+    for code, e in raw.items():
+        try:
+            j = Jurisdiction(
+                code=str(code),
+                name=str(e["name"]),
+                currency=str(e["currency"]),
+                pricing=e["pricing"],
+                rounding=Decimal(str(e["rounding"])),
+                methods=tuple(e["methods"]),
+                service_charge=e["service_charge"],
+            )
+        except (KeyError, TypeError, ValueError, ArithmeticError) as err:
+            raise TaxRateError(f"Bad jurisdiction {code!r}: {err}") from err
+        if not j.code.strip() or not j.name.strip() or not j.currency.strip():
+            raise TaxRateError(f"Bad jurisdiction {code!r}: code, name and currency required")
+        if j.pricing not in ("on_top", "included"):
+            raise TaxRateError(f"Bad jurisdiction {code!r}: unknown pricing {j.pricing!r}")
+        if not j.rounding.is_finite() or j.rounding <= 0:
+            raise TaxRateError(f"Bad jurisdiction {code!r}: rounding must be positive")
+        if not j.methods or any(m not in PAYMENT_METHODS for m in j.methods):
+            raise TaxRateError(f"Bad jurisdiction {code!r}: methods {j.methods!r}")
+        if j.service_charge not in (None, "optional_outside_tax"):
+            raise TaxRateError(f"Bad jurisdiction {code!r}: service_charge {j.service_charge!r}")
+        out[j.code] = j
+    return out
+
+
+def check_rates_against(
+    rates: tuple[TaxRate, ...] | list[TaxRate], jurisdictions: dict[str, Jurisdiction]
+) -> None:
+    """Every rate names a known jurisdiction; no jurisdiction mixes "any" with a split."""
+    classes: dict[str, set[str]] = {}
+    for r in rates:
+        if r.jurisdiction not in jurisdictions:
+            raise TaxRateError(f"Rate for unknown jurisdiction {r.jurisdiction!r}")
+        classes.setdefault(r.jurisdiction, set()).add(r.payment_class)
+    for code, cls in classes.items():
+        if "any" in cls and len(cls) > 1:
+            raise TaxRateError(f"Jurisdiction {code!r} mixes 'any' with standard/digital rates")
+
+
+@lru_cache(maxsize=1)
+def default_jurisdictions() -> dict[str, Jurisdiction]:
+    js = load_jurisdictions()
+    check_rates_against(default_rates(), js)
+    return js
 
 
 def jurisdictions(rates: tuple[TaxRate, ...] | list[TaxRate] | None = None) -> set[str]:
