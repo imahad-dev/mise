@@ -80,7 +80,8 @@ The loader refuses, with a clear error:
   `methods` list.
 
 A venue's `tax_jurisdiction` must exist in this file and its `currency` must match the
-jurisdiction's. This is checked wherever either is set (seed, settings), and `NULL` keeps today's
+jurisdiction's. This is checked wherever either is set (seed and admin scripts; owner settings
+cannot change either), and `NULL` keeps today's
 meaning (no tax configured, previews absent, settle refused).
 
 ### The sums
