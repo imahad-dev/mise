@@ -65,6 +65,9 @@ class Bill(Base):
             name="chk_bills_service_charge",
         ),
         CheckConstraint("tax_pricing IN ('on_top', 'included')", name="chk_bills_tax_pricing"),
+        CheckConstraint(
+            "(tax_rate IS NULL) = (tax_pricing IS NULL)", name="chk_bills_tax_pricing_pair"
+        ),
         CheckConstraint("(pickup_no IS NULL) = (pickup_day IS NULL)", name="chk_bills_pickup_pair"),
         UniqueConstraint("restaurant_id", "bill_no", name="uq_bills_restaurant_bill_no"),
         UniqueConstraint("restaurant_id", "pickup_day", "pickup_no", name="uq_bills_pickup_no"),

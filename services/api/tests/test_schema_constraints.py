@@ -870,15 +870,27 @@ async def test_bill_tax_pricing_checked(db_session: AsyncSession):
     rid = await _create_test_restaurant(db_session)
     await assert_violates(
         db_session,
-        "INSERT INTO bills (restaurant_id, source, tax_pricing) "
-        "VALUES (:rid, 'simulated', 'sometimes')",
+        "INSERT INTO bills (restaurant_id, source, tax_rate, tax_pricing) "
+        "VALUES (:rid, 'simulated', 0.2, 'sometimes')",
         {"rid": rid},
         "chk_bills_tax_pricing",
     )
     await db_session.execute(
         text(
-            "INSERT INTO bills (restaurant_id, source, tax_pricing) "
-            "VALUES (:rid, 'simulated', 'included')"
+            "INSERT INTO bills (restaurant_id, source, tax_rate, tax_pricing) "
+            "VALUES (:rid, 'simulated', 0.2, 'included')"
         ),
         {"rid": rid},
     )
+
+
+@pytest.mark.asyncio
+async def test_bill_tax_rate_and_pricing_come_together(db_session: AsyncSession):
+    rid = await _create_test_restaurant(db_session)
+    for col, val in (("tax_rate", "0.2"), ("tax_pricing", "'included'")):
+        await assert_violates(
+            db_session,
+            f"INSERT INTO bills (restaurant_id, source, {col}) VALUES (:rid, 'simulated', {val})",
+            {"rid": rid},
+            "chk_bills_tax_pricing_pair",
+        )

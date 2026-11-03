@@ -239,6 +239,7 @@ async def test_brief_payment_mix_on_known_bills(
                 subtotal=Decimal(subtotal),
                 tax_jurisdiction="PB",
                 tax_rate=Decimal(rate),
+                tax_pricing="on_top",
                 tax_amount=Decimal(tax),
                 total=Decimal(subtotal) + Decimal(tax),
                 opened_at=settled - timedelta(hours=1),

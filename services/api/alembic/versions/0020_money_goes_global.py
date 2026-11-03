@@ -58,10 +58,14 @@ def upgrade() -> None:
     )
     # Every bill so far was Pakistani: tax on top.
     op.execute("UPDATE bills SET tax_pricing = 'on_top' WHERE tax_rate IS NOT NULL")
+    op.create_check_constraint(
+        "chk_bills_tax_pricing_pair", "bills", "(tax_rate IS NULL) = (tax_pricing IS NULL)"
+    )
 
 
 def downgrade() -> None:
     # Dropping tax_pricing means VAT-inclusive bills read as tax-on-top afterwards.
+    op.drop_constraint("chk_bills_tax_pricing_pair", "bills", type_="check")
     op.drop_constraint("chk_bills_service_charge", "bills", type_="check")
     op.drop_column("bills", "claimed_service_included")
     op.drop_column("bills", "service_charge_amount")
