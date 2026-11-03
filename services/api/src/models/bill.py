@@ -59,6 +59,11 @@ class Bill(Base):
             "payment_reference IS NULL OR length(payment_reference) <= 64",
             name="chk_bills_reference_len",
         ),
+        CheckConstraint(
+            "service_charge_rate >= 0 AND service_charge_rate <= 0.20 "
+            "AND service_charge_amount >= 0",
+            name="chk_bills_service_charge",
+        ),
         CheckConstraint("tax_pricing IN ('on_top', 'included')", name="chk_bills_tax_pricing"),
         CheckConstraint("(pickup_no IS NULL) = (pickup_day IS NULL)", name="chk_bills_pickup_pair"),
         UniqueConstraint("restaurant_id", "bill_no", name="uq_bills_restaurant_bill_no"),

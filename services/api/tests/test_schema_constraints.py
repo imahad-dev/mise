@@ -840,6 +840,29 @@ async def test_restaurant_service_charge_rate_bounds(db_session: AsyncSession):
         {},
         "chk_restaurant_service_charge_rate",
     )
+    await assert_violates(
+        db_session,
+        "INSERT INTO restaurant (name, slug, service_charge_rate) VALUES ('x', 'sc-neg', -0.01)",
+        {},
+        "chk_restaurant_service_charge_rate",
+    )
+    await db_session.execute(
+        text(
+            "INSERT INTO restaurant (name, slug, service_charge_rate) VALUES ('x', 'sc-max', 0.20)"
+        )
+    )
+
+
+@pytest.mark.asyncio
+async def test_bill_service_charge_checked(db_session: AsyncSession):
+    rid = await _create_test_restaurant(db_session)
+    for col, val in (("service_charge_rate", "0.25"), ("service_charge_amount", "-1")):
+        await assert_violates(
+            db_session,
+            f"INSERT INTO bills (restaurant_id, source, {col}) VALUES (:rid, 'simulated', {val})",
+            {"rid": rid},
+            "chk_bills_service_charge",
+        )
 
 
 @pytest.mark.asyncio
