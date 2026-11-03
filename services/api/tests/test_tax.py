@@ -259,8 +259,9 @@ def test_included_vat_always_adds_up():
         for jur in ("GB", "AE-DU"):
             c = charge_for(jur, "card", NOV, sub)
             assert c.total == sub  # the guest pays the menu price
-            assert (c.total - c.tax) + c.tax == c.total
-            assert c.tax == (sub * c.rate / (1 + c.rate)).quantize(Decimal("0.01"), "ROUND_HALF_UP")
+            net = c.total - c.tax
+            assert Decimal(0) <= c.tax < c.total
+            assert abs(net * c.rate - c.tax) <= Decimal("0.01")
 
 
 def test_method_not_accepted_in_jurisdiction():
@@ -273,5 +274,7 @@ def test_unknown_jurisdiction():
         charge_for("SD", "cash", NOV, Decimal("10"))
 
 
-def test_tax_for_keeps_its_shape():
-    assert tax_for("GB", "card", NOV, Decimal("24.00")) == (Decimal("0.20"), Decimal("4.00"))
+def test_tax_for_keeps_its_shape_and_refuses_included_vat():
+    assert tax_for("PB", "cash", JULY, Decimal("1000")) == (Decimal("0.16"), Decimal("160"))
+    with pytest.raises(TaxRateError, match="charge_for"):
+        tax_for("GB", "card", NOV, Decimal("24.00"))

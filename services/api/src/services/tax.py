@@ -222,7 +222,11 @@ def charge_for(
     subtotal: Decimal,
     rates: tuple[TaxRate, ...] | list[TaxRate] | None = None,
 ) -> Charge:
-    """Rate, tax and total for a bill of menu-price lines settled on on_date."""
+    """Rate, tax and total for a bill of menu-price lines settled on on_date.
+
+    The jurisdiction and its methods always come from the shipped jurisdictions, even when
+    `rates` is passed.
+    """
     j = jurisdiction_of(jurisdiction)
     if j is None:
         raise TaxRateError(f"Unknown tax jurisdiction {jurisdiction!r}")
@@ -243,6 +247,8 @@ def charge_for(
         tax = round_money(subtotal * rate, j.rounding)
         return Charge(rate, tax, subtotal + tax, "on_top")
     tax = round_money(subtotal * rate / (1 + rate), j.rounding)
+    # shortcut: total is the raw menu-price subtotal; round it if an inclusive jurisdiction
+    # ever uses a unit coarser than 0.01
     return Charge(rate, tax, subtotal, "included")
 
 
@@ -253,8 +259,10 @@ def tax_for(
     subtotal: Decimal,
     rates: tuple[TaxRate, ...] | list[TaxRate] | None = None,
 ) -> tuple[Decimal, Decimal]:
-    """(rate, tax amount) for a bill settled on on_date; see charge_for for the total."""
+    """(rate, tax amount) for tax-on-top jurisdictions only; use charge_for for the total."""
     c = charge_for(jurisdiction, method, on_date, subtotal, rates)
+    if c.pricing != "on_top":
+        raise TaxRateError("tax_for is for tax-on-top jurisdictions; use charge_for")
     return c.rate, c.tax
 
 
@@ -275,6 +283,7 @@ def price_tax_factor(jurisdiction: str | None, on_date: date) -> Decimal:
     if j is None or j.pricing != "included":
         return Decimal(1)
     try:
+        # included pricing implies an "any" rate, so methods[0] gives the one rate
         return 1 + charge_for(j.code, j.methods[0], on_date, Decimal(0)).rate
     except TaxRateError:
         return Decimal(1)
