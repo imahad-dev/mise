@@ -131,21 +131,39 @@ GOOD = {
 }
 
 
+def test_good_jurisdiction_loads(tmp_path):
+    js = load_jurisdictions(_write(tmp_path, "j.json", {"XX": GOOD}))
+    assert js["XX"].currency == "GBP"
+
+
 @pytest.mark.parametrize(
-    "patch",
+    ("patch", "match"),
     [
-        {"pricing": "sometimes"},
-        {"rounding": "0"},
-        {"rounding": "-1"},
-        {"methods": []},
-        {"methods": ["cash", "cheque"]},
-        {"service_charge": "compulsory"},
-        {"currency": ""},
+        ({"pricing": "sometimes"}, "pricing"),
+        ({"rounding": "0"}, "rounding"),
+        ({"rounding": "-1"}, "rounding"),
+        ({"rounding": "0.001"}, "rounding"),
+        ({"rounding": "0.015"}, "rounding"),
+        ({"methods": []}, "methods"),
+        ({"methods": ["cash", "cheque"]}, "methods"),
+        ({"methods": ["cash", "cash"]}, "methods"),
+        ({"methods": "cash"}, "methods"),
+        ({"service_charge": "compulsory"}, "service_charge"),
+        ({"currency": ""}, "currency"),
+        ({"currency": "gbp"}, "currency"),
+        ({"currency": None}, "currency"),
+        ({"name": None}, "name"),
+        ({"name": " "}, "name"),
     ],
 )
-def test_bad_jurisdiction_refused(tmp_path, patch):
-    with pytest.raises(TaxRateError):
+def test_bad_jurisdiction_refused(tmp_path, patch, match):
+    with pytest.raises(TaxRateError, match=match):
         load_jurisdictions(_write(tmp_path, "j.json", {"XX": {**GOOD, **patch}}))
+
+
+def test_code_with_whitespace_refused(tmp_path):
+    with pytest.raises(TaxRateError, match="code"):
+        load_jurisdictions(_write(tmp_path, "j.json", {" XX": GOOD}))
 
 
 def _xx():
@@ -184,3 +202,23 @@ def test_any_payment_class_accepted_by_rate_loader(tmp_path):
         )
     )
     assert rates[0].payment_class == "any"
+
+
+def test_rates_must_cover_methods():
+    pb = Jurisdiction("XX", "X", "GBP", "included", Decimal("0.01"), ("cash", "card"), None)
+    std = TaxRate("XX", "standard", Decimal("0.2"), JULY, "s")
+    dig = TaxRate("XX", "digital", Decimal("0.1"), JULY, "s")
+    any_ = TaxRate("XX", "any", Decimal("0.2"), JULY, "s")
+    check_rates_against([std, dig], {"XX": pb})
+    check_rates_against([any_], {"XX": pb})
+    with pytest.raises(TaxRateError, match="digital"):
+        check_rates_against([std], {"XX": pb})
+    with pytest.raises(TaxRateError, match="standard"):
+        check_rates_against([dig], {"XX": pb})
+    with pytest.raises(TaxRateError, match="XX"):
+        check_rates_against([], {"XX": pb})
+
+
+def test_default_jurisdictions_is_read_only():
+    with pytest.raises(TypeError):
+        default_jurisdictions()["ZZ"] = None  # type: ignore[index]

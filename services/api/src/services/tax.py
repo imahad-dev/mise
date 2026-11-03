@@ -1,15 +1,19 @@
 """Restaurant sales tax: rates are data (data/tax_rates.json), the calculation is pure."""
 
 import json
+import re
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
 from functools import lru_cache
 from pathlib import Path
+from types import MappingProxyType
 from typing import Literal
 
 from src.config import settings
 
+CENTS = Decimal("0.01")
 PaymentMethod = Literal["cash", "card", "wallet", "raast", "bank_transfer"]
 PaymentClass = Literal["standard", "digital"]
 PAYMENT_METHODS: tuple[str, ...] = ("cash", "card", "wallet", "raast", "bank_transfer")
@@ -121,10 +125,14 @@ def load_jurisdictions(path: Path | None = None) -> dict[str, Jurisdiction]:
     out: dict[str, Jurisdiction] = {}
     for code, e in raw.items():
         try:
+            if not isinstance(e["name"], str) or not isinstance(e["currency"], str):
+                raise TypeError("name and currency must be strings")
+            if not isinstance(e["methods"], list):
+                raise TypeError("methods must be a list")
             j = Jurisdiction(
                 code=str(code),
-                name=str(e["name"]),
-                currency=str(e["currency"]),
+                name=e["name"],
+                currency=e["currency"],
                 pricing=e["pricing"],
                 rounding=Decimal(str(e["rounding"])),
                 methods=tuple(e["methods"]),
@@ -132,13 +140,21 @@ def load_jurisdictions(path: Path | None = None) -> dict[str, Jurisdiction]:
             )
         except (KeyError, TypeError, ValueError, ArithmeticError) as err:
             raise TaxRateError(f"Bad jurisdiction {code!r}: {err}") from err
-        if not j.code.strip() or not j.name.strip() or not j.currency.strip():
-            raise TaxRateError(f"Bad jurisdiction {code!r}: code, name and currency required")
+        if not j.code.strip() or j.code != j.code.strip():
+            raise TaxRateError(f"Bad jurisdiction {code!r}: bad code")
+        if not j.name.strip():
+            raise TaxRateError(f"Bad jurisdiction {code!r}: name required")
+        if not re.fullmatch(r"[A-Z]{3}", j.currency):
+            raise TaxRateError(f"Bad jurisdiction {code!r}: currency {j.currency!r}")
         if j.pricing not in ("on_top", "included"):
             raise TaxRateError(f"Bad jurisdiction {code!r}: unknown pricing {j.pricing!r}")
-        if not j.rounding.is_finite() or j.rounding <= 0:
-            raise TaxRateError(f"Bad jurisdiction {code!r}: rounding must be positive")
-        if not j.methods or any(m not in PAYMENT_METHODS for m in j.methods):
+        if not (j.rounding.is_finite() and j.rounding >= CENTS and j.rounding % CENTS == 0):
+            raise TaxRateError(f"Bad jurisdiction {code!r}: rounding must be whole cents")
+        if (
+            not j.methods
+            or len(set(j.methods)) != len(j.methods)
+            or any(m not in PAYMENT_METHODS for m in j.methods)
+        ):
             raise TaxRateError(f"Bad jurisdiction {code!r}: methods {j.methods!r}")
         if j.service_charge not in (None, "optional_outside_tax"):
             raise TaxRateError(f"Bad jurisdiction {code!r}: service_charge {j.service_charge!r}")
@@ -158,13 +174,20 @@ def check_rates_against(
     for code, cls in classes.items():
         if "any" in cls and len(cls) > 1:
             raise TaxRateError(f"Jurisdiction {code!r} mixes 'any' with standard/digital rates")
+    for code, j in jurisdictions.items():
+        have = classes.get(code, set())
+        if "any" in have:
+            continue
+        for needed in {payment_class(m) for m in j.methods}:
+            if needed not in have:
+                raise TaxRateError(f"Jurisdiction {code!r} has no {needed} rate")
 
 
 @lru_cache(maxsize=1)
-def default_jurisdictions() -> dict[str, Jurisdiction]:
+def default_jurisdictions() -> Mapping[str, Jurisdiction]:
     js = load_jurisdictions()
     check_rates_against(default_rates(), js)
-    return js
+    return MappingProxyType(js)
 
 
 def jurisdictions(rates: tuple[TaxRate, ...] | list[TaxRate] | None = None) -> set[str]:
