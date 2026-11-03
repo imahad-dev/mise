@@ -63,6 +63,7 @@ async def narrate(
     facts: dict,
     template: str,
     task: str,
+    length: str = "2-4 sentences",
 ) -> tuple[str, str]:
     """Return (text, source) where source is 'llm' or 'template'."""
     if inference is None:
@@ -71,7 +72,7 @@ async def narrate(
         {
             "role": "system",
             "content": (
-                f"You write the {task} for a restaurant owner in plain English, 2-4 sentences. "
+                f"You write the {task} for a restaurant owner in plain English, {length}. "
                 "Use only the facts in the user's JSON. Do not compute, estimate or invent "
                 "any number; only repeat numbers exactly as written in the facts. "
                 'Return JSON: {"summary": "<text>"}.'

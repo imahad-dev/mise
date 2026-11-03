@@ -1,23 +1,35 @@
 """SQLAlchemy models — import all here for Alembic autogenerate."""
 
 from src.models.audit import AuditLog
+from src.models.bill import Bill
 from src.models.dining_table import DiningTable
 from src.models.forecast import ForecastRun
-from src.models.menu import MenuItem, MenuTranslation
+from src.models.menu import MenuItem, MenuItemOption, MenuTranslation
 from src.models.metrics import MetricsSample
 from src.models.order import Order, OrderItem
+from src.models.pay_forward import PayForward
 from src.models.restaurant import Restaurant
+from src.models.service_call import ServiceCall
 from src.models.session import GuestSession
+from src.models.sitting import TableSitting
+from src.models.user import Membership, User
 
 __all__ = [
     "AuditLog",
+    "Bill",
     "DiningTable",
     "ForecastRun",
     "GuestSession",
+    "Membership",
     "MenuItem",
+    "MenuItemOption",
     "MenuTranslation",
     "MetricsSample",
     "Order",
     "OrderItem",
+    "PayForward",
     "Restaurant",
+    "ServiceCall",
+    "TableSitting",
+    "User",
 ]

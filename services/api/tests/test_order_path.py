@@ -3,7 +3,6 @@ Authentication, Guest Sessions, Orders Path, Kitchen, and Owner Management.
 """
 
 import asyncio
-import time
 import uuid
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
@@ -14,16 +13,16 @@ import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from scripts.seed import load_seed_data, seed_data
-from sqlalchemy import delete, select, text
+from sqlalchemy import delete, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
+from tests.helpers import as_member, make_user, seat_table, sign_in
 
 from src.auth import AUTH_COOKIE_NAME, GUEST_COOKIE_NAME, sign_value
-from src.config import settings
 from src.database import async_session_factory, get_db
 from src.main import app
 from src.models.audit import AuditLog
 from src.models.dining_table import DiningTable
-from src.models.menu import MenuItem, MenuTranslation
+from src.models.menu import MenuItem, MenuItemOption, MenuTranslation
 from src.models.order import Order
 from src.models.restaurant import Restaurant
 from src.models.session import GuestSession
@@ -41,27 +40,38 @@ def assert_no_unit_cost(data: Any) -> None:
             assert_no_unit_cost(item)
 
 
+# Dishes with portion options need an option on every order line; these tests order a plain dish.
+NO_OPTIONS = ~MenuItem.id.in_(select(MenuItemOption.menu_item_id))
+
+
 @pytest.fixture
 async def seeded_restaurant(db_session: AsyncSession) -> Restaurant:
-    """Seed test database with Mario trattoria and return Restaurant."""
-    data = load_seed_data("data/seed/trattoria_da_mario.json")
+    """Seed test database with Angeethi House and return Restaurant."""
+    data = load_seed_data("data/seed/angeethi_house.json")
     await seed_data(data, db_session, rotate_qr=False)
-    res = await db_session.execute(
-        select(Restaurant).where(Restaurant.slug == "trattoria-da-mario")
-    )
+    res = await db_session.execute(select(Restaurant).where(Restaurant.slug == "angeethi-house"))
     return res.scalar_one()
 
 
 @pytest.mark.asyncio
-async def test_auth_login_and_cookie_flags(client: AsyncClient):
-    """Test owner and staff login, cookie attributes (httponly, samesite), and me/logout."""
+async def test_auth_login_and_cookie_flags(
+    client: AsyncClient, db_session: AsyncSession, seeded_restaurant: Restaurant
+):
+    """Test staff and owner login, cookie attributes (httponly, samesite), and me/logout."""
+    await make_user(
+        db_session, [(seeded_restaurant.id, "staff")], email="staff@example.com", password="pw-s"
+    )
+    await make_user(
+        db_session, [(seeded_restaurant.id, "owner")], email="owner@example.com", password="pw-o"
+    )
+
     # 1. Staff login
     resp_staff = await client.post(
         "/api/auth/login",
-        json={"role": "staff", "secret": settings.staff_pin},
+        json={"email": "staff@example.com", "password": "pw-s"},
     )
     assert resp_staff.status_code == 200
-    assert resp_staff.json() == {"status": "ok", "role": "staff"}
+    assert resp_staff.json() == {"status": "ok", "name": "Test user", "email": "staff@example.com"}
 
     # Verify cookie attributes
     set_cookie = resp_staff.headers.get("set-cookie", "")
@@ -73,7 +83,7 @@ async def test_auth_login_and_cookie_flags(client: AsyncClient):
     client.cookies.set(AUTH_COOKIE_NAME, resp_staff.cookies[AUTH_COOKIE_NAME])
     resp_me = await client.get("/api/auth/me")
     assert resp_me.status_code == 200
-    assert resp_me.json() == {"role": "staff"}
+    assert resp_me.json() == {"name": "Test user", "email": "staff@example.com"}
 
     # 3. Logout
     resp_logout = await client.post("/api/auth/logout")
@@ -82,10 +92,10 @@ async def test_auth_login_and_cookie_flags(client: AsyncClient):
     # 4. Owner login
     resp_owner = await client.post(
         "/api/auth/login",
-        json={"role": "owner", "secret": settings.owner_api_key},
+        json={"email": "owner@example.com", "password": "pw-o"},
     )
     assert resp_owner.status_code == 200
-    assert resp_owner.json() == {"status": "ok", "role": "owner"}
+    assert resp_owner.json() == {"status": "ok", "name": "Test user", "email": "owner@example.com"}
 
 
 @pytest.mark.asyncio
@@ -100,14 +110,14 @@ async def test_auth_login_rate_limiting(client: AsyncClient):
         for _ in range(4):
             r = await client.post(
                 "/api/auth/login",
-                json={"role": "staff", "secret": "wrong_pin"},
+                json={"email": "nobody@example.com", "password": "wrong"},
             )
             assert r.status_code == 401
 
         # 5th failed attempt reaches limit -> 429
         r5 = await client.post(
             "/api/auth/login",
-            json={"role": "staff", "secret": "wrong_pin"},
+            json={"email": "nobody@example.com", "password": "wrong"},
         )
         assert r5.status_code == 429
     finally:
@@ -123,7 +133,9 @@ async def test_guest_session_flow_and_no_unit_cost(
     """Create guest session, fetch menu and session, and verify unit_cost is NEVER exposed."""
     # Get a valid table QR token
     res_t = await db_session.execute(
-        select(DiningTable).where(DiningTable.restaurant_id == seeded_restaurant.id)
+        select(DiningTable).where(
+            DiningTable.restaurant_id == seeded_restaurant.id, DiningTable.kind == "table"
+        )
     )
     table = res_t.scalars().first()
     assert table is not None
@@ -161,11 +173,14 @@ async def test_guest_session_flow_and_no_unit_cost(
     assert resp_patch_sess.json()["language"] == "it"
     assert_no_unit_cost(resp_patch_sess.json())
 
+    seeded_restaurant.service_extra_label = "More napkins / cutlery"
+    await db_session.flush()
+
     # 4. GET /api/guest/menu
     resp_menu = await client.get("/api/guest/menu")
     assert resp_menu.status_code == 200
     menu_data = resp_menu.json()
-    assert len(menu_data["items"]) == 25
+    assert len(menu_data["items"]) == 27  # 26 dishes + pay-it-forward chai
     assert_no_unit_cost(menu_data)
     # The guest menu page renders these; their absence crashed the page.
     assert menu_data["restaurant"] == {
@@ -175,6 +190,8 @@ async def test_guest_session_flow_and_no_unit_cost(
     }
     assert menu_data["table_id"] == str(table.id)
     assert menu_data["table_label"] == table.label
+    assert menu_data["table_kind"] == "table"
+    assert menu_data["service_extra_label"] == "More napkins / cutlery"
 
 
 @pytest.mark.asyncio
@@ -302,6 +319,8 @@ async def test_order_idempotency_201_200_409(
     }
     r3 = await client.post("/api/orders", json=payload_diff)
     assert r3.status_code == 409
+    # The phone already sent an order under this key: point it there, never a new one.
+    assert r3.json()["detail"] == {"error": "already_sent", "order_id": order1["id"]}
 
 
 @pytest_asyncio.fixture
@@ -426,6 +445,7 @@ async def test_concurrent_duplicate_posts_create_one_order(
     try:
         guest_sess_id = concurrent_order_env["guest_session_id"]
         item_id = concurrent_order_env["item_id"]
+        await seat_table(concurrent_order_env["table_id"])
 
         cookie_val = sign_value(str(guest_sess_id))
         cookies = {GUEST_COOKIE_NAME: cookie_val}
@@ -486,11 +506,12 @@ async def test_allergen_acknowledgment_required_and_recorded(
     await db_session.flush()
     client.cookies.set(GUEST_COOKIE_NAME, sign_value(str(session.id)))
 
-    # Find item with milk (e.g., Tiramisù or Margherita)
+    # Find a plain (option-less) item with milk
     res_milk = await db_session.execute(
         select(MenuItem).where(
             MenuItem.restaurant_id == seeded_restaurant.id,
             MenuItem.allergens.contains(["milk"]),
+            NO_OPTIONS,
         )
     )
     milk_item = res_milk.scalars().first()
@@ -523,12 +544,22 @@ async def test_allergen_acknowledgment_required_and_recorded(
     audit_ack = res_audit.scalars().first()
     assert audit_ack is not None
 
-    # 4. Safe item with no conflicts: acknowledge_allergen_risk=True leaves it False
+    # 4. Safe item with no conflicts: acknowledge_allergen_risk=True leaves it False.
+    # The seed ships every item unverified, so verify the milk-free ones here.
+    await db_session.execute(
+        update(MenuItem)
+        .where(
+            MenuItem.restaurant_id == seeded_restaurant.id,
+            ~MenuItem.allergens.contains(["milk"]),
+        )
+        .values(allergen_verified=True)
+    )
     res_safe = await db_session.execute(
         select(MenuItem).where(
             MenuItem.restaurant_id == seeded_restaurant.id,
             ~MenuItem.allergens.contains(["milk"]),
             MenuItem.allergen_verified.is_(True),
+            NO_OPTIONS,
         )
     )
     safe_item = res_safe.scalars().first()
@@ -600,7 +631,7 @@ async def test_snapshots_unchanged_after_later_menu_edit(
 
     # Fetch menu item
     res = await db_session.execute(
-        select(MenuItem).where(MenuItem.restaurant_id == seeded_restaurant.id).limit(1)
+        select(MenuItem).where(MenuItem.restaurant_id == seeded_restaurant.id, NO_OPTIONS).limit(1)
     )
     item = res.scalars().first()
     original_price = item.price
@@ -632,11 +663,12 @@ async def test_snapshots_unchanged_after_later_menu_edit(
 async def test_auth_matrix_401_and_403(
     client: AsyncClient,
     seeded_restaurant: Restaurant,
+    db_session: AsyncSession,
 ):
     """Matrix test: unauthenticated -> 401, staff -> 403 on owner routes, owner -> 200 on all."""
     slug = seeded_restaurant.slug
-    owner_cookie = sign_value(f"owner:{int(time.time()) + 3600}")
-    staff_cookie = sign_value(f"staff:{int(time.time()) + 3600}")
+    owner = await make_user(db_session, [(seeded_restaurant.id, "owner")])
+    staff = await make_user(db_session, [(seeded_restaurant.id, "staff")])
 
     kitchen_url = f"/api/restaurants/{slug}/kitchen/orders"
     menu_url = f"/api/restaurants/{slug}/menu-items"
@@ -649,13 +681,13 @@ async def test_auth_matrix_401_and_403(
     assert (await client.get(tables_url)).status_code == 401
 
     # --- 2. Staff cookie -> 200 on kitchen, 403 on owner endpoints ---
-    client.cookies.set(AUTH_COOKIE_NAME, staff_cookie)
+    sign_in(client, staff)
     assert (await client.get(kitchen_url)).status_code == 200
     assert (await client.get(menu_url)).status_code == 403
     assert (await client.get(tables_url)).status_code == 403
 
     # --- 3. Owner cookie -> 200 on all endpoints ---
-    client.cookies.set(AUTH_COOKIE_NAME, owner_cookie)
+    sign_in(client, owner)
     assert (await client.get(kitchen_url)).status_code == 200
     assert (await client.get(menu_url)).status_code == 200
     assert (await client.get(tables_url)).status_code == 200
@@ -669,8 +701,7 @@ async def test_kitchen_bump_idempotent_and_recall_timing(
 ):
     """Kitchen bump is idempotent; recall succeeds at 59s and is rejected at 61s."""
     slug = seeded_restaurant.slug
-    staff_cookie = sign_value(f"staff:{int(time.time()) + 3600}")
-    client.cookies.set(AUTH_COOKIE_NAME, staff_cookie)
+    await as_member(client, db_session, seeded_restaurant.id, "staff")
 
     # Create order
     session = GuestSession(
@@ -737,8 +768,14 @@ async def test_owner_patch_resets_verified_flags_and_audit(
     dietary flags reset dietary_verified.
     """
     slug = seeded_restaurant.slug
-    owner_cookie = sign_value(f"owner:{int(time.time()) + 3600}")
-    client.cookies.set(AUTH_COOKIE_NAME, owner_cookie)
+    await as_member(client, db_session, seeded_restaurant.id, "owner")
+
+    # The seed ships every item unverified, so start from a verified one.
+    await db_session.execute(
+        update(MenuItem)
+        .where(MenuItem.restaurant_id == seeded_restaurant.id)
+        .values(allergen_verified=True, dietary_verified=True)
+    )
 
     # Pick an item initially verified
     res = await db_session.execute(
@@ -805,7 +842,7 @@ async def test_failing_redis_publish_does_not_fail_order(
     client.cookies.set(GUEST_COOKIE_NAME, sign_value(str(session.id)))
 
     res = await db_session.execute(
-        select(MenuItem).where(MenuItem.restaurant_id == seeded_restaurant.id).limit(1)
+        select(MenuItem).where(MenuItem.restaurant_id == seeded_restaurant.id, NO_OPTIONS).limit(1)
     )
     item = res.scalars().first()
 
@@ -840,7 +877,7 @@ async def test_order_integrity_error_non_idempotency_reraised(
     client.cookies.set(GUEST_COOKIE_NAME, sign_value(str(session.id)))
 
     res = await db_session.execute(
-        select(MenuItem).where(MenuItem.restaurant_id == seeded_restaurant.id).limit(1)
+        select(MenuItem).where(MenuItem.restaurant_id == seeded_restaurant.id, NO_OPTIONS).limit(1)
     )
     item = res.scalars().first()
 

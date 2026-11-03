@@ -1,19 +1,21 @@
 "use client";
 
 import React, { useCallback, useEffect, useState } from "react";
-import { StatTile } from "ui";
+import { useSlugRef, useVenue } from "../../../lib/venue";
+import { Card, StatTile } from "ui";
+import { ServiceReportCard, SummarySourceChip } from "../../../components/ServiceReportCard";
 import {
   CLASS_COLORS,
   METHOD_LABELS,
-  eur,
+  money,
   forecastTable,
   quadrantLayout,
+  sharePct,
   wapePct,
   type DailyBrief,
   type MenuClass,
 } from "@/lib/analytics";
 
-const DEFAULT_SLUG = process.env.NEXT_PUBLIC_RESTAURANT_SLUG || "trattoria-da-mario";
 const W = 560;
 const H = 320;
 const PAD = 36;
@@ -55,9 +57,9 @@ function Quadrant({ brief }: { brief: DailyBrief }) {
         </text>
       ))}
       {points.map((p) => (
-        <circle key={p.item.item_id} cx={p.x} cy={p.y} r={6} fill={CLASS_COLORS[p.item.menu_class]}>
+        <circle key={`${p.item.item_id}:${p.item.option_id ?? ""}`} cx={p.x} cy={p.y} r={6} fill={CLASS_COLORS[p.item.menu_class]}>
           <title>
-            {`${p.item.name}: ${p.item.units} sold, ${eur(p.item.unit_margin_eur)} margin per unit (${p.item.menu_class})`}
+            {`${p.item.name}: ${p.item.units} sold, ${money(p.item.unit_margin, brief.currency)} margin per unit (${p.item.menu_class})`}
           </title>
         </circle>
       ))}
@@ -97,7 +99,9 @@ function BacktestBadge({ forecast }: { forecast: DailyBrief["forecast"] }) {
 }
 
 export default function DailyBriefPage() {
-  const [slug] = useState(DEFAULT_SLUG);
+  const { venue } = useVenue();
+  const slug = venue?.slug;
+  const slugRef = useSlugRef(slug);
   const [brief, setBrief] = useState<DailyBrief | null>(null);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
@@ -106,28 +110,35 @@ export default function DailyBriefPage() {
   const [error, setError] = useState<string | null>(null);
 
   const loadBrief = useCallback(async () => {
+    if (!slug) return;
     setLoading(true);
     setError(null);
     try {
       const res = await fetch(`/api/restaurants/${slug}/ai/brief`);
       if (!res.ok) throw new Error(`Failed to load brief (${res.status})`);
-      setBrief(await res.json());
+      const data: DailyBrief = await res.json();
+      if (slugRef.current === slug) setBrief(data);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : String(err));
+      if (slugRef.current === slug) setError(err instanceof Error ? err.message : String(err));
     } finally {
-      setLoading(false);
+      if (slugRef.current === slug) setLoading(false);
     }
-  }, [slug]);
+  }, [slug, slugRef]);
 
   useEffect(() => {
+    setBrief(null);
     loadBrief();
+  }, [loadBrief]);
+
+  useEffect(() => {
     fetch("/api/auth/config")
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => setDemoMode(Boolean(d?.demo_mode)))
       .catch(() => setDemoMode(false));
-  }, [loadBrief]);
+  }, []);
 
   const generateDemoData = async () => {
+    if (!slug) return;
     setGenerating(true);
     setError(null);
     try {
@@ -137,9 +148,10 @@ export default function DailyBriefPage() {
         body: JSON.stringify({ days: 56 }),
       });
       if (!res.ok) throw new Error(`Failed to generate demo data (${res.status})`);
+      if (slugRef.current !== slug) return;
       await loadBrief();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : String(err));
+      if (slugRef.current === slug) setError(err instanceof Error ? err.message : String(err));
     } finally {
       setGenerating(false);
     }
@@ -199,13 +211,13 @@ export default function DailyBriefPage() {
             <div className="grid gap-4 sm:grid-cols-3">
               <StatTile
                 label="Revenue"
-                value={eur(brief.kpis.revenue_eur)}
+                value={money(brief.kpis.revenue, brief.currency)}
                 sub={`${brief.kpis.orders} orders`}
               />
-              <StatTile label="Average order value" value={eur(brief.kpis.aov_eur)} />
+              <StatTile label="Average order value" value={money(brief.kpis.aov, brief.currency)} />
               <StatTile
                 label="Contribution margin"
-                value={eur(brief.kpis.contribution_margin_eur)}
+                value={money(brief.kpis.contribution_margin, brief.currency)}
                 sub={`${brief.kpis.margin_pct}% of revenue`}
               />
             </div>
@@ -213,14 +225,12 @@ export default function DailyBriefPage() {
             <div className="mise-card p-6 space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <h2 className="text-lg font-bold text-ink">Summary — {brief.date}</h2>
-                <span className={`chip ${brief.summary_source === "llm" ? "chip-safe" : "chip-unverified"}`}>
-                  {brief.summary_source === "llm"
-                    ? "AI-written, numbers checked against facts"
-                    : "Template summary"}
-                </span>
+                <SummarySourceChip source={brief.summary_source} />
               </div>
               <p className="text-sm leading-relaxed text-ink">{brief.summary}</p>
             </div>
+
+            <ServiceReportCard key={slug} slug={slug} />
 
             <div className="space-y-4">
               <h3 className="text-base font-bold text-ink">Ranked actions</h3>
@@ -234,10 +244,10 @@ export default function DailyBriefPage() {
                       <span className="chip chip-unverified uppercase">
                         #{a.rank} {a.type.replace("_", " ")}
                       </span>
-                      {a.estimated_impact_eur_per_week != null && (
+                      {a.estimated_impact_per_week != null && (
                         <span className="text-xs font-bold text-olive">
-                          est. {a.estimated_impact_eur_per_week >= 0 ? "+" : ""}
-                          {eur(a.estimated_impact_eur_per_week)}/week
+                          est. {a.estimated_impact_per_week >= 0 ? "+" : ""}
+                          {money(a.estimated_impact_per_week, brief.currency)}/week
                         </span>
                       )}
                     </div>
@@ -261,7 +271,7 @@ export default function DailyBriefPage() {
                 <h3 className="text-base font-bold text-ink">Menu engineering</h3>
                 <p className="text-xs text-ink-muted">
                   Dashed lines are the medians: {brief.thresholds.median_units} units and{" "}
-                  {eur(brief.thresholds.median_unit_margin_eur)} margin per unit. Hover a dot for
+                  {money(brief.thresholds.median_unit_margin, brief.currency)} margin per unit. Hover a dot for
                   details.
                 </p>
               </div>
@@ -271,6 +281,57 @@ export default function DailyBriefPage() {
                 <p className="text-xs text-ink-muted">No sales in this window.</p>
               )}
             </div>
+
+            <Card className="p-6 space-y-4">
+              <div>
+                <h3 className="text-base font-bold text-ink">Payments and tax</h3>
+                <p className="text-xs text-ink-muted">
+                  Settled bills in this window. Digital is card, mobile wallet or QR; standard is
+                  cash or bank transfer.
+                </p>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <StatTile
+                  label="Digital share of revenue"
+                  value={sharePct(brief.payment_mix.revenue_share.digital)}
+                  sub={`${brief.payment_mix.bills.digital} of ${
+                    brief.payment_mix.bills.digital + brief.payment_mix.bills.standard
+                  } bills`}
+                />
+                <StatTile
+                  label="Tax saved by digital payments"
+                  value={money(Number(brief.payment_mix.digital_tax_saving), brief.currency)}
+                  sub="Versus the standard rate on the same bills"
+                />
+              </div>
+              {brief.payment_mix.tax_by_rate.length ? (
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="text-ink-muted text-left">
+                      <th scope="col" className="py-2 pr-3">Tax rate</th>
+                      <th scope="col" className="py-2 pr-3">Tax collected</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {brief.payment_mix.tax_by_rate.map((r) => (
+                      <tr key={r.rate} className="border-t border-line">
+                        <td className="py-2 pr-3 font-mono text-ink">{sharePct(Number(r.rate))}</td>
+                        <td className="py-2 pr-3 font-mono text-ink">
+                          {money(Number(r.tax), brief.currency)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <p className="text-xs text-ink-muted">No settled bills in this window.</p>
+              )}
+            </Card>
+
+            {/* Not revenue: handouts are free and the chai sold already counts as a normal sale. */}
+            <Card className="p-4 text-sm text-ink">
+              Pay-it-forward: {brief.pay_forward.bought} bought · {brief.pay_forward.given} given this week
+            </Card>
 
             <div className="mise-card p-6 space-y-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
@@ -284,15 +345,19 @@ export default function DailyBriefPage() {
                 <BacktestBadge forecast={brief.forecast} />
               </div>
               <div className="flex gap-2" role="group" aria-label="Daypart">
-                {(["lunch", "dinner"] as const).map((d) => (
+                {/* API values stay lunch/dinner; analytics splits the day at 18:00. */}
+                {([
+                  ["lunch", "Daytime"],
+                  ["dinner", "Evening"],
+                ] as const).map(([d, label]) => (
                   <button
                     key={d}
                     type="button"
                     aria-pressed={daypart === d}
                     onClick={() => setDaypart(d)}
-                    className={`${daypart === d ? "btn-primary" : "btn-ghost"} min-h-[44px] capitalize`}
+                    className={`${daypart === d ? "btn-primary" : "btn-ghost"} min-h-[44px]`}
                   >
-                    {d}
+                    {label}
                   </button>
                 ))}
               </div>

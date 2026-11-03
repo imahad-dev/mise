@@ -38,10 +38,10 @@ def unsign_value(signed: str, secret: str = settings.api_secret_key) -> str | No
     return None
 
 
-def set_auth_cookie(response: Response, role: Role) -> None:
-    """Set 8-hour httpOnly signed authentication cookie for owner or staff."""
+def set_auth_cookie(response: Response, user_id: uuid.UUID) -> None:
+    """Set 8-hour httpOnly signed authentication cookie carrying the signed-in user's id."""
     exp_ts = int(time.time()) + 8 * 3600
-    val = f"{role}:{exp_ts}"
+    val = f"{user_id}:{exp_ts}"
     signed = sign_value(val)
     response.set_cookie(
         key=AUTH_COOKIE_NAME,
@@ -76,66 +76,6 @@ def set_guest_cookie(response: Response, session_id: uuid.UUID) -> None:
         samesite="lax",
         secure=(settings.app_env != "dev"),
         path="/",
-    )
-
-
-async def get_current_role(request: Request) -> Role:
-    """Extract and validate owner/staff role from signed httpOnly cookie."""
-    cookie = request.cookies.get(AUTH_COOKIE_NAME)
-    if not cookie:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authentication required",
-        )
-
-    val = unsign_value(cookie)
-    if not val or ":" not in val:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid authentication cookie",
-        )
-
-    role_str, exp_str = val.split(":", 1)
-    try:
-        exp_ts = int(exp_str)
-    except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Malformed authentication cookie",
-        ) from None
-
-    if time.time() > exp_ts:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authentication cookie expired",
-        )
-
-    if role_str not in ("owner", "staff"):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid role in authentication cookie",
-        )
-
-    return role_str  # type: ignore[return-value]
-
-
-async def require_staff_or_owner(role: Role = Depends(get_current_role)) -> Role:
-    """Allow either staff or owner (owner is allowed everywhere staff is)."""
-    if role in ("owner", "staff"):
-        return role
-    raise HTTPException(
-        status_code=status.HTTP_403_FORBIDDEN,
-        detail="Staff or owner privileges required",
-    )
-
-
-async def require_owner(role: Role = Depends(get_current_role)) -> Role:
-    """Require owner privileges; staff receives 403 Forbidden."""
-    if role == "owner":
-        return role
-    raise HTTPException(
-        status_code=status.HTTP_403_FORBIDDEN,
-        detail="Owner privileges required",
     )
 
 

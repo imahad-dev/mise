@@ -74,5 +74,29 @@ export function getDictionary(locale: string | undefined | null): TranslationDic
       ...en.ui,
       ...(raw.ui || {}),
     },
+    menu: {
+      ...en.menu,
+      ...(raw.menu || {}),
+    },
+    bill: {
+      ...en.bill,
+      ...(raw.bill || {}),
+    },
+    pay: {
+      ...en.pay,
+      ...(raw.pay || {}),
+    },
+    call: {
+      ...en.call,
+      ...(raw.call || {}),
+    },
+    counter: {
+      ...en.counter,
+      ...(raw.counter || {}),
+    },
+    order: {
+      ...en.order,
+      ...(raw.order || {}),
+    },
   };
 }

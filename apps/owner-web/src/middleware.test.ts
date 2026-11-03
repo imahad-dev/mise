@@ -63,7 +63,7 @@ describe("owner-web middleware", () => {
 
   it("passes through when mise_auth cookie is present", () => {
     const result = middleware(
-      fakeRequest("/dashboard", { mise_auth: "owner:9999999999.sig" }),
+      fakeRequest("/dashboard", { mise_auth: "00000000-0000-0000-0000-000000000000:9999999999.sig" }),
     );
     expect(NextResponse.next).toHaveBeenCalled();
     expect(result).toEqual({ type: "next", status: 200 });

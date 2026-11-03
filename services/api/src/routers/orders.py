@@ -4,6 +4,7 @@ import asyncio
 import hashlib
 import json
 import logging
+import secrets
 import time
 import uuid
 from collections.abc import AsyncGenerator
@@ -11,7 +12,7 @@ from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from fastapi.responses import StreamingResponse
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -19,14 +20,25 @@ from sqlalchemy.orm import selectinload
 from src.auth import get_current_guest_session
 from src.database import get_db
 from src.models.audit import AuditLog
-from src.models.menu import MenuItem
+from src.models.dining_table import DiningTable
+from src.models.menu import MenuItem, MenuItemOption
 from src.models.order import Order, OrderItem
 from src.models.restaurant import Restaurant
 from src.models.session import GuestSession
-from src.redis_client import publish_event, redis_client
+from src.models.sitting import TableSitting
+from src.redis_client import publish_declined, publish_event, redis_client
+from src.request_limits import enforce_session_limit
 from src.schemas.orders import CreateOrderRequest, OrderItemRequest, OrderResponse
 from src.services.allergen_service import compute_allergen_status
+from src.services.bills import (
+    VISIT_ENDED,
+    lock_open_bill,
+    open_bill_for_table,
+    session_is_current,
+)
+from src.services.counter import open_counter_bill
 from src.services.order_snapshot import line_total, snapshot_order_item
+from src.services.sitting import get_open_sitting, has_approved_order
 
 logger = logging.getLogger(__name__)
 
@@ -38,12 +50,13 @@ def compute_payload_hash(items: list[OrderItemRequest]) -> str:
     canonical = [
         {
             "menu_item_id": str(i.menu_item_id),
+            "option_id": str(i.option_id or ""),
             "quantity": i.quantity,
             "notes": i.notes or "",
         }
         for i in sorted(
             items,
-            key=lambda x: (str(x.menu_item_id), x.quantity, x.notes or ""),
+            key=lambda x: (str(x.menu_item_id), str(x.option_id or ""), x.quantity, x.notes or ""),
         )
     ]
     raw = json.dumps(canonical, sort_keys=True)
@@ -70,6 +83,97 @@ def is_idempotency_unique_violation(err: IntegrityError) -> bool:
     return "orders_guest_idempotency_key" in err_str or "idempotency_key" in err_str
 
 
+def cancel_reason(order: Order) -> str | None:
+    """Guest-safe reason for a cancelled order, from void_kind (never the staff's words)."""
+    if order.status != "cancelled":
+        return None
+    return {"declined": "declined", "table_closed": "table_closed"}.get(order.void_kind, "voided")
+
+
+async def order_response(
+    db: AsyncSession, order: Order, over_first_order_cap: bool = False
+) -> OrderResponse:
+    """OrderResponse with the venue currency, loaded explicitly (relationships are lazy="raise")."""
+    currency = await db.scalar(
+        select(Restaurant.currency).where(Restaurant.id == order.restaurant_id)
+    )
+    computed = {
+        "currency": currency,
+        "over_first_order_cap": over_first_order_cap,
+        "cancel_reason": cancel_reason(order),
+    }
+    fields = {
+        name: getattr(order, name) for name in OrderResponse.model_fields if name not in computed
+    }
+    return OrderResponse.model_validate({**fields, **computed}, from_attributes=True)
+
+
+CODE_TRIES = 5  # wrong table codes in a row before the phone waits CODE_LOCK_S
+CODE_LOCK_S = 60
+# Fresh phones each get CODE_TRIES, so the visit also counts wrong codes from every phone.
+VISIT_CODE_TRIES = 20  # wrong table codes at one sitting before no new phone may join it
+VISIT_LOCK_S = 600  # staff closing and reopening the table gives a new sitting (and code) sooner
+TOO_MANY_TRIES = "Too many tries. Please wait a minute and ask your waiter."
+ASK_WAITER = "Please ask your waiter to help you order."
+ORDERING_QUICKLY = "You're ordering quickly! Please wait a moment and try again."
+
+
+async def _check_table_code(session: GuestSession, sitting: TableSitting, code: str | None) -> None:
+    """403 unless `code` is the visit's table code; 429 while the phone is locked out.
+
+    Redis errors skip the lockouts (fail open, like the other limits); the code comparison
+    itself never does.
+    """
+    lock_key, tries_key = f"code_lock:{session.id}", f"code_attempts:{session.id}"
+    visit_lock, visit_tries = (
+        f"code_lock:sitting:{sitting.id}",
+        f"code_attempts:sitting:{sitting.id}",
+    )
+    for key, detail in ((lock_key, TOO_MANY_TRIES), (visit_lock, ASK_WAITER)):
+        try:
+            locked = await redis_client.exists(key)
+        except Exception as e:
+            logger.warning("Redis error reading %s: %s", key, e)
+            locked = False
+        if locked:
+            raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=detail)
+    if code is not None and sitting.code is not None and secrets.compare_digest(code, sitting.code):
+        try:
+            await redis_client.delete(tries_key)
+        except Exception as e:
+            logger.warning("Redis error clearing %s: %s", tries_key, e)
+        return
+    if code is not None:  # a missing code is a prompt, not a wrong try
+        try:
+            # The visit's count outlives any phone; a closed sitting is never asked again.
+            if await redis_client.incr(visit_tries) >= VISIT_CODE_TRIES:
+                await redis_client.set(visit_lock, "1", ex=VISIT_LOCK_S)
+                await redis_client.expire(visit_tries, 86400)
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=ASK_WAITER
+                )
+            await redis_client.expire(visit_tries, 86400)
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.warning("Redis error counting %s: %s", visit_tries, e)
+        try:
+            tries = await redis_client.incr(tries_key)
+            if tries == 1:
+                await redis_client.expire(tries_key, 300)
+            if tries >= CODE_TRIES:
+                await redis_client.set(lock_key, "1", ex=CODE_LOCK_S)
+                await redis_client.delete(tries_key)
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=TOO_MANY_TRIES
+                )
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.warning("Redis error counting %s: %s", tries_key, e)
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail={"error": "code_required"})
+
+
 @router.post(
     "",
     response_model=OrderResponse,
@@ -80,7 +184,12 @@ def is_idempotency_unique_violation(err: IntegrityError) -> bool:
             "description": "Order already placed (idempotent replay)",
         },
         400: {"description": "Invalid order items"},
-        409: {"description": "Idempotency conflict, unavailable items, or allergen ack required"},
+        403: {"description": "The table code is required or wrong"},
+        409: {
+            "description": "Table not open, already sent under this key (with its order_id), "
+            "unavailable items, or allergen ack required"
+        },
+        429: {"description": "Too many orders or wrong table codes from this phone"},
     },
 )
 async def create_order(
@@ -88,7 +197,7 @@ async def create_order(
     response: Response,
     session: GuestSession = Depends(get_current_guest_session),
     db: AsyncSession = Depends(get_db),
-) -> Order:
+) -> OrderResponse:
     """Place an order with canonical hash idempotency, allergen check, and audit logging."""
     payload_hash = compute_payload_hash(payload.items)
 
@@ -107,17 +216,44 @@ async def create_order(
     if existing_order is not None:
         if existing_order.payload_hash == payload_hash:
             response.status_code = status.HTTP_200_OK
-            return existing_order
+            return await order_response(db, existing_order)
+        # This phone already sent an order under this key: send it there, never a second one.
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="Idempotency key mismatch with different payload",
+            detail={"error": "already_sent", "order_id": str(existing_order.id)},
         )
+
+    # 1b. A table order needs an open table (and its code); counters and replays don't.
+    at_counter = session.table_id is not None and (
+        await db.scalar(select(DiningTable.kind).where(DiningTable.id == session.table_id))
+        == "counter"
+    )
+    sitting: TableSitting | None = None
+    bill = None
+    if session.table_id is not None and not at_counter:
+        # Bill lock before the sitting lock, the order every path takes.
+        bill = await lock_open_bill(db, session.restaurant_id, session.table_id)
+        cancelled: list[uuid.UUID] = []
+        sitting = await get_open_sitting(db, session.table_id, cancelled)
+        # A phone from an earlier sitting rescans the QR to join the new party's visit.
+        if sitting is None or session.sitting_id not in (None, sitting.id):
+            await db.commit()  # keep an idle close get_open_sitting may have just made
+            await publish_declined(session.restaurant_id, cancelled)
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT, detail={"error": "table_not_open"}
+            )
+        # After the bill lock (a racing settle is committed by now), before any code try.
+        if not await session_is_current(db, session):
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=VISIT_ENDED)
+        if sitting.code_required and session.sitting_id != sitting.id:
+            await _check_table_code(session, sitting, payload.code)
+        session.sitting_id = sitting.id
 
     # 2. Fetch menu items for this restaurant
     item_ids = [item_req.menu_item_id for item_req in payload.items]
     stmt_items = (
         select(MenuItem)
-        .options(selectinload(MenuItem.translations))
+        .options(selectinload(MenuItem.translations), selectinload(MenuItem.options))
         .where(
             MenuItem.id.in_(item_ids),
             MenuItem.restaurant_id == session.restaurant_id,
@@ -152,6 +288,23 @@ async def create_order(
     stmt_rest = select(Restaurant).where(Restaurant.id == session.restaurant_id)
     res_rest = await db.execute(stmt_rest)
     restaurant = res_rest.scalar_one()
+
+    # 4b. Resolve each line's option (422 before any allergen check)
+    line_options: list[MenuItemOption | None] = []
+    for req in payload.items:
+        item = found_items[req.menu_item_id]
+        opts = {o.id: o for o in item.options}
+        if opts and req.option_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=f"Choose a size for {item.id}",
+            )
+        if req.option_id is not None and req.option_id not in opts:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=f"Unknown option for {item.id}",
+            )
+        line_options.append(opts.get(req.option_id))
 
     # 5. Check allergen conflict against session's allergens_to_avoid
     conflict_items: list[dict] = []
@@ -191,19 +344,58 @@ async def create_order(
             guest_language=session.language,
             default_language=restaurant.default_language,
             guest_allergens_to_avoid=session.allergens_to_avoid,
+            option=opt,
         )
-        for req in payload.items
+        for req, opt in zip(payload.items, line_options, strict=True)
     ]
     total = sum((line_total(oi) for oi in order_items), Decimal("0.00"))
 
     has_conflict = bool(conflict_items)
     ack_recorded = has_conflict and bool(payload.acknowledge_allergen_risk)
 
+    # A visit's orders wait for the waiter until one of them is approved; a waiting order is
+    # on no bill, so it never reaches any total.
+    pending = sitting is not None and not await has_approved_order(db, sitting.id)
+    bill_created = False
+    if at_counter:
+        # Every counter order is its own bill and pickup number, held until paid.
+        bill, bill_created = await open_counter_bill(db, restaurant), True
+    elif pending:
+        bill = None
+    elif sitting is not None:
+        bill, bill_created = await open_bill_for_table(db, session.restaurant_id, session.table_id)
+
+    over_first_order_cap = False
+    if pending:
+        # Base price of each dish on offer now; a dish's size options are not averaged in.
+        avg_price = await db.scalar(
+            select(func.avg(MenuItem.price)).where(
+                MenuItem.restaurant_id == session.restaurant_id,
+                MenuItem.deleted_at.is_(None),
+                MenuItem.available.is_(True),
+            )
+        )
+        waiting = await db.scalar(
+            select(func.coalesce(func.sum(Order.total), 0)).where(
+                Order.sitting_id == sitting.id, Order.status == "pending_approval"
+            )
+        )
+        if avg_price is not None:
+            cap = avg_price * restaurant.first_order_cap_multiplier
+            over_first_order_cap = waiting + total > cap
+
+    if sitting is not None:
+        # Last check before the order exists: code tries, allergen confirmations and refused
+        # orders never use up a slot.
+        await enforce_session_limit(str(session.id), "order_create", 3, 300, ORDERING_QUICKLY)
+
     order = Order(
         guest_session_id=session.id,
         restaurant_id=session.restaurant_id,
         table_id=session.table_id,
-        status="placed",
+        bill_id=bill.id if bill else None,
+        sitting_id=sitting.id if sitting else None,
+        status="awaiting_payment" if at_counter else "pending_approval" if pending else "placed",
         total=total,
         idempotency_key=payload.idempotency_key,
         payload_hash=payload_hash,
@@ -248,10 +440,12 @@ async def create_order(
         conc_order = res_conc.scalar_one_or_none()
         if conc_order is not None and conc_order.payload_hash == payload_hash:
             response.status_code = status.HTTP_200_OK
-            return conc_order
+            return await order_response(db, conc_order)
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="Order conflict",
+            detail={"error": "already_sent", "order_id": str(conc_order.id)}
+            if conc_order is not None
+            else "Order conflict",
         ) from err
 
     # Re-fetch order with items eager-loaded
@@ -260,13 +454,30 @@ async def create_order(
     )
     final_order = res_final.scalar_one()
 
-    # 8. Publish Redis change signal AFTER commit (publish failures never fail the order)
-    order_event = json.dumps({"event": "order_placed", "order_id": str(final_order.id)})
-    await publish_event(f"kitchen:{final_order.restaurant_id}", order_event)
-    await publish_event(f"orders:{final_order.id}", order_event)
+    # 8. Publish Redis change signal AFTER commit (publish failures never fail the order).
+    # A counter order reaches the kitchen only when its bill is settled, a waiting one when
+    # the waiter approves it.
+    if final_order.status == "placed":
+        order_event = json.dumps({"event": "order_placed", "order_id": str(final_order.id)})
+        await publish_event(f"kitchen:{final_order.restaurant_id}", order_event)
+        await publish_event(f"orders:{final_order.id}", order_event)
+    elif final_order.status == "pending_approval":
+        await publish_event(
+            f"kitchen:{final_order.restaurant_id}",
+            json.dumps({"event": "approval_needed", "table_id": str(final_order.table_id)}),
+        )
+        await publish_event(
+            f"orders:{final_order.id}",
+            json.dumps({"event": "order_pending_approval", "order_id": str(final_order.id)}),
+        )
+    if bill_created:
+        await publish_event(
+            f"kitchen:{final_order.restaurant_id}",
+            json.dumps({"event": "bill_opened", "bill_id": str(final_order.bill_id)}),
+        )
 
     response.status_code = status.HTTP_201_CREATED
-    return final_order
+    return await order_response(db, final_order, over_first_order_cap)
 
 
 @router.get(
@@ -279,7 +490,7 @@ async def get_order(
     id: uuid.UUID,
     session: GuestSession = Depends(get_current_guest_session),
     db: AsyncSession = Depends(get_db),
-) -> Order:
+) -> OrderResponse:
     """Retrieve an order. Returns 404 unless order belongs to the session cookie's session."""
     stmt = (
         select(Order)
@@ -294,7 +505,7 @@ async def get_order(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Order not found",
         )
-    return order
+    return await order_response(db, order)
 
 
 @router.get(
@@ -343,7 +554,7 @@ async def stream_order(
         event_generator(),
         media_type="text/event-stream",
         headers={
-            "Cache-Control": "no-cache",
+            "Cache-Control": "no-cache, no-transform",
             "Connection": "keep-alive",
             "X-Accel-Buffering": "no",
         },

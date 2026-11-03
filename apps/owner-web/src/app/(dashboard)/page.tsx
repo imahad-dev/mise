@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useCallback, useState } from "react";
+import { useVenue } from "../../lib/venue";
 import { useSse } from "../../hooks/use-sse";
 
 interface KitchenOrderItem {
@@ -33,13 +34,13 @@ interface OrdersResponse {
   orders: KitchenOrder[];
 }
 
-const DEFAULT_SLUG = process.env.NEXT_PUBLIC_RESTAURANT_SLUG || "trattoria-da-mario";
-
 export default function DashboardOrdersPage() {
-  const [slug] = useState(DEFAULT_SLUG);
+  const { venue } = useVenue();
+  const slug = venue?.slug;
   const [actionError, setActionError] = useState<string | null>(null);
 
   const fetchOrders = useCallback(async (): Promise<OrdersResponse> => {
+    if (!slug) throw new Error("No venue selected");
     const res = await fetch(`/api/restaurants/${slug}/kitchen/orders`);
     if (!res.ok) {
       throw new Error(`Failed to load kitchen orders (${res.status})`);
@@ -54,7 +55,8 @@ export default function DashboardOrdersPage() {
     error,
     refetch,
   } = useSse<OrdersResponse>({
-    url: `/api/restaurants/${slug}/kitchen/stream`,
+    url: slug ? `/api/restaurants/${slug}/kitchen/stream` : null,
+    enabled: Boolean(slug),
     fetchState: fetchOrders,
     pollingIntervalMs: 4000,
   });
@@ -105,7 +107,7 @@ export default function DashboardOrdersPage() {
             Live <span className="text-terracotta">Orders Stream</span>
           </h1>
           <p className="text-xs text-ink-muted mt-1">
-            Real-time kitchen stream for restaurant: <span className="text-terracotta font-mono">{slug}</span>
+            Real-time kitchen stream for restaurant: <span className="text-terracotta font-mono">{venue?.name ?? "…"}</span>
           </p>
         </div>
 

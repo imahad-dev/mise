@@ -1,15 +1,18 @@
 // Types and pure helpers for the analytics brief and what-if pages.
+import { formatPrice } from "ui";
 
 export type MenuClass = "star" | "plowhorse" | "puzzle" | "dog";
 
 export interface MenuEngineeringItem {
   item_id: string;
+  /** Set on a portion/size row: one row per (dish, option). */
+  option_id: string | null;
   name: string;
   units: number;
   weekly_units: number;
-  revenue_eur: number;
-  unit_margin_eur: number;
-  contribution_eur: number;
+  revenue: number;
+  unit_margin: number;
+  contribution: number;
   menu_class: MenuClass;
 }
 
@@ -33,10 +36,12 @@ export interface BacktestMetric {
 export interface BriefAction {
   rank: number;
   type: "promote_puzzle" | "reprice_plowhorse" | "review_dog" | "prep_target";
+  item_id: string | null;
+  option_id: string | null;
   item: string;
   title: string;
   evidence: Record<string, number | string>;
-  estimated_impact_eur_per_week: number | null;
+  estimated_impact_per_week: number | null;
   formula: string;
 }
 
@@ -45,20 +50,33 @@ export interface DataSources {
   simulated: number;
 }
 
+/** Decimal amounts arrive as strings ("240.00"). Standard = cash, bank transfer. */
+export interface PaymentMix {
+  bills: { standard: number; digital: number };
+  revenue_share: { standard: number; digital: number };
+  digital_revenue_pct: number;
+  tax_by_rate: { rate: string; tax: string }[];
+  digital_tax_saving: string;
+}
+
 export interface DailyBrief {
   date: string;
+  currency: string;
   window_start: string;
   window_end: string;
   data_sources: DataSources;
   kpis: {
     orders: number;
-    revenue_eur: number;
-    aov_eur: number;
-    contribution_margin_eur: number;
+    revenue: number;
+    aov: number;
+    contribution_margin: number;
     margin_pct: number;
   };
   menu_engineering: MenuEngineeringItem[];
-  thresholds: { median_units: number; median_unit_margin_eur: number };
+  thresholds: { median_units: number; median_unit_margin: number };
+  payment_mix: PaymentMix;
+  /** Pay-it-forward chai over the last 7 days; not revenue. */
+  pay_forward: { bought: number; given: number };
   forecast: {
     method: string | null;
     model_name: string | null;
@@ -85,8 +103,13 @@ export const METHOD_LABELS: Record<string, string> = {
   hgb: "Gradient boosting",
 };
 
-export function eur(v: number): string {
-  return `€${v.toLocaleString("en-IE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+export function money(v: number, currency: string): string {
+  return formatPrice(v, currency);
+}
+
+/** 0.6667 -> "66.7%" */
+export function sharePct(v: number): string {
+  return `${(v * 100).toFixed(1)}%`;
 }
 
 export function wapePct(v: number | null | undefined): string {
@@ -102,21 +125,21 @@ export interface QuadrantPoint {
 /** Map items to SVG coordinates: x = units sold, y = unit margin (higher is up). */
 export function quadrantLayout(
   items: MenuEngineeringItem[],
-  thresholds: { median_units: number; median_unit_margin_eur: number },
+  thresholds: { median_units: number; median_unit_margin: number },
   width: number,
   height: number,
   pad: number,
 ): { points: QuadrantPoint[]; medianX: number; medianY: number } {
   const maxUnits = Math.max(1, thresholds.median_units, ...items.map((i) => i.units));
-  const margins = items.map((i) => i.unit_margin_eur);
-  const minM = Math.min(0, thresholds.median_unit_margin_eur, ...margins);
-  const maxM = Math.max(minM + 1, thresholds.median_unit_margin_eur, ...margins);
+  const margins = items.map((i) => i.unit_margin);
+  const minM = Math.min(0, thresholds.median_unit_margin, ...margins);
+  const maxM = Math.max(minM + 1, thresholds.median_unit_margin, ...margins);
   const sx = (u: number) => pad + (u / maxUnits) * (width - 2 * pad);
   const sy = (m: number) => height - pad - ((m - minM) / (maxM - minM)) * (height - 2 * pad);
   return {
-    points: items.map((item) => ({ item, x: sx(item.units), y: sy(item.unit_margin_eur) })),
+    points: items.map((item) => ({ item, x: sx(item.units), y: sy(item.unit_margin) })),
     medianX: sx(thresholds.median_units),
-    medianY: sy(thresholds.median_unit_margin_eur),
+    medianY: sy(thresholds.median_unit_margin),
   };
 }
 

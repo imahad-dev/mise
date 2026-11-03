@@ -41,14 +41,11 @@ def client_ip(request: Request) -> str:
     return str(hops[0]) if hops else peer
 
 
-async def enforce_ip_limit(
-    request: Request, scope: str, limit: int, window_s: int, detail: str
-) -> None:
-    """Allow `limit` requests per `window_s` seconds per client IP; 429 beyond that.
+async def _enforce_fixed_window(key: str, limit: int, window_s: int, detail: str) -> None:
+    """Allow `limit` requests per `window_s` seconds under `key`; 429 beyond that.
 
     Redis errors are logged and the request is allowed (fail open), like the other limits.
     """
-    key = f"rate_limit:{scope}:{client_ip(request)}"
     try:
         count = await redis_client.incr(key)
         if count == 1:
@@ -58,4 +55,18 @@ async def enforce_ip_limit(
     except HTTPException:
         raise
     except Exception as e:
-        logger.warning("Redis error checking %s rate limit: %s", scope, e)
+        logger.warning("Redis error checking rate limit for %s: %s", key, e)
+
+
+async def enforce_ip_limit(
+    request: Request, scope: str, limit: int, window_s: int, detail: str
+) -> None:
+    """Allow `limit` requests per `window_s` seconds per client IP; 429 beyond that."""
+    await _enforce_fixed_window(f"rate_limit:{scope}:{client_ip(request)}", limit, window_s, detail)
+
+
+async def enforce_session_limit(
+    session_id: str, scope: str, limit: int, window_s: int, detail: str
+) -> None:
+    """Allow `limit` requests per `window_s` seconds per guest session; 429 beyond that."""
+    await _enforce_fixed_window(f"rate_limit:{scope}:{session_id}", limit, window_s, detail)

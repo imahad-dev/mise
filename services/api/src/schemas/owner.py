@@ -3,9 +3,9 @@
 import uuid
 from datetime import datetime
 from decimal import Decimal
-from typing import Literal
+from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
 
 
 class OwnerMenuTranslation(BaseModel):
@@ -31,6 +31,7 @@ class OwnerMenuItemResponse(BaseModel):
     is_gluten_free: bool
     available: bool
     featured: bool
+    is_pay_forward: bool = False
     sort_order: int
     image_url: str | None = None
     translations: list[OwnerMenuTranslation]
@@ -50,6 +51,8 @@ class PatchMenuItemRequest(BaseModel):
     is_vegetarian: bool | None = None
     is_vegan: bool | None = None
     is_gluten_free: bool | None = None
+    # The venue's pay-it-forward chai (at most one live item per venue).
+    is_pay_forward: bool | None = None
 
 
 class OwnerTableResponse(BaseModel):
@@ -58,8 +61,34 @@ class OwnerTableResponse(BaseModel):
     label: str
     qr_token: str
     guest_url: str
+    # "counter" is the counter / pickup QR.
+    kind: Literal["table", "counter"]
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class PatchSettingsRequest(BaseModel):
+    payment_details: dict[str, Any] | None = None
+    service_extra_label: (
+        Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=40)] | None
+    ) = None
+    # Pickup numbers print as "<prefix>-042": 1-3 uppercase ASCII letters.
+    pickup_prefix: Annotated[str, StringConstraints(pattern=r"^[A-Z]{1,3}$")] | None = None
+    # Ask guests for a 4-digit table number before their first order (tables opened from now on).
+    sitting_code_required: bool | None = None
+
+    @field_validator("service_extra_label", mode="before")
+    @classmethod
+    def _blank_label_clears(cls, v: Any) -> Any:
+        # null or a blank label clears it (omit the field to keep it).
+        return None if isinstance(v, str) and not v.strip() else v
+
+
+class SettingsResponse(BaseModel):
+    payment_details: dict[str, Any]
+    service_extra_label: str | None
+    pickup_prefix: str | None
+    sitting_code_required: bool
 
 
 class StatusOkResponse(BaseModel):
@@ -112,28 +141,34 @@ class DataSources(BaseModel):
     simulated: int
 
 
+class PayForwardTotals(BaseModel):
+    bought: int
+    given: int
+
+
 class Kpis(BaseModel):
     orders: int
-    revenue_eur: float
-    aov_eur: float
-    contribution_margin_eur: float
+    revenue: float
+    aov: float
+    contribution_margin: float
     margin_pct: float
 
 
 class MenuEngineeringItem(BaseModel):
     item_id: str
+    option_id: str | None
     name: str
     units: int
     weekly_units: float
-    revenue_eur: float
-    unit_margin_eur: float
-    contribution_eur: float
+    revenue: float
+    unit_margin: float
+    contribution: float
     menu_class: Literal["star", "plowhorse", "puzzle", "dog"]
 
 
 class MenuThresholds(BaseModel):
     median_units: float
-    median_unit_margin_eur: float
+    median_unit_margin: float
 
 
 class Pairing(BaseModel):
@@ -148,7 +183,32 @@ class Pairing(BaseModel):
 class PeakHour(BaseModel):
     hour: int
     avg_orders_per_day: float
-    avg_revenue_per_day_eur: float
+    avg_revenue_per_day: float
+
+
+class PaymentClassCounts(BaseModel):
+    standard: int
+    digital: int
+
+
+class PaymentClassShares(BaseModel):
+    standard: float
+    digital: float
+
+
+class TaxByRate(BaseModel):
+    rate: Decimal
+    tax: Decimal
+
+
+class PaymentMix(BaseModel):
+    """Settled bills in the window: standard (cash, bank transfer) vs digital payments."""
+
+    bills: PaymentClassCounts
+    revenue_share: PaymentClassShares
+    digital_revenue_pct: float  # revenue_share.digital as a percentage, as the summary states it
+    tax_by_rate: list[TaxByRate]
+    digital_tax_saving: Decimal
 
 
 class BacktestMetric(BaseModel):
@@ -181,16 +241,18 @@ class ForecastSummary(BaseModel):
 class BriefAction(BaseModel):
     rank: int
     type: Literal["promote_puzzle", "reprice_plowhorse", "review_dog", "prep_target"]
-    item_id: str | None
+    item_id: str | None  # menu item id, like menu_engineering[].item_id
+    option_id: str | None = None  # set on a portion/size row
     item: str
     title: str
     evidence: dict[str, float | int | str]
-    estimated_impact_eur_per_week: float | None
+    estimated_impact_per_week: float | None
     formula: str
 
 
 class DailyBriefResponse(BaseModel):
     date: str
+    currency: str
     window_start: str
     window_end: str
     data_sources: DataSources
@@ -199,6 +261,8 @@ class DailyBriefResponse(BaseModel):
     thresholds: MenuThresholds
     pairings: list[Pairing]
     peak_hours: list[PeakHour]
+    payment_mix: PaymentMix
+    pay_forward: PayForwardTotals
     forecast: ForecastSummary
     actions: list[BriefAction]
     summary: str
@@ -215,12 +279,13 @@ class WhatIfRequest(BaseModel):
 
 
 class WhatIfTotals(BaseModel):
-    revenue_eur: float
-    margin_eur: float
+    revenue: float
+    margin: float
 
 
 class WhatIfResponse(BaseModel):
     scenario: str
+    currency: str
     item: str | None
     window_start: str
     window_end: str
@@ -241,6 +306,7 @@ class SimulateOrdersRequest(BaseModel):
 
 class SimulateOrdersResponse(BaseModel):
     orders_created: int
+    bills_created: int
     start_date: str
     end_date: str
     assumptions: dict

@@ -1,12 +1,15 @@
 """Tests verifying that all database CHECK constraints and FK RESTRICT rules reject invalid data."""
 
 import uuid
+from datetime import date
 from typing import Any
 
 import pytest
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from src.models.dining_table import DiningTable
 
 
 async def _create_test_restaurant(db: AsyncSession, slug: str | None = None) -> str:
@@ -243,6 +246,30 @@ async def test_orders_bad_status(db_session: AsyncSession):
         sql,
         {"session_id": session_id, "restaurant_id": rest_id},
         "chk_orders_status",
+    )
+
+
+@pytest.mark.asyncio
+async def test_orders_bad_void_kind(db_session: AsyncSession):
+    """CHECK constraint: void_kind in ('staff', 'declined', 'table_closed')."""
+    rest_id = await _create_test_restaurant(db_session)
+    session_id = await _create_test_session(db_session, rest_id)
+
+    sql = """
+    INSERT INTO orders (
+        guest_session_id, restaurant_id, status, total,
+        idempotency_key, payload_hash, void_kind
+    )
+    VALUES (
+        :session_id, :restaurant_id, 'cancelled', 10.00,
+        'idem-key-vk', 'hash-123', 'guest'
+    )
+    """
+    await assert_violates(
+        db_session,
+        sql,
+        {"session_id": session_id, "restaurant_id": rest_id},
+        "chk_orders_void_kind",
     )
 
 
@@ -586,4 +613,220 @@ async def test_orders_bumped_without_bumped_at_rejected(db_session: AsyncSession
         sql,
         {"session_id": session_id, "restaurant_id": rest_id},
         "chk_orders_bumped_at_required",
+    )
+
+
+async def test_user_email_unique(db_session):
+    from src.models.user import User
+
+    db_session.add(User(email="a@example.com", name="A", password_hash="x"))
+    await db_session.flush()
+    db_session.add(User(email="a@example.com", name="B", password_hash="y"))
+    with pytest.raises(IntegrityError):
+        await db_session.flush()
+
+
+async def test_membership_role_and_uniqueness(db_session):
+    from src.models.user import Membership, User
+
+    rid = await _create_test_restaurant(db_session)
+    user = User(email="m@example.com", name="M", password_hash="x")
+    db_session.add(user)
+    await db_session.flush()
+    db_session.add(Membership(user_id=user.id, restaurant_id=uuid.UUID(rid), role="owner"))
+    await db_session.flush()
+    db_session.add(Membership(user_id=user.id, restaurant_id=uuid.UUID(rid), role="staff"))
+    with pytest.raises(IntegrityError):
+        await db_session.flush()
+
+
+@pytest.mark.asyncio
+async def test_option_price_and_cost_non_negative(db_session):
+    from decimal import Decimal
+
+    from sqlalchemy.exc import IntegrityError
+
+    from src.models.menu import MenuItemOption
+
+    rid = await _create_test_restaurant(db_session)
+    mid = await _create_test_menu_item(db_session, rid)
+    db_session.add(
+        MenuItemOption(
+            menu_item_id=uuid.UUID(mid), label="Half", price=Decimal("-1"), unit_cost=Decimal("0")
+        )
+    )
+    with pytest.raises(IntegrityError):
+        await db_session.flush()
+
+
+@pytest.mark.asyncio
+async def test_option_label_unique_per_item(db_session):
+    from decimal import Decimal
+
+    from sqlalchemy.exc import IntegrityError
+
+    from src.models.menu import MenuItemOption
+
+    rid = await _create_test_restaurant(db_session)
+    mid = uuid.UUID(await _create_test_menu_item(db_session, rid))
+    db_session.add(
+        MenuItemOption(menu_item_id=mid, label="Full", price=Decimal("10"), unit_cost=Decimal("4"))
+    )
+    await db_session.flush()
+    db_session.add(
+        MenuItemOption(menu_item_id=mid, label="Full", price=Decimal("11"), unit_cost=Decimal("4"))
+    )
+    with pytest.raises(IntegrityError):
+        await db_session.flush()
+
+
+async def test_service_call_one_open_per_table(db_session):
+    from src.models.service_call import ServiceCall
+
+    rid = uuid.UUID(await _create_test_restaurant(db_session))
+    table = DiningTable(restaurant_id=rid, label="T9", qr_token=f"qr-{uuid.uuid4().hex}")
+    db_session.add(table)
+    await db_session.flush()
+    db_session.add(ServiceCall(restaurant_id=rid, table_id=table.id, reason="water"))
+    await db_session.flush()
+    db_session.add(ServiceCall(restaurant_id=rid, table_id=table.id, reason="help"))
+    with pytest.raises(IntegrityError):
+        await db_session.flush()
+
+
+async def test_service_call_reason_checked(db_session):
+    from src.models.service_call import ServiceCall
+
+    rid = uuid.UUID(await _create_test_restaurant(db_session))
+    table = DiningTable(restaurant_id=rid, label="T8", qr_token=f"qr-{uuid.uuid4().hex}")
+    db_session.add(table)
+    await db_session.flush()
+    db_session.add(ServiceCall(restaurant_id=rid, table_id=table.id, reason="pizza"))
+    with pytest.raises(IntegrityError):
+        await db_session.flush()
+
+
+async def test_table_kind_checked(db_session):
+    rid = uuid.UUID(await _create_test_restaurant(db_session))
+    db_session.add(DiningTable(restaurant_id=rid, label="X", qr_token="qr-x-kind", kind="bar"))
+    with pytest.raises(IntegrityError):
+        await db_session.flush()
+
+
+@pytest.mark.asyncio
+async def test_bill_claimed_reference_over_64_rejected(db_session: AsyncSession):
+    rid = await _create_test_restaurant(db_session)
+    await assert_violates(
+        db_session,
+        "INSERT INTO bills (restaurant_id, source, claimed_reference) "
+        "VALUES (:rid, 'simulated', :ref)",
+        {"rid": rid, "ref": "x" * 65},
+        "chk_bills_claimed_reference_len",
+    )
+
+
+@pytest.mark.asyncio
+async def test_bill_claimed_method_checked(db_session: AsyncSession):
+    rid = await _create_test_restaurant(db_session)
+    await assert_violates(
+        db_session,
+        "INSERT INTO bills (restaurant_id, source, claimed_method) "
+        "VALUES (:rid, 'simulated', 'btc')",
+        {"rid": rid},
+        "chk_bills_claimed_method",
+    )
+
+
+@pytest.mark.asyncio
+async def test_bill_cancelled_requires_cancelled_at(db_session: AsyncSession):
+    rid = await _create_test_restaurant(db_session)
+    await assert_violates(
+        db_session,
+        "INSERT INTO bills (restaurant_id, source, status) VALUES (:rid, 'simulated', 'cancelled')",
+        {"rid": rid},
+        "chk_bills_cancelled_complete",
+    )
+    await db_session.execute(
+        text(
+            "INSERT INTO bills (restaurant_id, source, status, cancelled_at) "
+            "VALUES (:rid, 'simulated', 'cancelled', now())"
+        ),
+        {"rid": rid},
+    )
+
+
+@pytest.mark.asyncio
+async def test_bill_settled_still_requires_payment_fields(db_session: AsyncSession):
+    rid = await _create_test_restaurant(db_session)
+    await assert_violates(
+        db_session,
+        "INSERT INTO bills (restaurant_id, source, status) VALUES (:rid, 'simulated', 'settled')",
+        {"rid": rid},
+        "chk_bills_settled_complete",
+    )
+
+
+@pytest.mark.asyncio
+async def test_order_void_requires_cancelled_status(db_session: AsyncSession):
+    rid = await _create_test_restaurant(db_session)
+    sid = await _create_test_session(db_session, rid)
+    sql = (
+        "INSERT INTO orders (guest_session_id, restaurant_id, status, total, idempotency_key, "
+        "payload_hash, voided_at) VALUES (:sid, :rid, :status, 1.00, 'void-k', 'h', now())"
+    )
+    await assert_violates(
+        db_session, sql, {"sid": sid, "rid": rid, "status": "placed"}, "chk_orders_void"
+    )
+    await db_session.execute(text(sql), {"sid": sid, "rid": rid, "status": "cancelled"})
+
+
+@pytest.mark.asyncio
+async def test_order_awaiting_payment_accepted_and_collected_needs_bumped(
+    db_session: AsyncSession,
+):
+    rid = await _create_test_restaurant(db_session)
+    sid = await _create_test_session(db_session, rid)
+    sql = (
+        "INSERT INTO orders (guest_session_id, restaurant_id, status, total, idempotency_key, "
+        "payload_hash, bumped_at, collected_at) "
+        "VALUES (:sid, :rid, :status, 1.00, :key, 'h', now(), :collected)"
+    )
+    await db_session.execute(
+        text(sql),
+        {"sid": sid, "rid": rid, "status": "awaiting_payment", "key": "k1", "collected": None},
+    )
+    for i, bad in enumerate(("placed", "awaiting_payment", "cancelled")):
+        await assert_violates(
+            db_session,
+            sql.replace(":collected", "now()"),
+            {"sid": sid, "rid": rid, "status": bad, "key": f"bad{i}"},
+            "chk_orders_collected",
+        )
+    await db_session.execute(
+        text(sql.replace(":collected", "now()")),
+        {"sid": sid, "rid": rid, "status": "bumped", "key": "k2"},
+    )
+
+
+@pytest.mark.asyncio
+async def test_bill_pickup_number_unique_per_day_and_paired(db_session: AsyncSession):
+    rid = await _create_test_restaurant(db_session)
+    sql = (
+        "INSERT INTO bills (restaurant_id, source, pickup_day, pickup_no) "
+        "VALUES (:rid, 'simulated', :day, :no)"
+    )
+    await db_session.execute(text(sql), {"rid": rid, "day": date(2026, 10, 27), "no": 1})
+    # The same number on another day is fine.
+    await db_session.execute(text(sql), {"rid": rid, "day": date(2026, 10, 28), "no": 1})
+    await assert_violates(
+        db_session, sql, {"rid": rid, "day": date(2026, 10, 27), "no": 1}, "uq_bills_pickup_no"
+    )
+    await assert_violates(
+        db_session, sql, {"rid": rid, "day": None, "no": 2}, "chk_bills_pickup_pair"
+    )
+    await assert_violates(
+        db_session,
+        sql,
+        {"rid": rid, "day": date(2026, 10, 27), "no": None},
+        "chk_bills_pickup_pair",
     )

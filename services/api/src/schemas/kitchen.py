@@ -10,6 +10,7 @@ class KitchenOrderItemResponse(BaseModel):
     id: uuid.UUID
     menu_item_id: uuid.UUID
     kitchen_name: str
+    option_label: str | None = None
     quantity: int
     notes: str | None
     allergens: list[str]
@@ -33,6 +34,10 @@ class KitchenOrderResponse(BaseModel):
     placed_at: datetime
     bumped_at: datetime | None
     items: list[KitchenOrderItemResponse]
+    # Counter orders: "K-042", shown large on the ticket.
+    pickup_label: str | None = None
+    # A free pay-it-forward chai handed out by staff: no table, no bill.
+    pay_forward: bool = False
 
     model_config = ConfigDict(from_attributes=True)
 

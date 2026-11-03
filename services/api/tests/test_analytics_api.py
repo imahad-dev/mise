@@ -1,29 +1,29 @@
 """API tests: simulated demo orders, deterministic brief, forecast_run storage and what-if."""
 
-import time
 from unittest.mock import patch
 
 import pytest
 from httpx import AsyncClient
 from scripts.seed import load_seed_data, seed_data
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
+from tests.helpers import as_member
 
-from src.auth import AUTH_COOKIE_NAME, sign_value
+from src.auth import sign_value
 from src.config import settings
 from src.models.forecast import ForecastRun
+from src.models.menu import MenuItem, MenuTranslation
 from src.models.order import Order
 from src.models.restaurant import Restaurant
 from src.redis_client import redis_client
+from src.services.narrative import numbers_grounded
 
 
 @pytest.fixture
 async def seeded_restaurant(db_session: AsyncSession) -> Restaurant:
-    data = load_seed_data("data/seed/trattoria_da_mario.json")
+    data = load_seed_data("data/seed/angeethi_house.json")
     await seed_data(data, db_session, rotate_qr=False)
-    res = await db_session.execute(
-        select(Restaurant).where(Restaurant.slug == "trattoria-da-mario")
-    )
+    res = await db_session.execute(select(Restaurant).where(Restaurant.slug == "angeethi-house"))
     return res.scalar_one()
 
 
@@ -36,10 +36,6 @@ async def _reset_simulate_rate_limit():
     await redis_client.delete(key)
 
 
-def _as_owner(client: AsyncClient) -> None:
-    client.cookies.set(AUTH_COOKIE_NAME, sign_value(f"owner:{int(time.time()) + 3600}"))
-
-
 async def _simulate(client: AsyncClient, slug: str, **body) -> dict:
     with patch.object(settings, "demo_mode", True):
         resp = await client.post(f"/api/restaurants/{slug}/demo/simulate-orders", json=body)
@@ -49,9 +45,9 @@ async def _simulate(client: AsyncClient, slug: str, **body) -> dict:
 
 @pytest.mark.asyncio
 async def test_simulate_orders_404_when_demo_mode_false(
-    client: AsyncClient, seeded_restaurant: Restaurant
+    client: AsyncClient, db_session: AsyncSession, seeded_restaurant: Restaurant
 ):
-    _as_owner(client)
+    await as_member(client, db_session, seeded_restaurant.id, "owner")
     with patch.object(settings, "demo_mode", False):
         resp = await client.post(
             f"/api/restaurants/{seeded_restaurant.slug}/demo/simulate-orders", json={}
@@ -65,11 +61,20 @@ async def test_simulated_orders_feed_brief_and_forecast(
     client: AsyncClient, db_session: AsyncSession, seeded_restaurant: Restaurant
 ):
     slug = seeded_restaurant.slug
-    _as_owner(client)
+    await db_session.execute(
+        update(Restaurant).where(Restaurant.id == seeded_restaurant.id).values(currency="PKR")
+    )
+    await db_session.commit()
+    await as_member(client, db_session, seeded_restaurant.id, "owner")
 
     summary = await _simulate(client, slug, days=56)
     n = summary["orders_created"]
     assert n > 500
+    # The venue profile from the seed applies; the request still sets days and seed
+    assert summary["assumptions"]["lunch_hours"] == [13, 16]
+    assert summary["assumptions"]["payment_mix"][0] == ["cash", 0.6]
+    assert summary["assumptions"]["days"] == 56
+    assert summary["bills_created"] == n  # one settled bill per simulated party
 
     rows = (
         await db_session.execute(
@@ -103,18 +108,53 @@ async def test_simulated_orders_feed_brief_and_forecast(
     brief = resp.json()
     assert brief["summary_source"] == "template"
     assert "simulated" in brief["summary"]
+    assert brief["currency"] == "PKR"
+    assert "PKR " in brief["summary"] and "EUR" not in brief["summary"]
     assert brief["data_sources"]["live"] == 0
     assert brief["data_sources"]["simulated"] > 0
 
     k = brief["kpis"]
     assert k["orders"] == brief["data_sources"]["simulated"]
-    assert k["aov_eur"] == pytest.approx(k["revenue_eur"] / k["orders"], abs=0.01)
+    assert k["aov"] == pytest.approx(k["revenue"] / k["orders"], abs=0.01)
     assert 0 < k["margin_pct"] < 100
 
     classes = {m["menu_class"] for m in brief["menu_engineering"]}
     assert classes <= {"star", "plowhorse", "puzzle", "dog"}
     assert "star" in classes and "dog" in classes
     assert 3 <= len(brief["actions"]) <= 5
+    # Actions name the menu item like menu_engineering rows do (never an item:option key)
+    row_ids = {(m["item_id"], m["option_id"]) for m in brief["menu_engineering"]}
+    for a in brief["actions"]:
+        if a["type"] != "prep_target":
+            assert (a["item_id"], a["option_id"]) in row_ids
+        assert "Unknown item" not in a["item"]
+
+    # One menu-engineering row per (dish, option): the karahi portions are separate rows
+    karahi_id = (
+        await db_session.execute(
+            select(MenuTranslation.menu_item_id)
+            .join(MenuItem)
+            .where(
+                MenuItem.restaurant_id == seeded_restaurant.id,
+                MenuTranslation.name == "Chicken Karahi",
+            )
+        )
+    ).scalar_one()
+    rows = {m["name"]: m for m in brief["menu_engineering"]}
+    for name in ("Chicken Karahi — ½ kg", "Chicken Karahi — 1 kg"):
+        assert rows[name]["item_id"] == str(karahi_id)
+        assert rows[name]["option_id"] is not None
+    assert rows["Chicken Karahi — ½ kg"]["option_id"] != rows["Chicken Karahi — 1 kg"]["option_id"]
+
+    # Every simulated party has a settled bill; the summary states digital share and saving
+    pm = brief["payment_mix"]
+    assert pm["bills"]["standard"] > 0 and pm["bills"]["digital"] > 0
+    assert pm["revenue_share"]["digital"] > 0
+    assert "Digital payments were" in brief["summary"]
+    assert f"PKR {pm['digital_tax_saving']} in tax" in brief["summary"]
+    assert f"Digital payments were {pm['digital_revenue_pct']}%" in brief["summary"]
+    # Every number the summary states can be traced to the response itself.
+    assert numbers_grounded(brief["summary"], {k: v for k, v in brief.items() if k != "summary"})
 
     fc = brief["forecast"]
     assert fc["low_confidence"] is False
@@ -146,26 +186,101 @@ async def test_simulated_orders_feed_brief_and_forecast(
     assert resp.status_code == 200, resp.text
     wi = resp.json()
     assert wi["explanation_source"] == "template"
-    assert wi["delta"]["revenue_eur"] == pytest.approx(
-        wi["baseline"]["revenue_eur"] * 0.5, abs=0.02
-    )
-    assert wi["delta"]["margin_eur"] == pytest.approx(wi["baseline"]["margin_eur"] * 0.5, abs=0.02)
+    assert wi["currency"] == "PKR"
+    assert "PKR " in wi["explanation"] and "EUR" not in wi["explanation"]
+    assert wi["delta"]["revenue"] == pytest.approx(wi["baseline"]["revenue"] * 0.5, abs=0.02)
+    assert wi["delta"]["margin"] == pytest.approx(wi["baseline"]["margin"] * 0.5, abs=0.02)
     assert wi["assumptions"]
 
-    item_id = brief["menu_engineering"][0]["item_id"]
+    plain = next(m for m in brief["menu_engineering"] if m["option_id"] is None)
     resp = await client.post(
         f"/api/restaurants/{slug}/ai/simulate",
-        json={"scenario": "price_change", "item_id": item_id, "change_pct": 10},
+        json={"scenario": "price_change", "item_id": plain["item_id"], "change_pct": 10},
     )
     assert resp.status_code == 200, resp.text
-    assert resp.json()["item"] == brief["menu_engineering"][0]["name"]
+    assert resp.json()["item"] == plain["name"]
+
+    # A dish with options is addressed by its menu item id: the change applies to every portion
+    resp = await client.post(
+        f"/api/restaurants/{slug}/ai/simulate",
+        json={"scenario": "price_change", "item_id": str(karahi_id), "change_pct": 10},
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["item"] == "Chicken Karahi"
+    assert resp.json()["delta"]["revenue"] != 0
+    assert any("every portion" in a for a in resp.json()["assumptions"])
+
+
+@pytest.mark.asyncio
+async def test_brief_payment_mix_on_known_bills(
+    client: AsyncClient, db_session: AsyncSession, seeded_restaurant: Restaurant
+):
+    """Four settled live bills: shares, tax per rate and the digital tax saving are exact."""
+    from datetime import UTC, datetime, timedelta
+    from decimal import Decimal
+
+    from src.models.bill import Bill
+
+    settled = datetime.now(UTC) - timedelta(days=1)
+    known = [
+        ("cash", "1000", "0.16", "160"),
+        ("card", "2000", "0.08", "160"),
+        ("wallet", "1000", "0.08", "80"),
+        ("bank_transfer", "500", "0.16", "80"),
+    ]
+    for n, (method, subtotal, rate, tax) in enumerate(known, start=1):
+        db_session.add(
+            Bill(
+                restaurant_id=seeded_restaurant.id,
+                bill_no=n,
+                status="settled",
+                source="live",
+                payment_method=method,
+                subtotal=Decimal(subtotal),
+                tax_jurisdiction="PB",
+                tax_rate=Decimal(rate),
+                tax_amount=Decimal(tax),
+                total=Decimal(subtotal) + Decimal(tax),
+                opened_at=settled - timedelta(hours=1),
+                settled_at=settled,
+            )
+        )
+    await db_session.commit()
+    await as_member(client, db_session, seeded_restaurant.id, "owner")
+    with patch.object(settings, "demo_mode", False):
+        resp = await client.get(f"/api/restaurants/{seeded_restaurant.slug}/ai/brief")
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["payment_mix"] == {
+        "bills": {"standard": 2, "digital": 2},
+        "revenue_share": {"standard": 0.3333, "digital": 0.6667},
+        "digital_revenue_pct": 66.67,
+        "tax_by_rate": [{"rate": "0.08", "tax": "240.00"}, {"rate": "0.16", "tax": "240.00"}],
+        "digital_tax_saving": "240.00",
+    }
+
+
+@pytest.mark.asyncio
+async def test_brief_payment_mix_without_bills_is_zero(
+    client: AsyncClient, db_session: AsyncSession, seeded_restaurant: Restaurant
+):
+    await as_member(client, db_session, seeded_restaurant.id, "owner")
+    with patch.object(settings, "demo_mode", False):
+        resp = await client.get(f"/api/restaurants/{seeded_restaurant.slug}/ai/brief")
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["payment_mix"] == {
+        "bills": {"standard": 0, "digital": 0},
+        "revenue_share": {"standard": 0.0, "digital": 0.0},
+        "digital_revenue_pct": 0.0,
+        "tax_by_rate": [],
+        "digital_tax_saving": "0.00",
+    }
 
 
 @pytest.mark.asyncio
 async def test_brief_with_no_orders_returns_empty_template(
-    client: AsyncClient, seeded_restaurant: Restaurant
+    client: AsyncClient, db_session: AsyncSession, seeded_restaurant: Restaurant
 ):
-    _as_owner(client)
+    await as_member(client, db_session, seeded_restaurant.id, "owner")
     with patch.object(settings, "demo_mode", False):
         resp = await client.get(f"/api/restaurants/{seeded_restaurant.slug}/ai/brief")
     assert resp.status_code == 200, resp.text
@@ -177,8 +292,10 @@ async def test_brief_with_no_orders_returns_empty_template(
 
 
 @pytest.mark.asyncio
-async def test_whatif_unknown_item_returns_422(client: AsyncClient, seeded_restaurant: Restaurant):
-    _as_owner(client)
+async def test_whatif_unknown_item_returns_422(
+    client: AsyncClient, db_session: AsyncSession, seeded_restaurant: Restaurant
+):
+    await as_member(client, db_session, seeded_restaurant.id, "owner")
     resp = await client.post(
         f"/api/restaurants/{seeded_restaurant.slug}/ai/simulate",
         json={
@@ -196,7 +313,7 @@ async def test_regenerating_demo_data_drops_stale_forecast(
     client: AsyncClient, db_session: AsyncSession, seeded_restaurant: Restaurant
 ):
     slug = seeded_restaurant.slug
-    _as_owner(client)
+    await as_member(client, db_session, seeded_restaurant.id, "owner")
 
     await _simulate(client, slug, days=28, seed=1)
     with patch.object(settings, "demo_mode", False):
@@ -220,7 +337,7 @@ async def test_regenerating_demo_data_drops_stale_forecast(
 @pytest.mark.asyncio
 @pytest.mark.timeout(120)
 async def test_health_stays_responsive_while_forecast_recomputes(
-    client: AsyncClient, seeded_restaurant: Restaurant
+    client: AsyncClient, db_session: AsyncSession, seeded_restaurant: Restaurant
 ):
     """A slow forecast (CPU-bound in production) must not block other requests."""
     import asyncio
@@ -229,7 +346,7 @@ async def test_health_stays_responsive_while_forecast_recomputes(
     from src.services import brief as brief_module
 
     slug = seeded_restaurant.slug
-    _as_owner(client)
+    await as_member(client, db_session, seeded_restaurant.id, "owner")
     await _simulate(client, slug, days=28)
 
     real_forecast = brief_module.forecast
@@ -335,7 +452,7 @@ async def test_generate_demo_data_keeps_live_orders(
     )
     await db_session.flush()
 
-    _as_owner(client)
+    await as_member(client, db_session, seeded_restaurant.id, "owner")
     n1 = (await _simulate(client, slug, days=14, seed=1))["orders_created"]
     live, live_items, session_alive, sim_first = await snapshot()
     assert (live, live_items, session_alive) == ("live", 2, True)
@@ -346,3 +463,30 @@ async def test_generate_demo_data_keeps_live_orders(
     assert (live, live_items, session_alive) == ("live", 2, True)
     assert len(sim_second) == n2
     assert not sim_first & sim_second  # every simulated order was replaced
+
+
+@pytest.mark.asyncio
+async def test_demo_tools_404_for_non_demo_venue_even_in_demo_mode(
+    client: AsyncClient, db_session: AsyncSession
+):
+    """An owner of a real venue cannot generate or reset demo data, nor write rows."""
+    real = Restaurant(
+        name="Real Venue",
+        slug="real-venue",
+        timezone="Asia/Karachi",
+        currency="PKR",
+        languages=["en"],
+        default_language="en",
+    )
+    db_session.add(real)
+    await db_session.flush()
+    await as_member(client, db_session, real.id, "owner")
+    with patch.object(settings, "demo_mode", True):
+        sim = await client.post("/api/restaurants/real-venue/demo/simulate-orders", json={})
+        reset = await client.post("/api/restaurants/real-venue/demo/reset")
+    assert sim.status_code == 404
+    assert reset.status_code == 404
+    count = await db_session.scalar(
+        select(func.count()).select_from(Order).where(Order.restaurant_id == real.id)
+    )
+    assert count == 0

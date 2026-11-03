@@ -67,4 +67,97 @@ export interface TranslationDict {
     items: string;
     backToMenu: string;
   };
+  menu: {
+    taxNote: string;
+    chooseSize: string;
+    from: string;
+  };
+  bill: {
+    /** Contains {billNo}. */
+    paid: string;
+    /** Contains {count}: pay-it-forward chai on the settled bill. */
+    payForward: string;
+  };
+  pay: {
+    button: string;
+    subtotal: string;
+    choose: string;
+    /** Contains {rate}. */
+    taxRate: string;
+    methods: Record<"cash" | "card" | "wallet" | "raast" | "bank_transfer", string>;
+    labels: Record<"raast_id" | "jazzcash" | "easypaisa" | "iban" | "account_title", string>;
+    /** Contains {name} and {qty}. */
+    removed: string;
+    /** Contains {total}. */
+    cash: string;
+    card: string;
+    sent: string;
+    /** Contains {total}. */
+    payTo: string;
+    sampleBanner: string;
+    copy: string;
+    copied: string;
+    copyFailed: string;
+    reference: string;
+    invalidReference: string;
+    paid: string;
+    sending: string;
+    networkError: string;
+    noBill: string;
+    /** Contains {total}, {rate} and {method}. */
+    paidAmount: string;
+    cancelled: string;
+    visitEnded: string;
+  };
+  counter: {
+    /** Menu header on a counter QR. */
+    header: string;
+    /** Pay sheet title and the prompt under the pickup number. */
+    payPrompt: string;
+    pickupNumber: string;
+    preparing: string;
+    /** Contains {label}. */
+    ready: string;
+    collected: string;
+    cancelled: string;
+    /** Contains {total}. */
+    cash: string;
+    card: string;
+  };
+  call: {
+    button: string;
+    help: string;
+    water: string;
+    /** Used when the venue has no service_extra_label. */
+    extra: string;
+    called: string;
+    resolved: string;
+    /** Contains {seconds}. */
+    wait: string;
+    already: string;
+    failed: string;
+  };
+  /** Ordering at a table: waiting for a waiter, the 4-digit number, and what happens after sending. */
+  order: {
+    waiting: string;
+    thanks: string;
+    numberTitle: string;
+    numberHelp: string;
+    /** Contains {n}. */
+    numberDigit: string;
+    numberWrong: string;
+    tooManyTries: string;
+    /** Contains {seconds}. */
+    tryAgainIn: string;
+    askWaiter: string;
+    tooFast: string;
+    tooBig: string;
+    bigFirst: string;
+    confirming: string;
+    declined: string;
+    unavailable: string;
+    /** Contains {names}. */
+    soldOut: string;
+    failed: string;
+  };
 }

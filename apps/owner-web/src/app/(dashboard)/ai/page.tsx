@@ -1,17 +1,19 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { eur, type DataSources } from "@/lib/analytics";
+import { useSlugRef, useVenue } from "../../../lib/venue";
+import { money, type DataSources } from "@/lib/analytics";
 
 type Scenario = "price_change" | "promotion" | "demand_surge";
 
 interface Totals {
-  revenue_eur: number;
-  margin_eur: number;
+  revenue: number;
+  margin: number;
 }
 
 interface WhatIfResult {
   scenario: Scenario;
+  currency: string;
   item: string | null;
   window_start: string;
   window_end: string;
@@ -29,18 +31,19 @@ interface MenuOption {
   name: string;
 }
 
-const DEFAULT_SLUG = process.env.NEXT_PUBLIC_RESTAURANT_SLUG || "trattoria-da-mario";
-
 const SCENARIOS: { id: Scenario; label: string; desc: string }[] = [
   { id: "price_change", label: "Price change", desc: "Change one item's price; demand reacts via elasticity." },
   { id: "promotion", label: "Promotion", desc: "Discount one item; demand reacts via promotion elasticity." },
   { id: "demand_surge", label: "Demand surge", desc: "Multiply every item's weekly demand." },
 ];
 
-const signed = (v: number) => `${v >= 0 ? "+" : "−"}${eur(Math.abs(v))}`;
+const signed = (v: number, currency: string) =>
+  `${v >= 0 ? "+" : "−"}${money(Math.abs(v), currency)}`;
 
 export default function WhatIfPage() {
-  const [slug] = useState(DEFAULT_SLUG);
+  const { venue } = useVenue();
+  const slug = venue?.slug;
+  const slugRef = useSlugRef(slug);
   const [items, setItems] = useState<MenuOption[]>([]);
   const [scenario, setScenario] = useState<Scenario>("price_change");
   const [itemId, setItemId] = useState("");
@@ -53,6 +56,12 @@ export default function WhatIfPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!slug) return;
+    setItems([]);
+    setItemId("");
+    setResult(null);
+    setError(null);
+    let cancelled = false;
     fetch(`/api/restaurants/${slug}/menu-items`)
       .then((r) => (r.ok ? r.json() : []))
       .then(
@@ -61,15 +70,22 @@ export default function WhatIfPage() {
             id: m.id,
             name: (m.translations.find((t) => t.language === "en") ?? m.translations[0])?.name ?? m.id,
           }));
+          if (cancelled) return;
           setItems(opts);
           if (opts.length) setItemId(opts[0].id);
         },
       )
-      .catch(() => setItems([]));
+      .catch(() => {
+        if (!cancelled) setItems([]);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [slug]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!slug) return;
     setLoading(true);
     setError(null);
     const body: Record<string, unknown> = { scenario };
@@ -90,9 +106,10 @@ export default function WhatIfPage() {
           typeof detail?.detail === "string" ? detail.detail : `What-if failed (${res.status})`,
         );
       }
-      setResult(await res.json());
+      const data: WhatIfResult = await res.json();
+      if (slugRef.current === slug) setResult(data);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : String(err));
+      if (slugRef.current === slug) setError(err instanceof Error ? err.message : String(err));
     } finally {
       setLoading(false);
     }
@@ -210,13 +227,13 @@ export default function WhatIfPage() {
                 <div className="text-sm text-ink">
                   Revenue{" "}
                   <span className="font-extrabold text-xl">
-                    {k === "delta" ? signed(result[k].revenue_eur) : eur(result[k].revenue_eur)}
+                    {k === "delta" ? signed(result[k].revenue, result.currency) : money(result[k].revenue, result.currency)}
                   </span>
                 </div>
                 <div className="text-sm text-ink">
                   Margin{" "}
-                  <span className={`font-extrabold text-xl ${k === "delta" ? (result.delta.margin_eur >= 0 ? "text-olive" : "text-danger-fg") : ""}`}>
-                    {k === "delta" ? signed(result[k].margin_eur) : eur(result[k].margin_eur)}
+                  <span className={`font-extrabold text-xl ${k === "delta" ? (result.delta.margin >= 0 ? "text-olive" : "text-danger-fg") : ""}`}>
+                    {k === "delta" ? signed(result[k].margin, result.currency) : money(result[k].margin, result.currency)}
                   </span>
                 </div>
               </div>

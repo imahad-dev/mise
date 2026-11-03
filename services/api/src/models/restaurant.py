@@ -2,9 +2,10 @@
 
 import uuid
 from datetime import datetime
+from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import Boolean, CheckConstraint, DateTime, Integer, Text, func, text
+from sqlalchemy import Boolean, CheckConstraint, DateTime, Integer, Numeric, Text, func, text
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -30,6 +31,16 @@ class Restaurant(Base):
         Text, nullable=False, server_default=text("'Europe/Rome'")
     )
     currency: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'EUR'"))
+    city: Mapped[str | None] = mapped_column(Text, nullable=True)
+    tax_jurisdiction: Mapped[str | None] = mapped_column(Text, nullable=True)
+    service_extra_label: Mapped[str | None] = mapped_column(Text, nullable=True)
+    pickup_prefix: Mapped[str | None] = mapped_column(Text, nullable=True)
+    sitting_code_required: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("false")
+    )
+    first_order_cap_multiplier: Mapped[Decimal] = mapped_column(
+        Numeric(5, 2), nullable=False, server_default=text("4")
+    )
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"))
     languages: Mapped[list[str]] = mapped_column(
         ARRAY(Text),
@@ -39,6 +50,11 @@ class Restaurant(Base):
     default_language: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'en'"))
     menu_version: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
     onboarding: Mapped[dict[str, Any]] = mapped_column(
+        JSONB,
+        nullable=False,
+        server_default=text("'{}'::jsonb"),
+    )
+    payment_details: Mapped[dict[str, Any]] = mapped_column(
         JSONB,
         nullable=False,
         server_default=text("'{}'::jsonb"),

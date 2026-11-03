@@ -25,6 +25,8 @@ class GuestSession(Base):
         Index("idx_guest_session_restaurant_id", "restaurant_id"),
         Index("idx_guest_session_table_id", "table_id"),
         Index("idx_guest_session_cleanup", "restaurant_id", "expires_at"),
+        Index("idx_guest_session_table_created", "table_id", "created_at"),
+        Index("idx_guest_session_sitting_id", "sitting_id"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -40,6 +42,11 @@ class GuestSession(Base):
     table_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("dining_table.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    sitting_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("table_sitting.id", ondelete="SET NULL"),
         nullable=True,
     )
     language: Mapped[str] = mapped_column(Text, nullable=False)
@@ -73,3 +80,4 @@ class GuestSession(Base):
     table: Mapped["DiningTable | None"] = relationship(  # noqa: F821
         "DiningTable", lazy="raise"
     )
+    sitting: Mapped["TableSitting | None"] = relationship("TableSitting", lazy="raise")  # noqa: F821

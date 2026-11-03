@@ -30,7 +30,7 @@ SupportedLanguage = Literal["en", "it"]
 
 class CreateGuestSessionRequest(BaseModel):
     qr_token: str
-    language: SupportedLanguage = "it"
+    language: SupportedLanguage = "en"
     dietary_preferences: list[DietaryPreference] = []
     allergens_to_avoid: list[EU14Allergen] = []
 
@@ -53,6 +53,22 @@ class GuestSessionResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class GuestSessionStatusResponse(GuestSessionResponse):
+    # Whether this phone may order at its table now; never the code itself.
+    # open: may order; waiting: the waiter has not opened the table yet; closed: this phone
+    # ordered on a visit that has ended; ended: scanned before the table reset, scan again.
+    table_state: Literal["open", "waiting", "closed", "ended"]
+    code_required: bool
+
+
+class GuestMenuOption(BaseModel):
+    id: uuid.UUID
+    label: str
+    price: Decimal
+
+    model_config = ConfigDict(from_attributes=True, extra="forbid")
+
+
 class GuestMenuItemResponse(BaseModel):
     id: uuid.UUID
     category: str
@@ -72,6 +88,7 @@ class GuestMenuItemResponse(BaseModel):
     image_url: str | None = None
     allergen_status: str
     matched_allergens: list[str]
+    options: list[GuestMenuOption] = []
 
     # Explicitly guarantee unit_cost is not in schema
     model_config = ConfigDict(from_attributes=True, extra="forbid")
@@ -87,6 +104,8 @@ class GuestMenuResponse(BaseModel):
     restaurant: GuestMenuRestaurant
     table_id: uuid.UUID | None = None
     table_label: str | None = None
+    table_kind: str | None = None
+    service_extra_label: str | None = None
     items: list[GuestMenuItemResponse]
 
 
