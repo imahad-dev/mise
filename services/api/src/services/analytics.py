@@ -39,6 +39,11 @@ _SCOPE = (
     "OR (o.source = 'simulated' AND o.bill_id IS NULL)) "
     "AND o.placed_at >= :start AND o.placed_at < :end"
 )
+# Money from order lines excluding VAT: a settled bill that included VAT in its menu prices
+# stores its rate; divide by 1 + rate. Bills with tax on top (Pakistan) and simulated orders
+# without a bill count as they are.
+_BILL = "LEFT JOIN bills b ON b.id = o.bill_id"
+_NET = "(CASE WHEN b.tax_pricing = 'included' THEN 1 + b.tax_rate ELSE 1 END)"
 
 
 @dataclass(frozen=True)
@@ -78,9 +83,9 @@ async def kpis(db: AsyncSession, w: Window) -> dict:
         await db.execute(
             text(
                 "SELECT count(DISTINCT o.id), "
-                "coalesce(sum(oi.quantity * oi.unit_price), 0), "
-                "coalesce(sum(oi.quantity * (oi.unit_price - oi.unit_cost)), 0) "
-                f"FROM orders o JOIN order_item oi ON oi.order_id = o.id WHERE {_SCOPE}"
+                f"coalesce(sum(oi.quantity * oi.unit_price / {_NET}), 0), "
+                f"coalesce(sum(oi.quantity * (oi.unit_price / {_NET} - oi.unit_cost)), 0) "
+                f"FROM orders o JOIN order_item oi ON oi.order_id = o.id {_BILL} WHERE {_SCOPE}"
             ),
             w.params(),
         )
@@ -108,9 +113,9 @@ async def daily_item_sales(db: AsyncSession, w: Window) -> list[dict]:
             f"CAST({_LOCAL} AS date) AS d, "
             f"CASE WHEN extract(hour FROM {_LOCAL}) < {LUNCH_END_HOUR} "
             "THEN 'lunch' ELSE 'dinner' END AS daypart, "
-            "sum(oi.quantity), sum(oi.quantity * oi.unit_price), "
+            f"sum(oi.quantity), sum(oi.quantity * oi.unit_price / {_NET}), "
             "sum(oi.quantity * oi.unit_cost) "
-            f"FROM orders o JOIN order_item oi ON oi.order_id = o.id WHERE {_SCOPE} "
+            f"FROM orders o JOIN order_item oi ON oi.order_id = o.id {_BILL} WHERE {_SCOPE} "
             "GROUP BY 1, 2, 4, 5 ORDER BY 4, 1, 2, 5"
         ),
         w.params(),
@@ -181,6 +186,19 @@ async def payment_mix(db: AsyncSession, w: Window, restaurant: Restaurant) -> di
     }
 
 
+async def service_charge_collected(db: AsyncSession, w: Window) -> Decimal:
+    """Optional service charge on bills settled in the window: staff money, never revenue."""
+    value = await db.scalar(
+        text(
+            "SELECT coalesce(sum(service_charge_amount), 0) FROM bills "
+            "WHERE restaurant_id = :rid AND status = 'settled' "
+            "AND settled_at >= :start AND settled_at < :end"
+        ),
+        w.params(),
+    )
+    return Decimal(value).quantize(_CENTS)
+
+
 async def top_pairings(db: AsyncSession, w: Window, limit: int = 5) -> list[dict]:
     """Item pairs ordered together, ranked by lift = P(A and B) / (P(A) * P(B))."""
     rows = await db.execute(
@@ -207,8 +225,9 @@ async def peak_hours(db: AsyncSession, w: Window, limit: int = 3) -> list[dict]:
     """Busiest local hours by average orders per day over the window."""
     rows = await db.execute(
         text(
-            f"SELECT extract(hour FROM {_LOCAL})::int AS h, count(*), coalesce(sum(o.total), 0) "
-            f"FROM orders o WHERE {_SCOPE} GROUP BY 1 ORDER BY 2 DESC, 1 LIMIT :limit"
+            f"SELECT extract(hour FROM {_LOCAL})::int AS h, count(*), "
+            f"coalesce(sum(o.total / {_NET}), 0) "
+            f"FROM orders o {_BILL} WHERE {_SCOPE} GROUP BY 1 ORDER BY 2 DESC, 1 LIMIT :limit"
         ),
         {**w.params(), "limit": limit},
     )

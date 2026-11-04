@@ -24,6 +24,7 @@ from src.models.menu import MenuItem, MenuItemOption, MenuTranslation
 from src.services import analytics, pay_forward
 from src.services.forecast import HORIZON_DAYS, build_input, forecast
 from src.services.narrative import narrate
+from src.services.tax import price_tax_factor, splits_by_method
 from src.services.whatif import DEFAULT_PRICE_ELASTICITY, ItemBaseline, run_whatif
 
 if TYPE_CHECKING:
@@ -72,13 +73,17 @@ def row_names(totals: dict[str, dict], names: dict[str, str]) -> dict[str, str]:
 async def current_prices(
     db: AsyncSession, restaurant: Restaurant
 ) -> dict[str, tuple[float, float]]:
-    """Current menu (price, unit_cost) per row key: the item id, and item:option per option."""
+    """Current menu (price, unit_cost) per row key: the item id, and item:option per option.
+
+    Prices exclude VAT where the venue's menu prices include it, like the sales figures.
+    """
+    factor = float(price_tax_factor(restaurant.tax_jurisdiction, local_today(restaurant)))
     rows = await db.execute(
         select(MenuItem.id, MenuItem.price, MenuItem.unit_cost).where(
             MenuItem.restaurant_id == restaurant.id
         )
     )
-    prices = {str(i): (float(p), float(c)) for i, p, c in rows.all()}
+    prices = {str(i): (float(p) / factor, float(c)) for i, p, c in rows.all()}
     options = await db.execute(
         select(
             MenuItemOption.menu_item_id,
@@ -90,7 +95,7 @@ async def current_prices(
         .where(MenuItem.restaurant_id == restaurant.id)
     )
     for item_id, option_id, p, c in options.all():
-        prices[analytics.row_key(str(item_id), str(option_id))] = (float(p), float(c))
+        prices[analytics.row_key(str(item_id), str(option_id))] = (float(p) / factor, float(c))
     return prices
 
 
@@ -377,16 +382,24 @@ async def compute_brief(
             {"items": f"{p['a_name']} + {p['b_name']}", "lift": p["lift"]} for p in pairings
         ],
         "peak_hours": peaks,
+        # Only where cash and digital carry different rates does the mix mean something.
         # Decimals as strings: the number guard reads numbers inside strings.
-        "payment_mix": {
-            "bills": payments["bills"],
-            "revenue_share": payments["revenue_share"],
-            "digital_revenue_pct": payments["digital_revenue_pct"],
-            "tax_by_rate": [
-                {"rate": str(r["rate"]), "tax": str(r["tax"])} for r in payments["tax_by_rate"]
-            ],
-            "digital_tax_saving": str(payments["digital_tax_saving"]),
-        },
+        **(
+            {
+                "payment_mix": {
+                    "bills": payments["bills"],
+                    "revenue_share": payments["revenue_share"],
+                    "digital_revenue_pct": payments["digital_revenue_pct"],
+                    "tax_by_rate": [
+                        {"rate": str(r["rate"]), "tax": str(r["tax"])}
+                        for r in payments["tax_by_rate"]
+                    ],
+                    "digital_tax_saving": str(payments["digital_tax_saving"]),
+                }
+            }
+            if splits_by_method(restaurant.tax_jurisdiction)
+            else {}
+        ),
         "forecast": {
             "method": fc.get("method"),
             "low_confidence": fc.get("low_confidence"),
@@ -423,6 +436,10 @@ async def compute_brief(
         "pairings": pairings,
         "peak_hours": peaks,
         "payment_mix": payments,
+        "prices_include_tax": price_tax_factor(restaurant.tax_jurisdiction, today) != 1,
+        "tax_split_by_method": splits_by_method(restaurant.tax_jurisdiction),
+        # Not narrated and not revenue: the optional service charge is staff money.
+        "service_charge_collected": await analytics.service_charge_collected(db, w),
         # Not narrated and not revenue: chai bought for others and handed out this week
         # (the last 7 local days, today included).
         "pay_forward": await pay_forward.window_totals(

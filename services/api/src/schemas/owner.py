@@ -275,6 +275,9 @@ class DailyBriefResponse(BaseModel):
     pairings: list[Pairing]
     peak_hours: list[PeakHour]
     payment_mix: PaymentMix
+    prices_include_tax: bool
+    tax_split_by_method: bool
+    service_charge_collected: Decimal
     pay_forward: PayForwardTotals
     forecast: ForecastSummary
     actions: list[BriefAction]

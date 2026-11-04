@@ -1,5 +1,6 @@
 """API tests: simulated demo orders, deterministic brief, forecast_run storage and what-if."""
 
+from datetime import date, timedelta
 from unittest.mock import patch
 
 import pytest
@@ -13,9 +14,10 @@ from src.auth import sign_value
 from src.config import settings
 from src.models.forecast import ForecastRun
 from src.models.menu import MenuItem, MenuTranslation
-from src.models.order import Order
+from src.models.order import Order, OrderItem
 from src.models.restaurant import Restaurant
 from src.redis_client import redis_client
+from src.services.analytics import Window
 from src.services.narrative import numbers_grounded
 
 
@@ -117,6 +119,26 @@ async def test_simulated_orders_feed_brief_and_forecast(
     assert k["orders"] == brief["data_sources"]["simulated"]
     assert k["aov"] == pytest.approx(k["revenue"] / k["orders"], abs=0.01)
     assert 0 < k["margin_pct"] < 100
+    # Pakistan bills put tax on top: revenue stays the plain sum of order lines.
+    wp = Window(
+        seeded_restaurant.id,
+        seeded_restaurant.timezone,
+        date.fromisoformat(brief["window_start"]),
+        date.fromisoformat(brief["window_end"]) + timedelta(days=1),
+    ).params()
+    gross = (
+        await db_session.execute(
+            select(func.sum(OrderItem.quantity * OrderItem.unit_price))
+            .join(Order)
+            .where(
+                Order.restaurant_id == seeded_restaurant.id,
+                Order.placed_at >= wp["start"],
+                Order.placed_at < wp["end"],
+            )
+        )
+    ).scalar_one()
+    assert k["revenue"] == round(float(gross), 2)
+    assert (brief["prices_include_tax"], brief["tax_split_by_method"]) == (False, True)
 
     classes = {m["menu_class"] for m in brief["menu_engineering"]}
     assert classes <= {"star", "plowhorse", "puzzle", "dog"}

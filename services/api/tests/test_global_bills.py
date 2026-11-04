@@ -3,19 +3,24 @@
 import uuid
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
+from unittest.mock import patch
 
 import pytest_asyncio
-from sqlalchemy import select
+from sqlalchemy import select, update
 from tests.helpers import approve_order, as_member, seat_table, settle
 from tests.test_bills import _item, bill_id_of, guest
 from tests.test_counter import _backdate
 from tests.test_floor_api import record_events
 
+from src.config import settings
 from src.models.audit import AuditLog
 from src.models.bill import Bill
 from src.models.dining_table import DiningTable
+from src.models.order import Order
 from src.models.restaurant import Restaurant
 from src.models.session import GuestSession
+from src.services import analytics
+from src.services.brief import current_prices, local_today
 
 
 async def _venue(db, jur, currency, tz, service="0"):
@@ -557,3 +562,61 @@ async def test_settings_pakistan_and_no_jurisdiction(client, db_session):
     )
     assert resp.status_code == 422
     assert resp.json()["detail"] == "An optional service charge is not offered at this venue"
+
+
+async def test_uk_revenue_excludes_vat_and_service(client, db_session, uk):
+    r, _, dish, side, s = uk
+    o = await _order(client, s, [(dish, 1), (side, 2)])  # 21.00 incl. VAT
+    bill_id = await bill_id_of(db_session, o)
+    await as_member(client, db_session, r.id, "staff")
+    assert (await settle(client, r.slug, bill_id, "card", service_included=True)).status_code == 200
+    today = local_today(r)
+    w = analytics.Window(r.id, r.timezone, today, today + timedelta(days=1))
+    k = await analytics.kpis(db_session, w)
+    assert k["revenue"] == 17.5  # 21.00 / 1.20
+    # Unit cost is 1.00 per item in _item: 3 items.
+    assert k["contribution_margin"] == 14.5
+    assert await analytics.service_charge_collected(db_session, w) == Decimal("2.63")
+
+
+async def test_uk_brief_excludes_vat_and_reports_service_apart(client, db_session, uk):
+    r, _, dish, side, s = uk
+    o = await _order(client, s, [(dish, 1), (side, 2)])
+    bill_id = await bill_id_of(db_session, o)
+    await as_member(client, db_session, r.id, "staff")
+    assert (await settle(client, r.slug, bill_id, "card", service_included=True)).status_code == 200
+    # The brief window ends yesterday: move the sale there.
+    yesterday = datetime.now(UTC) - timedelta(days=1)
+    await db_session.execute(update(Order).where(Order.id == o).values(placed_at=yesterday))
+    await db_session.execute(update(Bill).where(Bill.id == bill_id).values(settled_at=yesterday))
+    await db_session.commit()
+    await as_member(client, db_session, r.id, "owner")
+    with patch.object(settings, "demo_mode", False):
+        resp = await client.get(f"/api/restaurants/{r.slug}/ai/brief")
+    assert resp.status_code == 200, resp.text
+    b = resp.json()
+    assert (b["kpis"]["revenue"], b["kpis"]["contribution_margin"]) == (17.5, 14.5)
+    assert {m["name"]: m["revenue"] for m in b["menu_engineering"]} == {"Pie": 10.0, "Chips": 7.5}
+    assert b["peak_hours"][0]["avg_revenue_per_day"] == round(17.5 / 28, 2)
+    assert b["service_charge_collected"] == "2.63"
+    assert (b["prices_include_tax"], b["tax_split_by_method"]) == (True, False)
+    # One VAT rate for every method: the payment mix says nothing worth narrating.
+    assert "Digital payments" not in b["summary"]
+    assert "2.63" not in b["summary"]
+
+
+async def test_uk_what_if_prices_exclude_vat(db_session, uk):
+    r, _, dish, side, _ = uk
+    prices = await current_prices(db_session, r)
+    assert prices[str(dish.id)] == (10.0, 1.0)  # 12.00 / 1.20
+    assert prices[str(side.id)] == (3.75, 1.0)  # 4.50 / 1.20
+
+
+async def test_pakistan_prices_and_brief_flags_unchanged(client, db_session):
+    pk, _, dish, *_ = await _venue(db_session, "PB", "PKR", "Asia/Karachi")
+    assert (await current_prices(db_session, pk))[str(dish.id)] == (12.0, 1.0)
+    await as_member(client, db_session, pk.id, "owner")
+    with patch.object(settings, "demo_mode", False):
+        b = (await client.get(f"/api/restaurants/{pk.slug}/ai/brief")).json()
+    assert (b["prices_include_tax"], b["tax_split_by_method"]) == (False, True)
+    assert b["service_charge_collected"] == "0.00"
