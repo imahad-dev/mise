@@ -176,6 +176,10 @@ def generate_orders(
     sizes = np.arange(1, len(a.party_size_weights) + 1)
     size_p = np.asarray(a.party_size_weights) / sum(a.party_size_weights)
     mix = [(m, s) for m, s in a.payment_mix if allowed_methods is None or m in allowed_methods]
+    if allowed_methods is not None and sum(w for _, w in mix) <= 0:
+        raise ValueError(
+            f"payment_mix has no weight on the methods accepted here: {sorted(allowed_methods)}"
+        )
     methods = [m for m, _ in mix]
     method_p = _probabilities([share for _, share in mix])
     settle_lo, settle_hi = a.settle_minutes

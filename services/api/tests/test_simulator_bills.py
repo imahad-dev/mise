@@ -83,6 +83,12 @@ def test_payment_and_options_do_not_move_the_order_stream():
     assert {o.payment_method for o in varied} == {"card"}
 
 
+def test_mix_with_no_accepted_method_is_refused():
+    a = SimAssumptions(days=3, payment_mix=(("wallet", 0.5), ("raast", 0.5)))
+    with pytest.raises(ValueError, match="no weight on the methods accepted"):
+        generate_orders(ITEMS, START, a, TZ, {"cash", "card"})
+
+
 def test_from_profile_converts_lists_and_rejects_unknown_keys():
     a = SimAssumptions.from_profile(
         {
@@ -250,6 +256,7 @@ async def test_simulated_uk_bills_include_vat_and_use_cash_or_card(db_session: A
         .all()
     )
     assert bills
+    assert {b.payment_method for b in bills} == {"cash", "card"}
     for b in bills:
         assert b.payment_method in ("cash", "card")
         assert b.tax_pricing == "included"
