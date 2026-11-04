@@ -90,7 +90,9 @@ function VenueSettings({ slug }: { slug: string }) {
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaved(false);
-    if (loaded.service_charge_allowed && serviceRateFraction(form.service_charge_rate ?? "") === null) {
+    // An unchanged stored rate is sent as null (kept), so an off-grid one never blocks other settings.
+    const rateChanged = form.service_charge_rate !== String(ratePercent(loaded.service_charge_rate));
+    if (loaded.service_charge_allowed && rateChanged && serviceRateFraction(form.service_charge_rate ?? "") === null) {
       setErrors({ service_charge_rate: "Enter 0 to 20, in steps of 0.5" });
       return;
     }

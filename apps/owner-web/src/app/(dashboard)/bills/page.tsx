@@ -169,7 +169,7 @@ export default function BillsPage() {
     if (next.apply) {
       setMethod(next.apply.method);
       setReference(next.apply.reference);
-      setServiceOn(Boolean(body.claim?.service_included));
+      setServiceOn(next.apply.serviceIncluded);
     }
     // A changed service amount is a changed bill too.
     const totals = (d: BillDetail) => `${d.methods.map((m) => `${m.method}:${m.total}`).join()}|${d.service_charge_amount}`;
@@ -382,6 +382,8 @@ export default function BillsPage() {
   const bills = data?.bills ?? [];
   const justCollected = kind === "counter" && view === "open" ? bills.filter((b) => collectedUndoLeft(b, now) > 0) : [];
   const currency = venue?.currency ?? "PKR";
+  // Open bills, and counter bills the expiry cancelled (settling one revives it).
+  const payable = Boolean(detail && (detail.status === "open" || isExpiredUnpaid(detail)));
   const selected = detail ? previewFor(detail, method) : null;
   const hasService = Number(detail?.service_charge_amount ?? 0) > 0;
   // What staff confirm: the method's total plus the optional service when on.
@@ -392,7 +394,7 @@ export default function BillsPage() {
       ? detail.tax_pricing === "included"
         ? totalRows(detail)
         : null
-      : detail && selected?.tax_included
+      : detail && payable && selected?.tax_included
         ? totalRows({
             currency: detail.currency,
             subtotal: detail.subtotal,
@@ -421,8 +423,6 @@ export default function BillsPage() {
   const sheetTitle = detail
     ? `${detail.pickup_label ? `Pickup ${pickupText(detail)}` : detail.table_label ? `Table ${detail.table_label}` : "Bill"} · ${billNo(detail.bill_no)}`
     : "Bill";
-  // Open bills, and counter bills the expiry cancelled (settling one revives it).
-  const payable = Boolean(detail && (detail.status === "open" || isExpiredUnpaid(detail)));
   const timeZone = data?.restaurant_timezone ?? "UTC";
 
   return (

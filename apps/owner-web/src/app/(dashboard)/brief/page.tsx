@@ -258,7 +258,7 @@ export default function DailyBriefPage() {
                       {a.estimated_impact_per_week != null && (
                         <span className="text-xs font-bold text-olive">
                           est. {a.estimated_impact_per_week >= 0 ? "+" : ""}
-                          {money(a.estimated_impact_per_week, brief.currency)}/week
+                          {exVat(`${money(a.estimated_impact_per_week, brief.currency)}/week`, vat)}
                         </span>
                       )}
                     </div>

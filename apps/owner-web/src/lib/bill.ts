@@ -97,10 +97,10 @@ export interface BillOrder {
 export const SAMPLE_BILL_FOOTER =
   "Sample bill — not a tax invoice. Not connected to FBR or any provincial revenue authority.";
 
-/** Pakistani bills name the authorities they are not connected to; others keep the first sentence. */
+/** Pakistani bills name the authorities they are not connected to; others keep only the first sentence. */
 export const billFooter = (jurisdiction: string | null | undefined) =>
   // No jurisdiction: a bill from before venues outside Pakistan existed.
-  !jurisdiction || jurisdiction === "PB" || jurisdiction === "ICT" ? SAMPLE_BILL_FOOTER : `${SAMPLE_BILL_FOOTER.split(". ")[0]}.`;
+  !jurisdiction || jurisdiction === "PB" || jurisdiction === "ICT" ? SAMPLE_BILL_FOOTER : "Sample bill — not a tax invoice.";
 
 export const PAYMENT_METHODS = [
   { value: "cash", label: "Cash" },
@@ -174,7 +174,9 @@ export const warningKey = (d: Pick<BillDetail, "reused_reference_bill_no" | "reu
   d ? `${d.reused_reference_bill_no ?? ""}|${d.reused_reference_open_bill_no ?? ""}|${d.claim?.reference ?? ""}` : "";
 
 const sameClaim = (a: PaymentClaim | null, b: PaymentClaim | null) =>
-  (a?.method ?? null) === (b?.method ?? null) && (a?.reference ?? null) === (b?.reference ?? null);
+  (a?.method ?? null) === (b?.method ?? null) &&
+  (a?.reference ?? null) === (b?.reference ?? null) &&
+  (a?.service_included ?? false) === (b?.service_included ?? false);
 
 /**
  * A live refresh brought a claim: follow it while staff haven't edited method or reference,
@@ -184,11 +186,11 @@ export function nextFormState(
   prev: PaymentClaim | null,
   next: PaymentClaim | null,
   touched: boolean,
-): { apply: { method: PaymentMethod; reference: string } | null; notice: string | null } {
+): { apply: { method: PaymentMethod; reference: string; serviceIncluded: boolean } | null; notice: string | null } {
   if (!next || sameClaim(prev, next)) return { apply: null, notice: null };
   if (touched) return { apply: null, notice: `The guest changed their payment to ${claimSummary(next)} — check before confirming` };
   const method = PAYMENT_METHODS.find((m) => m.value === next.method)?.value ?? "cash";
-  return { apply: { method, reference: next.reference ?? "" }, notice: null };
+  return { apply: { method, reference: next.reference ?? "", serviceIncluded: next.service_included ?? false }, notice: null };
 }
 
 export const VOID_REASONS = ["Wrong table", "Guest changed mind", "Duplicate", "Other"] as const;

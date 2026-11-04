@@ -55,7 +55,9 @@ describe("bill helpers", () => {
   it("keeps forbidden wording out of the Bills and print pages", () => {
     const files = ["../app/(dashboard)/bills/page.tsx", "../app/bills/[id]/print/page.tsx", "./bill.ts"];
     for (const file of files) {
-      const source = readFileSync(fileURLToPath(new URL(file, import.meta.url)), "utf8").replace(SAMPLE_BILL_FOOTER, "");
+      const source = readFileSync(fileURLToPath(new URL(file, import.meta.url)), "utf8")
+        .replace(SAMPLE_BILL_FOOTER, "")
+        .replace(`"${billFooter("GB")}"`, "");
       expect(source, file).not.toMatch(/invoice|FBR|compliant/i);
     }
   });
@@ -135,8 +137,8 @@ describe("confirm sheet helpers", () => {
     const raast = claim("raast", "TX1");
     expect(nextFormState(raast, { ...raast, claimed_at: "later" }, false)).toEqual({ apply: null, notice: null });
     expect(nextFormState(null, null, false)).toEqual({ apply: null, notice: null });
-    expect(nextFormState(raast, claim("cash"), false)).toEqual({ apply: { method: "cash", reference: "" }, notice: null });
-    expect(nextFormState(null, raast, false)).toEqual({ apply: { method: "raast", reference: "TX1" }, notice: null });
+    expect(nextFormState(raast, claim("cash"), false)).toEqual({ apply: { method: "cash", reference: "", serviceIncluded: false }, notice: null });
+    expect(nextFormState(null, raast, false)).toEqual({ apply: { method: "raast", reference: "TX1", serviceIncluded: false }, notice: null });
     expect(nextFormState(raast, claim("raast", "TX9"), true)).toEqual({
       apply: null,
       notice: "The guest changed their payment to Raast QR · ref TX9 — check before confirming",
@@ -244,6 +246,8 @@ describe("VAT-included bills and the optional service", () => {
     expect(billFooter("ICT")).toBe(SAMPLE_BILL_FOOTER);
     expect(billFooter("GB")).toBe("Sample bill — not a tax invoice.");
     expect(billFooter("AE-DU")).toBe("Sample bill — not a tax invoice.");
+    // No jurisdiction: a bill from before venues outside Pakistan.
+    expect(billFooter(null)).toBe(SAMPLE_BILL_FOOTER);
   });
   it("prints a settled UK bill with VAT included and the service on top", () => {
     const bill = {
@@ -297,5 +301,26 @@ describe("service-charge settings errors", () => {
     expect(settingsErrors(422, { detail: [{ loc: ["body", "service_charge_rate"], msg: "Input should be less than or equal to 0.2" }] })).toEqual({
       service_charge_rate: "Input should be less than or equal to 0.2",
     });
+  });
+});
+
+describe("the staff sheet follows the guest's service choice", () => {
+  const card = (service_included: boolean) => ({ method: "card", reference: null, total: "21.00", claimed_at: "2026-11-02T19:00:00Z", service_included });
+  it("follows a service-only change on an untouched form", () => {
+    expect(nextFormState(card(true), card(false), false)).toEqual({ apply: { method: "card", reference: "", serviceIncluded: false }, notice: null });
+    expect(nextFormState(card(false), card(true), false)).toEqual({ apply: { method: "card", reference: "", serviceIncluded: true }, notice: null });
+  });
+  it("warns about a service-only change once staff edited the form", () => {
+    expect(nextFormState(card(true), card(false), true)).toEqual({
+      apply: null,
+      notice: "The guest changed their payment to Card — check before confirming",
+    });
+  });
+  it("applies a claim that arrives later, service included", () => {
+    expect(nextFormState(null, card(true), false)).toEqual({ apply: { method: "card", reference: "", serviceIncluded: true }, notice: null });
+  });
+  it("does nothing when the claim is unchanged", () => {
+    expect(nextFormState(card(true), { ...card(true), claimed_at: "later" }, false)).toEqual({ apply: null, notice: null });
+    expect(nextFormState(card(true), card(true), true)).toEqual({ apply: null, notice: null });
   });
 });
