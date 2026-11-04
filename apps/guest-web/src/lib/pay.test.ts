@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { formatPrice } from "ui";
 import { getDictionary } from "../i18n";
-import { billState, claimMessage, counterState, paidText, payForwardThanks, referenceFor, copyText, detailsFor, isValidReference, needsReference, percent, type GuestBill } from "./pay";
+import { billState, claimMessage, counterState, paidText, payForwardThanks, referenceFor, copyText, detailsFor, isValidReference, needsReference, payTotal, percent, serviceLine, type GuestBill } from "./pay";
 
 const en = getDictionary("en");
 const claim = (method: "cash" | "card" | "wallet" | "raast" | "bank_transfer") => ({
-  method, reference: method === "cash" || method === "card" ? null : "TX123", total: "2714.00", claimed_at: "2026-10-27T10:00:00Z",
+  method, reference: method === "cash" || method === "card" ? null : "TX123", total: "2714.00", claimed_at: "2026-10-27T10:00:00Z", service_included: false,
 });
 
 describe("pay helpers", () => {
@@ -133,5 +133,16 @@ describe("pay-it-forward thanks", () => {
     expect(payForwardThanks(bill, en)).toBe("You bought 2 chai for someone who needs it. Shukriya.");
     expect(payForwardThanks({ ...bill, status: "open" }, en)).toBeNull();
     expect(payForwardThanks({ ...bill, pay_forward_count: 0 }, en)).toBeNull();
+  });
+});
+
+describe("payTotal", () => {
+  const m = { method: "card", label: "Card", payment_class: "standard", tax_rate: "0.20", tax_amount: "3.50", total: "21.00", tax_included: true } as const;
+  it("adds the optional service only when chosen", () => {
+    expect(payTotal(m, "2.63", true)).toBe(23.63);
+    expect(payTotal(m, "2.63", false)).toBe(21);
+  });
+  it("names the service line with its rate", () => {
+    expect(serviceLine("0.1250", "Add optional service ({rate}%)")).toBe("Add optional service (12.5%)");
   });
 });

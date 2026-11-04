@@ -76,6 +76,7 @@ export const it: TranslationDict = {
     taxNote: "I prezzi non includono l'imposta, aggiunta al conto.",
     chooseSize: "Scegli la porzione",
     from: "da",
+    serviceNotice: "Ai conti al tavolo si aggiunge un servizio facoltativo del {rate}%.",
   },
   bill: {
     paid: "Pagato · Conto n. {billNo} · grazie",
@@ -84,6 +85,9 @@ export const it: TranslationDict = {
   pay: {
     button: "Paga il conto",
     subtotal: "Subtotale",
+    total: "Totale",
+    vatIncluded: "IVA {rate}% inclusa: {amount}",
+    service: "Aggiungi servizio facoltativo ({rate}%): {amount}",
     choose: "Come vuoi pagare?",
     taxRate: "imposta {rate}% inclusa",
     methods: {

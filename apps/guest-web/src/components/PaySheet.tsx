@@ -9,8 +9,10 @@ import {
   detailsFor,
   isValidReference,
   needsReference,
+  payTotal,
   percent,
   referenceFor,
+  serviceLine,
   type GuestBill,
   type Method,
 } from "../lib/pay";
@@ -37,12 +39,15 @@ export function PaySheet({ lang, bill, orderId, open, onClose, onUpdated, onConf
   const [posting, setPosting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState<{ key: string; ok: boolean } | null>(null);
+  // The optional service starts on; one tap turns it off.
+  const [withService, setWithService] = useState(bill.claim?.service_included ?? true);
 
   // A claim made on another phone at the table becomes this sheet's starting point.
   useEffect(() => {
     if (!open) return;
     setSelected(bill.claim?.method ?? null);
     setReference(bill.claim?.reference ?? "");
+    setWithService(bill.claim?.service_included ?? true);
     setError(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reset only when the sheet opens
   }, [open]);
@@ -54,7 +59,7 @@ export function PaySheet({ lang, bill, orderId, open, onClose, onUpdated, onConf
       const r = await fetch(`/api/guest/bill/payment${orderId ? `?order_id=${encodeURIComponent(orderId)}` : ""}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ method, reference: ref }),
+        body: JSON.stringify({ method, reference: ref, service_included: addService }),
       });
       if (r.ok) {
         onUpdated((await r.json()) as GuestBill);
@@ -95,6 +100,10 @@ export function PaySheet({ lang, bill, orderId, open, onClose, onUpdated, onConf
   const copy = async (key: string, value: string) => setCopied({ key, ok: await copyText(value) });
 
   const isOpen = bill.status === "open";
+  const hasService = Number(bill.service_charge_amount) > 0;
+  const addService = hasService && withService;
+  const included = bill.methods[0]?.tax_included ?? false;
+  const toPay = (m: (typeof bill.methods)[number]) => money(String(payTotal(m, bill.service_charge_amount, addService)));
   const preview = bill.methods.find((m) => m.method === selected) ?? null;
   const details = selected ? detailsFor(selected, bill.payment_details) : [];
 
@@ -121,6 +130,33 @@ export function PaySheet({ lang, bill, orderId, open, onClose, onUpdated, onConf
         <span>{money(bill.subtotal)}</span>
       </p>
 
+      {isOpen && hasService && (
+        <button
+          type="button"
+          role="switch"
+          aria-checked={withService}
+          onClick={() => setWithService(!withService)}
+          className="flex min-h-12 w-full items-center justify-between gap-3 rounded-xl border border-line bg-card px-4 py-3 text-left text-sm text-ink"
+        >
+          <span>{serviceLine(bill.service_charge_rate, dict.pay.service).replace("{amount}", money(bill.service_charge_amount))}</span>
+          <span aria-hidden className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${withService ? "bg-terracotta" : "bg-line"}`}>
+            <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-paper shadow transition-all ${withService ? "left-[22px]" : "left-0.5"}`} />
+          </span>
+        </button>
+      )}
+
+      {isOpen && included && (
+        <div className="space-y-1">
+          <p className="flex justify-between text-base font-semibold text-ink">
+            <span>{dict.pay.total}</span>
+            <span data-testid="pay-total">{toPay(bill.methods[0])}</span>
+          </p>
+          <p className="text-xs text-ink-muted">
+            {dict.pay.vatIncluded.replace("{rate}", percent(bill.methods[0].tax_rate)).replace("{amount}", money(bill.methods[0].tax_amount))}
+          </p>
+        </div>
+      )}
+
       {isOpen && (
         <fieldset className="space-y-2">
           <legend className="mb-2 text-sm font-semibold text-ink">{dict.pay.choose}</legend>
@@ -137,9 +173,9 @@ export function PaySheet({ lang, bill, orderId, open, onClose, onUpdated, onConf
             >
               <span>
                 <span className="block font-semibold text-ink">{dict.pay.methods[m.method] ?? m.label}</span>
-                <span className="block text-xs text-ink-muted">{dict.pay.taxRate.replace("{rate}", percent(m.tax_rate))}</span>
+                {!included && <span className="block text-xs text-ink-muted">{dict.pay.taxRate.replace("{rate}", percent(m.tax_rate))}</span>}
               </span>
-              <span className="font-semibold text-ink">{money(m.total)}</span>
+              {!included && <span className="font-semibold text-ink">{toPay(m)}</span>}
             </button>
           ))}
         </fieldset>
@@ -153,7 +189,7 @@ export function PaySheet({ lang, bill, orderId, open, onClose, onUpdated, onConf
             }`}
           >
             {bill.payment_details.sample && <p className="font-semibold text-warn-fg">{dict.pay.sampleBanner}</p>}
-            <p className="text-ink">{dict.pay.payTo.replace("{total}", money(preview.total))}</p>
+            <p className="text-ink">{dict.pay.payTo.replace("{total}", toPay(preview))}</p>
             {details.map((d) => (
               <div key={d.key} className="flex flex-wrap items-center justify-between gap-2">
                 <span>

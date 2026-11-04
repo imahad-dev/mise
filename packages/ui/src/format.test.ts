@@ -22,4 +22,11 @@ describe("formatPrice", () => {
   it("keeps EUR unchanged", () => {
     expect(formatPrice(13, "EUR")).toBe("€13.00");
   });
+
+  it("formats pounds and dirhams with two decimals", () => {
+    expect(formatPrice(23.63, "GBP", "en")).toBe("£23.63");
+    expect(formatPrice(105, "AED", "en").replace(/\s/g, " ")).toBe("AED 105.00");
+    expect(formatPrice(23.63, "GBP", "it").replace(/\s/g, " ")).toBe("23,63 £");
+    expect(formatPrice(105, "AED", "it").replace(/\s/g, " ")).toBe("105,00 AED");
+  });
 });

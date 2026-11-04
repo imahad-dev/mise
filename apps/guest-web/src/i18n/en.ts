@@ -76,6 +76,7 @@ export const en: TranslationDict = {
     taxNote: "Prices exclude sales tax, which is added to your bill.",
     chooseSize: "Choose a size",
     from: "from",
+    serviceNotice: "An optional {rate}% service charge is added to table bills.",
   },
   bill: {
     paid: "Paid · Bill no. {billNo} · thank you",
@@ -84,6 +85,9 @@ export const en: TranslationDict = {
   pay: {
     button: "Pay bill",
     subtotal: "Subtotal",
+    total: "Total",
+    vatIncluded: "Includes VAT {rate}%: {amount}",
+    service: "Add optional service ({rate}%): {amount}",
     choose: "How would you like to pay?",
     taxRate: "incl. {rate}% tax",
     methods: {

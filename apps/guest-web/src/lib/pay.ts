@@ -11,13 +11,17 @@ export interface MethodPreview {
   tax_rate: string;
   tax_amount: string;
   total: string;
+  /** VAT is already in the prices (UK, Dubai): one total for every method. */
+  tax_included: boolean;
 }
 
 export interface PaymentClaim {
   method: Method;
   reference: string | null;
+  /** Includes the optional service when the guest chose it. */
   total: string;
   claimed_at: string;
+  service_included: boolean;
 }
 
 export interface PaymentDetails {
@@ -45,6 +49,9 @@ export interface GuestBill {
   payment_method: Method | null;
   tax_rate: string | null;
   total: string | null;
+  /** The optional service charge; "0.0000" / "0.00" where none applies. */
+  service_charge_rate: string;
+  service_charge_amount: string;
   /** Counter pickup bills only: "K-042". */
   pickup_label?: string | null;
   /** Pay-it-forward chai on this bill once settled. */
@@ -130,3 +137,10 @@ export function payForwardThanks(bill: GuestBill, dict: TranslationDict): string
 }
 
 export const percent = (rate: string) => String(Number((Number(rate) * 100).toFixed(2)));
+
+/** What the guest pays for a method: the method total plus the optional service when chosen. */
+export const payTotal = (m: MethodPreview, serviceAmount: string, withService: boolean) =>
+  Number(m.total) + (withService ? Number(serviceAmount) : 0);
+
+/** "Add optional service (12.5%)" from the template and the rate as a fraction. */
+export const serviceLine = (rate: string, template: string) => template.replace("{rate}", percent(rate));

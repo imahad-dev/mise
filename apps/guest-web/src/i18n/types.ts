@@ -71,6 +71,7 @@ export interface TranslationDict {
     taxNote: string;
     chooseSize: string;
     from: string;
+    serviceNotice: string;
   };
   bill: {
     /** Contains {billNo}. */
@@ -81,6 +82,9 @@ export interface TranslationDict {
   pay: {
     button: string;
     subtotal: string;
+    total: string;
+    vatIncluded: string;
+    service: string;
     choose: string;
     /** Contains {rate}. */
     taxRate: string;
