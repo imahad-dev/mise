@@ -313,7 +313,13 @@ describe("the staff sheet follows the guest's service choice", () => {
   it("warns about a service-only change once staff edited the form", () => {
     expect(nextFormState(card(true), card(false), true)).toEqual({
       apply: null,
-      notice: "The guest changed their payment to Card — check before confirming",
+      notice: "The guest turned the optional service off — check before confirming",
+    });
+  });
+  it("names both changes when the method and the service change", () => {
+    expect(nextFormState({ ...card(false), method: "cash" }, card(true), true)).toEqual({
+      apply: null,
+      notice: "The guest changed their payment to Card and turned the optional service on — check before confirming",
     });
   });
   it("applies a claim that arrives later, service included", () => {

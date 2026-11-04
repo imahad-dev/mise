@@ -188,7 +188,13 @@ export function nextFormState(
   touched: boolean,
 ): { apply: { method: PaymentMethod; reference: string; serviceIncluded: boolean } | null; notice: string | null } {
   if (!next || sameClaim(prev, next)) return { apply: null, notice: null };
-  if (touched) return { apply: null, notice: `The guest changed their payment to ${claimSummary(next)} — check before confirming` };
+  if (touched) {
+    const paymentChanged = (prev?.method ?? null) !== next.method || (prev?.reference ?? null) !== (next.reference ?? null);
+    const serviceChanged = (prev?.service_included ?? false) !== (next.service_included ?? false);
+    const service = `turned the optional service ${next.service_included ? "on" : "off"}`;
+    const what = paymentChanged ? `changed their payment to ${claimSummary(next)}${serviceChanged ? ` and ${service}` : ""}` : service;
+    return { apply: null, notice: `The guest ${what} — check before confirming` };
+  }
   const method = PAYMENT_METHODS.find((m) => m.value === next.method)?.value ?? "cash";
   return { apply: { method, reference: next.reference ?? "", serviceIncluded: next.service_included ?? false }, notice: null };
 }
