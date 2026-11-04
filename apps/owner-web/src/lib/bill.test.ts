@@ -76,8 +76,8 @@ describe("the UI shows the API's tax numbers verbatim", () => {
   it("has the 50 Pakistani vectors and VAT-included UK and Dubai ones", () => {
     const count = (j: string) => vectors.filter((v) => v.jurisdiction === j).length;
     expect(count("PB") + count("ICT")).toBe(50);
-    expect(count("GB")).toBeGreaterThanOrEqual(4);
-    expect(count("AE-DU")).toBeGreaterThanOrEqual(4);
+    expect(count("GB")).toBe(4);
+    expect(count("AE-DU")).toBe(4);
   });
   it.each(vectors)("$jurisdiction $method $subtotal at $tax_rate", (v) => {
     const pieces = sampleBillPieces({
@@ -245,9 +245,15 @@ describe("VAT-included bills and the optional service", () => {
     expect(settlePayload(ukBill as never, "card", "", false, false, true)?.acknowledge_service_change).toBe(true);
   });
   it("keys a service choice that differs from the guest's claim, null when it does not", () => {
-    const withClaim = (service_included: boolean) => ({ ...ukBill, id: "b1", claim: { method: "card", reference: null, total: "21.00", claimed_at: "2026-10-27T10:00:00Z", service_included } });
-    expect(serviceChangeKey(withClaim(true) as never, false)).toBe("b1|true|false");
-    expect(serviceChangeKey(withClaim(false) as never, true)).toBe("b1|false|true");
+    const withClaim = (service_included: boolean, claimed_at = "2026-10-27T10:00:00Z") => ({
+      ...ukBill, id: "b1", claim: { method: "card", reference: null, total: "21.00", claimed_at, service_included },
+    });
+    expect(serviceChangeKey(withClaim(true) as never, false)).toBe("b1|2026-10-27T10:00:00Z|true|false");
+    expect(serviceChangeKey(withClaim(false) as never, true)).toBe("b1|2026-10-27T10:00:00Z|false|true");
+    // A re-claim needs a new tick even when the choice is the same.
+    expect(serviceChangeKey(withClaim(true, "2026-10-27T10:05:00Z") as never, false)).not.toBe(
+      serviceChangeKey(withClaim(true) as never, false),
+    );
     expect(serviceChangeKey(withClaim(true) as never, true)).toBeNull();
     // No claim, or no service on this bill: staff choose freely.
     expect(serviceChangeKey({ ...ukBill, id: "b1", claim: null } as never, false)).toBeNull();

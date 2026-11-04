@@ -181,7 +181,7 @@ export const serviceChangeKey = (
   serviceOn: boolean,
 ) => {
   const claimed = d?.claim?.service_included ?? false;
-  return d?.claim && Number(d.service_charge_amount ?? 0) > 0 && claimed !== serviceOn ? `${d.id}|${claimed}|${serviceOn}` : null;
+  return d?.claim && Number(d.service_charge_amount ?? 0) > 0 && claimed !== serviceOn ? `${d.id}|${d.claim.claimed_at}|${claimed}|${serviceOn}` : null;
 };
 
 /** Changes whenever the reused-reference warnings could change: an acknowledgement never outlives it. */

@@ -448,7 +448,7 @@ async def settle_bill(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="No tax rate configured"
         ) from e
     sc_rate, sc_amount = bill_service(restaurant, bill, subtotal)
-    service_offered = sc_rate > 0
+    service_offered = sc_amount > 0  # as the staff screen decides: a 0.00 service is none
     if not service_included:
         sc_rate, sc_amount = Decimal("0.0000"), Decimal("0.00")
     if c.total + sc_amount != expected_total:

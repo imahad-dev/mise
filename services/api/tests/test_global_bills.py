@@ -790,3 +790,61 @@ async def test_pakistan_what_if_text_unchanged(db_session):
         "Estimated weekly change: revenue PKR +0.00, contribution margin PKR +0.00, "
         "under the assumptions listed."
     )
+
+
+async def test_service_that_rounds_to_nothing_needs_no_acknowledgement(client, db_session, uk):
+    r, _, _, _, s = uk
+    free = _item(r.id, "Tap water", "0.00", 3)
+    db_session.add(free)
+    await db_session.flush()
+    o = await _order(client, s, [(free, 1)])
+    claim = {"method": "card", "service_included": True}
+    assert (await client.post("/api/guest/bill/payment", json=claim)).status_code == 200
+    await as_member(client, db_session, r.id, "staff")
+    resp = await settle(client, r.slug, await bill_id_of(db_session, o), "card")
+    assert resp.status_code == 200, resp.text
+
+
+async def test_service_rate_removed_after_the_claim_needs_no_acknowledgement(
+    client, db_session, uk
+):
+    r, _, dish, _, s = uk
+    o = await _order(client, s, [(dish, 1)])
+    claim = {"method": "card", "service_included": True}
+    assert (await client.post("/api/guest/bill/payment", json=claim)).status_code == 200
+    await db_session.execute(
+        update(Restaurant).where(Restaurant.id == r.id).values(service_charge_rate=Decimal("0"))
+    )
+    await db_session.commit()
+    await as_member(client, db_session, r.id, "staff")
+    resp = await settle(client, r.slug, await bill_id_of(db_session, o), "card")
+    assert resp.status_code == 200, resp.text
+
+
+async def test_reclaim_between_load_and_settle_is_refused(client, db_session, uk):
+    r, _, dish, _, s = uk
+    o = await _order(client, s, [(dish, 1)])
+    on = {"method": "card", "service_included": True}
+    assert (await client.post("/api/guest/bill/payment", json=on)).status_code == 200
+    bill_id = await bill_id_of(db_session, o)
+    await as_member(client, db_session, r.id, "staff")
+    base = f"/api/restaurants/{r.slug}/bills/{bill_id}"
+    d = (await client.get(base)).json()
+    card = next(m for m in d["methods"] if m["method"] == "card")
+    expected = str(Decimal(card["total"]) + Decimal(d["service_charge_amount"]))
+    # The guest turns service off after staff loaded the bill with it on.
+    guest(client, s)
+    off = {"method": "card", "service_included": False}
+    assert (await client.post("/api/guest/bill/payment", json=off)).status_code == 200
+    await as_member(client, db_session, r.id, "staff")
+    resp = await client.post(
+        f"{base}/settle",
+        json={
+            "payment_method": "card",
+            "expected_method": "card",
+            "expected_total": expected,
+            "service_included": True,
+        },
+    )
+    assert resp.status_code == 409
+    assert resp.json() == {"detail": "Service choice differs from the guest's"}

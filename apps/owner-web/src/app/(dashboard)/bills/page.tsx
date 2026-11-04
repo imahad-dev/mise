@@ -211,6 +211,7 @@ export default function BillsPage() {
     setMethod("cash");
     setReference("");
     setServiceOn(true);
+    setServiceAckKey(null);
     setAcknowledged(false);
     setRefusedReference(false);
     setOpen(true);

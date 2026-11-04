@@ -97,7 +97,7 @@ def test_shared_ui_vectors_match_the_server():
     vectors = doc["vectors"]
     by_jurisdiction = Counter(v["jurisdiction"] for v in vectors)
     assert by_jurisdiction["PB"] + by_jurisdiction["ICT"] == 50
-    assert by_jurisdiction["GB"] >= 4 and by_jurisdiction["AE-DU"] >= 4
+    assert by_jurisdiction["GB"] == by_jurisdiction["AE-DU"] == 4
     for v in vectors:
         expected = next(
             p
