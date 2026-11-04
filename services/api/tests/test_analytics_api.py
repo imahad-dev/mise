@@ -6,12 +6,13 @@ from unittest.mock import patch
 import pytest
 from httpx import AsyncClient
 from scripts.seed import load_seed_data, seed_data
-from sqlalchemy import func, select, update
+from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from tests.helpers import as_member
 
 from src.auth import sign_value
 from src.config import settings
+from src.models.bill import Bill
 from src.models.forecast import ForecastRun
 from src.models.menu import MenuItem, MenuTranslation
 from src.models.order import Order, OrderItem
@@ -130,8 +131,15 @@ async def test_simulated_orders_feed_brief_and_forecast(
         await db_session.execute(
             select(func.sum(OrderItem.quantity * OrderItem.unit_price))
             .join(Order)
+            .outerjoin(Bill, Bill.id == Order.bill_id)
             .where(
                 Order.restaurant_id == seeded_restaurant.id,
+                Order.status.in_(("placed", "bumped")),
+                Order.source.in_(("live", "simulated")),
+                or_(
+                    Bill.status == "settled",
+                    and_(Order.source == "simulated", Order.bill_id.is_(None)),
+                ),
                 Order.placed_at >= wp["start"],
                 Order.placed_at < wp["end"],
             )
@@ -139,6 +147,7 @@ async def test_simulated_orders_feed_brief_and_forecast(
     ).scalar_one()
     assert k["revenue"] == round(float(gross), 2)
     assert (brief["prices_include_tax"], brief["tax_split_by_method"]) == (False, True)
+    assert "VAT" not in brief["summary"]
 
     classes = {m["menu_class"] for m in brief["menu_engineering"]}
     assert classes <= {"star", "plowhorse", "puzzle", "dog"}

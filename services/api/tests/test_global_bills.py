@@ -21,6 +21,8 @@ from src.models.restaurant import Restaurant
 from src.models.session import GuestSession
 from src.services import analytics
 from src.services.brief import current_prices, local_today
+from src.services.order_snapshot import snapshot_order_item
+from src.services.simulator import SimAssumptions, persist_simulation
 
 
 async def _venue(db, jur, currency, tz, service="0"):
@@ -597,11 +599,13 @@ async def test_uk_brief_excludes_vat_and_reports_service_apart(client, db_sessio
     b = resp.json()
     assert (b["kpis"]["revenue"], b["kpis"]["contribution_margin"]) == (17.5, 14.5)
     assert {m["name"]: m["revenue"] for m in b["menu_engineering"]} == {"Pie": 10.0, "Chips": 7.5}
-    assert b["peak_hours"][0]["avg_revenue_per_day"] == round(17.5 / 28, 2)
+    assert b["peak_hours"][0]["avg_revenue_per_day"] == 0.62  # 17.50 over 28 days
     assert b["service_charge_collected"] == "2.63"
     assert (b["prices_include_tax"], b["tax_split_by_method"]) == (True, False)
     # One VAT rate for every method: the payment mix says nothing worth narrating.
     assert "Digital payments" not in b["summary"]
+    assert "revenue GBP 17.5 (excl. VAT), average order GBP 17.5 (excl. VAT)" in b["summary"]
+    assert "contribution margin GBP 14.5 (excl. VAT;" in b["summary"]
     assert "2.63" not in b["summary"]
 
 
@@ -620,3 +624,67 @@ async def test_pakistan_prices_and_brief_flags_unchanged(client, db_session):
         b = (await client.get(f"/api/restaurants/{pk.slug}/ai/brief")).json()
     assert (b["prices_include_tax"], b["tax_split_by_method"]) == (False, True)
     assert b["service_charge_collected"] == "0.00"
+
+
+async def _settled_gb_bill(db, r, s, item, n):
+    """One live GB bill settled yesterday for one line of `item`, VAT as charge_for stamps it."""
+    at = datetime.now(UTC) - timedelta(days=1)
+    bill = Bill(
+        restaurant_id=r.id,
+        bill_no=n,
+        status="settled",
+        source="live",
+        payment_method="card",
+        subtotal=item.price,
+        tax_jurisdiction="GB",
+        tax_rate=Decimal("0.20"),
+        tax_pricing="included",
+        tax_amount=Decimal("2.03"),
+        total=item.price,
+        opened_at=at - timedelta(hours=1),
+        settled_at=at,
+    )
+    db.add(bill)
+    await db.flush()
+    line = snapshot_order_item(item, 1, None, "en", "en", [])
+    db.add(
+        Order(
+            guest_session_id=s.id,
+            restaurant_id=r.id,
+            status="bumped",
+            total=item.price,
+            bill_id=bill.id,
+            idempotency_key=uuid.uuid4().hex,
+            payload_hash="x",
+            placed_at=at,
+            bumped_at=at,
+            items=[line],
+        )
+    )
+    await db.flush()
+
+
+async def test_uk_revenue_matches_the_vat_each_bill_recorded(db_session, uk):
+    r, _, _, _, s = uk
+    item = _item(r.id, "Soup", "12.15", 3)
+    db_session.add(item)
+    await db_session.flush()
+    for n in (1, 2):
+        await _settled_gb_bill(db_session, r, s, item, n)  # VAT 2.025 rounds to 2.03
+    today = local_today(r)
+    w = analytics.Window(r.id, r.timezone, today - timedelta(days=2), today + timedelta(days=1))
+    # 2 x (12.15 - 2.03); dividing by the 1.20 rate would give 20.25.
+    assert (await analytics.kpis(db_session, w))["revenue"] == 20.24
+
+
+async def test_simulated_uk_revenue_is_billed_net(db_session, uk):
+    r, *_ = uk
+    db_session.add_all([_item(r.id, "Soup", "12.15", 3), _item(r.id, "Tea", "2.35", 4)])
+    await db_session.flush()
+    await persist_simulation(db_session, r, SimAssumptions(days=14))
+    today = local_today(r)
+    w = analytics.Window(r.id, r.timezone, today - timedelta(days=15), today + timedelta(days=1))
+    bills = (await db_session.scalars(select(Bill).where(Bill.restaurant_id == r.id))).all()
+    assert bills and all(b.status == "settled" for b in bills)
+    net = sum((b.subtotal - b.tax_amount for b in bills), Decimal(0))
+    assert (await analytics.kpis(db_session, w))["revenue"] == float(net)

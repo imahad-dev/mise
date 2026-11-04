@@ -40,10 +40,14 @@ _SCOPE = (
     "AND o.placed_at >= :start AND o.placed_at < :end"
 )
 # Money from order lines excluding VAT: a settled bill that included VAT in its menu prices
-# stores its rate; divide by 1 + rate. Bills with tax on top (Pakistan) and simulated orders
-# without a bill count as they are.
+# divides each line by subtotal / (subtotal - VAT recorded), so the lines sum to the bill's
+# net to the penny. Bills with tax on top (Pakistan) and simulated orders without a bill
+# count as they are.
 _BILL = "LEFT JOIN bills b ON b.id = o.bill_id"
-_NET = "(CASE WHEN b.tax_pricing = 'included' THEN 1 + b.tax_rate ELSE 1 END)"
+_NET = (
+    "(CASE WHEN b.tax_pricing = 'included' "
+    "THEN coalesce(b.subtotal / NULLIF(b.subtotal - b.tax_amount, 0), 1) ELSE 1 END)"
+)
 
 
 @dataclass(frozen=True)
@@ -187,7 +191,10 @@ async def payment_mix(db: AsyncSession, w: Window, restaurant: Restaurant) -> di
 
 
 async def service_charge_collected(db: AsyncSession, w: Window) -> Decimal:
-    """Optional service charge on bills settled in the window: staff money, never revenue."""
+    """Optional service charge on bills settled in the window: staff money, never revenue.
+
+    Counted by settle time, while revenue is counted by order placement time.
+    """
     value = await db.scalar(
         text(
             "SELECT coalesce(sum(service_charge_amount), 0) FROM bills "

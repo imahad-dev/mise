@@ -14,6 +14,7 @@ import asyncio
 import math
 import uuid
 from datetime import date, datetime, timedelta
+from decimal import Decimal
 from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo
 
@@ -77,13 +78,13 @@ async def current_prices(
 
     Prices exclude VAT where the venue's menu prices include it, like the sales figures.
     """
-    factor = float(price_tax_factor(restaurant.tax_jurisdiction, local_today(restaurant)))
+    factor = price_tax_factor(restaurant.tax_jurisdiction, local_today(restaurant))
     rows = await db.execute(
         select(MenuItem.id, MenuItem.price, MenuItem.unit_cost).where(
             MenuItem.restaurant_id == restaurant.id
         )
     )
-    prices = {str(i): (float(p) / factor, float(c)) for i, p, c in rows.all()}
+    prices = {str(i): (float(Decimal(p) / factor), float(c)) for i, p, c in rows.all()}
     options = await db.execute(
         select(
             MenuItemOption.menu_item_id,
@@ -95,7 +96,10 @@ async def current_prices(
         .where(MenuItem.restaurant_id == restaurant.id)
     )
     for item_id, option_id, p, c in options.all():
-        prices[analytics.row_key(str(item_id), str(option_id))] = (float(p) / factor, float(c))
+        prices[analytics.row_key(str(item_id), str(option_id))] = (
+            float(Decimal(p) / factor),
+            float(c),
+        )
     return prices
 
 
@@ -313,10 +317,12 @@ def template_summary(facts: dict) -> str:
             "Generate demo data or take live orders to see analytics."
         )
     cur = facts["currency"]
+    vat = facts.get("figures_exclude_vat")
+    net, net_sep = (" (excl. VAT)", " (excl. VAT; ") if vat else ("", " (")
     text = (
         f"In the {w['days']} days to {w['end']}: {k['orders']} orders, revenue "
-        f"{cur} {k['revenue']}, average order {cur} {k['aov']}, contribution margin "
-        f"{cur} {k['contribution_margin']} ({k['margin_pct']}%)."
+        f"{cur} {k['revenue']}{net}, average order {cur} {k['aov']}{net}, contribution margin "
+        f"{cur} {k['contribution_margin']}{net_sep}{k['margin_pct']}%)."
     )
     money = [a for a in facts["actions"] if a["estimated_impact_per_week"] is not None]
     if money:
@@ -364,9 +370,11 @@ async def compute_brief(
         totals, classes, thresholds, fc, rnames, await current_prices(db, restaurant)
     )
     backtest = (fc.get("backtest") or {}).get("methods", {})
+    prices_include_tax = price_tax_factor(restaurant.tax_jurisdiction, today) != 1
     facts = {
         "restaurant": restaurant.name,
         "currency": restaurant.currency,
+        "figures_exclude_vat": prices_include_tax,
         "window": {
             "start": w.start.isoformat(),
             "end": (w.end - timedelta(days=1)).isoformat(),
@@ -436,7 +444,7 @@ async def compute_brief(
         "pairings": pairings,
         "peak_hours": peaks,
         "payment_mix": payments,
-        "prices_include_tax": price_tax_factor(restaurant.tax_jurisdiction, today) != 1,
+        "prices_include_tax": prices_include_tax,
         "tax_split_by_method": splits_by_method(restaurant.tax_jurisdiction),
         # Not narrated and not revenue: the optional service charge is staff money.
         "service_charge_collected": await analytics.service_charge_collected(db, w),
