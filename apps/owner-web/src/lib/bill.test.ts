@@ -66,22 +66,29 @@ describe("bill helpers", () => {
 // Shared with services/api/tests/test_money_agreement.py (scripts/gen_tax_vectors.py writes it).
 const vectorsUrl = new URL("../../../../data/test-vectors/tax_vectors.json", import.meta.url);
 const { vectors } = JSON.parse(readFileSync(fileURLToPath(vectorsUrl), "utf8")) as {
-  vectors: { method: string; payment_class: string; subtotal: string; tax_rate: string; tax_amount: string; total: string; currency: string }[];
+  vectors: {
+    jurisdiction: string; method: string; payment_class: string; subtotal: string; tax_rate: string; tax_amount: string; total: string;
+    currency: string; tax_included: boolean;
+  }[];
 };
 
 describe("the UI shows the API's tax numbers verbatim", () => {
-  it("has the 50 shared vectors", () => {
-    expect(vectors).toHaveLength(50);
+  it("has the 50 Pakistani vectors and VAT-included UK and Dubai ones", () => {
+    const count = (j: string) => vectors.filter((v) => v.jurisdiction === j).length;
+    expect(count("PB") + count("ICT")).toBe(50);
+    expect(count("GB")).toBeGreaterThanOrEqual(4);
+    expect(count("AE-DU")).toBeGreaterThanOrEqual(4);
   });
-  it.each(vectors)("$method $subtotal at $tax_rate", (v) => {
+  it.each(vectors)("$jurisdiction $method $subtotal at $tax_rate", (v) => {
     const pieces = sampleBillPieces({
       restaurant_name: "Venue", restaurant_city: null, restaurant_timezone: "Asia/Karachi", currency: v.currency,
       bill_no: 1, table_label: null, settled_at: null, lines: [],
       subtotal: v.subtotal, tax_rate: v.tax_rate, tax_amount: v.tax_amount, total: v.total, payment_method: v.method,
+      tax_jurisdiction: v.jurisdiction, tax_pricing: v.tax_included ? "included" : "on_top",
     });
     expect(pieces.totals).toEqual([
       { label: "Subtotal", amount: formatPrice(Number(v.subtotal), v.currency) },
-      { label: taxLabel(v.tax_rate, v.method), amount: formatPrice(Number(v.tax_amount), v.currency) },
+      { label: taxLabel(v.tax_rate, v.method, v.tax_included), amount: formatPrice(Number(v.tax_amount), v.currency) },
       { label: "Total", amount: formatPrice(Number(v.total), v.currency) },
     ]);
     // Settle confirms the server's preview for the method, never a total computed here.
