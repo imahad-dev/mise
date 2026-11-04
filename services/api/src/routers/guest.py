@@ -493,6 +493,7 @@ async def _bill_detail(
         order_status=order_status,
         payment_method=bill.payment_method if bill.status == "settled" else None,
         tax_rate=bill.tax_rate if bill.status == "settled" else None,
+        tax_included=bill.status == "settled" and bill.tax_pricing == "included",
         total=bill.total if bill.status == "settled" else None,
         pickup_label=(
             pickup_label(restaurant.pickup_prefix, bill.pickup_no) if bill.pickup_no else None

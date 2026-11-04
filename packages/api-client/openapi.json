@@ -4696,6 +4696,11 @@
             ],
             "title": "Tax Rate"
           },
+          "tax_included": {
+            "type": "boolean",
+            "title": "Tax Included",
+            "default": false
+          },
           "total": {
             "anyOf": [
               {

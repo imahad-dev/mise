@@ -696,3 +696,17 @@ async def test_simulated_uk_revenue_is_billed_net(db_session, uk):
     assert bills and all(b.status == "settled" for b in bills)
     net = sum((b.subtotal - b.tax_amount for b in bills), Decimal(0))
     assert (await analytics.kpis(db_session, w))["revenue"] == float(net)
+
+
+async def test_settled_guest_bill_says_whether_vat_was_included(client, db_session, uk):
+    pb = await _venue(db_session, "PB", "PKR", "Asia/Karachi")
+    for (r, _, dish, _, s), included in ((uk, True), (pb, False)):
+        o = await _order(client, s, [(dish, 1)])
+        bill_id = await bill_id_of(db_session, o)
+        guest(client, s)
+        assert (await client.get("/api/guest/bill")).json()["tax_included"] is False  # open
+        await as_member(client, db_session, r.id, "staff")
+        assert (await settle(client, r.slug, bill_id, "card")).status_code == 200
+        guest(client, s)
+        b = (await client.get("/api/guest/bill")).json()
+        assert (b["status"], b["tax_included"]) == ("settled", included)

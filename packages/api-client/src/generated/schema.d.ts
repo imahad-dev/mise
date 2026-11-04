@@ -1654,6 +1654,11 @@ export interface components {
             payment_method?: string | null;
             /** Tax Rate */
             tax_rate?: string | null;
+            /**
+             * Tax Included
+             * @default false
+             */
+            tax_included: boolean;
             /** Total */
             total?: string | null;
             /** Pickup Label */
