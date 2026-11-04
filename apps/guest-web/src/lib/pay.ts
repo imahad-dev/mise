@@ -144,3 +144,7 @@ export const payTotal = (m: MethodPreview, serviceAmount: string, withService: b
 
 /** "Add optional service (12.5%)" from the template and the rate as a fraction. */
 export const serviceLine = (rate: string, template: string) => template.replace("{rate}", percent(rate));
+
+/** The menu's tax line: VAT already in the price (UK, Dubai) or sales tax added to the bill. */
+export const menuTaxNote = (pricesIncludeTax: boolean, dict: TranslationDict) =>
+  pricesIncludeTax ? dict.menu.vatIncluded : dict.menu.taxNote;

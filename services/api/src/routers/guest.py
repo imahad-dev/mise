@@ -71,7 +71,7 @@ from src.services.bills import (
 from src.services.counter import order_status as counter_order_status
 from src.services.counter import pickup_label
 from src.services.guest_chat import handle_guest_chat
-from src.services.tax import methods_for, service_charge_for
+from src.services.tax import jurisdiction_of, methods_for, service_charge_for
 
 router = APIRouter(prefix="/api/guest", tags=["guest"])
 
@@ -291,6 +291,7 @@ async def get_guest_menu(
         if row is not None:
             table_label, table_kind = row
 
+    jurisdiction = jurisdiction_of(restaurant.tax_jurisdiction)
     return GuestMenuResponse(
         restaurant=GuestMenuRestaurant(
             id=restaurant.id,
@@ -300,6 +301,7 @@ async def get_guest_menu(
             service_charge_rate=service_charge_for(
                 restaurant.tax_jurisdiction, restaurant.service_charge_rate, Decimal(0), True
             )[0],
+            prices_include_tax=jurisdiction is not None and jurisdiction.pricing == "included",
         ),
         table_id=session.table_id,
         table_label=table_label,

@@ -74,6 +74,7 @@ export const it: TranslationDict = {
   },
   menu: {
     taxNote: "I prezzi non includono l'imposta, aggiunta al conto.",
+    vatIncluded: "I prezzi includono l'IVA.",
     chooseSize: "Scegli la porzione",
     from: "da",
     serviceNotice: "Ai conti al tavolo si aggiunge un servizio facoltativo del {rate}%.",

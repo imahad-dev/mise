@@ -74,6 +74,7 @@ export const en: TranslationDict = {
   },
   menu: {
     taxNote: "Prices exclude sales tax, which is added to your bill.",
+    vatIncluded: "Prices include VAT.",
     chooseSize: "Choose a size",
     from: "from",
     serviceNotice: "An optional {rate}% service charge is added to table bills.",

@@ -1759,6 +1759,8 @@ export interface components {
             currency: string;
             /** Service Charge Rate */
             service_charge_rate: string;
+            /** Prices Include Tax */
+            prices_include_tax: boolean;
         };
         /** GuestPaymentRequest */
         GuestPaymentRequest: {

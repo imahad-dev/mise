@@ -69,6 +69,7 @@ export interface TranslationDict {
   };
   menu: {
     taxNote: string;
+    vatIncluded: string;
     chooseSize: string;
     from: string;
     serviceNotice: string;

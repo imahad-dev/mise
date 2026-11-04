@@ -380,6 +380,14 @@ async def test_menu_shows_the_service_rate(client, db_session, uk, dubai):
         assert menu["restaurant"]["service_charge_rate"] == rate
 
 
+async def test_menu_says_whether_prices_include_vat(client, db_session, uk, dubai):
+    pb = await _venue(db_session, "PB", "PKR", "Asia/Karachi")
+    for (*_rest, s), included in ((uk, True), (dubai, True), (pb, False)):
+        guest(client, s)
+        menu = (await client.get("/api/guest/menu")).json()
+        assert menu["restaurant"]["prices_include_tax"] is included
+
+
 async def _claim_audits(db, r):
     rows = await db.scalars(
         select(AuditLog.payload)

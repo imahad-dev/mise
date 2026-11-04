@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { formatPrice } from "ui";
 import { getDictionary } from "../i18n";
-import { billState, claimMessage, counterState, paidText, payForwardThanks, referenceFor, copyText, detailsFor, isValidReference, needsReference, payTotal, percent, serviceLine, type GuestBill } from "./pay";
+import { billState, claimMessage, counterState, paidText, payForwardThanks, referenceFor, copyText, detailsFor, isValidReference, menuTaxNote, needsReference, payTotal, percent, serviceLine, type GuestBill } from "./pay";
 
 const en = getDictionary("en");
 const claim = (method: "cash" | "card" | "wallet" | "raast" | "bank_transfer") => ({
@@ -144,5 +144,13 @@ describe("payTotal", () => {
   });
   it("names the service line with its rate", () => {
     expect(serviceLine("0.1250", "Add optional service ({rate}%)")).toBe("Add optional service (12.5%)");
+  });
+});
+
+describe("menuTaxNote", () => {
+  it("says prices include VAT where they do, else the sales-tax note", () => {
+    expect(menuTaxNote(true, en)).toBe("Prices include VAT.");
+    expect(menuTaxNote(true, getDictionary("it"))).toBe("I prezzi includono l'IVA.");
+    expect(menuTaxNote(false, en)).toBe("Prices exclude sales tax, which is added to your bill.");
   });
 });

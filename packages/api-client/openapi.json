@@ -5017,6 +5017,10 @@
           "service_charge_rate": {
             "type": "string",
             "title": "Service Charge Rate"
+          },
+          "prices_include_tax": {
+            "type": "boolean",
+            "title": "Prices Include Tax"
           }
         },
         "type": "object",
@@ -5024,7 +5028,8 @@
           "id",
           "name",
           "currency",
-          "service_charge_rate"
+          "service_charge_rate",
+          "prices_include_tax"
         ],
         "title": "GuestMenuRestaurant"
       },
