@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { formatPrice } from "ui";
 import {
   PAYMENT_METHODS, SAMPLE_BILL_FOOTER, amountDueText, billNo, claimChip, claimSummary, claimWarning, previewFor, sampleBillPieces, sampleBillText,
-  nextFormState, settlePayload, taxLabel, voidReason, warningKey,
+  nextFormState, settlePayload, taxLabel, voidReason, warningKey, billFooter, ratePercent, serviceRateFraction, taxRuleText,
   collectedUndoLeft, counterColumn, isExpiredUnpaid, pickupText, settingsBody, settingsErrors, undoSecondsLeft,
 } from "./bill";
 
@@ -116,10 +116,10 @@ describe("confirm sheet helpers", () => {
       { method: "raast", label: "Raast QR", payment_class: "digital" as const, tax_rate: "0.08", tax_amount: "187.00", total: "2527.00" },
     ];
     expect(settlePayload({ methods }, "cash", "TX1", false)).toEqual({
-      payment_method: "cash", payment_reference: null, expected_total: "2714.00", expected_method: "cash", acknowledge_reused_reference: false,
+      payment_method: "cash", payment_reference: null, expected_total: "2714.00", expected_method: "cash", acknowledge_reused_reference: false, service_included: false,
     });
     expect(settlePayload({ methods }, "raast", "  TX1 ", true)).toEqual({
-      payment_method: "raast", payment_reference: "TX1", expected_total: "2527.00", expected_method: "raast", acknowledge_reused_reference: true,
+      payment_method: "raast", payment_reference: "TX1", expected_total: "2527.00", expected_method: "raast", acknowledge_reused_reference: true, service_included: false,
     });
     expect(settlePayload({ methods }, "card", "", false)).toBeNull();
   });
@@ -215,5 +215,87 @@ describe("counter helpers", () => {
       pickup_prefix: "String should match pattern",
     });
     expect(settingsErrors(500, null)).toEqual({ form: "Request failed (500)" });
+  });
+});
+
+describe("VAT-included bills and the optional service", () => {
+  const ukBill = {
+    methods: [{ method: "card", label: "Card", payment_class: "digital", tax_rate: "0.20", tax_amount: "3.50", total: "21.00", tax_included: true }],
+    service_charge_amount: "2.63",
+  } as const;
+
+  it("adds the service to the expected total only when included", () => {
+    expect(settlePayload(ukBill as never, "card", "", false, true)?.expected_total).toBe("23.63");
+    expect(settlePayload(ukBill as never, "card", "", false, true)?.service_included).toBe(true);
+    expect(settlePayload(ukBill as never, "card", "", false, false)?.expected_total).toBe("21.00");
+    expect(settlePayload(ukBill as never, "card", "", false, false)?.service_included).toBe(false);
+  });
+  it("never claims a service the bill does not have", () => {
+    const none = { ...ukBill, service_charge_amount: "0.00" };
+    expect(settlePayload(none as never, "card", "", false, true)).toMatchObject({ expected_total: "21.00", service_included: false });
+  });
+  it("says VAT is included where it is", () => {
+    expect(taxLabel("0.20", "card", true)).toBe("VAT 20% included");
+    expect(taxLabel("0.05", "cash", true)).toBe("VAT 5% included");
+    expect(taxLabel("0.16", "cash", false)).toBe("Sales tax (illustrative) 16% — cash");
+  });
+  it("mentions Pakistani authorities only for Pakistani bills", () => {
+    expect(billFooter("PB")).toContain("FBR");
+    expect(billFooter("ICT")).toBe(SAMPLE_BILL_FOOTER);
+    expect(billFooter("GB")).toBe("Sample bill — not a tax invoice.");
+    expect(billFooter("AE-DU")).toBe("Sample bill — not a tax invoice.");
+  });
+  it("prints a settled UK bill with VAT included and the service on top", () => {
+    const bill = {
+      restaurant_name: "The Anchor", restaurant_city: "London", restaurant_timezone: "Europe/London", currency: "GBP", bill_no: 7,
+      table_label: "4", settled_at: "2026-11-02T19:30:00Z", lines: [],
+      subtotal: "21.00", tax_rate: "0.20", tax_amount: "3.50", total: "23.63", payment_method: "card",
+      tax_jurisdiction: "GB", tax_pricing: "included", service_charge_amount: "2.63",
+    };
+    const p = sampleBillPieces(bill);
+    expect(p.totals).toEqual([
+      { label: "Subtotal", amount: formatPrice(21, "GBP") },
+      { label: "VAT 20% included", amount: formatPrice(3.5, "GBP") },
+      { label: "Optional service", amount: formatPrice(2.63, "GBP") },
+      { label: "Total", amount: formatPrice(23.63, "GBP") },
+    ]);
+    expect(p.footer).toBe("Sample bill — not a tax invoice.");
+    expect(sampleBillPieces({ ...bill, service_charge_amount: "0.00", total: "21.00" }).totals.map((r) => r.label)).toEqual([
+      "Subtotal", "VAT 20% included", "Total",
+    ]);
+  });
+  it("sends the service rate as a fraction only where the venue offers it", () => {
+    expect(settingsBody({ service_charge_rate: "12.5" }, false, true).service_charge_rate).toBe("0.1250");
+    expect(settingsBody({ service_charge_rate: "" }, false, true).service_charge_rate).toBe("0.0000");
+    expect(settingsBody({ service_charge_rate: "12.5" }, false)).not.toHaveProperty("service_charge_rate");
+  });
+  it("accepts 0 to 20 per cent in 0.5 steps", () => {
+    expect(serviceRateFraction("0")).toBe("0.0000");
+    expect(serviceRateFraction("7.5")).toBe("0.0750");
+    expect(serviceRateFraction("20")).toBe("0.2000");
+    expect(serviceRateFraction("12.3")).toBeNull();
+    expect(serviceRateFraction("20.5")).toBeNull();
+    expect(serviceRateFraction("-1")).toBeNull();
+    expect(serviceRateFraction("ten")).toBeNull();
+  });
+  it("shows a stored rate as a percentage", () => {
+    expect(ratePercent("0.0750")).toBe(7.5);
+    expect(ratePercent("0.1250")).toBe(12.5);
+  });
+  it("names the venue's tax rule", () => {
+    expect(taxRuleText({ name: "United Kingdom", rate: "0.20", pricing: "included" })).toBe("Prices include VAT 20% (United Kingdom)");
+    expect(taxRuleText({ name: "Punjab, Pakistan", rate: "0.16", pricing: "on_top" })).toBe("Sales tax added to bills (Punjab, Pakistan)");
+    expect(taxRuleText(null)).toBeNull();
+  });
+});
+
+describe("service-charge settings errors", () => {
+  it("puts the API's service-charge refusal under its field", () => {
+    expect(settingsErrors(422, { detail: "An optional service charge is not offered in Dubai, UAE" })).toEqual({
+      service_charge_rate: "An optional service charge is not offered in Dubai, UAE",
+    });
+    expect(settingsErrors(422, { detail: [{ loc: ["body", "service_charge_rate"], msg: "Input should be less than or equal to 0.2" }] })).toEqual({
+      service_charge_rate: "Input should be less than or equal to 0.2",
+    });
   });
 });

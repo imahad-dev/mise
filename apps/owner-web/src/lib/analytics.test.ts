@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { formatPrice } from "ui";
 import {
+  exVat,
   money,
   forecastTable,
   quadrantLayout,
@@ -67,5 +68,12 @@ describe("formatting", () => {
     expect(wapePct(null)).toBe("n/a");
     expect(sharePct(0.6667)).toBe("66.7%");
     expect(sharePct(0)).toBe("0.0%");
+  });
+});
+
+describe("exVat", () => {
+  it("marks figures that exclude VAT only where menu prices include it", () => {
+    expect(exVat("Revenue", true)).toBe("Revenue (excl. VAT)");
+    expect(exVat("Revenue", false)).toBe("Revenue");
   });
 });

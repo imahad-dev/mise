@@ -58,7 +58,7 @@ export const stateIcon = (state: FloorState) => STATES[state]?.icon ?? "?";
 export const waitingText = (time: string | null) =>
   time ? `Guests waiting to order · ${time}` : "Guests waiting to order";
 
-/** The waiting order in plain words, e.g. "3 items · Rs 1,200". */
+/** The waiting order in plain words, e.g. "3 items · £12.50" (total already in the venue's currency). */
 export const orderSummary = (items: number, total: string) => `${items} ${items === 1 ? "item" : "items"} · ${total}`;
 
 const LEVEL_ORDER: Record<FloorLevel, number> = { red: 0, amber: 1, none: 2 };

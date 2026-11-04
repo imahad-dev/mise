@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { Badge, Button, Card } from "ui";
 import { useVenue } from "../../../lib/venue";
-import { settingsBody, settingsErrors } from "../../../lib/bill";
+import { ratePercent, serviceRateFraction, settingsBody, settingsErrors, taxRuleText, type TaxRule } from "../../../lib/bill";
 import QRCode from "qrcode";
 
 interface TableItem {
@@ -23,6 +23,10 @@ interface VenueSettingsBody {
   service_extra_label: string | null;
   pickup_prefix: string | null;
   sitting_code_required: boolean;
+  /** A fraction, "0.1250"; editable only when service_charge_allowed. */
+  service_charge_rate: string;
+  service_charge_allowed: boolean;
+  tax_rule: TaxRule | null;
 }
 
 const PAYMENT_FIELDS = [
@@ -52,6 +56,7 @@ function VenueSettings({ slug }: { slug: string }) {
       pickup_prefix: body.pickup_prefix ?? "",
       service_extra_label: body.service_extra_label ?? "",
       sitting_code_required: body.sitting_code_required ? "on" : "",
+      service_charge_rate: String(ratePercent(body.service_charge_rate)),
     });
   };
 
@@ -84,14 +89,18 @@ function VenueSettings({ slug }: { slug: string }) {
 
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSaved(false);
+    if (loaded.service_charge_allowed && serviceRateFraction(form.service_charge_rate ?? "") === null) {
+      setErrors({ service_charge_rate: "Enter 0 to 20, in steps of 0.5" });
+      return;
+    }
     setBusy(true);
     setErrors({});
-    setSaved(false);
     try {
       const res = await fetch(`/api/restaurants/${slug}/settings`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(settingsBody(form, loaded.payment_details.sample === true)),
+        body: JSON.stringify(settingsBody(form, loaded.payment_details.sample === true, loaded.service_charge_allowed)),
       });
       if (res.ok) {
         apply((await res.json()) as VenueSettingsBody);
@@ -129,7 +138,8 @@ function VenueSettings({ slug }: { slug: string }) {
       )}
     </label>
   );
-  const known = new Set<string>([...PAYMENT_FIELDS.map((f) => f.key), "pickup_prefix", "service_extra_label"]);
+  const known = new Set<string>([...PAYMENT_FIELDS.map((f) => f.key), "pickup_prefix", "service_extra_label", ...(loaded.service_charge_allowed ? ["service_charge_rate"] : [])]);
+  const taxLine = taxRuleText(loaded.tax_rule);
   const other = Object.entries(errors).filter(([k]) => !known.has(k));
 
   return (
@@ -138,6 +148,7 @@ function VenueSettings({ slug }: { slug: string }) {
         <h2 className="text-lg font-semibold text-ink">Payments and counter</h2>
         {loaded.payment_details.sample && <Badge>Sample — demo only</Badge>}
       </div>
+      {taxLine && <p className="text-sm text-ink">{taxLine}</p>}
       <form onSubmit={save} className="space-y-4" noValidate>
         <fieldset className="grid gap-3 sm:grid-cols-2">
           <legend className="mb-2 text-sm text-ink-muted">Where guests send money. Leave a method empty to hide it.</legend>
@@ -164,6 +175,13 @@ function VenueSettings({ slug }: { slug: string }) {
             </span>
           </span>
         </label>
+        {loaded.service_charge_allowed &&
+          field(
+            "service_charge_rate",
+            "Optional service charge (%)",
+            "Shown to guests before they order and on the bill as optional. By law, staff must receive all of it.",
+            { type: "number", min: 0, max: 20, step: 0.5, inputMode: "decimal", className: `${INPUT} sm:w-40` },
+          )}
         {other.map(([k, message]) => (
           <p key={k} role="alert" className="text-sm text-danger-fg">
             {k === "form" ? message : `${k}: ${message}`}
