@@ -5,7 +5,7 @@
 #   LLM_PROVIDER=mock DEMO_MODE=true bash scripts/verify_phase1.sh     (or: make verify-f)
 #
 # Wipes the dev database volumes (make reset). Prints one PASS/FAIL line per step and the
-# tail of the failing step's log, then stops at the first failure.
+# tail of the failing step's log (the full log is kept in a temp file), then stops at the first failure.
 #
 set -uo pipefail
 
@@ -30,6 +30,11 @@ run_step() {
   else
     echo "FAIL $name"
     tail -n 30 "$TMP/step.log" | sed 's/^/    /'
+    # $TMP is removed on exit: keep the whole log outside the repo for later reading.
+    local kept
+    kept="$(mktemp "${TMPDIR:-/tmp}/verify-failed-XXXXXX.log")"
+    cp "$TMP/step.log" "$kept"
+    echo "    full log: $kept"
     exit 1
   fi
 }
