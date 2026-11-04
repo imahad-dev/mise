@@ -35,6 +35,7 @@ Alembic + Postgres 16 + Redis 7 (`services/api`), two Next.js 15 apps (`apps/gue
   client-supplied prompts.
 - Demo bills never imitate a tax invoice: no fiscal number, QR code, authority logo, 'invoice',
   'FBR integrated' or 'compliant'.
+- Tax rules are data (`data/tax_rates.json`, `data/tax_jurisdictions.json`) with a source per rate; code never hard-codes a rate, and a venue only settles with its jurisdiction's methods.
 - Cookies: `mise_auth` (signed user id) and `mise_guest`. Languages: `en` and `it` only.
 - No event or vendor-specific branding (`scripts/check_branding.sh`). README and docs
   describe only what is implemented and tested.

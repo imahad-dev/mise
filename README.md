@@ -77,6 +77,21 @@ Mise is an ordering, kitchen and revenue analytics platform for independent rest
 
 ---
 
+## Tax and currency
+
+Each venue has a tax jurisdiction and bills and reports in that jurisdiction's currency (no exchange rates, no combined totals). The rules are data: dated rates with a legal source per row in `data/tax_rates.json`, and per-jurisdiction pricing, rounding, payment methods and service-charge rule in `data/tax_jurisdictions.json`. The seed and admin scripts refuse a venue whose currency is not its jurisdiction's.
+
+| Code | Jurisdiction | Currency | What it does |
+|---|---|---|---|
+| `PB` | Punjab, Pakistan | PKR | Sales tax added on top of menu prices: 16% cash or bank transfer, 8% card, wallet or QR; whole rupees; all five payment methods |
+| `ICT` | Islamabad, Pakistan | PKR | Sales tax added on top: 15% cash or bank transfer, 5% card, wallet or QR; whole rupees; all five payment methods |
+| `GB` | United Kingdom | GBP | Menu prices include VAT 20% (the guest pays the menu price; VAT is worked out once on the bill); pence; cash and card only; the owner may set an optional table service charge (0–20%), shown on the menu before ordering, chosen by the guest on the pay sheet, never taxed and never counted as revenue |
+| `AE-DU` | Dubai, UAE | AED | Menu prices include VAT 5%; fils; cash and card only; no service charge |
+
+Any other payment method is refused at venues that do not accept it. Where prices include VAT, the guest menu says "Prices include VAT.", the bill shows "VAT 20% included", and the brief's sales figures exclude VAT using each bill's recorded VAT; the service charge appears apart as "Service charge collected (for staff)". Bills stay sample bills, never tax invoices. Details: [docs/architecture.md](docs/architecture.md) and [docs/analytics.md](docs/analytics.md).
+
+---
+
 ## Architecture
 
 ```mermaid
