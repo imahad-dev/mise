@@ -169,7 +169,8 @@ def load_jurisdictions(path: Path | None = None) -> dict[str, Jurisdiction]:
 def check_rates_against(
     rates: tuple[TaxRate, ...] | list[TaxRate], jurisdictions: dict[str, Jurisdiction]
 ) -> None:
-    """Rates name known jurisdictions, never mix "any" with a split, and cover the methods."""
+    """Rates name known jurisdictions, never mix "any" with a split, give a VAT-included
+    jurisdiction a single "any" rate, and cover the methods."""
     classes: dict[str, set[str]] = {}
     for r in rates:
         if r.jurisdiction not in jurisdictions:
@@ -178,6 +179,9 @@ def check_rates_against(
     for code, cls in classes.items():
         if "any" in cls and len(cls) > 1:
             raise TaxRateError(f"Jurisdiction {code!r} mixes 'any' with standard/digital rates")
+        # VAT inside the menu price: one rate whatever the method, or the price would vary.
+        if jurisdictions[code].pricing == "included" and cls != {"any"}:
+            raise TaxRateError(f"Jurisdiction {code!r} prices include tax: use one 'any' rate")
     for code, j in jurisdictions.items():
         have = classes.get(code, set())
         if "any" in have:

@@ -190,6 +190,16 @@ def test_any_and_split_rates_cannot_mix():
         check_rates_against(rates, _xx())
 
 
+def test_vat_included_jurisdiction_needs_a_single_any_rate():
+    rates = [
+        TaxRate("XX", "standard", Decimal("0.2"), JULY, "s"),
+        TaxRate("XX", "digital", Decimal("0.2"), JULY, "s"),
+    ]
+    with pytest.raises(TaxRateError, match="use one 'any' rate"):
+        check_rates_against(rates, _xx())
+    check_rates_against([TaxRate("XX", "any", Decimal("0.2"), JULY, "s")], _xx())
+
+
 def test_any_payment_class_accepted_by_rate_loader(tmp_path):
     rates = load_rates(
         _write(
@@ -210,7 +220,8 @@ def test_any_payment_class_accepted_by_rate_loader(tmp_path):
 
 
 def test_rates_must_cover_methods():
-    pb = Jurisdiction("XX", "X", "GBP", "included", Decimal("0.01"), ("cash", "card"), None)
+    # Tax on top: only there may standard and digital rates differ.
+    pb = Jurisdiction("XX", "X", "PKR", "on_top", Decimal("1"), ("cash", "card"), None)
     std = TaxRate("XX", "standard", Decimal("0.2"), JULY, "s")
     dig = TaxRate("XX", "digital", Decimal("0.1"), JULY, "s")
     any_ = TaxRate("XX", "any", Decimal("0.2"), JULY, "s")
