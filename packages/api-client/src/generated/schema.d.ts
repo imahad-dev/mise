@@ -2554,6 +2554,11 @@ export interface components {
              * @default false
              */
             service_included: boolean;
+            /**
+             * Acknowledge Service Change
+             * @default false
+             */
+            acknowledge_service_change: boolean;
         };
         /** SimulateOrdersRequest */
         SimulateOrdersRequest: {
@@ -3934,7 +3939,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Bill already settled or not open; reference already used on another bill; or {"detail": "Bill changed", "bill": <fresh BillDetail>} */
+            /** @description Bill already settled or not open; reference already used on another bill; service choice differs from the guest's; or {"detail": "Bill changed", "bill": <fresh BillDetail>} */
             409: {
                 headers: {
                     [name: string]: unknown;

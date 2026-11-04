@@ -1272,7 +1272,7 @@
             "description": "Restaurant or bill not found"
           },
           "409": {
-            "description": "Bill already settled or not open; reference already used on another bill; or {\"detail\": \"Bill changed\", \"bill\": <fresh BillDetail>}"
+            "description": "Bill already settled or not open; reference already used on another bill; service choice differs from the guest's; or {\"detail\": \"Bill changed\", \"bill\": <fresh BillDetail>}"
           },
           "422": {
             "description": "No active orders, no tax rate, expected_method mismatch, or Payment method not accepted here"
@@ -7221,6 +7221,11 @@
           "service_included": {
             "type": "boolean",
             "title": "Service Included",
+            "default": false
+          },
+          "acknowledge_service_change": {
+            "type": "boolean",
+            "title": "Acknowledge Service Change",
             "default": false
           }
         },

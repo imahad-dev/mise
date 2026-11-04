@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { formatPrice } from "ui";
 import {
   PAYMENT_METHODS, SAMPLE_BILL_FOOTER, amountDueText, billNo, claimChip, claimSummary, claimWarning, previewFor, sampleBillPieces, sampleBillText,
-  nextFormState, settlePayload, taxLabel, voidReason, warningKey, billFooter, ratePercent, serviceRateFraction, taxRuleText,
+  nextFormState, serviceChangeKey, settlePayload, taxLabel, voidReason, warningKey, billFooter, ratePercent, serviceRateFraction, taxRuleText,
   collectedUndoLeft, counterColumn, isExpiredUnpaid, pickupText, settingsBody, settingsErrors, undoSecondsLeft,
 } from "./bill";
 
@@ -119,9 +119,11 @@ describe("confirm sheet helpers", () => {
     ];
     expect(settlePayload({ methods }, "cash", "TX1", false)).toEqual({
       payment_method: "cash", payment_reference: null, expected_total: "2714.00", expected_method: "cash", acknowledge_reused_reference: false, service_included: false,
+      acknowledge_service_change: false,
     });
     expect(settlePayload({ methods }, "raast", "  TX1 ", true)).toEqual({
       payment_method: "raast", payment_reference: "TX1", expected_total: "2527.00", expected_method: "raast", acknowledge_reused_reference: true, service_included: false,
+      acknowledge_service_change: false,
     });
     expect(settlePayload({ methods }, "card", "", false)).toBeNull();
   });
@@ -231,6 +233,19 @@ describe("VAT-included bills and the optional service", () => {
     expect(settlePayload(ukBill as never, "card", "", false, true)?.service_included).toBe(true);
     expect(settlePayload(ukBill as never, "card", "", false, false)?.expected_total).toBe("21.00");
     expect(settlePayload(ukBill as never, "card", "", false, false)?.service_included).toBe(false);
+  });
+  it("sends the acknowledged change of the guest's service choice", () => {
+    expect(settlePayload(ukBill as never, "card", "", false, false, true)?.acknowledge_service_change).toBe(true);
+  });
+  it("keys a service choice that differs from the guest's claim, null when it does not", () => {
+    const withClaim = (service_included: boolean) => ({ ...ukBill, id: "b1", claim: { method: "card", reference: null, total: "21.00", claimed_at: "2026-10-27T10:00:00Z", service_included } });
+    expect(serviceChangeKey(withClaim(true) as never, false)).toBe("b1|true|false");
+    expect(serviceChangeKey(withClaim(false) as never, true)).toBe("b1|false|true");
+    expect(serviceChangeKey(withClaim(true) as never, true)).toBeNull();
+    // No claim, or no service on this bill: staff choose freely.
+    expect(serviceChangeKey({ ...ukBill, id: "b1", claim: null } as never, false)).toBeNull();
+    expect(serviceChangeKey({ ...withClaim(true), service_charge_amount: "0.00" } as never, false)).toBeNull();
+    expect(serviceChangeKey(null, false)).toBeNull();
   });
   it("never claims a service the bill does not have", () => {
     const none = { ...ukBill, service_charge_amount: "0.00" };

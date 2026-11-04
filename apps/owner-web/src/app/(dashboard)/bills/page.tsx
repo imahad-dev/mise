@@ -24,6 +24,7 @@ import {
   pickupText,
   previewFor,
   ratePercent,
+  serviceChangeKey,
   settlePayload,
   totalRows,
   collectedUndoLeft,
@@ -67,6 +68,8 @@ export default function BillsPage() {
   const [acknowledged, setAcknowledged] = useState(false);
   // The optional service charge (UK table bills): from the guest's claim, on when there is none.
   const [serviceOn, setServiceOn] = useState(true);
+  // The serviceChangeKey staff confirmed: a change of bill, claim or choice needs a new tick.
+  const [serviceAckKey, setServiceAckKey] = useState<string | null>(null);
   const [refusedReference, setRefusedReference] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -227,7 +230,7 @@ export default function BillsPage() {
 
   const settle = async () => {
     if (!detail) return;
-    const body = settlePayload(detail, method, reference, acknowledged, serviceOn);
+    const body = settlePayload(detail, method, reference, acknowledged, serviceOn, serviceChange !== null && serviceAcked);
     if (!body) {
       setError("No tax rate configured");
       return;
@@ -420,6 +423,8 @@ export default function BillsPage() {
       ]
     : [];
   const needsAck = reusedWarnings.length > 0 || refusedReference;
+  const serviceChange = payable ? serviceChangeKey(detail, serviceOn) : null;
+  const serviceAcked = serviceChange === serviceAckKey;
   const sheetTitle = detail
     ? `${detail.pickup_label ? `Pickup ${pickupText(detail)}` : detail.table_label ? `Table ${detail.table_label}` : "Bill"} · ${billNo(detail.bill_no)}`
     : "Bill";
@@ -605,7 +610,11 @@ export default function BillsPage() {
         title={sheetTitle}
         footer={
           payable && (
-            <Button className="w-full" onClick={settle} disabled={busy || !selected || (needsAck && !acknowledged)}>
+            <Button
+              className="w-full"
+              onClick={settle}
+              disabled={busy || !selected || (needsAck && !acknowledged) || (serviceChange !== null && !serviceAcked)}
+            >
               {busy ? "Saving…" : "Confirm received"}
             </Button>
           )
@@ -752,6 +761,19 @@ export default function BillsPage() {
                   <span className="h-5 w-5 rounded-full bg-paper shadow" />
                 </span>
               </button>
+            )}
+
+            {serviceChange !== null && (
+              <label className="flex items-center gap-2 rounded-xl border border-danger-fg bg-danger-bg p-3 text-sm font-semibold text-danger-fg">
+                <input
+                  type="checkbox"
+                  checked={serviceAcked}
+                  onChange={(e) => setServiceAckKey(e.target.checked ? serviceChange : null)}
+                  className="accent-terracotta"
+                />
+                The guest chose {detail.claim?.service_included ? "to add" : "not to add"} the optional service — confirm
+                the change
+              </label>
             )}
 
             {detail.status === "cancelled" && (

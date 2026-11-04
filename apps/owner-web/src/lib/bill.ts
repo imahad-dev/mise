@@ -154,6 +154,7 @@ export function settlePayload(
   reference: string,
   acknowledgeReused: boolean,
   serviceIncluded = false,
+  acknowledgeServiceChange = false,
 ) {
   const preview = previewFor(bill, method);
   if (!preview) return null;
@@ -166,8 +167,22 @@ export function settlePayload(
     expected_method: method,
     acknowledge_reused_reference: acknowledgeReused,
     service_included: service > 0,
+    acknowledge_service_change: acknowledgeServiceChange,
   };
 }
+
+/**
+ * Staff's service choice differs from the guest's claim on a bill with a service charge: settle
+ * then needs acknowledge_service_change. The key changes with the bill, claim and choice, so an
+ * acknowledgement never outlives what it confirmed; null when nothing needs confirming.
+ */
+export const serviceChangeKey = (
+  d: (Pick<BillDetail, "id" | "claim"> & Partial<Pick<BillDetail, "service_charge_amount">>) | null,
+  serviceOn: boolean,
+) => {
+  const claimed = d?.claim?.service_included ?? false;
+  return d?.claim && Number(d.service_charge_amount ?? 0) > 0 && claimed !== serviceOn ? `${d.id}|${claimed}|${serviceOn}` : null;
+};
 
 /** Changes whenever the reused-reference warnings could change: an acknowledgement never outlives it. */
 export const warningKey = (d: Pick<BillDetail, "reused_reference_bill_no" | "reused_reference_open_bill_no" | "claim"> | null) =>
