@@ -104,6 +104,16 @@ describe("PaySheet in a VAT-inclusive venue", () => {
     expect(bodies(fetchMock)).toEqual([{ method: "cash", reference: null, service_included: false }]);
   });
 
+  it("puts the switch back when the cash claim cannot be updated", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("offline")));
+    render(<Harness initial={{ ...ukBill, claim: claimOf("cash", "23.63", true) }} />);
+    fireEvent.click(screen.getByRole("switch"));
+    await waitFor(() => expect(screen.getByRole("alert").textContent).toBe("Couldn't reach the restaurant — tap again"));
+    expect(screen.getByRole("switch").getAttribute("aria-checked")).toBe("true");
+    expect(screen.getByTestId("pay-total").textContent).toBe("£23.63");
+    expect(screen.getByText("A waiter is coming to collect £23.63.")).toBeTruthy();
+  });
+
   it("asks to send a transfer again after the service changes", () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);

@@ -111,7 +111,9 @@ export interface TranslationDict {
     noBill: string;
     /** Contains {total}, {rate} and {method}. */
     paidAmount: string;
+    /** Contains {total}, {rate} and {method}: a settled bill whose prices included VAT. */
     paidVatIncluded: string;
+    /** Contains {button}: the "I've paid" label, after the service changed on a transfer claim. */
     serviceChanged: string;
     cancelled: string;
     visitEnded: string;

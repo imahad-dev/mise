@@ -57,7 +57,8 @@ export function PaySheet({ lang, bill, orderId, open, onClose, onUpdated, onConf
   const addService = hasService && withService;
   const included = bill.methods[0]?.tax_included ?? false;
 
-  const claim = async (method: Method, ref: string | null, service: boolean) => {
+  /** True only when the server took the claim. */
+  const claim = async (method: Method, ref: string | null, service: boolean): Promise<boolean> => {
     setPosting(true);
     setError(null);
     try {
@@ -68,6 +69,7 @@ export function PaySheet({ lang, bill, orderId, open, onClose, onUpdated, onConf
       });
       if (r.ok) {
         onUpdated((await r.json()) as GuestBill);
+        return true;
       } else if (r.status === 409) {
         const body = (await r.json().catch(() => null)) as { detail?: unknown } | null;
         onConflict(typeof body?.detail === "string" ? body.detail : null);
@@ -81,6 +83,7 @@ export function PaySheet({ lang, bill, orderId, open, onClose, onUpdated, onConf
     } finally {
       setPosting(false);
     }
+    return false;
   };
 
   const choose = (method: Method) => {
@@ -108,7 +111,13 @@ export function PaySheet({ lang, bill, orderId, open, onClose, onUpdated, onConf
   const toggleService = () => {
     const next = !withService;
     setWithService(next);
-    if (bill.claim && !needsReference(bill.claim.method)) void claim(bill.claim.method, null, next);
+    if (bill.claim && !needsReference(bill.claim.method)) {
+      // A failed update leaves the stored claim as it was, so the switch goes back to match it.
+      const was = bill.claim.service_included;
+      void claim(bill.claim.method, null, next).then((ok) => {
+        if (!ok) setWithService(was);
+      });
+    }
   };
   const staleClaim = hasService && bill.claim !== null && needsReference(bill.claim.method) && bill.claim.service_included !== withService;
   const toPay = (m: (typeof bill.methods)[number]) => money(String(payTotal(m, bill.service_charge_amount, addService)));
