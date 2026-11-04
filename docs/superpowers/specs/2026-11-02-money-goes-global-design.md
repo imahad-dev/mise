@@ -157,8 +157,9 @@ Examples: £24.00 at 20% → VAT £4.00, total £24.00. AED 105.00 at 5% → VAT
   - reports use "excl. VAT" labels, the Pakistan-only tax card, and the service-charge figure.
 - **Model:** the morning brief and service report receive the same computed figures; the model
   only phrases them and its text still passes the number-consistency check.
-- **No tax-invoice look:** bills never show a VAT number or the words "VAT invoice", "tax
-  invoice" or "receipt". They say "VAT 20% included" only.
+- **No tax-invoice look:** bills never show a VAT number, never call themselves a VAT or tax
+  invoice or a receipt, and keep the footer "Sample bill — not a tax invoice.". They say
+  "VAT 20% included" only.
 
 ## Testing
 
