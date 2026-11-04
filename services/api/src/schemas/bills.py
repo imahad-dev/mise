@@ -122,6 +122,8 @@ class SettleBillRequest(BaseModel):
     expected_method: Method
     acknowledge_reused_reference: bool = False
     service_included: bool = False
+    # Settling with a service choice other than the guest's claim needs this (409 otherwise).
+    acknowledge_service_change: bool = False
 
     @field_validator("payment_reference")
     @classmethod

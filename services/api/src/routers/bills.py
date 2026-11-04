@@ -360,7 +360,8 @@ async def get_bill(
         **RESPONSES,
         409: {
             "description": "Bill already settled or not open; reference already used on another "
-            'bill; or {"detail": "Bill changed", "bill": <fresh BillDetail>}'
+            "bill; service choice differs from the guest's; or "
+            '{"detail": "Bill changed", "bill": <fresh BillDetail>}'
         },
         422: {
             "description": "No active orders, no tax rate, expected_method mismatch, or "
@@ -385,6 +386,7 @@ async def settle(
             access.user.id,
             payload.acknowledge_reused_reference,
             payload.service_included,
+            payload.acknowledge_service_change,
         )
     except BillChanged:
         # Still under the bill lock and unmodified: the fresh detail matches what settle saw.

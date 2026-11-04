@@ -710,3 +710,60 @@ async def test_settled_guest_bill_says_whether_vat_was_included(client, db_sessi
         guest(client, s)
         b = (await client.get("/api/guest/bill")).json()
         assert (b["status"], b["tax_included"]) == ("settled", included)
+
+
+async def _claim_then_settle(
+    client, db, venue, method, claim_service, settle_service, counter=False, **extra
+):
+    r, _, dish, _, s = venue
+    if counter:
+        o = await _counter_order(client, db, r, dish)
+    else:
+        o = await _order(client, s, [(dish, 1)])
+    resp = await client.post(
+        "/api/guest/bill/payment", json={"method": method, "service_included": claim_service}
+    )
+    assert resp.status_code == 200, resp.text
+    await as_member(client, db, r.id, "staff")
+    bill_id = await bill_id_of(db, o)
+    return await settle(client, r.slug, bill_id, method, service_included=settle_service, **extra)
+
+
+async def test_settle_refuses_to_override_the_guests_service_choice(client, db_session, uk):
+    resp = await _claim_then_settle(client, db_session, uk, "card", True, False)
+    assert resp.status_code == 409
+    assert resp.json() == {"detail": "Service choice differs from the guest's"}
+
+
+async def test_settle_refuses_service_the_guest_declined(client, db_session, uk):
+    resp = await _claim_then_settle(client, db_session, uk, "card", False, True)
+    assert resp.status_code == 409
+    assert resp.json() == {"detail": "Service choice differs from the guest's"}
+
+
+async def test_settle_overrides_the_guests_service_choice_when_acknowledged(client, db_session, uk):
+    resp = await _claim_then_settle(
+        client, db_session, uk, "card", True, False, acknowledge_service_change=True
+    )
+    assert resp.status_code == 200, resp.text
+    assert (resp.json()["total"], resp.json()["service_charge_amount"]) == ("12.00", "0.00")
+
+
+async def test_settle_without_a_claim_takes_any_service_choice(client, db_session, uk):
+    r, _, dish, _, s = uk
+    o = await _order(client, s, [(dish, 1)])
+    await as_member(client, db_session, r.id, "staff")
+    resp = await settle(client, r.slug, await bill_id_of(db_session, o), "card")
+    assert resp.status_code == 200, resp.text
+
+
+async def test_service_choice_check_only_where_service_applies(client, db_session, uk, dubai):
+    # Dubai and Pakistan have no service and a counter bill never carries it: the claim is
+    # stored without service, and staff switching it on changes nothing.
+    resp = await _claim_then_settle(client, db_session, dubai, "card", True, True)
+    assert resp.status_code == 200, resp.text
+    pk = await _venue(db_session, "PB", "PKR", "Asia/Karachi", service="0.10")
+    resp = await _claim_then_settle(client, db_session, pk, "cash", True, True)
+    assert resp.status_code == 200, resp.text
+    resp = await _claim_then_settle(client, db_session, uk, "card", True, True, counter=True)
+    assert resp.status_code == 200, resp.text

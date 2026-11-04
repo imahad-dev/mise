@@ -396,6 +396,7 @@ async def settle_bill(
     user_id: uuid.UUID,
     acknowledge_reused: bool = False,
     service_included: bool = False,
+    acknowledge_service_change: bool = False,
 ) -> tuple[Bill, list[uuid.UUID], list[uuid.UUID]]:
     """Lock the bill, recompute, check the staff's expectation, snapshot tax. Caller commits.
 
@@ -447,6 +448,7 @@ async def settle_bill(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="No tax rate configured"
         ) from e
     sc_rate, sc_amount = bill_service(restaurant, bill, subtotal)
+    service_offered = sc_rate > 0
     if not service_included:
         sc_rate, sc_amount = Decimal("0.0000"), Decimal("0.00")
     if c.total + sc_amount != expected_total:
@@ -468,6 +470,17 @@ async def settle_bill(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"Reference already used on {bill_no_label(reused)}",
+        )
+    # Staff may change the guest's service choice, but never silently.
+    if (
+        claim_of(bill) is not None
+        and service_offered
+        and service_included != bill.claimed_service_included
+        and not acknowledge_service_change
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Service choice differs from the guest's",
         )
     revived = await revive_expired(db, bill, restaurant.id, f"user:{user_id}") if expired else []
     bill.status = "settled"
