@@ -1275,7 +1275,7 @@
             "description": "Bill already settled or not open; reference already used on another bill; or {\"detail\": \"Bill changed\", \"bill\": <fresh BillDetail>}"
           },
           "422": {
-            "description": "No active orders, no tax rate, or expected_method mismatch"
+            "description": "No active orders, no tax rate, expected_method mismatch, or Payment method not accepted here"
           }
         }
       }
@@ -2463,7 +2463,7 @@
             "description": "Pickup prefix changed while counter orders are open"
           },
           "422": {
-            "description": "Invalid setting; detail.field names it"
+            "description": "Invalid setting; payment details: detail.field names it; service charge: detail is a message"
           }
         }
       }
@@ -3155,6 +3155,25 @@
             ],
             "title": "Tax Jurisdiction"
           },
+          "tax_pricing": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tax Pricing"
+          },
+          "service_charge_rate": {
+            "type": "string",
+            "title": "Service Charge Rate"
+          },
+          "service_charge_amount": {
+            "type": "string",
+            "title": "Service Charge Amount"
+          },
           "tax_rate": {
             "anyOf": [
               {
@@ -3312,6 +3331,9 @@
           "payment_method",
           "payment_reference",
           "tax_jurisdiction",
+          "tax_pricing",
+          "service_charge_rate",
+          "service_charge_amount",
           "tax_rate",
           "tax_amount",
           "total",
@@ -4027,6 +4049,18 @@
           "payment_mix": {
             "$ref": "#/components/schemas/PaymentMix"
           },
+          "prices_include_tax": {
+            "type": "boolean",
+            "title": "Prices Include Tax"
+          },
+          "tax_split_by_method": {
+            "type": "boolean",
+            "title": "Tax Split By Method"
+          },
+          "service_charge_collected": {
+            "type": "string",
+            "title": "Service Charge Collected"
+          },
           "pay_forward": {
             "$ref": "#/components/schemas/PayForwardTotals"
           },
@@ -4066,6 +4100,9 @@
           "pairings",
           "peak_hours",
           "payment_mix",
+          "prices_include_tax",
+          "tax_split_by_method",
+          "service_charge_collected",
           "pay_forward",
           "forecast",
           "actions",
@@ -4598,6 +4635,14 @@
             "type": "array",
             "title": "Methods"
           },
+          "service_charge_rate": {
+            "type": "string",
+            "title": "Service Charge Rate"
+          },
+          "service_charge_amount": {
+            "type": "string",
+            "title": "Service Charge Amount"
+          },
           "payment_details": {
             "$ref": "#/components/schemas/PaymentDetails"
           },
@@ -4688,6 +4733,8 @@
           "subtotal",
           "currency",
           "methods",
+          "service_charge_rate",
+          "service_charge_amount",
           "payment_details",
           "claim",
           "voided",
@@ -4966,13 +5013,18 @@
           "currency": {
             "type": "string",
             "title": "Currency"
+          },
+          "service_charge_rate": {
+            "type": "string",
+            "title": "Service Charge Rate"
           }
         },
         "type": "object",
         "required": [
           "id",
           "name",
-          "currency"
+          "currency",
+          "service_charge_rate"
         ],
         "title": "GuestMenuRestaurant"
       },
@@ -5000,6 +5052,11 @@
               }
             ],
             "title": "Reference"
+          },
+          "service_included": {
+            "type": "boolean",
+            "title": "Service Included",
+            "default": false
           }
         },
         "type": "object",
@@ -5733,6 +5790,11 @@
           "total": {
             "type": "string",
             "title": "Total"
+          },
+          "tax_included": {
+            "type": "boolean",
+            "title": "Tax Included",
+            "default": false
           },
           "method": {
             "type": "string",
@@ -6614,6 +6676,22 @@
               }
             ],
             "title": "Sitting Code Required"
+          },
+          "service_charge_rate": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 0.2,
+                "minimum": 0.0
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Service Charge Rate"
           }
         },
         "type": "object",
@@ -6662,6 +6740,11 @@
             "type": "string",
             "format": "date-time",
             "title": "Claimed At"
+          },
+          "service_included": {
+            "type": "boolean",
+            "title": "Service Included",
+            "default": false
           }
         },
         "type": "object",
@@ -7041,6 +7124,24 @@
           "sitting_code_required": {
             "type": "boolean",
             "title": "Sitting Code Required"
+          },
+          "service_charge_rate": {
+            "type": "string",
+            "title": "Service Charge Rate"
+          },
+          "service_charge_allowed": {
+            "type": "boolean",
+            "title": "Service Charge Allowed"
+          },
+          "tax_rule": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TaxRule"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -7048,7 +7149,10 @@
           "payment_details",
           "service_extra_label",
           "pickup_prefix",
-          "sitting_code_required"
+          "sitting_code_required",
+          "service_charge_rate",
+          "service_charge_allowed",
+          "tax_rule"
         ],
         "title": "SettingsResponse"
       },
@@ -7102,6 +7206,11 @@
           "acknowledge_reused_reference": {
             "type": "boolean",
             "title": "Acknowledge Reused Reference",
+            "default": false
+          },
+          "service_included": {
+            "type": "boolean",
+            "title": "Service Included",
             "default": false
           }
         },
@@ -7335,6 +7444,11 @@
           "total": {
             "type": "string",
             "title": "Total"
+          },
+          "tax_included": {
+            "type": "boolean",
+            "title": "Tax Included",
+            "default": false
           }
         },
         "type": "object",
@@ -7345,6 +7459,33 @@
           "total"
         ],
         "title": "TaxPreview"
+      },
+      "TaxRule": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "rate": {
+            "type": "string",
+            "title": "Rate"
+          },
+          "pricing": {
+            "type": "string",
+            "enum": [
+              "on_top",
+              "included"
+            ],
+            "title": "Pricing"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "rate",
+          "pricing"
+        ],
+        "title": "TaxRule"
       },
       "ValidationError": {
         "properties": {
