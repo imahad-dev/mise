@@ -69,7 +69,7 @@ export interface TranslationDict {
   };
   menu: {
     taxNote: string;
-    vatIncluded: string;
+    pricesIncludeVat: string;
     chooseSize: string;
     from: string;
     serviceNotice: string;
@@ -111,6 +111,8 @@ export interface TranslationDict {
     noBill: string;
     /** Contains {total}, {rate} and {method}. */
     paidAmount: string;
+    paidVatIncluded: string;
+    serviceChanged: string;
     cancelled: string;
     visitEnded: string;
   };

@@ -74,7 +74,7 @@ export const en: TranslationDict = {
   },
   menu: {
     taxNote: "Prices exclude sales tax, which is added to your bill.",
-    vatIncluded: "Prices include VAT.",
+    pricesIncludeVat: "Prices include VAT.",
     chooseSize: "Choose a size",
     from: "from",
     serviceNotice: "An optional {rate}% service charge is added to table bills.",
@@ -121,6 +121,8 @@ export const en: TranslationDict = {
     networkError: "Couldn't reach the restaurant — tap again",
     noBill: "Your bill appears here after your first order.",
     paidAmount: "Paid {total} (incl. {rate}% sales tax) by {method}",
+    paidVatIncluded: "Paid {total} (VAT {rate}% included) by {method}",
+    serviceChanged: "You changed the service — tap “{button}” again to update your payment.",
     cancelled: "This bill was cancelled by staff — please ask a waiter",
     visitEnded: "Your visit has ended — scan the table QR again",
   },

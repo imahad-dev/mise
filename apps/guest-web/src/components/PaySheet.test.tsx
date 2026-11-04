@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 import React from "react";
-import { cleanup, render, screen, fireEvent } from "@testing-library/react";
+import { cleanup, render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { PaySheet } from "./PaySheet";
-import type { GuestBill } from "../lib/pay";
+import type { GuestBill, PaymentClaim } from "../lib/pay";
 
 const ukBill: GuestBill = {
   bill_no: 1, status: "open", bill_requested_at: null,
@@ -28,6 +28,17 @@ HTMLDialogElement.prototype.close = function (this: HTMLDialogElement) {
 
 const sheet = (bill: GuestBill) =>
   render(<PaySheet lang="en" bill={bill} open onClose={() => {}} onUpdated={() => {}} onConflict={() => {}} />);
+
+/** The order page's part: the server's answer replaces the bill. */
+function Harness({ initial, open = true }: { initial: GuestBill; open?: boolean }) {
+  const [bill, setBill] = React.useState(initial);
+  return <PaySheet lang="en" bill={bill} open={open} onClose={() => {}} onUpdated={setBill} onConflict={() => {}} />;
+}
+
+const claimOf = (method: PaymentClaim["method"], total: string, service_included: boolean): PaymentClaim => ({
+  method, reference: method === "cash" || method === "card" ? null : "TX1", total, claimed_at: "2026-11-04T10:00:00Z", service_included,
+});
+const bodies = (f: ReturnType<typeof vi.fn>) => f.mock.calls.map((c) => JSON.parse(c[1].body));
 
 afterEach(() => {
   cleanup();
@@ -54,8 +65,66 @@ describe("PaySheet in a VAT-inclusive venue", () => {
     sheet(ukBill);
     fireEvent.click(screen.getByRole("switch"));
     fireEvent.click(screen.getByRole("button", { name: /Card/ }));
-    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
-    expect(body).toEqual({ method: "card", reference: null, service_included: false });
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    expect(bodies(fetchMock)[0]).toEqual({ method: "card", reference: null, service_included: false });
+  });
+
+  it("sends the service by default", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ukBill });
+    vi.stubGlobal("fetch", fetchMock);
+    sheet(ukBill);
+    fireEvent.click(screen.getByRole("button", { name: /Card/ }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    expect(bodies(fetchMock)[0]).toEqual({ method: "card", reference: null, service_included: true });
+  });
+
+  it("starts from the table's claim when it left the service off", () => {
+    sheet({ ...ukBill, claim: claimOf("card", "21.00", false) });
+    expect(screen.getByRole("switch").getAttribute("aria-checked")).toBe("false");
+    expect(screen.getByTestId("pay-total").textContent).toBe("£21.00");
+  });
+
+  it("resets the switch when the sheet opens again", async () => {
+    const { rerender } = render(<Harness initial={ukBill} />);
+    fireEvent.click(screen.getByRole("switch"));
+    expect(screen.getByRole("switch").getAttribute("aria-checked")).toBe("false");
+    rerender(<Harness initial={ukBill} open={false} />);
+    rerender(<Harness initial={ukBill} open />);
+    await waitFor(() => expect(screen.getByRole("switch").getAttribute("aria-checked")).toBe("true"));
+  });
+
+  it("updates a cash claim at once when the service is turned off", async () => {
+    const claimed = { ...ukBill, claim: claimOf("cash", "23.63", true) };
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ...ukBill, claim: claimOf("cash", "21.00", false) }) });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<Harness initial={claimed} />);
+    expect(screen.getByText("A waiter is coming to collect £23.63.")).toBeTruthy();
+    fireEvent.click(screen.getByRole("switch"));
+    await waitFor(() => expect(screen.getByText("A waiter is coming to collect £21.00.")).toBeTruthy());
+    expect(bodies(fetchMock)).toEqual([{ method: "cash", reference: null, service_included: false }]);
+  });
+
+  it("asks to send a transfer again after the service changes", () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const bill: GuestBill = {
+      ...ukBill,
+      methods: [{ method: "bank_transfer", label: "Bank transfer", payment_class: "digital", tax_rate: "0.20", tax_amount: "3.50", total: "21.00", tax_included: true }],
+      claim: claimOf("bank_transfer", "23.63", true),
+    };
+    sheet(bill);
+    expect(screen.getByText("Payment sent — waiting for staff to confirm.")).toBeTruthy();
+    fireEvent.click(screen.getByRole("switch"));
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(screen.queryByText("Payment sent — waiting for staff to confirm.")).toBeNull();
+    expect(screen.getByText("You changed the service — tap “I've paid” again to update your payment.")).toBeTruthy();
+    expect(screen.getByText("Send £21.00 to:")).toBeTruthy();
+  });
+
+  it("names the rate the Italian way", () => {
+    render(<PaySheet lang="it" bill={ukBill} open onClose={() => {}} onUpdated={() => {}} onConflict={() => {}} />);
+    expect(screen.getByRole("switch", { name: /\(12,5%\)/ })).toBeTruthy();
+    expect(screen.getByText(/^IVA 20% inclusa:/)).toBeTruthy();
   });
 
   it("asks for the total with service on a transfer method", () => {
@@ -90,6 +159,7 @@ describe("PaySheet in a venue without service charge", () => {
     expect(screen.getByText("incl. 16% tax")).toBeTruthy();
     expect(screen.getByText("incl. 5% tax")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /Card/ }));
-    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ method: "card", reference: null, service_included: false });
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    expect(bodies(fetchMock)[0]).toEqual({ method: "card", reference: null, service_included: false });
   });
 });

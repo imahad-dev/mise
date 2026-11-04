@@ -50,8 +50,10 @@ describe("pay helpers", () => {
   });
 
   it("formats tax rates as percentages", () => {
-    expect(percent("0.16")).toBe("16");
-    expect(percent("0.165")).toBe("16.5");
+    expect(percent("0.16", "en")).toBe("16");
+    expect(percent("0.165", "en")).toBe("16.5");
+    expect(percent("0.1250", "it")).toBe("12,5");
+    expect(percent("0.2000", "it")).toBe("20");
   });
 });
 
@@ -78,6 +80,14 @@ describe("paid text", () => {
     expect(paidText(settled, en, "en")).toBe(`Paid ${formatPrice(130, "PKR")} (incl. 8% sales tax) by Raast QR`);
     expect(paidText({ ...settled, payment_method: "bank_transfer" }, getDictionary("it"), "it")).toBe(
       `Pagato ${formatPrice(130, "PKR", "it")} (imposta 8% inclusa) con Bonifico`,
+    );
+  });
+  it("says VAT was included for a VAT-inclusive venue", () => {
+    const uk = { ...settled, currency: "GBP", payment_method: "card", tax_rate: "0.2000", total: "23.63", tax_included: true } as GuestBill;
+    expect(paidText(uk, en, "en")).toBe("Paid £23.63 (VAT 20% included) by Card");
+    expect(paidText(uk, getDictionary("it"), "it")?.replace(/\s/g, " ")).toBe("Pagato 23,63 £ (IVA 20% inclusa) con Carta");
+    expect(paidText({ ...settled, tax_rate: "0.1650" }, getDictionary("it"), "it")).toBe(
+      `Pagato ${formatPrice(130, "PKR", "it")} (imposta 16,5% inclusa) con Raast QR`,
     );
   });
   it("is empty until the bill is settled", () => {
@@ -143,14 +153,17 @@ describe("payTotal", () => {
     expect(payTotal(m, "2.63", false)).toBe(21);
   });
   it("names the service line with its rate", () => {
-    expect(serviceLine("0.1250", "Add optional service ({rate}%)")).toBe("Add optional service (12.5%)");
+    expect(serviceLine("0.1250", "Add optional service ({rate}%)", "en")).toBe("Add optional service (12.5%)");
+    expect(serviceLine("0.1250", getDictionary("it").menu.serviceNotice, "it")).toBe(
+      "Ai conti al tavolo si aggiunge un servizio facoltativo del 12,5%.",
+    );
   });
 });
 
 describe("menuTaxNote", () => {
   it("says prices include VAT where they do, else the sales-tax note", () => {
     expect(menuTaxNote(true, en)).toBe("Prices include VAT.");
-    expect(menuTaxNote(true, getDictionary("it"))).toBe("I prezzi includono l'IVA.");
+    expect(menuTaxNote(true, getDictionary("it"))).toBe("Prezzi IVA inclusa.");
     expect(menuTaxNote(false, en)).toBe("Prices exclude sales tax, which is added to your bill.");
   });
 });

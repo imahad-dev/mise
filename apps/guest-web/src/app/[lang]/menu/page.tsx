@@ -389,8 +389,9 @@ export default function GuestMenuPage({
                 </p>
               )}
               <h1 className="text-2xl text-ink">{menu.restaurant.name}</h1>
-              {Number(menu.restaurant.service_charge_rate) > 0 && (
-                <p className="text-xs text-ink-muted">{serviceLine(menu.restaurant.service_charge_rate, dict.menu.serviceNotice)}</p>
+              {/* Counter bills carry no service charge. */}
+              {menu.table_kind !== "counter" && Number(menu.restaurant.service_charge_rate) > 0 && (
+                <p className="text-xs text-ink-muted">{serviceLine(menu.restaurant.service_charge_rate, dict.menu.serviceNotice, lang)}</p>
               )}
               {menu.table_kind === "counter" && (
                 <p className="mt-0.5 text-sm font-semibold text-terracotta">{dict.counter.header}</p>
