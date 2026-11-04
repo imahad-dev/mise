@@ -114,9 +114,9 @@ Examples: £24.00 at 20% → VAT £4.00, total £24.00. AED 105.00 at 5% → VAT
   a mismatch is refused. The request gains `service_included: bool` (default false).
 - **Reports.** Every sales figure built from order lines (revenue, margin, average order value,
   menu engineering, forecast inputs, what-if, the morning brief and the service report) is
-  reported **excluding VAT** for `included` venues: each order's money is divided by
-  `1 + tax_rate` from its settled bill's snapshot (current menu prices in what-if use the rate
-  in force today). Pakistan figures are unchanged (tax was
+  reported **excluding VAT** for `included` venues: each order's money is scaled by its settled
+  bill's own `(subtotal − tax_amount) / subtotal`, so report sales match the VAT recorded on
+  bills to the penny (current menu prices in what-if use the rate in force today). Pakistan figures are unchanged (tax was
   never in them). Labels say "excl. VAT" where it applies.
 - The cash-versus-digital tax card is shown only where the jurisdiction splits by method.
 - Pay-forward amounts stay at menu prices; nothing about pay-forward changes.
