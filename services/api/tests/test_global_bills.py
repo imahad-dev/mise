@@ -20,7 +20,7 @@ from src.models.order import Order
 from src.models.restaurant import Restaurant
 from src.models.session import GuestSession
 from src.services import analytics
-from src.services.brief import current_prices, local_today
+from src.services.brief import compute_whatif, current_prices, local_today
 from src.services.order_snapshot import snapshot_order_item
 from src.services.simulator import SimAssumptions, persist_simulation
 
@@ -767,3 +767,26 @@ async def test_service_choice_check_only_where_service_applies(client, db_sessio
     assert resp.status_code == 200, resp.text
     resp = await _claim_then_settle(client, db_session, uk, "card", True, True, counter=True)
     assert resp.status_code == 200, resp.text
+
+
+async def _whatif(db, r):
+    with patch("src.services.brief.narrate") as narrate:
+        narrate.side_effect = lambda _i, _db, _facts, template, **_: (template, "template")
+        out = await compute_whatif(db, r, None, "demand_surge", {"multiplier": 1.5})
+    return out["explanation"], narrate.call_args.args[2]
+
+
+async def test_uk_what_if_says_figures_exclude_vat(db_session, uk):
+    text, facts = await _whatif(db_session, uk[0])
+    assert facts["figures_exclude_vat"] is True
+    assert "revenue GBP +0.00 (excl. VAT), contribution margin GBP +0.00 (excl. VAT)," in text
+
+
+async def test_pakistan_what_if_text_unchanged(db_session):
+    pk, *_ = await _venue(db_session, "PB", "PKR", "Asia/Karachi")
+    text, facts = await _whatif(db_session, pk)
+    assert facts["figures_exclude_vat"] is False
+    assert text == (
+        "Estimated weekly change: revenue PKR +0.00, contribution margin PKR +0.00, "
+        "under the assumptions listed."
+    )

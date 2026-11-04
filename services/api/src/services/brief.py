@@ -493,14 +493,18 @@ async def compute_whatif(
         )
     d = result["delta"]
     cur = restaurant.currency
+    # Same rule as the brief: VAT-inclusive menu prices are analysed net of VAT.
+    vat = price_tax_factor(restaurant.tax_jurisdiction, today) != 1
+    net = " (excl. VAT)" if vat else ""
     template = (
-        f"Estimated weekly change: revenue {cur} {d['revenue']:+.2f}, contribution margin "
-        f"{cur} {d['margin']:+.2f}, under the assumptions listed."
+        f"Estimated weekly change: revenue {cur} {d['revenue']:+.2f}{net}, contribution margin "
+        f"{cur} {d['margin']:+.2f}{net}, under the assumptions listed."
     )
     # Ids are dropped: their digits would otherwise count as "allowed" numbers.
     llm_facts = {
         **{k: v for k, v in result.items() if k != "params"},
         "currency": restaurant.currency,
+        "figures_exclude_vat": vat,
         "item": names.get(str(item_id)) if item_id else None,
         "params": {k: v for k, v in params.items() if k != "item_id"},
     }
