@@ -148,6 +148,9 @@ async def test_owner_saves_and_reads_settings(client: AsyncClient, db_session: A
         "service_extra_label": "More naan",
         "pickup_prefix": "P",
         "sitting_code_required": False,
+        "service_charge_rate": "0.0000",
+        "service_charge_allowed": False,
+        "tax_rule": None,
     }
     got = await client.get(f"/api/restaurants/{r.slug}/settings")
     assert got.json() == resp.json()

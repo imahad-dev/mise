@@ -2,6 +2,7 @@ import logging
 import uuid
 from dataclasses import asdict, replace
 from datetime import UTC, date, datetime, timedelta
+from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import exists, func, select
@@ -38,6 +39,7 @@ from src.schemas.owner import (
     SimulateOrdersRequest,
     SimulateOrdersResponse,
     StatusOkResponse,
+    TaxRule,
     WhatIfRequest,
     WhatIfResponse,
 )
@@ -58,6 +60,7 @@ from src.services.service_report import (
 )
 from src.services.simulator import SimAssumptions, persist_simulation
 from src.services.sitting import close_sitting_for_table
+from src.services.tax import TaxRateError, charge_for, jurisdiction_of
 
 router = APIRouter(prefix="/api/restaurants/{slug}", tags=["owner"])
 logger = logging.getLogger(__name__)
@@ -393,6 +396,26 @@ async def list_tables(
     ]
 
 
+def _settings_response(r: Restaurant) -> SettingsResponse:
+    j = jurisdiction_of(r.tax_jurisdiction)
+    rule = None
+    if j is not None:
+        try:
+            rate = charge_for(j.code, j.methods[0], local_today(r), Decimal(0)).rate
+            rule = TaxRule(name=j.name, rate=rate, pricing=j.pricing)
+        except TaxRateError:
+            rule = None
+    return SettingsResponse(
+        payment_details=r.payment_details,
+        service_extra_label=r.service_extra_label,
+        pickup_prefix=r.pickup_prefix,
+        sitting_code_required=r.sitting_code_required,
+        service_charge_rate=r.service_charge_rate.quantize(Decimal("0.0001")),
+        service_charge_allowed=j is not None and j.service_charge is not None,
+        tax_rule=rule,
+    )
+
+
 @router.get(
     "/settings",
     response_model=SettingsResponse,
@@ -404,13 +427,7 @@ async def list_tables(
     },
 )
 async def get_settings(access: RestaurantAccess = Depends(owner_access)) -> SettingsResponse:
-    r = access.restaurant
-    return SettingsResponse(
-        payment_details=r.payment_details,
-        service_extra_label=r.service_extra_label,
-        pickup_prefix=r.pickup_prefix,
-        sitting_code_required=r.sitting_code_required,
-    )
+    return _settings_response(access.restaurant)
 
 
 @router.patch(
@@ -422,7 +439,10 @@ async def get_settings(access: RestaurantAccess = Depends(owner_access)) -> Sett
         403: {"description": "Unauthorized (Owner only)"},
         404: {"description": "Restaurant not found"},
         409: {"description": "Pickup prefix changed while counter orders are open"},
-        422: {"description": "Invalid setting; detail.field names it"},
+        422: {
+            "description": "Invalid setting; payment details: detail.field names it; "
+            "service charge: detail is a message"
+        },
     },
 )
 async def patch_settings(
@@ -462,6 +482,27 @@ async def patch_settings(
         restaurant.payment_details = cleaned
     if "service_extra_label" in payload.model_fields_set:
         restaurant.service_extra_label = payload.service_extra_label
+    rate = payload.service_charge_rate
+    if rate is not None:
+        j = jurisdiction_of(restaurant.tax_jurisdiction)
+        if rate > 0 and (j is None or j.service_charge is None):  # 0 (off) is always allowed
+            where = f"in {j.name}" if j else "at this venue"
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=f"An optional service charge is not offered {where}",
+            )
+        rate = rate.quantize(Decimal("0.0001")) + 0  # "-0" becomes 0
+        old = restaurant.service_charge_rate.quantize(Decimal("0.0001"))
+        if rate != old:
+            db.add(
+                AuditLog(
+                    restaurant_id=restaurant.id,
+                    event_type="owner_service_charge_edit",
+                    actor=f"user:{access.user.id}",
+                    payload={"before": str(old), "after": str(rate)},
+                )
+            )
+        restaurant.service_charge_rate = rate
     if payload.sitting_code_required is not None:  # tables already open keep their own rule
         restaurant.sitting_code_required = payload.sitting_code_required
     if (
@@ -486,12 +527,7 @@ async def patch_settings(
             )
         restaurant.pickup_prefix = payload.pickup_prefix
     await db.commit()
-    return SettingsResponse(
-        payment_details=restaurant.payment_details,
-        service_extra_label=restaurant.service_extra_label,
-        pickup_prefix=restaurant.pickup_prefix,
-        sitting_code_required=restaurant.sitting_code_required,
-    )
+    return _settings_response(restaurant)
 
 
 # --- Checkpoint D: AI endpoints ---
@@ -558,7 +594,7 @@ async def daily_brief(
 ) -> DailyBriefResponse:
     """Deterministic analytics brief; the LLM only narrates. Cached for 10m in DEMO_MODE."""
     restaurant = access.restaurant
-    cache_key = f"cache:demo:brief:v4:{restaurant.slug}"
+    cache_key = f"cache:demo:brief:v5:{restaurant.slug}"
 
     if settings.demo_mode:
         try:
@@ -819,7 +855,7 @@ async def simulate_demo_orders(
     summary = await persist_simulation(db, restaurant, assumptions)
     await db.commit()
     try:
-        await redis_client.delete(f"cache:demo:brief:v4:{restaurant.slug}")
+        await redis_client.delete(f"cache:demo:brief:v5:{restaurant.slug}")
     except Exception as e:
         logger.warning("Redis error clearing brief cache: %s", e)
     return SimulateOrdersResponse(**summary)

@@ -39,6 +39,7 @@ from src.services.bills import (
     BillChanged,
     active_orders,
     bill_lines,
+    bill_service,
     claim_of,
     is_expired_unpaid,
     local_date,
@@ -68,6 +69,11 @@ RESPONSES = {
 JOINED_LATE = timedelta(minutes=20)
 ALL_VOIDED = "All orders voided"
 CANCELLED_BY_STAFF = "Cancelled by staff"
+
+
+def _money(currency: str, amount: Decimal) -> str:
+    """Staff text for an amount: "Rs 2527.00" in Pakistan, else "GBP 12.00"."""
+    return f"{'Rs' if currency == 'PKR' else currency} {amount}"
 
 
 async def _order_cancelled(order_id: uuid.UUID) -> None:
@@ -161,11 +167,20 @@ async def bill_detail(db: AsyncSession, restaurant: Restaurant, bill: Bill) -> B
     on_date = local_date(restaurant, at)
     standard, digital = previews(restaurant.tax_jurisdiction, subtotal, on_date)
     methods = method_previews(restaurant.tax_jurisdiction, subtotal, on_date)
+    if bill.status == "settled":
+        sc_rate, sc_amount = bill.service_charge_rate, bill.service_charge_amount
+    else:
+        sc_rate, sc_amount = bill_service(restaurant, bill, subtotal)
     claim = claim_of(bill)
     due = reused = reused_open = None
     if claim is not None and bill.status == "open":
         current = next((m for m in methods if m.method == claim.method), None)
-        due = None if current is None else current.total - claim.total
+        # The amount due counts the service charge the guest chose.
+        due = (
+            None
+            if current is None
+            else current.total + (sc_amount if claim.service_included else 0) - claim.total
+        )
         key = reference_key(claim.reference)
         reused = await reused_reference_bill_no(db, restaurant.id, bill.id, [key])
         reused_open = await open_bill_with_claimed_key(db, restaurant.id, bill.id, key)
@@ -191,6 +206,9 @@ async def bill_detail(db: AsyncSession, restaurant: Restaurant, bill: Bill) -> B
         payment_method=bill.payment_method,
         payment_reference=bill.payment_reference,
         tax_jurisdiction=bill.tax_jurisdiction,
+        tax_pricing=bill.tax_pricing,
+        service_charge_rate=sc_rate,
+        service_charge_amount=sc_amount,
         tax_rate=bill.tax_rate,
         tax_amount=bill.tax_amount,
         total=bill.total,
@@ -342,9 +360,13 @@ async def get_bill(
         **RESPONSES,
         409: {
             "description": "Bill already settled or not open; reference already used on another "
-            'bill; or {"detail": "Bill changed", "bill": <fresh BillDetail>}'
+            "bill; service choice differs from the guest's; or "
+            '{"detail": "Bill changed", "bill": <fresh BillDetail>}'
         },
-        422: {"description": "No active orders, no tax rate, or expected_method mismatch"},
+        422: {
+            "description": "No active orders, no tax rate, expected_method mismatch, or "
+            "Payment method not accepted here"
+        },
     },
 )
 async def settle(
@@ -363,6 +385,8 @@ async def settle(
             payload.expected_total,
             access.user.id,
             payload.acknowledge_reused_reference,
+            payload.service_included,
+            payload.acknowledge_service_change,
         )
     except BillChanged:
         # Still under the bill lock and unmodified: the fresh detail matches what settle saw.
@@ -469,7 +493,8 @@ async def void_order(
         return JSONResponse(
             status_code=status.HTTP_409_CONFLICT,
             content={
-                "detail": f"Guest says they paid by {label} (Rs {claim.total}) — any refund "
+                "detail": f"Guest says they paid by {label} "
+                f"({_money(access.restaurant.currency, claim.total)}) — any refund "
                 "happens outside Mise. Confirm to void and cancel the bill.",
                 "claim": claim.model_dump(mode="json"),
             },
@@ -568,7 +593,8 @@ async def cancel_bill(
         label = METHOD_LABELS.get(claim.method, claim.method)
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail=f"Guest says they paid by {label} (Rs {claim.total}) — any refund happens "
+            detail=f"Guest says they paid by {label} "
+            f"({_money(access.restaurant.currency, claim.total)}) — any refund happens "
             "outside Mise. Give a reason to cancel.",
         )
     reason = payload.reason or CANCELLED_BY_STAFF

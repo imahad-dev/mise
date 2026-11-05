@@ -702,3 +702,22 @@ test.describe.serial("13. A venue that asks for the table number", () => {
     expect(await pendingOrderIds("T4")).toHaveLength(1);
   });
 });
+
+test.describe.serial("Sheets on a phone", () => {
+  test.beforeAll(async () => {
+    await resetVenue(ANGEETHI);
+    T = await venueTables(ANGEETHI);
+  });
+
+  test("the pay sheet opens at the bottom of the screen", async ({ browser }) => {
+    const context = await browser.newContext({ viewport: { width: 375, height: 812 } });
+    const guest = await context.newPage();
+    await openTable(ANGEETHI, "T1");
+    await openTableMenu(guest, T.T1.qr_token);
+    await orderOne(guest, "Raita");
+    await guest.getByRole("button", { name: "Pay bill" }).click();
+    const box = await guest.getByRole("dialog", { name: "Pay bill" }).boundingBox();
+    expect(Math.round(box!.y + box!.height)).toBe(812);
+    await context.close();
+  });
+});

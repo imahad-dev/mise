@@ -28,6 +28,8 @@ class Settings(BaseSettings):
 
     # Sales tax rates file (defaults to data/tax_rates.json)
     tax_rates_path: str | None = None
+    # Per-jurisdiction tax rules (defaults to data/tax_jurisdictions.json)
+    tax_jurisdictions_path: str | None = None
 
     # URLs
     public_guest_url: str = "http://localhost:3000"

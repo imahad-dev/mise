@@ -83,6 +83,12 @@ def test_payment_and_options_do_not_move_the_order_stream():
     assert {o.payment_method for o in varied} == {"card"}
 
 
+def test_mix_with_no_accepted_method_is_refused():
+    a = SimAssumptions(days=3, payment_mix=(("wallet", 0.5), ("raast", 0.5)))
+    with pytest.raises(ValueError, match="no weight on the methods accepted"):
+        generate_orders(ITEMS, START, a, TZ, {"cash", "card"})
+
+
 def test_from_profile_converts_lists_and_rejects_unknown_keys():
     a = SimAssumptions.from_profile(
         {
@@ -147,7 +153,7 @@ async def test_persist_simulation_writes_one_settled_bill_per_party(db_session: 
         )
         assert (bill.tax_rate, bill.tax_amount) == (rate, tax)
         assert bill.total == bill.subtotal + bill.tax_amount
-        assert bill.tax_jurisdiction == "PB"
+        assert (bill.tax_jurisdiction, bill.tax_pricing) == ("PB", "on_top")
         methods[bill.payment_method] += 1
     for method, share in a.payment_mix:
         assert abs(methods[method] / n - share) <= 0.05, (method, methods)
@@ -221,6 +227,43 @@ async def test_longest_history_still_bills_every_order(db_session: AsyncSession)
         )
     ).scalar_one()
     assert early > 0  # digital bills settled before 1 July 2026 use 5%
+
+
+@pytest.mark.asyncio
+async def test_simulated_uk_bills_include_vat_and_use_cash_or_card(db_session: AsyncSession):
+    restaurant = Restaurant(
+        name="UK Cafe",
+        slug=f"uk-{uuid.uuid4().hex[:8]}",
+        timezone="Europe/London",
+        currency="GBP",
+        tax_jurisdiction="GB",
+    )
+    db_session.add(restaurant)
+    await db_session.flush()
+    db_session.add(
+        MenuItem(
+            restaurant_id=restaurant.id,
+            category="mains",
+            price=Decimal("12.50"),
+            unit_cost=Decimal("4.00"),
+        )
+    )
+    await db_session.flush()
+    await persist_simulation(db_session, restaurant, SimAssumptions(days=14))
+    bills = (
+        (await db_session.execute(select(Bill).where(Bill.restaurant_id == restaurant.id)))
+        .scalars()
+        .all()
+    )
+    assert bills
+    assert {b.payment_method for b in bills} == {"cash", "card"}
+    for b in bills:
+        assert b.payment_method in ("cash", "card")
+        assert b.tax_pricing == "included"
+        assert b.total == b.subtotal
+        assert b.tax_amount == (b.subtotal * b.tax_rate / (1 + b.tax_rate)).quantize(
+            Decimal("0.01"), "ROUND_HALF_UP"
+        )
 
 
 @pytest.mark.asyncio

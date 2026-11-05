@@ -19,10 +19,17 @@ from src.models.restaurant import Restaurant
 from src.models.session import GuestSession
 from src.schemas.bills import BillLine, MethodPreview, PaymentClaim, TaxPreview
 from src.services.pay_forward import record_bought
-from src.services.tax import PAYMENT_METHODS, TaxRateError, default_rates, payment_class, tax_for
+from src.services.tax import (
+    CENTS,  # noqa: F401 - routers import it from here
+    TaxRateError,
+    charge_for,
+    default_rates,
+    methods_for,
+    payment_class,
+    service_charge_for,
+)
 
 logger = logging.getLogger(__name__)
-CENTS = Decimal("0.01")
 VISIT_ENDED = "Your visit has ended — scan the table QR again"
 REUSE_WINDOW = timedelta(days=7)
 EXPIRED = "Expired unpaid"
@@ -240,15 +247,15 @@ def _preview(
     jurisdiction: str | None, method: str, subtotal: Decimal, on_date: date
 ) -> TaxPreview | None:
     try:
-        rate, tax = tax_for(jurisdiction or "", method, on_date, subtotal, default_rates())
+        c = charge_for(jurisdiction or "", method, on_date, subtotal, default_rates())
     except TaxRateError:
         return None
-    tax = tax.quantize(CENTS)
     return TaxPreview(
         payment_class=payment_class(method),
-        tax_rate=rate,
-        tax_amount=tax,
-        total=subtotal + tax,
+        tax_rate=c.rate,
+        tax_amount=c.tax,
+        total=c.total,
+        tax_included=c.pricing == "included",
     )
 
 
@@ -285,9 +292,22 @@ def method_preview(
 def method_previews(
     jurisdiction: str | None, subtotal: Decimal, on_date: date
 ) -> list[MethodPreview]:
-    """Tax and total for each of the five methods; methods without a rate are left out."""
-    out = [method_preview(jurisdiction, m, subtotal, on_date) for m in PAYMENT_METHODS]
+    """Tax and total for each method the venue accepts; methods without a rate are left out."""
+    out = [method_preview(jurisdiction, m, subtotal, on_date) for m in methods_for(jurisdiction)]
     return [p for p in out if p is not None]
+
+
+def bill_service(restaurant: Restaurant, bill: Bill, subtotal: Decimal) -> tuple[Decimal, Decimal]:
+    """The optional service charge this bill would carry: table bills only."""
+    return service_charge_for(
+        restaurant.tax_jurisdiction,
+        restaurant.service_charge_rate,
+        subtotal,
+        bill.table_id is not None,
+    )
+
+
+METHOD_REFUSED = "Payment method not accepted here"
 
 
 def local_date(restaurant: Restaurant, at: datetime) -> date:
@@ -302,6 +322,7 @@ def claim_of(bill: Bill) -> PaymentClaim | None:
         reference=bill.claimed_reference,
         total=bill.claimed_total,
         claimed_at=bill.claimed_at,
+        service_included=bill.claimed_service_included,
     )
 
 
@@ -374,6 +395,8 @@ async def settle_bill(
     expected_total: Decimal,
     user_id: uuid.UUID,
     acknowledge_reused: bool = False,
+    service_included: bool = False,
+    acknowledge_service_change: bool = False,
 ) -> tuple[Bill, list[uuid.UUID], list[uuid.UUID]]:
     """Lock the bill, recompute, check the staff's expectation, snapshot tax. Caller commits.
 
@@ -401,6 +424,10 @@ async def settle_bill(
     # bill committed before it.
     now = (await db.execute(select(func.clock_timestamp()))).scalar_one()
     # Nothing is modified before the expected-total check, so BillChanged leaves no trace.
+    if method not in methods_for(restaurant.tax_jurisdiction):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=METHOD_REFUSED
+        )
     orders = await active_orders(db, bill.id, include_expired=expired)
     if not orders:
         raise HTTPException(
@@ -408,7 +435,7 @@ async def settle_bill(
         )
     _, subtotal = bill_lines(orders)
     try:
-        rate, tax = tax_for(
+        c = charge_for(
             restaurant.tax_jurisdiction or "",
             method,
             local_date(restaurant, now),
@@ -420,8 +447,11 @@ async def settle_bill(
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="No tax rate configured"
         ) from e
-    tax = tax.quantize(CENTS)
-    if subtotal + tax != expected_total:
+    sc_rate, sc_amount = bill_service(restaurant, bill, subtotal)
+    service_offered = sc_amount > 0  # as the staff screen decides: a 0.00 service is none
+    if not service_included:
+        sc_rate, sc_amount = Decimal("0.0000"), Decimal("0.00")
+    if c.total + sc_amount != expected_total:
         raise BillChanged
     # Both the staff's reference and the guest's claimed one. Per-reference locks (sorted, so
     # no cycle) serialise two bills settling with the same reference: the second sees the first.
@@ -441,15 +471,29 @@ async def settle_bill(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"Reference already used on {bill_no_label(reused)}",
         )
+    # Staff may change the guest's service choice, but never silently.
+    if (
+        claim_of(bill) is not None
+        and service_offered
+        and service_included != bill.claimed_service_included
+        and not acknowledge_service_change
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Service choice differs from the guest's",
+        )
     revived = await revive_expired(db, bill, restaurant.id, f"user:{user_id}") if expired else []
     bill.status = "settled"
     bill.payment_method = method
     bill.payment_reference = reference
     bill.subtotal = subtotal
     bill.tax_jurisdiction = restaurant.tax_jurisdiction
-    bill.tax_rate = rate
-    bill.tax_amount = tax
-    bill.total = subtotal + tax
+    bill.tax_rate = c.rate
+    bill.tax_amount = c.tax
+    bill.tax_pricing = c.pricing
+    bill.service_charge_rate = sc_rate
+    bill.service_charge_amount = sc_amount
+    bill.total = c.total + sc_amount
     bill.settled_at = now
     bill.settled_by = user_id
     # Under the bill lock, so no other path can change these orders meanwhile.

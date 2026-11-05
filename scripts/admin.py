@@ -51,6 +51,10 @@ async def create_restaurant(
     if not re.fullmatch(r"[A-Z]{3}", currency):
         raise AdminError(f"Currency must be 3 uppercase letters, got {currency!r}")
     try:
+        tax.check_venue_tax(jurisdiction, currency)
+    except tax.TaxRateError as e:
+        raise AdminError(str(e)) from e
+    try:
         ZoneInfo(timezone)
     except (ZoneInfoNotFoundError, ValueError, OSError) as e:
         raise AdminError(f"Unknown timezone {timezone!r}") from e

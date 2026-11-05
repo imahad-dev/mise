@@ -48,6 +48,19 @@ async def test_unknown_jurisdiction_is_rejected(db_session):
         )
 
 
+async def test_jurisdiction_in_another_currency_is_rejected(db_session):
+    with pytest.raises(AdminError, match="currency"):
+        await create_restaurant(
+            db_session,
+            slug="cafe-gb",
+            name="GB",
+            city="London",
+            jurisdiction="GB",
+            currency="PKR",
+            timezone="Europe/London",
+        )
+
+
 async def test_existing_user_gets_second_membership(db_session):
     await create_restaurant(
         db_session,

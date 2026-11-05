@@ -1165,6 +1165,12 @@ export interface components {
             payment_reference: string | null;
             /** Tax Jurisdiction */
             tax_jurisdiction: string | null;
+            /** Tax Pricing */
+            tax_pricing: string | null;
+            /** Service Charge Rate */
+            service_charge_rate: string;
+            /** Service Charge Amount */
+            service_charge_amount: string;
             /** Tax Rate */
             tax_rate: string | null;
             /** Tax Amount */
@@ -1441,6 +1447,12 @@ export interface components {
             /** Peak Hours */
             peak_hours: components["schemas"]["PeakHour"][];
             payment_mix: components["schemas"]["PaymentMix"];
+            /** Prices Include Tax */
+            prices_include_tax: boolean;
+            /** Tax Split By Method */
+            tax_split_by_method: boolean;
+            /** Service Charge Collected */
+            service_charge_collected: string;
             pay_forward: components["schemas"]["PayForwardTotals"];
             forecast: components["schemas"]["ForecastSummary"];
             /** Actions */
@@ -1628,6 +1640,10 @@ export interface components {
             currency: string;
             /** Methods */
             methods: components["schemas"]["MethodPreview"][];
+            /** Service Charge Rate */
+            service_charge_rate: string;
+            /** Service Charge Amount */
+            service_charge_amount: string;
             payment_details: components["schemas"]["PaymentDetails"];
             claim: components["schemas"]["PaymentClaim"] | null;
             /** Voided */
@@ -1638,6 +1654,11 @@ export interface components {
             payment_method?: string | null;
             /** Tax Rate */
             tax_rate?: string | null;
+            /**
+             * Tax Included
+             * @default false
+             */
+            tax_included: boolean;
             /** Total */
             total?: string | null;
             /** Pickup Label */
@@ -1741,6 +1762,10 @@ export interface components {
             name: string;
             /** Currency */
             currency: string;
+            /** Service Charge Rate */
+            service_charge_rate: string;
+            /** Prices Include Tax */
+            prices_include_tax: boolean;
         };
         /** GuestPaymentRequest */
         GuestPaymentRequest: {
@@ -1751,6 +1776,11 @@ export interface components {
             method: "cash" | "card" | "wallet" | "raast" | "bank_transfer";
             /** Reference */
             reference?: string | null;
+            /**
+             * Service Included
+             * @default false
+             */
+            service_included: boolean;
         };
         /** GuestSessionResponse */
         GuestSessionResponse: {
@@ -2040,6 +2070,11 @@ export interface components {
             tax_amount: string;
             /** Total */
             total: string;
+            /**
+             * Tax Included
+             * @default false
+             */
+            tax_included: boolean;
             /** Method */
             method: string;
             /** Label */
@@ -2322,6 +2357,8 @@ export interface components {
             pickup_prefix?: string | null;
             /** Sitting Code Required */
             sitting_code_required?: boolean | null;
+            /** Service Charge Rate */
+            service_charge_rate?: number | string | null;
         };
         /** PayForwardTotals */
         PayForwardTotals: {
@@ -2343,6 +2380,11 @@ export interface components {
              * Format: date-time
              */
             claimed_at: string;
+            /**
+             * Service Included
+             * @default false
+             */
+            service_included: boolean;
         };
         /** PaymentClassCounts */
         PaymentClassCounts: {
@@ -2480,6 +2522,11 @@ export interface components {
             pickup_prefix: string | null;
             /** Sitting Code Required */
             sitting_code_required: boolean;
+            /** Service Charge Rate */
+            service_charge_rate: string;
+            /** Service Charge Allowed */
+            service_charge_allowed: boolean;
+            tax_rule: components["schemas"]["TaxRule"] | null;
         };
         /** SettleBillRequest */
         SettleBillRequest: {
@@ -2502,6 +2549,16 @@ export interface components {
              * @default false
              */
             acknowledge_reused_reference: boolean;
+            /**
+             * Service Included
+             * @default false
+             */
+            service_included: boolean;
+            /**
+             * Acknowledge Service Change
+             * @default false
+             */
+            acknowledge_service_change: boolean;
         };
         /** SimulateOrdersRequest */
         SimulateOrdersRequest: {
@@ -2597,6 +2654,23 @@ export interface components {
             tax_amount: string;
             /** Total */
             total: string;
+            /**
+             * Tax Included
+             * @default false
+             */
+            tax_included: boolean;
+        };
+        /** TaxRule */
+        TaxRule: {
+            /** Name */
+            name: string;
+            /** Rate */
+            rate: string;
+            /**
+             * Pricing
+             * @enum {string}
+             */
+            pricing: "on_top" | "included";
         };
         /** ValidationError */
         ValidationError: {
@@ -3865,14 +3939,14 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Bill already settled or not open; reference already used on another bill; or {"detail": "Bill changed", "bill": <fresh BillDetail>} */
+            /** @description Bill already settled or not open; reference already used on another bill; service choice differs from the guest's; or {"detail": "Bill changed", "bill": <fresh BillDetail>} */
             409: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description No active orders, no tax rate, or expected_method mismatch */
+            /** @description No active orders, no tax rate, expected_method mismatch, or Payment method not accepted here */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -4913,7 +4987,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Invalid setting; detail.field names it */
+            /** @description Invalid setting; payment details: detail.field names it; service charge: detail is a message */
             422: {
                 headers: {
                     [name: string]: unknown;

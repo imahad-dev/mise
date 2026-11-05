@@ -14,6 +14,8 @@ export interface TaxPreview {
   tax_rate: string;
   tax_amount: string;
   total: string;
+  /** VAT already inside the menu prices (UK, Dubai); the API always sends it. */
+  tax_included?: boolean;
 }
 
 export interface MethodPreview extends TaxPreview {
@@ -49,6 +51,11 @@ export interface BillDetail extends BillSummary {
   payment_method: string | null;
   payment_reference: string | null;
   tax_jurisdiction: string | null;
+  /** "on_top" or "included": set when the bill is settled. */
+  tax_pricing: string | null;
+  /** The optional service charge; "0.00" where none applies, the settled amount once settled. */
+  service_charge_rate: string;
+  service_charge_amount: string;
   tax_rate: string | null;
   tax_amount: string | null;
   total: string | null;
@@ -72,6 +79,8 @@ export interface PaymentClaim {
   reference: string | null;
   total: string;
   claimed_at: string;
+  /** The guest chose the optional service; their total includes it. The API always sends it. */
+  service_included?: boolean;
 }
 
 export interface BillOrder {
@@ -87,6 +96,11 @@ export interface BillOrder {
 
 export const SAMPLE_BILL_FOOTER =
   "Sample bill — not a tax invoice. Not connected to FBR or any provincial revenue authority.";
+
+/** Pakistani bills name the authorities they are not connected to; others keep only the first sentence. */
+export const billFooter = (jurisdiction: string | null | undefined) =>
+  // No jurisdiction: a bill from before venues outside Pakistan existed.
+  !jurisdiction || jurisdiction === "PB" || jurisdiction === "ICT" ? SAMPLE_BILL_FOOTER : "Sample bill — not a tax invoice.";
 
 export const PAYMENT_METHODS = [
   { value: "cash", label: "Cash" },
@@ -105,7 +119,7 @@ export const previewFor = (bill: Pick<BillDetail, "methods">, method: string) =>
 export const paymentLabel = (method: string | null) =>
   PAYMENT_METHODS.find((m) => m.value === method)?.label ?? method ?? "";
 
-/** "Guest said they paid by Raast QR (Rs 2,527.00)": shown on bills cancelled after a claim. */
+/** "Guest said they paid by Raast QR (<total in the venue's currency>)": shown on bills cancelled after a claim. */
 export const claimWarning = (claim: PaymentClaim, currency: string) =>
   `Guest said they paid by ${paymentLabel(claim.method)} (${formatPrice(Number(claim.total), currency)}) — any refund happens outside Mise.`;
 
@@ -130,28 +144,54 @@ export function amountDueText(due: string | null, currency: string): string | nu
 }
 
 /**
- * The settle body. expected_total comes from the server's preview for the selected method,
- * never from the claim; null when that method has no preview (no tax rate).
+ * The settle body. expected_total comes from the server's preview for the selected method plus
+ * the server's optional service amount when included, never from the claim; null when that
+ * method has no preview (no tax rate).
  */
-export function settlePayload(bill: Pick<BillDetail, "methods">, method: PaymentMethod, reference: string, acknowledgeReused: boolean) {
+export function settlePayload(
+  bill: Pick<BillDetail, "methods"> & Partial<Pick<BillDetail, "service_charge_amount">>,
+  method: PaymentMethod,
+  reference: string,
+  acknowledgeReused: boolean,
+  serviceIncluded = false,
+  acknowledgeServiceChange = false,
+) {
   const preview = previewFor(bill, method);
   if (!preview) return null;
   const ref = method === "cash" ? "" : reference.trim();
+  const service = serviceIncluded ? Number(bill.service_charge_amount ?? 0) : 0;
   return {
     payment_method: method,
     payment_reference: ref || null,
-    expected_total: preview.total,
+    expected_total: (Number(preview.total) + service).toFixed(2),
     expected_method: method,
     acknowledge_reused_reference: acknowledgeReused,
+    service_included: service > 0,
+    acknowledge_service_change: acknowledgeServiceChange,
   };
 }
+
+/**
+ * Staff's service choice differs from the guest's claim on a bill with a service charge: settle
+ * then needs acknowledge_service_change. The key changes with the bill, claim and choice, so an
+ * acknowledgement never outlives what it confirmed; null when nothing needs confirming.
+ */
+export const serviceChangeKey = (
+  d: (Pick<BillDetail, "id" | "claim"> & Partial<Pick<BillDetail, "service_charge_amount">>) | null,
+  serviceOn: boolean,
+) => {
+  const claimed = d?.claim?.service_included ?? false;
+  return d?.claim && Number(d.service_charge_amount ?? 0) > 0 && claimed !== serviceOn ? `${d.id}|${d.claim.claimed_at}|${claimed}|${serviceOn}` : null;
+};
 
 /** Changes whenever the reused-reference warnings could change: an acknowledgement never outlives it. */
 export const warningKey = (d: Pick<BillDetail, "reused_reference_bill_no" | "reused_reference_open_bill_no" | "claim"> | null) =>
   d ? `${d.reused_reference_bill_no ?? ""}|${d.reused_reference_open_bill_no ?? ""}|${d.claim?.reference ?? ""}` : "";
 
 const sameClaim = (a: PaymentClaim | null, b: PaymentClaim | null) =>
-  (a?.method ?? null) === (b?.method ?? null) && (a?.reference ?? null) === (b?.reference ?? null);
+  (a?.method ?? null) === (b?.method ?? null) &&
+  (a?.reference ?? null) === (b?.reference ?? null) &&
+  (a?.service_included ?? false) === (b?.service_included ?? false);
 
 /**
  * A live refresh brought a claim: follow it while staff haven't edited method or reference,
@@ -161,11 +201,17 @@ export function nextFormState(
   prev: PaymentClaim | null,
   next: PaymentClaim | null,
   touched: boolean,
-): { apply: { method: PaymentMethod; reference: string } | null; notice: string | null } {
+): { apply: { method: PaymentMethod; reference: string; serviceIncluded: boolean } | null; notice: string | null } {
   if (!next || sameClaim(prev, next)) return { apply: null, notice: null };
-  if (touched) return { apply: null, notice: `The guest changed their payment to ${claimSummary(next)} — check before confirming` };
+  if (touched) {
+    const paymentChanged = (prev?.method ?? null) !== next.method || (prev?.reference ?? null) !== (next.reference ?? null);
+    const serviceChanged = (prev?.service_included ?? false) !== (next.service_included ?? false);
+    const service = `turned the optional service ${next.service_included ? "on" : "off"}`;
+    const what = paymentChanged ? `changed their payment to ${claimSummary(next)}${serviceChanged ? ` and ${service}` : ""}` : service;
+    return { apply: null, notice: `The guest ${what} — check before confirming` };
+  }
   const method = PAYMENT_METHODS.find((m) => m.value === next.method)?.value ?? "cash";
-  return { apply: { method, reference: next.reference ?? "" }, notice: null };
+  return { apply: { method, reference: next.reference ?? "", serviceIncluded: next.service_included ?? false }, notice: null };
 }
 
 export const VOID_REASONS = ["Wrong table", "Guest changed mind", "Duplicate", "Other"] as const;
@@ -213,21 +259,51 @@ export const collectedUndoLeft = (row: Pick<BillSummary, "pickup_label" | "colle
 
 export const SETTINGS_PAYMENT_FIELDS = ["raast_id", "jazzcash", "easypaisa", "iban", "account_title"] as const;
 
-/** The PATCH /settings body: every field, always; empty text clears (null); a checkbox is "on" or "". */
-export function settingsBody(form: Record<string, string | undefined>, sample: boolean) {
+/** "0.0750" -> 7.5 */
+export const ratePercent = (rate: string) => Number((Number(rate) * 100).toFixed(2));
+
+/** The service-charge field (a percentage) as the API's fraction: "12.5" -> "0.1250"; blank is 0 (off); null unless 0-20 in 0.5 steps. */
+export function serviceRateFraction(percent: string): string | null {
+  const n = Number(percent.trim() || 0);
+  return Number.isFinite(n) && n >= 0 && n <= 20 && Number.isInteger(n * 2) ? (n / 100).toFixed(4) : null;
+}
+
+/**
+ * The PATCH /settings body: every field, always; empty text clears (null); a checkbox is "on" or "".
+ * The service-charge rate goes only where the venue may offer one.
+ */
+export function settingsBody(form: Record<string, string | undefined>, sample: boolean, serviceAllowed = false) {
   const value = (key: string) => form[key]?.trim() || null;
   return {
     payment_details: { ...Object.fromEntries(SETTINGS_PAYMENT_FIELDS.map((k) => [k, value(k)])), sample },
     pickup_prefix: value("pickup_prefix"),
     service_extra_label: value("service_extra_label"),
     sitting_code_required: form.sitting_code_required === "on",
+    ...(serviceAllowed ? { service_charge_rate: serviceRateFraction(form.service_charge_rate ?? "") } : {}),
   };
 }
 
-/** PATCH /settings errors by field: {field, message} for payment details, FastAPI's list, or the 409 prefix message. */
+/** Mirrors TaxRule in services/api/src/schemas/owner.py. */
+export interface TaxRule {
+  name: string;
+  rate: string;
+  pricing: "on_top" | "included";
+}
+
+/** The settings page's read-only tax line; null when the venue has no tax rule. */
+export function taxRuleText(rule: TaxRule | null): string | null {
+  if (!rule) return null;
+  return rule.pricing === "included"
+    ? `Prices include VAT ${ratePercent(rule.rate)}% (${rule.name})`
+    : `Sales tax added to bills (${rule.name})`;
+}
+
+/** PATCH /settings errors by field: {field, message} for payment details, FastAPI's list, the 409 prefix message or the 422 service-charge message. */
 export function settingsErrors(status: number, body: unknown): Record<string, string> {
   const detail = (body as { detail?: unknown } | null)?.detail;
   if (status === 409) return { pickup_prefix: typeof detail === "string" ? detail : "Finish open counter orders first" };
+  // The only plain-text 422 from PATCH /settings refuses the service charge.
+  if (status === 422 && typeof detail === "string") return { service_charge_rate: detail };
   if (Array.isArray(detail)) {
     const out: Record<string, string> = {};
     for (const d of detail as { loc?: unknown[]; msg?: string }[]) {
@@ -247,9 +323,9 @@ export const billNo = (n: number | null) => (n === null ? "Bill no. —" : `Bill
 
 const TAX_CLASS: Record<string, string> = { cash: "cash", bank_transfer: "bank transfer" };
 
-export function taxLabel(rate: string, method: string | null): string {
-  const pct = Number((Number(rate) * 100).toFixed(2));
-  return `Sales tax (illustrative) ${pct}% — ${TAX_CLASS[method ?? ""] ?? "card, wallet or QR"}`;
+export function taxLabel(rate: string, method: string | null, included = false): string {
+  if (included) return `VAT ${ratePercent(rate)}% included`;
+  return `Sales tax (illustrative) ${ratePercent(rate)}% — ${TAX_CLASS[method ?? ""] ?? "card, wallet or QR"}`;
 }
 
 export const localDateTime = (iso: string, timeZone: string) =>
@@ -270,11 +346,28 @@ type SampleBill = Pick<
   | "tax_amount"
   | "total"
   | "payment_method"
->;
+> &
+  Partial<Pick<BillDetail, "tax_jurisdiction" | "tax_pricing" | "service_charge_amount">>;
 
 export interface BillRow {
   label: string;
   amount: string;
+}
+
+type TotalsBill = Pick<
+  SampleBill,
+  "currency" | "subtotal" | "tax_rate" | "tax_amount" | "total" | "payment_method" | "tax_pricing" | "service_charge_amount"
+>;
+
+/** Subtotal, tax, the optional service when taken, and total; a VAT-included bill says the VAT is inside. */
+export function totalRows(bill: TotalsBill): BillRow[] {
+  const money = (v: string | null | undefined) => formatPrice(Number(v ?? 0), bill.currency);
+  return [
+    { label: "Subtotal", amount: money(bill.subtotal) },
+    { label: taxLabel(bill.tax_rate ?? "0", bill.payment_method, bill.tax_pricing === "included"), amount: money(bill.tax_amount) },
+    ...(Number(bill.service_charge_amount ?? 0) > 0 ? [{ label: "Optional service", amount: money(bill.service_charge_amount) }] : []),
+    { label: "Total", amount: money(bill.total) },
+  ];
 }
 
 /** The pieces of a settled sample bill; the print page renders these, sampleBillText joins them. */
@@ -292,13 +385,9 @@ export function sampleBillPieces(bill: SampleBill) {
       label: `${l.quantity} × ${l.name}${l.option_label ? ` — ${l.option_label}` : ""}`,
       amount: money(l.line_total),
     })),
-    totals: [
-      { label: "Subtotal", amount: money(bill.subtotal) },
-      { label: taxLabel(bill.tax_rate ?? "0", bill.payment_method), amount: money(bill.tax_amount) },
-      { label: "Total", amount: money(bill.total) },
-    ] as BillRow[],
+    totals: totalRows(bill),
     payment: `Paid by ${paymentLabel(bill.payment_method)}`,
-    footer: SAMPLE_BILL_FOOTER,
+    footer: billFooter(bill.tax_jurisdiction),
   };
 }
 

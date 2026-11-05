@@ -4,6 +4,7 @@ and on real bills the guest's preview is what settles and what analytics counts.
 
 import json
 import random
+from collections import Counter
 from datetime import UTC, date, datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
@@ -22,7 +23,7 @@ from src.models.session import GuestSession
 from src.services import analytics
 from src.services.analytics import Window
 from src.services.bills import method_previews, previews, session_started_at
-from src.services.tax import PAYMENT_METHODS, payment_class, tax_for
+from src.services.tax import PAYMENT_METHODS, default_jurisdictions, payment_class, tax_for
 
 CASES = 2000
 
@@ -94,7 +95,9 @@ def test_exact_edges():
 def test_shared_ui_vectors_match_the_server():
     doc = json.loads(_vectors_file().read_text(encoding="utf-8"))
     vectors = doc["vectors"]
-    assert len(vectors) == 50
+    by_jurisdiction = Counter(v["jurisdiction"] for v in vectors)
+    assert by_jurisdiction["PB"] + by_jurisdiction["ICT"] == 50
+    assert by_jurisdiction["GB"] == by_jurisdiction["AE-DU"] == 4
     for v in vectors:
         expected = next(
             p
@@ -105,6 +108,9 @@ def test_shared_ui_vectors_match_the_server():
         )
         got = {k: v[k] for k in expected.model_dump(mode="json")}
         assert got == expected.model_dump(mode="json"), v
+        assert v["currency"] == default_jurisdictions()[v["jurisdiction"]].currency, v
+        if v["tax_included"]:  # VAT inside the price: the total is the subtotal
+            assert v["total"] == v["subtotal"], v
 
 
 # --- Database-backed sample: guest preview = settled total; analytics revenue = settled ---

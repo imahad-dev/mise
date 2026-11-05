@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { formatPrice } from "ui";
 import {
   PAYMENT_METHODS, SAMPLE_BILL_FOOTER, amountDueText, billNo, claimChip, claimSummary, claimWarning, previewFor, sampleBillPieces, sampleBillText,
-  nextFormState, settlePayload, taxLabel, voidReason, warningKey,
+  nextFormState, serviceChangeKey, settlePayload, taxLabel, voidReason, warningKey, billFooter, ratePercent, serviceRateFraction, taxRuleText,
   collectedUndoLeft, counterColumn, isExpiredUnpaid, pickupText, settingsBody, settingsErrors, undoSecondsLeft,
 } from "./bill";
 
@@ -55,7 +55,9 @@ describe("bill helpers", () => {
   it("keeps forbidden wording out of the Bills and print pages", () => {
     const files = ["../app/(dashboard)/bills/page.tsx", "../app/bills/[id]/print/page.tsx", "./bill.ts"];
     for (const file of files) {
-      const source = readFileSync(fileURLToPath(new URL(file, import.meta.url)), "utf8").replace(SAMPLE_BILL_FOOTER, "");
+      const source = readFileSync(fileURLToPath(new URL(file, import.meta.url)), "utf8")
+        .replace(SAMPLE_BILL_FOOTER, "")
+        .replace(`"${billFooter("GB")}"`, "");
       expect(source, file).not.toMatch(/invoice|FBR|compliant/i);
     }
   });
@@ -64,22 +66,29 @@ describe("bill helpers", () => {
 // Shared with services/api/tests/test_money_agreement.py (scripts/gen_tax_vectors.py writes it).
 const vectorsUrl = new URL("../../../../data/test-vectors/tax_vectors.json", import.meta.url);
 const { vectors } = JSON.parse(readFileSync(fileURLToPath(vectorsUrl), "utf8")) as {
-  vectors: { method: string; payment_class: string; subtotal: string; tax_rate: string; tax_amount: string; total: string; currency: string }[];
+  vectors: {
+    jurisdiction: string; method: string; payment_class: string; subtotal: string; tax_rate: string; tax_amount: string; total: string;
+    currency: string; tax_included: boolean;
+  }[];
 };
 
 describe("the UI shows the API's tax numbers verbatim", () => {
-  it("has the 50 shared vectors", () => {
-    expect(vectors).toHaveLength(50);
+  it("has the 50 Pakistani vectors and VAT-included UK and Dubai ones", () => {
+    const count = (j: string) => vectors.filter((v) => v.jurisdiction === j).length;
+    expect(count("PB") + count("ICT")).toBe(50);
+    expect(count("GB")).toBe(4);
+    expect(count("AE-DU")).toBe(4);
   });
-  it.each(vectors)("$method $subtotal at $tax_rate", (v) => {
+  it.each(vectors)("$jurisdiction $method $subtotal at $tax_rate", (v) => {
     const pieces = sampleBillPieces({
       restaurant_name: "Venue", restaurant_city: null, restaurant_timezone: "Asia/Karachi", currency: v.currency,
       bill_no: 1, table_label: null, settled_at: null, lines: [],
       subtotal: v.subtotal, tax_rate: v.tax_rate, tax_amount: v.tax_amount, total: v.total, payment_method: v.method,
+      tax_jurisdiction: v.jurisdiction, tax_pricing: v.tax_included ? "included" : "on_top",
     });
     expect(pieces.totals).toEqual([
       { label: "Subtotal", amount: formatPrice(Number(v.subtotal), v.currency) },
-      { label: taxLabel(v.tax_rate, v.method), amount: formatPrice(Number(v.tax_amount), v.currency) },
+      { label: taxLabel(v.tax_rate, v.method, v.tax_included), amount: formatPrice(Number(v.tax_amount), v.currency) },
       { label: "Total", amount: formatPrice(Number(v.total), v.currency) },
     ]);
     // Settle confirms the server's preview for the method, never a total computed here.
@@ -116,10 +125,12 @@ describe("confirm sheet helpers", () => {
       { method: "raast", label: "Raast QR", payment_class: "digital" as const, tax_rate: "0.08", tax_amount: "187.00", total: "2527.00" },
     ];
     expect(settlePayload({ methods }, "cash", "TX1", false)).toEqual({
-      payment_method: "cash", payment_reference: null, expected_total: "2714.00", expected_method: "cash", acknowledge_reused_reference: false,
+      payment_method: "cash", payment_reference: null, expected_total: "2714.00", expected_method: "cash", acknowledge_reused_reference: false, service_included: false,
+      acknowledge_service_change: false,
     });
     expect(settlePayload({ methods }, "raast", "  TX1 ", true)).toEqual({
-      payment_method: "raast", payment_reference: "TX1", expected_total: "2527.00", expected_method: "raast", acknowledge_reused_reference: true,
+      payment_method: "raast", payment_reference: "TX1", expected_total: "2527.00", expected_method: "raast", acknowledge_reused_reference: true, service_included: false,
+      acknowledge_service_change: false,
     });
     expect(settlePayload({ methods }, "card", "", false)).toBeNull();
   });
@@ -135,8 +146,8 @@ describe("confirm sheet helpers", () => {
     const raast = claim("raast", "TX1");
     expect(nextFormState(raast, { ...raast, claimed_at: "later" }, false)).toEqual({ apply: null, notice: null });
     expect(nextFormState(null, null, false)).toEqual({ apply: null, notice: null });
-    expect(nextFormState(raast, claim("cash"), false)).toEqual({ apply: { method: "cash", reference: "" }, notice: null });
-    expect(nextFormState(null, raast, false)).toEqual({ apply: { method: "raast", reference: "TX1" }, notice: null });
+    expect(nextFormState(raast, claim("cash"), false)).toEqual({ apply: { method: "cash", reference: "", serviceIncluded: false }, notice: null });
+    expect(nextFormState(null, raast, false)).toEqual({ apply: { method: "raast", reference: "TX1", serviceIncluded: false }, notice: null });
     expect(nextFormState(raast, claim("raast", "TX9"), true)).toEqual({
       apply: null,
       notice: "The guest changed their payment to Raast QR · ref TX9 — check before confirming",
@@ -215,5 +226,135 @@ describe("counter helpers", () => {
       pickup_prefix: "String should match pattern",
     });
     expect(settingsErrors(500, null)).toEqual({ form: "Request failed (500)" });
+  });
+});
+
+describe("VAT-included bills and the optional service", () => {
+  const ukBill = {
+    methods: [{ method: "card", label: "Card", payment_class: "digital", tax_rate: "0.20", tax_amount: "3.50", total: "21.00", tax_included: true }],
+    service_charge_amount: "2.63",
+  } as const;
+
+  it("adds the service to the expected total only when included", () => {
+    expect(settlePayload(ukBill as never, "card", "", false, true)?.expected_total).toBe("23.63");
+    expect(settlePayload(ukBill as never, "card", "", false, true)?.service_included).toBe(true);
+    expect(settlePayload(ukBill as never, "card", "", false, false)?.expected_total).toBe("21.00");
+    expect(settlePayload(ukBill as never, "card", "", false, false)?.service_included).toBe(false);
+  });
+  it("sends the acknowledged change of the guest's service choice", () => {
+    expect(settlePayload(ukBill as never, "card", "", false, false, true)?.acknowledge_service_change).toBe(true);
+  });
+  it("keys a service choice that differs from the guest's claim, null when it does not", () => {
+    const withClaim = (service_included: boolean, claimed_at = "2026-10-27T10:00:00Z") => ({
+      ...ukBill, id: "b1", claim: { method: "card", reference: null, total: "21.00", claimed_at, service_included },
+    });
+    expect(serviceChangeKey(withClaim(true) as never, false)).toBe("b1|2026-10-27T10:00:00Z|true|false");
+    expect(serviceChangeKey(withClaim(false) as never, true)).toBe("b1|2026-10-27T10:00:00Z|false|true");
+    // A re-claim needs a new tick even when the choice is the same.
+    expect(serviceChangeKey(withClaim(true, "2026-10-27T10:05:00Z") as never, false)).not.toBe(
+      serviceChangeKey(withClaim(true) as never, false),
+    );
+    expect(serviceChangeKey(withClaim(true) as never, true)).toBeNull();
+    // No claim, or no service on this bill: staff choose freely.
+    expect(serviceChangeKey({ ...ukBill, id: "b1", claim: null } as never, false)).toBeNull();
+    expect(serviceChangeKey({ ...withClaim(true), service_charge_amount: "0.00" } as never, false)).toBeNull();
+    expect(serviceChangeKey(null, false)).toBeNull();
+  });
+  it("never claims a service the bill does not have", () => {
+    const none = { ...ukBill, service_charge_amount: "0.00" };
+    expect(settlePayload(none as never, "card", "", false, true)).toMatchObject({ expected_total: "21.00", service_included: false });
+  });
+  it("says VAT is included where it is", () => {
+    expect(taxLabel("0.20", "card", true)).toBe("VAT 20% included");
+    expect(taxLabel("0.05", "cash", true)).toBe("VAT 5% included");
+    expect(taxLabel("0.16", "cash", false)).toBe("Sales tax (illustrative) 16% — cash");
+  });
+  it("mentions Pakistani authorities only for Pakistani bills", () => {
+    expect(billFooter("PB")).toContain("FBR");
+    expect(billFooter("ICT")).toBe(SAMPLE_BILL_FOOTER);
+    expect(billFooter("GB")).toBe("Sample bill — not a tax invoice.");
+    expect(billFooter("AE-DU")).toBe("Sample bill — not a tax invoice.");
+    // No jurisdiction: a bill from before venues outside Pakistan.
+    expect(billFooter(null)).toBe(SAMPLE_BILL_FOOTER);
+  });
+  it("prints a settled UK bill with VAT included and the service on top", () => {
+    const bill = {
+      restaurant_name: "The Anchor", restaurant_city: "London", restaurant_timezone: "Europe/London", currency: "GBP", bill_no: 7,
+      table_label: "4", settled_at: "2026-11-02T19:30:00Z", lines: [],
+      subtotal: "21.00", tax_rate: "0.20", tax_amount: "3.50", total: "23.63", payment_method: "card",
+      tax_jurisdiction: "GB", tax_pricing: "included", service_charge_amount: "2.63",
+    };
+    const p = sampleBillPieces(bill);
+    expect(p.totals).toEqual([
+      { label: "Subtotal", amount: formatPrice(21, "GBP") },
+      { label: "VAT 20% included", amount: formatPrice(3.5, "GBP") },
+      { label: "Optional service", amount: formatPrice(2.63, "GBP") },
+      { label: "Total", amount: formatPrice(23.63, "GBP") },
+    ]);
+    expect(p.footer).toBe("Sample bill — not a tax invoice.");
+    expect(sampleBillPieces({ ...bill, service_charge_amount: "0.00", total: "21.00" }).totals.map((r) => r.label)).toEqual([
+      "Subtotal", "VAT 20% included", "Total",
+    ]);
+  });
+  it("sends the service rate as a fraction only where the venue offers it", () => {
+    expect(settingsBody({ service_charge_rate: "12.5" }, false, true).service_charge_rate).toBe("0.1250");
+    expect(settingsBody({ service_charge_rate: "" }, false, true).service_charge_rate).toBe("0.0000");
+    expect(settingsBody({ service_charge_rate: "12.5" }, false)).not.toHaveProperty("service_charge_rate");
+  });
+  it("accepts 0 to 20 per cent in 0.5 steps", () => {
+    expect(serviceRateFraction("0")).toBe("0.0000");
+    expect(serviceRateFraction("7.5")).toBe("0.0750");
+    expect(serviceRateFraction("20")).toBe("0.2000");
+    expect(serviceRateFraction("12.3")).toBeNull();
+    expect(serviceRateFraction("20.5")).toBeNull();
+    expect(serviceRateFraction("-1")).toBeNull();
+    expect(serviceRateFraction("ten")).toBeNull();
+  });
+  it("shows a stored rate as a percentage", () => {
+    expect(ratePercent("0.0750")).toBe(7.5);
+    expect(ratePercent("0.1250")).toBe(12.5);
+  });
+  it("names the venue's tax rule", () => {
+    expect(taxRuleText({ name: "United Kingdom", rate: "0.20", pricing: "included" })).toBe("Prices include VAT 20% (United Kingdom)");
+    expect(taxRuleText({ name: "Punjab, Pakistan", rate: "0.16", pricing: "on_top" })).toBe("Sales tax added to bills (Punjab, Pakistan)");
+    expect(taxRuleText(null)).toBeNull();
+  });
+});
+
+describe("service-charge settings errors", () => {
+  it("puts the API's service-charge refusal under its field", () => {
+    expect(settingsErrors(422, { detail: "An optional service charge is not offered in Dubai, UAE" })).toEqual({
+      service_charge_rate: "An optional service charge is not offered in Dubai, UAE",
+    });
+    expect(settingsErrors(422, { detail: [{ loc: ["body", "service_charge_rate"], msg: "Input should be less than or equal to 0.2" }] })).toEqual({
+      service_charge_rate: "Input should be less than or equal to 0.2",
+    });
+  });
+});
+
+describe("the staff sheet follows the guest's service choice", () => {
+  const card = (service_included: boolean) => ({ method: "card", reference: null, total: "21.00", claimed_at: "2026-11-02T19:00:00Z", service_included });
+  it("follows a service-only change on an untouched form", () => {
+    expect(nextFormState(card(true), card(false), false)).toEqual({ apply: { method: "card", reference: "", serviceIncluded: false }, notice: null });
+    expect(nextFormState(card(false), card(true), false)).toEqual({ apply: { method: "card", reference: "", serviceIncluded: true }, notice: null });
+  });
+  it("warns about a service-only change once staff edited the form", () => {
+    expect(nextFormState(card(true), card(false), true)).toEqual({
+      apply: null,
+      notice: "The guest turned the optional service off — check before confirming",
+    });
+  });
+  it("names both changes when the method and the service change", () => {
+    expect(nextFormState({ ...card(false), method: "cash" }, card(true), true)).toEqual({
+      apply: null,
+      notice: "The guest changed their payment to Card and turned the optional service on — check before confirming",
+    });
+  });
+  it("applies a claim that arrives later, service included", () => {
+    expect(nextFormState(null, card(true), false)).toEqual({ apply: { method: "card", reference: "", serviceIncluded: true }, notice: null });
+  });
+  it("does nothing when the claim is unchanged", () => {
+    expect(nextFormState(card(true), { ...card(true), claimed_at: "later" }, false)).toEqual({ apply: null, notice: null });
+    expect(nextFormState(card(true), card(true), true)).toEqual({ apply: null, notice: null });
   });
 });

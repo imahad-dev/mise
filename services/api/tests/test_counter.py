@@ -756,6 +756,13 @@ async def test_queue_lists_every_waiting_order_past_the_cap(client, db_session, 
         .where(Order.id.in_([uuid.UUID(o["id"]) for o in orders[1:-1]]))
         .values(collected_at=datetime.now(UTC) - timedelta(minutes=5))
     )
+    # The first was paid well before the rest: the database clock can step back, so 52 settles
+    # in a few seconds are not reliably stamped in order.
+    await db_session.execute(
+        update(Bill)
+        .where(Bill.id == bills[0].id)
+        .values(settled_at=datetime.now(UTC) - timedelta(minutes=5))
+    )
     old_ready, just_collected = str(bills[0].id), str(bills[-1].id)
     capped = await counter_list(client, cv, "settled")
     assert old_ready not in capped

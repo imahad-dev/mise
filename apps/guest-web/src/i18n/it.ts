@@ -74,8 +74,10 @@ export const it: TranslationDict = {
   },
   menu: {
     taxNote: "I prezzi non includono l'imposta, aggiunta al conto.",
+    pricesIncludeVat: "Prezzi IVA inclusa.",
     chooseSize: "Scegli la porzione",
     from: "da",
+    serviceNotice: "Ai conti al tavolo si aggiunge un servizio facoltativo del {rate}%.",
   },
   bill: {
     paid: "Pagato · Conto n. {billNo} · grazie",
@@ -84,6 +86,9 @@ export const it: TranslationDict = {
   pay: {
     button: "Paga il conto",
     subtotal: "Subtotale",
+    total: "Totale",
+    vatIncluded: "IVA {rate}% inclusa: {amount}",
+    service: "Aggiungi servizio facoltativo ({rate}%): {amount}",
     choose: "Come vuoi pagare?",
     taxRate: "imposta {rate}% inclusa",
     methods: {
@@ -116,6 +121,8 @@ export const it: TranslationDict = {
     networkError: "Impossibile raggiungere il ristorante — tocca di nuovo",
     noBill: "Il conto appare qui dopo il primo ordine.",
     paidAmount: "Pagato {total} (imposta {rate}% inclusa) con {method}",
+    paidVatIncluded: "Pagato {total} (IVA {rate}% inclusa) con {method}",
+    serviceChanged: "Hai cambiato il servizio — tocca di nuovo “{button}” per aggiornare il pagamento.",
     cancelled: "Il personale ha annullato questo conto — chiedi a un cameriere",
     visitEnded: "La visita è terminata — scansiona di nuovo il QR del tavolo",
   },

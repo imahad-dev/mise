@@ -69,8 +69,10 @@ export interface TranslationDict {
   };
   menu: {
     taxNote: string;
+    pricesIncludeVat: string;
     chooseSize: string;
     from: string;
+    serviceNotice: string;
   };
   bill: {
     /** Contains {billNo}. */
@@ -81,6 +83,9 @@ export interface TranslationDict {
   pay: {
     button: string;
     subtotal: string;
+    total: string;
+    vatIncluded: string;
+    service: string;
     choose: string;
     /** Contains {rate}. */
     taxRate: string;
@@ -106,6 +111,10 @@ export interface TranslationDict {
     noBill: string;
     /** Contains {total}, {rate} and {method}. */
     paidAmount: string;
+    /** Contains {total}, {rate} and {method}: a settled bill whose prices included VAT. */
+    paidVatIncluded: string;
+    /** Contains {button}: the "I've paid" label, after the service changed on a transfer claim. */
+    serviceChanged: string;
     cancelled: string;
     visitEnded: string;
   };

@@ -60,7 +60,7 @@ async def new_party(db: AsyncSession, v, table) -> GuestSession:
         table_id=table.id,
         language="en",
         expires_at=datetime.now(UTC) + timedelta(hours=2),
-        created_at=await db.scalar(select(func.clock_timestamp())),
+        created_at=await session_started_at(db, table.id),  # as the scan route stamps it
     )
     db.add(s)
     await db.flush()

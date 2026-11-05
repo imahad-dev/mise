@@ -21,6 +21,7 @@ from src.models.dining_table import DiningTable
 from src.models.menu import MenuItem, MenuItemOption, MenuTranslation
 from src.models.restaurant import Restaurant
 from src.models.user import Membership, User
+from src.services.tax import TaxRateError
 
 ANGEETHI = "data/seed/angeethi_house.json"
 KEHWA = "data/seed/kehwa_and_crumb.json"
@@ -346,3 +347,11 @@ async def test_reseed_keeps_the_pickup_prefix_while_counter_orders_are_open(
     await db_session.flush()
     await seed_data(data, db_session)
     assert restaurant.pickup_prefix == data["restaurant"]["pickup_prefix"]
+
+
+@pytest.mark.asyncio
+async def test_seed_refuses_a_jurisdiction_in_another_currency(db_session: AsyncSession):
+    data = load_seed_data(ANGEETHI)
+    data["restaurant"]["tax_jurisdiction"] = "GB"  # the file bills in PKR
+    with pytest.raises(TaxRateError, match="currency"):
+        await seed_data(data, db_session)

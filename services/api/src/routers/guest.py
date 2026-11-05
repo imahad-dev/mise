@@ -4,6 +4,7 @@ import json
 import math
 import uuid
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy import func, select
@@ -53,9 +54,11 @@ from src.schemas.payments import (
 )
 from src.services.allergen_service import compute_allergen_status
 from src.services.bills import (
+    METHOD_REFUSED,
     VISIT_ENDED,
     active_orders,
     bill_lines,
+    bill_service,
     claim_of,
     is_expired_unpaid,
     local_date,
@@ -68,6 +71,7 @@ from src.services.bills import (
 from src.services.counter import order_status as counter_order_status
 from src.services.counter import pickup_label
 from src.services.guest_chat import handle_guest_chat
+from src.services.tax import jurisdiction_of, methods_for, service_charge_for
 
 router = APIRouter(prefix="/api/guest", tags=["guest"])
 
@@ -287,9 +291,17 @@ async def get_guest_menu(
         if row is not None:
             table_label, table_kind = row
 
+    jurisdiction = jurisdiction_of(restaurant.tax_jurisdiction)
     return GuestMenuResponse(
         restaurant=GuestMenuRestaurant(
-            id=restaurant.id, name=restaurant.name, currency=restaurant.currency
+            id=restaurant.id,
+            name=restaurant.name,
+            currency=restaurant.currency,
+            # The rate applies to table bills only; counter phones see the notice too.
+            service_charge_rate=service_charge_for(
+                restaurant.tax_jurisdiction, restaurant.service_charge_rate, Decimal(0), True
+            )[0],
+            prices_include_tax=jurisdiction is not None and jurisdiction.pricing == "included",
         ),
         table_id=session.table_id,
         table_label=table_label,
@@ -453,6 +465,11 @@ async def _bill_detail(
     ).one_or_none()
     order_status = counter_order_status(*latest) if latest else None
     is_open = bill.status == "open"
+    sc_rate, sc_amount = (
+        bill_service(restaurant, bill, subtotal)
+        if is_open
+        else (bill.service_charge_rate, bill.service_charge_amount)
+    )
     return GuestBillDetail(
         bill_no=bill.bill_no,
         status=bill.status,
@@ -465,6 +482,8 @@ async def _bill_detail(
             if is_open
             else []
         ),
+        service_charge_rate=sc_rate,
+        service_charge_amount=sc_amount,
         payment_details=PaymentDetails(**restaurant.payment_details),
         claim=claim_of(bill),
         voided=[
@@ -474,6 +493,7 @@ async def _bill_detail(
         order_status=order_status,
         payment_method=bill.payment_method if bill.status == "settled" else None,
         tax_rate=bill.tax_rate if bill.status == "settled" else None,
+        tax_included=bill.status == "settled" and bill.tax_pricing == "included",
         total=bill.total if bill.status == "settled" else None,
         pickup_label=(
             pickup_label(restaurant.pickup_prefix, bill.pickup_no) if bill.pickup_no else None
@@ -536,6 +556,11 @@ async def claim_payment(
     db: AsyncSession = Depends(get_db),
 ) -> GuestBillDetail:
     """Record how the guest pays (counts as requesting the bill). Never settles; latest wins."""
+    restaurant = await db.get(Restaurant, session.restaurant_id)
+    if payload.method not in methods_for(restaurant.tax_jurisdiction):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=METHOD_REFUSED
+        )
     # Locked: concurrent taps serialise here, so an identical repeat sees the stored claim.
     bill = await _session_bill(db, session, lock=True, order_id=order_id)
     if bill is None:
@@ -544,32 +569,45 @@ async def claim_payment(
     # Only on the day it was numbered; an older one needs staff (they can still settle it).
     revived = []
     if is_expired_unpaid(bill):
-        restaurant = await db.get(Restaurant, session.restaurant_id)
         now = await db.scalar(select(func.clock_timestamp()))
         if bill.pickup_day == local_date(restaurant, now):
             revived = await revive_expired(db, bill, session.restaurant_id, f"guest:{session.id}")
     if bill.status != "open":
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Bill is not open")
-    restaurant = await db.get(Restaurant, session.restaurant_id)
-    changed = (bill.claimed_method, bill.claimed_reference) != (payload.method, payload.reference)
-    if changed:
-        now = await db.scalar(select(func.clock_timestamp()))
-        orders = await active_orders(db, bill.id)
-        if not orders:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="No active orders"
-            )
+    # Service is recorded only where this bill can carry it, so a repeat compares equal.
+    include = payload.service_included and bill_service(restaurant, bill, Decimal(0))[0] > 0
+    now = await db.scalar(select(func.clock_timestamp()))
+    orders = await active_orders(db, bill.id)
+    total = None
+    if orders:
         _, subtotal = bill_lines(orders)
         preview = method_preview(
             restaurant.tax_jurisdiction, payload.method, subtotal, local_date(restaurant, now)
         )
-        if preview is None:
+        if preview is not None:
+            _, sc_amount = bill_service(restaurant, bill, subtotal)
+            total = preview.total + (sc_amount if include else 0)
+    # A repeat after new orders refreshes the claimed total; an identical one changes nothing.
+    changed = (
+        bill.claimed_method,
+        bill.claimed_reference,
+        bill.claimed_service_included,
+    ) != (payload.method, payload.reference, include) or (
+        total is not None and bill.claimed_total != total
+    )
+    if changed:
+        if not orders:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="No active orders"
+            )
+        if total is None:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="No tax rate configured"
             )
         bill.claimed_method = payload.method
         bill.claimed_reference = payload.reference
-        bill.claimed_total = preview.total
+        bill.claimed_service_included = include
+        bill.claimed_total = total
         bill.claimed_at = now
         if bill.bill_requested_at is None:
             bill.bill_requested_at = now
@@ -582,7 +620,8 @@ async def claim_payment(
                     "bill_id": str(bill.id),
                     "method": payload.method,
                     "reference_last4": payload.reference[-4:] if payload.reference else None,
-                    "total": str(preview.total),
+                    "service_included": include,
+                    "total": str(bill.claimed_total),
                 },
             )
         )

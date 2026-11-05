@@ -75,6 +75,12 @@ export interface DailyBrief {
   menu_engineering: MenuEngineeringItem[];
   thresholds: { median_units: number; median_unit_margin: number };
   payment_mix: PaymentMix;
+  /** Menu prices include VAT: revenue, margins and prices here exclude it. */
+  prices_include_tax: boolean;
+  /** Tax differs by payment method (Pakistan): the payments-and-tax card applies. */
+  tax_split_by_method: boolean;
+  /** Optional service charge on settled bills; for staff, not revenue. Decimal string. */
+  service_charge_collected: string;
   /** Pay-it-forward chai over the last 7 days; not revenue. */
   pay_forward: { bought: number; given: number };
   forecast: {
@@ -102,6 +108,9 @@ export const METHOD_LABELS: Record<string, string> = {
   trailing_4w_mean: "4-week mean",
   hgb: "Gradient boosting",
 };
+
+/** "Revenue (excl. VAT)" where menu prices include VAT: these figures are net of it. */
+export const exVat = (label: string, pricesIncludeTax: boolean) => (pricesIncludeTax ? `${label} (excl. VAT)` : label);
 
 export function money(v: number, currency: string): string {
   return formatPrice(v, currency);

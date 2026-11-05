@@ -10,5 +10,9 @@
   {"jurisdiction": "ICT", "payment_class": "standard", "rate": "0.15", "effective_from": "2023-07-01",
    "source": "ICT (Tax on Services) Ordinance 2001, Schedule Table-1 S/N 1(ii)(b), as amended up to 30-06-2025 (FBR); entry substituted by Finance Act 2023; not changed by Finance Act 2026"},
   {"jurisdiction": "ICT", "payment_class": "digital",  "rate": "0.05", "effective_from": "2023-07-01",
-   "source": "Same, S/N 1(ii)(a): five percent, payment by debit or credit card, mobile wallet or QR scanning, no input tax adjustment"}
+   "source": "Same, S/N 1(ii)(a): five percent, payment by debit or credit card, mobile wallet or QR scanning, no input tax adjustment"},
+  {"jurisdiction": "GB", "payment_class": "any", "rate": "0.20", "effective_from": "2011-01-04",
+   "source": "HMRC VAT Notice 709/1 (catering): food and drink for consumption on the premises is standard-rated; standard rate 20% since 4 January 2011"},
+  {"jurisdiction": "AE-DU", "payment_class": "any", "rate": "0.05", "effective_from": "2018-01-01",
+   "source": "UAE Federal Decree-Law No. 8 of 2017 on VAT, Art. 3 (5% standard rate) and Art. 38 (advertised prices include the tax)"}
 ]

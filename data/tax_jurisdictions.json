@@ -1,0 +1,10 @@
+{
+  "PB": {"name": "Punjab, Pakistan", "currency": "PKR", "pricing": "on_top", "rounding": "1",
+         "methods": ["cash", "card", "wallet", "raast", "bank_transfer"], "service_charge": null},
+  "ICT": {"name": "Islamabad, Pakistan", "currency": "PKR", "pricing": "on_top", "rounding": "1",
+          "methods": ["cash", "card", "wallet", "raast", "bank_transfer"], "service_charge": null},
+  "GB": {"name": "United Kingdom", "currency": "GBP", "pricing": "included", "rounding": "0.01",
+         "methods": ["cash", "card"], "service_charge": "optional_outside_tax"},
+  "AE-DU": {"name": "Dubai, UAE", "currency": "AED", "pricing": "included", "rounding": "0.01",
+            "methods": ["cash", "card"], "service_charge": null}
+}

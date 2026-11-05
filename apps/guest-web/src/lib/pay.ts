@@ -11,13 +11,17 @@ export interface MethodPreview {
   tax_rate: string;
   tax_amount: string;
   total: string;
+  /** VAT is already in the prices (UK, Dubai): one total for every method. */
+  tax_included: boolean;
 }
 
 export interface PaymentClaim {
   method: Method;
   reference: string | null;
+  /** Includes the optional service when the guest chose it. */
   total: string;
   claimed_at: string;
+  service_included: boolean;
 }
 
 export interface PaymentDetails {
@@ -44,7 +48,12 @@ export interface GuestBill {
   /** Set only on a settled bill. */
   payment_method: Method | null;
   tax_rate: string | null;
+  /** Settled bills: true when VAT was inside the prices (UK, Dubai). */
+  tax_included?: boolean;
   total: string | null;
+  /** The optional service charge; "0.0000" / "0.00" where none applies. */
+  service_charge_rate: string;
+  service_charge_amount: string;
   /** Counter pickup bills only: "K-042". */
   pickup_label?: string | null;
   /** Pay-it-forward chai on this bill once settled. */
@@ -117,9 +126,9 @@ export async function copyText(text: string): Promise<boolean> {
 /** "Paid Rs 2,714 (incl. 16% sales tax) by Cash" for a settled bill, else null. */
 export function paidText(bill: GuestBill, dict: TranslationDict, lang: string): string | null {
   if (bill.status !== "settled" || bill.total === null || bill.tax_rate === null || !bill.payment_method) return null;
-  return dict.pay.paidAmount
+  return (bill.tax_included ? dict.pay.paidVatIncluded : dict.pay.paidAmount)
     .replace("{total}", formatPrice(Number(bill.total), bill.currency, lang))
-    .replace("{rate}", percent(bill.tax_rate))
+    .replace("{rate}", percent(bill.tax_rate, lang))
     .replace("{method}", dict.pay.methods[bill.payment_method] ?? bill.payment_method);
 }
 
@@ -129,4 +138,17 @@ export function payForwardThanks(bill: GuestBill, dict: TranslationDict): string
   return bill.status === "settled" && n > 0 ? dict.bill.payForward.replace("{count}", String(n)) : null;
 }
 
-export const percent = (rate: string) => String(Number((Number(rate) * 100).toFixed(2)));
+/** A rate as a fraction ("0.125") to a percentage in the guest's language: "12.5" (en), "12,5" (it). */
+export const percent = (rate: string, lang: string) =>
+  new Intl.NumberFormat(lang, { maximumFractionDigits: 2 }).format(Number(rate) * 100);
+
+/** What the guest pays for a method: the method total plus the optional service when chosen. */
+export const payTotal = (m: MethodPreview, serviceAmount: string, withService: boolean) =>
+  Number(m.total) + (withService ? Number(serviceAmount) : 0);
+
+/** "Add optional service (12.5%)" from the template and the rate as a fraction. */
+export const serviceLine = (rate: string, template: string, lang: string) => template.replace("{rate}", percent(rate, lang));
+
+/** The menu's tax line: VAT already in the price (UK, Dubai) or sales tax added to the bill. */
+export const menuTaxNote = (pricesIncludeTax: boolean, dict: TranslationDict) =>
+  pricesIncludeTax ? dict.menu.pricesIncludeVat : dict.menu.taxNote;

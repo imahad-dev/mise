@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { useSlugRef, useVenue } from "../../../lib/venue";
-import { money, type DataSources } from "@/lib/analytics";
+import { exVat, money, type DataSources } from "@/lib/analytics";
 
 type Scenario = "price_change" | "promotion" | "demand_surge";
 
@@ -53,6 +53,8 @@ export default function WhatIfPage() {
   const [elasticity, setElasticity] = useState("");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<WhatIfResult | null>(null);
+  // Menu prices include VAT here: the what-if figures are net of it (the API excludes it).
+  const [vat, setVat] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -61,7 +63,14 @@ export default function WhatIfPage() {
     setItemId("");
     setResult(null);
     setError(null);
+    setVat(false);
     let cancelled = false;
+    fetch(`/api/restaurants/${slug}/settings`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((s: { tax_rule: { pricing: string } | null } | null) => {
+        if (!cancelled) setVat(s?.tax_rule?.pricing === "included");
+      })
+      .catch(() => undefined);
     fetch(`/api/restaurants/${slug}/menu-items`)
       .then((r) => (r.ok ? r.json() : []))
       .then(
@@ -225,13 +234,13 @@ export default function WhatIfPage() {
                   {k === "baseline" ? "Baseline / week" : k === "result" ? "Scenario / week" : "Change / week"}
                 </span>
                 <div className="text-sm text-ink">
-                  Revenue{" "}
+                  {exVat("Revenue", vat)}{" "}
                   <span className="font-extrabold text-xl">
                     {k === "delta" ? signed(result[k].revenue, result.currency) : money(result[k].revenue, result.currency)}
                   </span>
                 </div>
                 <div className="text-sm text-ink">
-                  Margin{" "}
+                  {exVat("Margin", vat)}{" "}
                   <span className={`font-extrabold text-xl ${k === "delta" ? (result.delta.margin >= 0 ? "text-olive" : "text-danger-fg") : ""}`}>
                     {k === "delta" ? signed(result[k].margin, result.currency) : money(result[k].margin, result.currency)}
                   </span>
@@ -246,6 +255,7 @@ export default function WhatIfPage() {
               {result.assumptions.map((a) => (
                 <li key={a}>{a}</li>
               ))}
+              {vat && <li>Prices, revenue and margin here exclude VAT (menu prices include it).</li>}
             </ul>
           </div>
 

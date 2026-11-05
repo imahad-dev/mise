@@ -20,6 +20,7 @@ import {
   soldOutIds,
 } from "../../../lib/ordering";
 import { Badge, Button, Sheet, formatPrice as formatAmount } from "ui";
+import { menuTaxNote, serviceLine } from "../../../lib/pay";
 import {
   addToCart,
   calculateCartTotal,
@@ -64,6 +65,10 @@ interface MenuResponse {
     id: string;
     name: string;
     currency: string;
+    /** The optional service on table bills; "0.0000" where none applies. */
+    service_charge_rate: string;
+    /** True where menu prices already include VAT. */
+    prices_include_tax: boolean;
   };
   table_id?: string | null;
   table_label?: string | null;
@@ -384,13 +389,17 @@ export default function GuestMenuPage({
                 </p>
               )}
               <h1 className="text-2xl text-ink">{menu.restaurant.name}</h1>
+              {/* Counter bills carry no service charge. */}
+              {menu.table_kind !== "counter" && Number(menu.restaurant.service_charge_rate) > 0 && (
+                <p className="text-xs text-ink-muted">{serviceLine(menu.restaurant.service_charge_rate, dict.menu.serviceNotice, lang)}</p>
+              )}
               {menu.table_kind === "counter" && (
                 <p className="mt-0.5 text-sm font-semibold text-terracotta">{dict.counter.header}</p>
               )}
             </div>
             {mode !== "waiting" && <CallWaiter lang={lang} />}
           </div>
-          <p className="mt-0.5 text-xs text-ink-muted">{dict.menu.taxNote}</p>
+          <p className="mt-0.5 text-xs text-ink-muted">{menuTaxNote(menu.restaurant.prices_include_tax, dict)}</p>
           <nav aria-label={dict.ui.menuTitle} className="-mx-1 mt-3 flex gap-2 overflow-x-auto pb-3">
             {categories.map((cat) => (
               <a

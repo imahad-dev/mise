@@ -59,7 +59,7 @@ Mise is an ordering, kitchen and revenue analytics platform for independent rest
   - Confirm sheet: each order with its device label ("Phone 1", "Phone 2", numbered by each phone's first order on the bill) and a red "Joined late" flag when a phone's first order lands on a bill open for more than 20 minutes, the total per payment method (Cash, Card, JazzCash / Easypaisa, Raast QR, Bank transfer), the method pre-selected from the claim, the amount and reference in large type with "Check your JazzCash / bank app for ref … and Rs … before confirming.", warnings for an amount still due or overpaid ("Guest sent Rs A · bill is now Rs B · Rs … still due") and for a reference already used on another bill of the venue in the last 7 days (confirm only after "I've checked — confirm anyway"). "Confirm received" sends the total and method shown; the server recomputes them under the bill lock and refuses on any difference, and the sheet then reloads with "The bill changed — check the new total". When two staff confirm the same bill, one wins and the other sees that it is already settled. Staff can void an order with a reason; voiding the last order of a bill the guest says they paid asks before cancelling the bill. Settling snapshots subtotal, tax rate, tax and total on the bill and records who settled it.
   - **The demo cannot verify a transaction with a bank.** "Confirm received" is a staff check: staff look for the reference and amount in the venue's own banking or wallet app before confirming. Nothing settles without a staff action.
   - Counter tab: Awaiting payment (Confirm received / Cancel), Preparing, Ready (Collected, with a 60 s Undo). Expired unpaid orders move to Cancelled with "Take late payment".
-  - Printable 80 mm sample bill with "Sales tax (illustrative)" and the fixed footer "Sample bill — not a tax invoice. Not connected to FBR or any provincial revenue authority."
+  - Printable 80 mm sample bill with "Sales tax (illustrative)" and the footer "Sample bill — not a tax invoice." (Pakistani bills add "Not connected to FBR or any provincial revenue authority.")
   - Sales tax rates live in `data/tax_rates.json`, one row per jurisdiction, payment class and start date, each with its legal source: Punjab 16% (cash, bank transfer) / 8% (card, wallet, QR) from 1 July 2026 under the Punjab Sales Tax on Services Act 2012 as amended by the Punjab Finance Act 2026 (16% / 5% before); Islamabad 15% / 5% under the ICT (Tax on Services) Ordinance 2001. Verification notes: [docs/research/2026-10-24-tax-rate-verification.md](docs/research/2026-10-24-tax-rate-verification.md).
 
 - **Owner Revenue Copilot (`owner-web`)**
@@ -74,6 +74,21 @@ Mise is an ordering, kitchen and revenue analytics platform for independent rest
   - Venue settings on the Tables & QR page: payment details guests pay into (Raast ID, JazzCash, Easypaisa, IBAN, account title), pickup prefix and the extra call reason. Validation: IBAN `PK` + 22 characters with the mod-97 checksum; JazzCash and Easypaisa a mobile number `03` + 9 digits (`+92`, `0092` and `92` forms are normalised to `03…`); Raast ID a mobile number or IBAN; an account title of 2–80 characters is required with any of them. Sample values are accepted only on demo venues and always shown under the demo banner.
   - The brief shows pay-it-forward chai bought and given over the last 7 days; handouts are never revenue.
   - Methods, assumptions and limits: [docs/analytics.md](docs/analytics.md).
+
+---
+
+## Tax and currency
+
+Each venue has a tax jurisdiction and bills and reports in that jurisdiction's currency (no exchange rates, no combined totals). The rules are data: dated rates with a legal source per row in `data/tax_rates.json`, and per-jurisdiction pricing, rounding, payment methods and service-charge rule in `data/tax_jurisdictions.json`. The seed and admin scripts refuse a venue whose currency is not its jurisdiction's.
+
+| Code | Jurisdiction | Currency | What it does |
+|---|---|---|---|
+| `PB` | Punjab, Pakistan | PKR | Sales tax added on top of menu prices: 16% cash or bank transfer, 8% card, wallet or QR; whole rupees; all five payment methods |
+| `ICT` | Islamabad, Pakistan | PKR | Sales tax added on top: 15% cash or bank transfer, 5% card, wallet or QR; whole rupees; all five payment methods |
+| `GB` | United Kingdom | GBP | Menu prices include VAT 20% (the guest pays the menu price; VAT is worked out once on the bill); pence; cash and card only; the owner may set an optional table service charge (0–20%), shown on the menu before ordering, chosen by the guest on the pay sheet, never taxed and never counted as revenue |
+| `AE-DU` | Dubai, UAE | AED | Menu prices include VAT 5%; fils; cash and card only; no service charge |
+
+Any other payment method is refused at venues that do not accept it. Where prices include VAT, the guest menu says "Prices include VAT.", the bill shows "VAT 20% included", and the brief's sales figures exclude VAT using each bill's recorded VAT; the service charge appears apart as "Service charge collected (for staff)". Bills stay sample bills, never tax invoices. Details: [docs/architecture.md](docs/architecture.md) and [docs/analytics.md](docs/analytics.md).
 
 ---
 

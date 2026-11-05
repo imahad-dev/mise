@@ -7,6 +7,7 @@ import { ServiceReportCard, SummarySourceChip } from "../../../components/Servic
 import {
   CLASS_COLORS,
   METHOD_LABELS,
+  exVat,
   money,
   forecastTable,
   quadrantLayout,
@@ -19,6 +20,8 @@ import {
 const W = 560;
 const H = 320;
 const PAD = 36;
+// Evidence money the brief nets of VAT where menu prices include it.
+const NET_EVIDENCE = new Set(["price", "unit_margin", "median_unit_margin"]);
 
 function Quadrant({ brief }: { brief: DailyBrief }) {
   const { points, medianX, medianY } = quadrantLayout(
@@ -59,7 +62,7 @@ function Quadrant({ brief }: { brief: DailyBrief }) {
       {points.map((p) => (
         <circle key={`${p.item.item_id}:${p.item.option_id ?? ""}`} cx={p.x} cy={p.y} r={6} fill={CLASS_COLORS[p.item.menu_class]}>
           <title>
-            {`${p.item.name}: ${p.item.units} sold, ${money(p.item.unit_margin, brief.currency)} margin per unit (${p.item.menu_class})`}
+            {`${p.item.name}: ${p.item.units} sold, ${money(p.item.revenue, brief.currency)} ${exVat("revenue", brief.prices_include_tax)}, ${money(p.item.unit_margin, brief.currency)} ${exVat("margin per unit", brief.prices_include_tax)} (${p.item.menu_class})`}
           </title>
         </circle>
       ))}
@@ -74,7 +77,7 @@ function Quadrant({ brief }: { brief: DailyBrief }) {
         textAnchor="middle"
         transform={`rotate(-90 12 ${H / 2})`}
       >
-        Unit margin →
+        {exVat("Unit margin", brief.prices_include_tax)} →
       </text>
     </svg>
   );
@@ -158,6 +161,7 @@ export default function DailyBriefPage() {
   };
 
   const simulated = brief?.data_sources.simulated ?? 0;
+  const vat = brief?.prices_include_tax ?? false;
   const table = brief ? forecastTable(brief.forecast.points, daypart) : null;
 
   return (
@@ -210,16 +214,23 @@ export default function DailyBriefPage() {
           <>
             <div className="grid gap-4 sm:grid-cols-3">
               <StatTile
-                label="Revenue"
+                label={exVat("Revenue", vat)}
                 value={money(brief.kpis.revenue, brief.currency)}
                 sub={`${brief.kpis.orders} orders`}
               />
-              <StatTile label="Average order value" value={money(brief.kpis.aov, brief.currency)} />
+              <StatTile label={exVat("Average order value", vat)} value={money(brief.kpis.aov, brief.currency)} />
               <StatTile
-                label="Contribution margin"
+                label={exVat("Contribution margin", vat)}
                 value={money(brief.kpis.contribution_margin, brief.currency)}
                 sub={`${brief.kpis.margin_pct}% of revenue`}
               />
+              {Number(brief.service_charge_collected) > 0 && (
+                <StatTile
+                  label="Service charge collected (for staff)"
+                  value={money(Number(brief.service_charge_collected), brief.currency)}
+                  sub="Not revenue. UK law: staff receive all of it."
+                />
+              )}
             </div>
 
             <div className="mise-card p-6 space-y-3">
@@ -247,7 +258,7 @@ export default function DailyBriefPage() {
                       {a.estimated_impact_per_week != null && (
                         <span className="text-xs font-bold text-olive">
                           est. {a.estimated_impact_per_week >= 0 ? "+" : ""}
-                          {money(a.estimated_impact_per_week, brief.currency)}/week
+                          {exVat(`${money(a.estimated_impact_per_week, brief.currency)}/week`, vat)}
                         </span>
                       )}
                     </div>
@@ -255,7 +266,7 @@ export default function DailyBriefPage() {
                     <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
                       {Object.entries(a.evidence).map(([k, v]) => (
                         <React.Fragment key={k}>
-                          <dt className="text-ink-muted">{k.replaceAll("_", " ")}</dt>
+                          <dt className="text-ink-muted">{exVat(k.replaceAll("_", " "), vat && NET_EVIDENCE.has(k))}</dt>
                           <dd className="text-ink font-mono">{String(v)}</dd>
                         </React.Fragment>
                       ))}
@@ -271,8 +282,8 @@ export default function DailyBriefPage() {
                 <h3 className="text-base font-bold text-ink">Menu engineering</h3>
                 <p className="text-xs text-ink-muted">
                   Dashed lines are the medians: {brief.thresholds.median_units} units and{" "}
-                  {money(brief.thresholds.median_unit_margin, brief.currency)} margin per unit. Hover a dot for
-                  details.
+                  {money(brief.thresholds.median_unit_margin, brief.currency)} {exVat("margin per unit", vat)}. Hover a dot
+                  for details.
                 </p>
               </div>
               {brief.menu_engineering.length ? (
@@ -282,51 +293,53 @@ export default function DailyBriefPage() {
               )}
             </div>
 
-            <Card className="p-6 space-y-4">
-              <div>
-                <h3 className="text-base font-bold text-ink">Payments and tax</h3>
-                <p className="text-xs text-ink-muted">
-                  Settled bills in this window. Digital is card, mobile wallet or QR; standard is
-                  cash or bank transfer.
-                </p>
-              </div>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <StatTile
-                  label="Digital share of revenue"
-                  value={sharePct(brief.payment_mix.revenue_share.digital)}
-                  sub={`${brief.payment_mix.bills.digital} of ${
-                    brief.payment_mix.bills.digital + brief.payment_mix.bills.standard
-                  } bills`}
-                />
-                <StatTile
-                  label="Tax saved by digital payments"
-                  value={money(Number(brief.payment_mix.digital_tax_saving), brief.currency)}
-                  sub="Versus the standard rate on the same bills"
-                />
-              </div>
-              {brief.payment_mix.tax_by_rate.length ? (
-                <table className="w-full text-xs">
-                  <thead>
-                    <tr className="text-ink-muted text-left">
-                      <th scope="col" className="py-2 pr-3">Tax rate</th>
-                      <th scope="col" className="py-2 pr-3">Tax collected</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {brief.payment_mix.tax_by_rate.map((r) => (
-                      <tr key={r.rate} className="border-t border-line">
-                        <td className="py-2 pr-3 font-mono text-ink">{sharePct(Number(r.rate))}</td>
-                        <td className="py-2 pr-3 font-mono text-ink">
-                          {money(Number(r.tax), brief.currency)}
-                        </td>
+            {brief.tax_split_by_method && (
+              <Card className="p-6 space-y-4">
+                <div>
+                  <h3 className="text-base font-bold text-ink">Payments and tax</h3>
+                  <p className="text-xs text-ink-muted">
+                    Settled bills in this window. Digital is card, mobile wallet or QR; standard is
+                    cash or bank transfer.
+                  </p>
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <StatTile
+                    label="Digital share of revenue"
+                    value={sharePct(brief.payment_mix.revenue_share.digital)}
+                    sub={`${brief.payment_mix.bills.digital} of ${
+                      brief.payment_mix.bills.digital + brief.payment_mix.bills.standard
+                    } bills`}
+                  />
+                  <StatTile
+                    label="Tax saved by digital payments"
+                    value={money(Number(brief.payment_mix.digital_tax_saving), brief.currency)}
+                    sub="Versus the standard rate on the same bills"
+                  />
+                </div>
+                {brief.payment_mix.tax_by_rate.length ? (
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="text-ink-muted text-left">
+                        <th scope="col" className="py-2 pr-3">Tax rate</th>
+                        <th scope="col" className="py-2 pr-3">Tax collected</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              ) : (
-                <p className="text-xs text-ink-muted">No settled bills in this window.</p>
-              )}
-            </Card>
+                    </thead>
+                    <tbody>
+                      {brief.payment_mix.tax_by_rate.map((r) => (
+                        <tr key={r.rate} className="border-t border-line">
+                          <td className="py-2 pr-3 font-mono text-ink">{sharePct(Number(r.rate))}</td>
+                          <td className="py-2 pr-3 font-mono text-ink">
+                            {money(Number(r.tax), brief.currency)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                ) : (
+                  <p className="text-xs text-ink-muted">No settled bills in this window.</p>
+                )}
+              </Card>
+            )}
 
             {/* Not revenue: handouts are free and the chai sold already counts as a normal sale. */}
             <Card className="p-4 text-sm text-ink">

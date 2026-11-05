@@ -33,6 +33,13 @@ Code: `services/api/src/services/` — `analytics.py`, `forecast.py`, `brief.py`
   count of each (`data_sources`) and the UI shows a "Simulated data" banner when any simulated
   orders are in the window.
 - Analysis window for KPIs, menu engineering and what-if: the last **28 days** ending yesterday.
+- **Sales exclude VAT.** Where menu prices include VAT (UK and Dubai venues, `tax_pricing =
+  'included'` on the bill), every sales figure built from order lines (revenue, margin, average
+  order value, menu engineering and peak-hour revenue, in the brief and on the Brief page) divides each
+  line by its settled bill's own recorded ratio `subtotal / (subtotal − tax_amount)`, so report
+  sales match the VAT recorded on the bills to the penny (`_NET` in `analytics.py`). Bills with tax
+  on top (Pakistan) and simulated orders without a bill count as they are, so Pakistan figures
+  are unchanged. Labels say "excl. VAT" where this applies.
 
 ## KPIs
 
@@ -81,6 +88,17 @@ QR) are **digital**.
 
 Rates come from `data/tax_rates.json` through `tax_for` (see [architecture.md](architecture.md)).
 The tax on the demo's bills is illustrative; the sample bill is not a tax invoice.
+
+The payment mix and tax card is shown only where the jurisdiction's rate differs by payment
+method (Pakistan); it is left out of the brief's facts elsewhere.
+
+## Service charge collected
+
+`service_charge_collected` is the sum of `service_charge_amount` on bills settled in the window,
+counted by **settle time** (`settled_at`), while revenue is counted by order placement time. It
+is the optional service charge (UK venues), shown as "Service charge collected (for staff)" with
+the note that UK law requires staff to receive all of it. It is **not revenue**: it is in no sales
+figure and is not narrated. Mise records it; it does not pay anyone.
 
 ## Forecast
 
@@ -182,7 +200,8 @@ those that closed that day, and their orders' timestamps.
 ## What-if calculator
 
 Baseline: weekly units per item over the analysis window (units / 4) at **current** menu price
-and cost. Output: weekly baseline vs scenario revenue and contribution margin, the deltas, and
+and cost. Where menu prices include VAT, the current price is divided by 1 + the rate in force
+today, so it excludes VAT like the sales figures. Output: weekly baseline vs scenario revenue and contribution margin, the deltas, and
 the assumptions applied.
 
 | Scenario | Inputs | Formula |
@@ -245,10 +264,15 @@ every demo venue.
 Pakistani restaurants; the shares only make the demo's cash-versus-digital split visible and
 must not be read as market data.
 
+Only the methods the venue's jurisdiction accepts are drawn, with the remaining shares
+renormalised: a UK or Dubai venue (cash and card only) with the default mix draws cash 75% and
+card 25%. A mix with no weight on any accepted method is refused with an error.
+
 **Bills.** Each simulated order is one party with one bill: `source='simulated'`, no bill
 number, no table, `status='settled'`, opened at the order time and settled 45–75 minutes later.
-The subtotal is the order total; tax comes from `tax_for(jurisdiction, payment method, local
-settle date, subtotal)` and the bill total is subtotal plus tax. When no tax rate is in force
+The subtotal is the order total; rate, tax, pricing and total come from `charge_for(jurisdiction,
+payment method, local settle date, subtotal)`: subtotal plus tax where tax is on top, the subtotal
+itself where prices include VAT. Simulated bills carry no service charge. When no tax rate is in force
 (no jurisdiction, or a date before the first configured rate) the order is written without a
 bill and still counts as a paid sale. Regenerating deletes simulated bills together with simulated orders.
 

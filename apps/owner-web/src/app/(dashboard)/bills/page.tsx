@@ -23,7 +23,10 @@ import {
   paymentLabel,
   pickupText,
   previewFor,
+  ratePercent,
+  serviceChangeKey,
   settlePayload,
+  totalRows,
   collectedUndoLeft,
   voidReason,
   warningKey,
@@ -63,6 +66,10 @@ export default function BillsPage() {
   const [method, setMethod] = useState<PaymentMethod>("cash");
   const [reference, setReference] = useState("");
   const [acknowledged, setAcknowledged] = useState(false);
+  // The optional service charge (UK table bills): from the guest's claim, on when there is none.
+  const [serviceOn, setServiceOn] = useState(true);
+  // The serviceChangeKey staff confirmed: a change of bill, claim or choice needs a new tick.
+  const [serviceAckKey, setServiceAckKey] = useState<string | null>(null);
   const [refusedReference, setRefusedReference] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -158,14 +165,17 @@ export default function BillsPage() {
       const claimed = PAYMENT_METHODS.find((m) => m.value === body.claim?.method)?.value;
       setMethod(claimed ?? "cash");
       setReference(body.claim?.reference ?? "");
+      setServiceOn(body.claim ? Boolean(body.claim.service_included) : true);
       return;
     }
     const next = nextFormState(prev.claim, body.claim, touched.current);
     if (next.apply) {
       setMethod(next.apply.method);
       setReference(next.apply.reference);
+      setServiceOn(next.apply.serviceIncluded);
     }
-    const totals = (d: BillDetail) => d.methods.map((m) => `${m.method}:${m.total}`).join();
+    // A changed service amount is a changed bill too.
+    const totals = (d: BillDetail) => `${d.methods.map((m) => `${m.method}:${m.total}`).join()}|${d.service_charge_amount}`;
     const notices = [
       ...(next.notice ? [next.notice] : []),
       ...(changed || totals(prev) !== totals(body) ? [BILL_CHANGED] : []),
@@ -200,6 +210,8 @@ export default function BillsPage() {
     setNotice(null);
     setMethod("cash");
     setReference("");
+    setServiceOn(true);
+    setServiceAckKey(null);
     setAcknowledged(false);
     setRefusedReference(false);
     setOpen(true);
@@ -219,7 +231,7 @@ export default function BillsPage() {
 
   const settle = async () => {
     if (!detail) return;
-    const body = settlePayload(detail, method, reference, acknowledged);
+    const body = settlePayload(detail, method, reference, acknowledged, serviceOn, serviceChange !== null && serviceAcked);
     if (!body) {
       setError("No tax rate configured");
       return;
@@ -374,7 +386,30 @@ export default function BillsPage() {
   const bills = data?.bills ?? [];
   const justCollected = kind === "counter" && view === "open" ? bills.filter((b) => collectedUndoLeft(b, now) > 0) : [];
   const currency = venue?.currency ?? "PKR";
+  // Open bills, and counter bills the expiry cancelled (settling one revives it).
+  const payable = Boolean(detail && (detail.status === "open" || isExpiredUnpaid(detail)));
   const selected = detail ? previewFor(detail, method) : null;
+  const hasService = Number(detail?.service_charge_amount ?? 0) > 0;
+  // What staff confirm: the method's total plus the optional service when on.
+  const toPay = selected ? Number(selected.total) + (hasService && serviceOn ? Number(detail?.service_charge_amount) : 0) : 0;
+  // VAT-included bills list subtotal, VAT inside, service and total: the settled snapshot, or the selected method while open.
+  const includedRows =
+    detail?.status === "settled"
+      ? detail.tax_pricing === "included"
+        ? totalRows(detail)
+        : null
+      : detail && payable && selected?.tax_included
+        ? totalRows({
+            currency: detail.currency,
+            subtotal: detail.subtotal,
+            tax_rate: selected.tax_rate,
+            tax_amount: selected.tax_amount,
+            total: toPay.toFixed(2),
+            payment_method: method,
+            tax_pricing: "included",
+            service_charge_amount: serviceOn ? detail.service_charge_amount : "0",
+          })
+        : null;
   const claimNow = detail?.claim ? previewFor(detail, detail.claim.method) : null;
   const due = detail ? amountDueText(detail.amount_due_after_claim, detail.currency) : null;
   const ref = method === "cash" ? "" : reference.trim();
@@ -389,11 +424,11 @@ export default function BillsPage() {
       ]
     : [];
   const needsAck = reusedWarnings.length > 0 || refusedReference;
+  const serviceChange = payable ? serviceChangeKey(detail, serviceOn) : null;
+  const serviceAcked = serviceChange === serviceAckKey;
   const sheetTitle = detail
     ? `${detail.pickup_label ? `Pickup ${pickupText(detail)}` : detail.table_label ? `Table ${detail.table_label}` : "Bill"} · ${billNo(detail.bill_no)}`
     : "Bill";
-  // Open bills, and counter bills the expiry cancelled (settling one revives it).
-  const payable = Boolean(detail && (detail.status === "open" || isExpiredUnpaid(detail)));
   const timeZone = data?.restaurant_timezone ?? "UTC";
 
   return (
@@ -576,7 +611,11 @@ export default function BillsPage() {
         title={sheetTitle}
         footer={
           payable && (
-            <Button className="w-full" onClick={settle} disabled={busy || !selected || (needsAck && !acknowledged)}>
+            <Button
+              className="w-full"
+              onClick={settle}
+              disabled={busy || !selected || (needsAck && !acknowledged) || (serviceChange !== null && !serviceAcked)}
+            >
               {busy ? "Saving…" : "Confirm received"}
             </Button>
           )
@@ -600,7 +639,7 @@ export default function BillsPage() {
               <div className="space-y-1 rounded-xl border border-line bg-paper-2 p-4 text-center">
                 <p className="text-lg font-semibold text-ink">{sheetTitle}</p>
                 <p className="font-serif text-4xl font-bold text-ink">
-                  {selected ? formatPrice(Number(selected.total), detail.currency) : "No tax rate configured"}
+                  {selected ? formatPrice(toPay, detail.currency) : "No tax rate configured"}
                 </p>
                 <p className="text-lg text-ink">
                   {paymentLabel(method)}
@@ -615,7 +654,7 @@ export default function BillsPage() {
 
             {payable && NEEDS_REFERENCE.has(method) && selected && (
               <p className="text-sm font-semibold text-ink">
-                Check your JazzCash / bank app for ref {ref || "…"} and {formatPrice(Number(selected.total), detail.currency)} before
+                Check your JazzCash / bank app for ref {ref || "…"} and {formatPrice(toPay, detail.currency)} before
                 confirming.
               </p>
             )}
@@ -680,10 +719,63 @@ export default function BillsPage() {
                 </li>
               ))}
             </ul>
-            <p className="flex justify-between text-sm font-semibold text-ink">
-              <span>Subtotal</span>
-              <span>{formatPrice(Number(detail.subtotal), detail.currency)}</span>
-            </p>
+            {includedRows ? (
+              <div className="space-y-1 text-sm text-ink">
+                {includedRows.map((r, i) => (
+                  <p key={r.label} className={`flex justify-between ${i === 0 || i === includedRows.length - 1 ? "font-semibold" : ""}`}>
+                    <span>{r.label}</span>
+                    <span>{r.amount}</span>
+                  </p>
+                ))}
+              </div>
+            ) : (
+              <p className="flex justify-between text-sm font-semibold text-ink">
+                <span>Subtotal</span>
+                <span>{formatPrice(Number(detail.subtotal), detail.currency)}</span>
+              </p>
+            )}
+
+            {payable && hasService && (
+              <button
+                type="button"
+                role="switch"
+                aria-checked={serviceOn}
+                onClick={() => {
+                  touched.current = true;
+                  setServiceOn(!serviceOn);
+                }}
+                className="flex w-full items-center justify-between gap-3 rounded-xl border border-line p-3 text-left text-sm text-ink"
+              >
+                <span>
+                  <span className="block font-semibold">
+                    Optional service ({ratePercent(detail.service_charge_rate)}%):{" "}
+                    {formatPrice(Number(detail.service_charge_amount), detail.currency)}
+                  </span>
+                  <span className="block text-xs text-ink-muted">
+                    {serviceOn ? "Included in the total" : "Not included"} · all of it goes to staff
+                  </span>
+                </span>
+                <span
+                  aria-hidden="true"
+                  className={`flex h-6 w-11 shrink-0 items-center rounded-full p-0.5 transition-colors ${serviceOn ? "justify-end bg-terracotta" : "justify-start bg-line"}`}
+                >
+                  <span className="h-5 w-5 rounded-full bg-paper shadow" />
+                </span>
+              </button>
+            )}
+
+            {serviceChange !== null && (
+              <label className="flex items-center gap-2 rounded-xl border border-danger-fg bg-danger-bg p-3 text-sm font-semibold text-danger-fg">
+                <input
+                  type="checkbox"
+                  checked={serviceAcked}
+                  onChange={(e) => setServiceAckKey(e.target.checked ? serviceChange : null)}
+                  className="accent-terracotta"
+                />
+                The guest chose {detail.claim?.service_included ? "to add" : "not to add"} the optional service — confirm
+                the change
+              </label>
+            )}
 
             {detail.status === "cancelled" && (
               <div className="space-y-1 text-sm">
@@ -706,7 +798,8 @@ export default function BillsPage() {
               <>
                 <fieldset className="space-y-2">
                   <legend className="text-sm font-semibold text-ink">Payment method</legend>
-                  {PAYMENT_METHODS.map((m) => {
+                  {/* Only the methods this venue takes (UK and Dubai: cash and card). */}
+                  {PAYMENT_METHODS.filter((m) => detail.methods.some((p) => p.method === m.value)).map((m) => {
                     const p = previewFor(detail, m.value);
                     return (
                       <label key={m.value} className="flex items-center justify-between gap-2 text-sm text-ink">
@@ -725,7 +818,9 @@ export default function BillsPage() {
                           />
                           {m.label}
                           {p && (
-                            <span className="text-xs text-ink-muted">tax {Number((Number(p.tax_rate) * 100).toFixed(2))}%</span>
+                            <span className="text-xs text-ink-muted">
+                              {p.tax_included ? `VAT ${ratePercent(p.tax_rate)}% incl.` : `tax ${ratePercent(p.tax_rate)}%`}
+                            </span>
                           )}
                         </span>
                         <span className="font-semibold">{p ? formatPrice(Number(p.total), detail.currency) : "—"}</span>

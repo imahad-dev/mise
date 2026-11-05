@@ -187,6 +187,8 @@ async def test_guest_session_flow_and_no_unit_cost(
         "id": str(seeded_restaurant.id),
         "name": seeded_restaurant.name,
         "currency": seeded_restaurant.currency,
+        "service_charge_rate": "0.0000",
+        "prices_include_tax": False,
     }
     assert menu_data["table_id"] == str(table.id)
     assert menu_data["table_label"] == table.label
@@ -285,9 +287,13 @@ async def test_order_idempotency_201_200_409(
     await db_session.flush()
     client.cookies.set(GUEST_COOKIE_NAME, sign_value(str(session.id)))
 
-    # Fetch menu items
+    # Two items that need no size choice, in a fixed order (an unordered pick could get a dish
+    # with sizes, which the order route refuses with 422).
     res_items = await db_session.execute(
-        select(MenuItem).where(MenuItem.restaurant_id == seeded_restaurant.id).limit(2)
+        select(MenuItem)
+        .where(MenuItem.restaurant_id == seeded_restaurant.id, ~MenuItem.options.any())
+        .order_by(MenuItem.id)
+        .limit(2)
     )
     items = list(res_items.scalars().all())
     item1, item2 = items[0], items[1]

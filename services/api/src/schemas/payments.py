@@ -28,6 +28,7 @@ class VoidedLine(BaseModel):
 class GuestPaymentRequest(BaseModel):
     method: Literal["cash", "card", "wallet", "raast", "bank_transfer"]
     reference: str | None = Field(None, max_length=64)
+    service_included: bool = False
 
     @model_validator(mode="after")
     def _reference_rule(self) -> "GuestPaymentRequest":
@@ -48,6 +49,8 @@ class GuestBillDetail(GuestBillResponse):
     subtotal: Decimal
     currency: str
     methods: list[MethodPreview]
+    service_charge_rate: Decimal
+    service_charge_amount: Decimal
     payment_details: PaymentDetails
     claim: PaymentClaim | None
     voided: list[VoidedLine]
@@ -55,6 +58,8 @@ class GuestBillDetail(GuestBillResponse):
     # What was paid: set only once the bill is settled (its snapshot).
     payment_method: str | None = None
     tax_rate: Decimal | None = None
+    # True when the settled bill's VAT was inside the prices (UK, Dubai).
+    tax_included: bool = False
     total: Decimal | None = None
     pickup_label: str | None = None
     pay_forward_count: int = 0

@@ -1,4 +1,5 @@
-"""Write data/test-vectors/tax_vectors.json: API per-method tax previews for 50 bills.
+"""Write data/test-vectors/tax_vectors.json: API per-method tax previews for 50 Pakistani
+bills, then fixed UK and Dubai bills whose prices include VAT.
 
 The owner-web Vitest suite checks the UI shows these numbers verbatim; the API's
 tests/test_money_agreement.py checks the file still matches the server's tax code.
@@ -17,7 +18,7 @@ REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO / "services" / "api"))
 
 from src.services.bills import method_previews
-from src.services.tax import PAYMENT_METHODS
+from src.services.tax import PAYMENT_METHODS, default_jurisdictions
 
 OUT = REPO / "data" / "test-vectors" / "tax_vectors.json"
 # Fixed edge cases first: zero, half-rupee rounding, and both sides of 1 July 2026.
@@ -28,9 +29,20 @@ FIXED = [
     ("PB", "card", "2026-06-30", 2340),  # 5%
     ("PB", "card", "2026-07-01", 2340),  # 8%
 ]
+# VAT inside the price, to the penny: odd pence, round pounds/dirhams and a half-penny VAT.
+INCLUDED = [
+    (jurisdiction, method, "2026-07-01", subtotal)
+    for jurisdiction in ("GB", "AE-DU")
+    for method, subtotal in (
+        ("card", "10.99"),
+        ("cash", "21.00"),
+        ("card", "105.00"),
+        ("cash", "12.15"),
+    )
+]
 
 
-def vector(jurisdiction: str, method: str, on: str, subtotal: int) -> dict:
+def vector(jurisdiction: str, method: str, on: str, subtotal: int | str) -> dict:
     sub = Decimal(subtotal).quantize(Decimal("0.01"))
     preview = next(
         p
@@ -41,7 +53,7 @@ def vector(jurisdiction: str, method: str, on: str, subtotal: int) -> dict:
         "jurisdiction": jurisdiction,
         "date": on,
         "subtotal": f"{sub:.2f}",
-        "currency": "PKR",
+        "currency": default_jurisdictions()[jurisdiction].currency,
         **preview.model_dump(mode="json"),
     }
 
@@ -59,7 +71,7 @@ def vectors() -> list[dict]:
                 rng.randint(0, 200_000),
             )
         )
-    return out
+    return out + [vector(*case) for case in INCLUDED]
 
 
 if __name__ == "__main__":
