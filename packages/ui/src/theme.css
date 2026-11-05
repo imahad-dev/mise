@@ -172,7 +172,8 @@
 
   /* Bottom sheet on native <dialog> */
   .sheet {
-    margin: auto auto 0;
+    /* !important: a space-y-* parent is a utility and would otherwise beat this layer. */
+    margin: auto auto 0 !important;
     width: 100%;
     max-width: 32rem;
     max-height: 90vh;
@@ -188,7 +189,7 @@
   }
   @media (min-width: 640px) {
     .sheet {
-      margin: auto;
+      margin: auto !important;
       border-radius: 22px;
     }
   }
