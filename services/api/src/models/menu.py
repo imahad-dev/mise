@@ -287,6 +287,11 @@ class MenuChoice(Base):
             "allergens && ARRAY['milk','eggs','fish','crustaceans','molluscs']::text[])",
             name="chk_choice_vegan_allergens",
         ),
+        CheckConstraint(
+            "NOT is_vegetarian OR NOT ("
+            "allergens && ARRAY['fish','crustaceans','molluscs']::text[])",
+            name="chk_choice_vegetarian_allergens",
+        ),
         UniqueConstraint("group_id", "label", name="uq_choice_label"),
         Index("idx_choice_group", "group_id"),
     )

@@ -92,6 +92,11 @@ def upgrade() -> None:
             "allergens && ARRAY['milk','eggs','fish','crustaceans','molluscs']::text[])",
             name="chk_choice_vegan_allergens",
         ),
+        sa.CheckConstraint(
+            "NOT is_vegetarian OR NOT ("
+            "allergens && ARRAY['fish','crustaceans','molluscs']::text[])",
+            name="chk_choice_vegetarian_allergens",
+        ),
         sa.UniqueConstraint("group_id", "label", name="uq_choice_label"),
     )
     op.create_index("idx_choice_group", "menu_choice", ["group_id"])
