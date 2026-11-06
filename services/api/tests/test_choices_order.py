@@ -373,6 +373,8 @@ async def test_menu_sends_choices_with_status_and_no_cost(client, tea_setup):
     assert milk["allergen_status"] == "contains"
     assert milk["matched_allergens"] == ["milk"]
     assert "cost_delta" not in milk
+    mild = next(c for c in spice["choices"] if c["label"] == "Mild")
+    assert mild["allergen_status"] == "no_declared_match"
     honey = next(c for c in extras["choices"] if c["label"] == "Honey")
     assert honey["allergen_status"] == "unverified"
     assert leave_out["choices"][0]["price_delta"] == "0.00"

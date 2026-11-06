@@ -205,3 +205,8 @@ def test_group_needing_two_with_one_available_stops_the_dish():
 
 def test_zero_decimals_pass_leave_out():
     check_choice("leave_out", price_delta=Decimal("0.00"), cost_delta=Decimal("0.00"), allergens=[])
+
+
+def test_required_group_with_one_of_two_sold_out_stays_orderable():
+    item = dish(group("Spice", "pick", 1, 1, choice("Mild", available=False), choice("Hot")))
+    assert can_be_ordered(item)

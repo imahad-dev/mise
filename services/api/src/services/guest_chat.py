@@ -14,8 +14,9 @@ from sqlalchemy.orm import selectinload
 
 from src.inference.metrics import record_metrics
 from src.inference.rate_limit import check_guest_chat_limit
-from src.models.menu import MenuItem
+from src.models.menu import MenuChoiceGroup, MenuItem
 from src.schemas.guest import AIChatResult
+from src.services.choices import can_be_ordered
 
 if TYPE_CHECKING:
     import uuid
@@ -31,7 +32,7 @@ def _build_menu_context(items: list[MenuItem], language: str) -> str:
     """Build a concise menu summary for the system prompt."""
     lines: list[str] = []
     for item in items:
-        if not item.available:
+        if not item.available or not can_be_ordered(item):
             continue
         trans = next((t for t in item.translations if t.language == language), None)
         if not trans and item.translations:
@@ -68,7 +69,10 @@ async def handle_guest_chat(
     # Fetch menu for context
     stmt = (
         select(MenuItem)
-        .options(selectinload(MenuItem.translations))
+        .options(
+            selectinload(MenuItem.translations),
+            selectinload(MenuItem.choice_groups).selectinload(MenuChoiceGroup.choices),
+        )
         .where(
             MenuItem.restaurant_id == restaurant_id,
             MenuItem.deleted_at.is_(None),
