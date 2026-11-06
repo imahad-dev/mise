@@ -1072,7 +1072,10 @@ async def test_leave_out_cannot_cost_or_carry_allergens(client, owner_setup):
     ).json()
     url = f"/api/restaurants/{s.restaurant.slug}/choice-groups/{group['id']}/choices"
     assert (await client.post(url, json=MILK)).status_code == 422
-    assert (await client.post(url, json={"label": "Onions"})).status_code == 201
+    onions = await client.post(url, json={"label": "Onions"})
+    assert onions.status_code == 201
+    body = onions.json()
+    assert (body["allergen_verified"], body["is_vegetarian"], body["is_vegan"]) == (True, True, True)
 
 
 async def test_defaults_cannot_exceed_the_maximum(client, owner_setup):
@@ -1315,6 +1318,12 @@ def _check_flags(is_vegetarian: bool, is_vegan: bool, allergens: list[str]) -> N
         raise _refuse("A vegetarian choice can't carry fish or shellfish")
 
 
+def _settle_leave_out(group: MenuChoiceGroup, c: MenuChoice) -> None:
+    """A leave-out adds nothing, so it has nothing to confirm and suits every diet."""
+    if group.kind == "leave_out":
+        c.allergen_verified = c.is_vegetarian = c.is_vegan = True
+
+
 def _check_unique(labels: list[str], label: str) -> None:
     if label in labels:
         raise _refuse("That name is already used here")
@@ -1406,6 +1415,7 @@ async def create_choice(
     )
     _check_flags(payload.is_vegetarian, payload.is_vegan, payload.allergens)
     choice = MenuChoice(**payload.model_dump())
+    _settle_leave_out(group, choice)
     group.choices.append(choice)
     _check_defaults(group)
     await db.flush()
@@ -1431,6 +1441,7 @@ async def patch_choice(
         changes.setdefault("allergen_verified", False)
     for field, value in changes.items():
         setattr(choice, field, value)
+    _settle_leave_out(group, choice)
     check_choice(
         group.kind,
         price_delta=choice.price_delta,
@@ -2297,7 +2308,9 @@ export function DishSheet({ item, lang, dict, formatPrice, dietary, onClose, onA
               <span>{g.label}</span>
               <span className="text-xs font-normal text-ink-muted">{need(g)}</span>
             </legend>
-            {g.kind === "leave_out" && <p className="text-xs text-ink-muted">{dict.dish.leaveOutNotice}</p>}
+            {(g.kind === "leave_out" || g.choices.some((c) => /^no\s/i.test(c.label))) && (
+              <p className="text-xs text-ink-muted">{dict.dish.leaveOutNotice}</p>
+            )}
             {g.choices.map((c) => {
               const on = picked.includes(c.id);
               const notFit =

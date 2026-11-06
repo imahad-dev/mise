@@ -58,7 +58,8 @@ a choice nobody has confirmed.
 
 Checked in the save path, because these rules span rows:
 
-- `leave_out` choices have zero price, zero cost and no allergens.
+- `leave_out` choices have zero price, zero cost and no allergens. They add nothing, so they are
+  always saved as confirmed, vegetarian and vegan: "Onions" never marks a line unverified.
 - A group has no more `is_default` choices than its `max_select`.
 - A pay-it-forward dish has no choice groups: the person who receives it is not the person
   ordering.
@@ -83,7 +84,8 @@ old lines untouched, so choices can be hard-deleted.
 `OrderItemRequest` gains `choice_ids: list[UUID]` (default empty, at most 30, no repeats). The
 server, for each line:
 
-1. **Resolves** every id against the dish's own groups. An id from another dish is 422.
+1. **Resolves** every id against the dish's own groups. An unknown id is 422 `choices_changed`:
+   it may be a choice the owner deleted while it sat in a saved cart.
 2. **Checks availability.** A sold-out choice is 409 `unavailable_choices`, naming the dish and the
    choice, in the same shape as `unavailable_items`.
 3. **Checks each group.** The count must lie between `min_select` and `max_select`. A failure is
@@ -121,11 +123,13 @@ This is the section a reviewer should read twice.
 - A choice's allergens are added to the line, never taken away.
 - "Leave out" has no allergen effect at all. "Leave out: Nuts" does not make a dish nut-free,
   because of cross-contact in the kitchen. The allergen stays listed and the status stays as it was.
-- Every `leave_out` group shows: "Leaving something out doesn't make a dish safe for an allergy.
+- Those groups and every `leave_out` group show: "Leaving something out doesn't make a dish safe for an allergy.
   Please ask a member of staff."
-- A choice label cannot promise safety. Saving a label containing `free`, `allergy`, `allergen` or
-  `safe` as a whole word (any case) is refused with 422. "Sugar free" is therefore refused too; the
-  owner writes "No sugar".
+- A choice label cannot promise safety. Saving a label with a word ending in `free`, containing
+  `allerg`, or starting with `safe` (any case) is refused with 422. "Sugar free" is therefore
+  refused too; the owner writes "No sugar".
+- Any group with a choice starting "No " shows the leave-out notice below, whatever its kind, so
+  "No nuts" in a pick group warns the guest too.
 - The dish page has no free-text box. A guest typing "I'm allergic" there could be missed, so that
   stays a conversation with staff. `notes` stays in the API, unused by this page.
 - The guest menu sends `allergen_status` and `matched_allergens` for each choice, computed by the
@@ -206,7 +210,8 @@ figures for dishes without choices stay the same, and the report has data in dem
 
 | Case | Result |
 |---|---|
-| Choice from another dish, or repeated | 422, order not placed |
+| Choice unknown to this dish | 422 `choices_changed` |
+| Repeated choice | 422, order not placed |
 | Too few or too many in a group | 422 `choices_changed` |
 | Sold-out choice | 409 `unavailable_choices` |
 | Chosen allergen conflicts, no acknowledgement | 409 `allergen_ack_required` |
