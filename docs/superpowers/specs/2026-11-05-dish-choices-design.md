@@ -152,8 +152,8 @@ size, then each choice group, then a fixed footer with quantity, the live total 
   "Choose spice", and tapping it scrolls to that group, highlights it and moves focus there. The
   button is never disabled, because a disabled button can't explain itself.
 - The total updates on every tap and is announced politely to screen readers.
-- The menu's + button adds in one tap when the dish has no size and no required group, using the
-  defaults. Otherwise it opens the dish page.
+- The menu's + button adds in one tap when the dish has no size and its defaults satisfy every
+  required group. Otherwise it opens the dish page.
 - A dish with no sizes and no groups still opens the page from its photo, with quantity and Add.
 
 **Cart.** A line's identity becomes dish + size + sorted choice ids. Two coffees with different
@@ -169,7 +169,8 @@ dropped or swapped, and nothing is charged.
 
 - **Kitchen.** Choices appear under the dish name. `leave_out` choices are shown in strong capitals
   with "NO" ("NO ONIONS") so a cook can't miss them.
-- **Waiting orders and staff approval** show the same choices.
+- **The Floor approval tile** stays a count and a total ("3 items · Rs 1,200"): it lists no dishes
+  today, and this spec does not add them.
 - **Guest order page and bills.** Lines list choices. Paid extras show their price. `BillLine`,
   `VoidedLine` and the kitchen and order item schemas gain
   `choices: [{label, kind, price_delta}]`.
