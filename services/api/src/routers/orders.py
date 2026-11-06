@@ -21,7 +21,7 @@ from src.auth import get_current_guest_session
 from src.database import get_db
 from src.models.audit import AuditLog
 from src.models.dining_table import DiningTable
-from src.models.menu import MenuItem, MenuItemOption
+from src.models.menu import MenuChoiceGroup, MenuItem, MenuItemOption
 from src.models.order import Order, OrderItem
 from src.models.restaurant import Restaurant
 from src.models.session import GuestSession
@@ -36,6 +36,7 @@ from src.services.bills import (
     open_bill_for_table,
     session_is_current,
 )
+from src.services.choices import can_be_ordered, line_allergens, resolve_choices
 from src.services.counter import open_counter_bill
 from src.services.order_snapshot import line_total, snapshot_order_item
 from src.services.sitting import get_open_sitting, has_approved_order
@@ -53,10 +54,17 @@ def compute_payload_hash(items: list[OrderItemRequest]) -> str:
             "option_id": str(i.option_id or ""),
             "quantity": i.quantity,
             "notes": i.notes or "",
+            **({"choice_ids": sorted(map(str, i.choice_ids))} if i.choice_ids else {}),
         }
         for i in sorted(
             items,
-            key=lambda x: (str(x.menu_item_id), str(x.option_id or ""), x.quantity, x.notes or ""),
+            key=lambda x: (
+                str(x.menu_item_id),
+                str(x.option_id or ""),
+                x.quantity,
+                x.notes or "",
+                sorted(map(str, x.choice_ids)),
+            ),
         )
     ]
     raw = json.dumps(canonical, sort_keys=True)
@@ -187,7 +195,7 @@ async def _check_table_code(session: GuestSession, sitting: TableSitting, code: 
         403: {"description": "The table code is required or wrong"},
         409: {
             "description": "Table not open, already sent under this key (with its order_id), "
-            "unavailable items, or allergen ack required"
+            "unavailable items or choices, or allergen ack required"
         },
         429: {"description": "Too many orders or wrong table codes from this phone"},
     },
@@ -253,7 +261,11 @@ async def create_order(
     item_ids = [item_req.menu_item_id for item_req in payload.items]
     stmt_items = (
         select(MenuItem)
-        .options(selectinload(MenuItem.translations), selectinload(MenuItem.options))
+        .options(
+            selectinload(MenuItem.translations),
+            selectinload(MenuItem.options),
+            selectinload(MenuItem.choice_groups).selectinload(MenuChoiceGroup.choices),
+        )
         .where(
             MenuItem.id.in_(item_ids),
             MenuItem.restaurant_id == session.restaurant_id,
@@ -276,7 +288,7 @@ async def create_order(
     unavailable_items = [
         {"menu_item_id": str(item.id), "category": item.category}
         for item in found_items.values()
-        if not item.available
+        if not item.available or not can_be_ordered(item)
     ]
     if unavailable_items:
         raise HTTPException(
@@ -306,19 +318,23 @@ async def create_order(
             )
         line_options.append(opts.get(req.option_id))
 
-    # 5. Check allergen conflict against session's allergens_to_avoid
+    # 4c. Resolve each line's choices (refusals before any allergen check)
+    line_choices = [
+        resolve_choices(found_items[req.menu_item_id], req.choice_ids) for req in payload.items
+    ]
+
+    # 5. Check allergen conflict (dish and choices together) against the session's allergens
     conflict_items: list[dict] = []
-    for req in payload.items:
+    for req, chosen in zip(payload.items, line_choices, strict=True):
         item = found_items[req.menu_item_id]
+        allergens, verified = line_allergens(item, chosen)
         s_val = compute_allergen_status(
-            item_allergens=item.allergens,
-            allergen_verified=item.allergen_verified,
+            item_allergens=allergens,
+            allergen_verified=verified,
             guest_allergens_to_avoid=session.allergens_to_avoid,
         )
         matched = (
-            [a for a in item.allergens if a in session.allergens_to_avoid]
-            if s_val == "contains"
-            else []
+            [a for a in allergens if a in session.allergens_to_avoid] if s_val == "contains" else []
         )
         if s_val in ("contains", "unverified"):
             conflict_items.append(
@@ -345,8 +361,9 @@ async def create_order(
             default_language=restaurant.default_language,
             guest_allergens_to_avoid=session.allergens_to_avoid,
             option=opt,
+            choices=chosen,
         )
-        for req, opt in zip(payload.items, line_options, strict=True)
+        for req, opt, chosen in zip(payload.items, line_options, line_choices, strict=True)
     ]
     total = sum((line_total(oi) for oi in order_items), Decimal("0.00"))
 
