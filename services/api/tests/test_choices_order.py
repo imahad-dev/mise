@@ -14,7 +14,13 @@ from tests.helpers import open_table
 
 from src.auth import GUEST_COOKIE_NAME, sign_value
 from src.models.dining_table import DiningTable
-from src.models.menu import MenuChoice, MenuChoiceGroup, MenuItem, MenuTranslation
+from src.models.menu import (
+    MenuChoice,
+    MenuChoiceGroup,
+    MenuItem,
+    MenuItemOption,
+    MenuTranslation,
+)
 from src.models.order import OrderItem
 from src.models.restaurant import Restaurant
 from src.models.session import GuestSession
@@ -239,3 +245,95 @@ async def test_menu_price_change_leaves_old_lines(client, tea_setup, db_session)
     await db_session.flush()
     fetched = (await client.get(f"/api/orders/{placed['id']}")).json()
     assert fetched["items"][0]["unit_price"] == "300.00"
+
+
+async def _soup(db_session, restaurant, extras_min=0):
+    """A dish with a Half/Full size and an Extras group (0/2), and its choices."""
+    soup = MenuItem(
+        restaurant_id=restaurant.id,
+        category="mains",
+        price=Decimal("500.00"),
+        unit_cost=Decimal("200.00"),
+        ingredients=[],
+        allergens=[],
+        allergen_verified=True,
+        dietary_verified=True,
+        sort_order=2,
+    )
+    soup.translations = [MenuTranslation(language="en", name="Soup")]
+    db_session.add(soup)
+    await db_session.flush()
+    full = MenuItemOption(
+        menu_item_id=soup.id, label="Full", price=Decimal("800.00"), unit_cost=Decimal("350.00")
+    )
+    group = MenuChoiceGroup(
+        menu_item_id=soup.id, label="Extras", kind="add", min_select=0, max_select=2
+    )
+    db_session.add_all([full, group])
+    await db_session.flush()
+    bread = MenuChoice(
+        group_id=group.id,
+        label="Bread",
+        price_delta=Decimal("40.00"),
+        cost_delta=Decimal("10.00"),
+        allergen_verified=True,
+        sort_order=0,
+    )
+    egg = MenuChoice(
+        group_id=group.id,
+        label="Egg",
+        price_delta=Decimal("25.00"),
+        cost_delta=Decimal("7.00"),
+        allergen_verified=True,
+        sort_order=1,
+    )
+    db_session.add_all([bread, egg])
+    await db_session.flush()
+    return soup, full, bread, egg
+
+
+async def test_unknown_choice_is_choices_changed(client, tea_setup):
+    s = tea_setup
+    resp = await order(client, "k13", [line(s, s.mild)])
+    assert resp.status_code == 201
+    bogus = {"menu_item_id": str(s.tea.id), "quantity": 1, "choice_ids": [str(uuid.uuid4())]}
+    resp = await order(client, "k14", [bogus])
+    assert resp.status_code == 422
+    assert resp.json()["detail"]["error"] == "choices_changed"
+
+
+async def test_choice_from_another_dish_is_choices_changed(client, tea_setup, db_session):
+    s = tea_setup
+    _, _, bread, _ = await _soup(db_session, s.restaurant)
+    resp = await order(client, "k15", [line(s, s.mild, bread)])
+    assert resp.status_code == 422
+    assert resp.json()["detail"]["error"] == "choices_changed"
+
+
+async def test_too_many_in_a_group_is_choices_changed(client, tea_setup):
+    s = tea_setup
+    resp = await order(client, "k16", [line(s, s.mild, s.hot)])
+    assert resp.status_code == 422
+    assert resp.json()["detail"]["error"] == "choices_changed"
+
+
+async def test_size_plus_extras_add_up(client, tea_setup, db_session):
+    s = tea_setup
+    soup, full, bread, egg = await _soup(db_session, s.restaurant)
+    resp = await order(
+        client,
+        "k17",
+        [
+            {
+                "menu_item_id": str(soup.id),
+                "option_id": str(full.id),
+                "quantity": 1,
+                "choice_ids": [str(bread.id), str(egg.id)],
+            }
+        ],
+    )
+    assert resp.status_code == 201
+    item = resp.json()["items"][0]
+    assert item["unit_price"] == "865.00"
+    row = await db_session.get(OrderItem, uuid.UUID(item["id"]))
+    assert row.unit_cost == Decimal("367.00")
