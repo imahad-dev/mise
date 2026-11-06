@@ -356,3 +356,32 @@ async def test_size_plus_extras_add_up(client, tea_setup, db_session):
     assert item["unit_price"] == "865.00"
     row = await db_session.get(OrderItem, uuid.UUID(item["id"]))
     assert row.unit_cost == Decimal("367.00")
+
+
+async def test_menu_sends_choices_with_status_and_no_cost(client, tea_setup):
+    menu = (await client.get("/api/guest/menu")).json()
+    tea = next(i for i in menu["items"] if i["name"] == "Tea")
+    spice, extras, leave_out = tea["choice_groups"]
+    assert (spice["label"], spice["kind"], spice["min_select"], spice["max_select"]) == (
+        "Spice",
+        "pick",
+        1,
+        1,
+    )
+    milk = next(c for c in extras["choices"] if c["label"] == "Extra milk")
+    assert milk["price_delta"] == "50.00"
+    assert milk["allergen_status"] == "contains"
+    assert milk["matched_allergens"] == ["milk"]
+    assert "cost_delta" not in milk
+    honey = next(c for c in extras["choices"] if c["label"] == "Honey")
+    assert honey["allergen_status"] == "unverified"
+    assert leave_out["choices"][0]["price_delta"] == "0.00"
+
+
+async def test_menu_marks_a_dish_sold_out_when_a_required_group_is(client, tea_setup, db_session):
+    s = tea_setup
+    s.mild.available = False
+    s.hot.available = False
+    await db_session.flush()
+    menu = (await client.get("/api/guest/menu")).json()
+    assert next(i for i in menu["items"] if i["name"] == "Tea")["available"] is False
