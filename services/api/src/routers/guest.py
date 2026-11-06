@@ -527,7 +527,12 @@ async def _bill_detail(
         payment_details=PaymentDetails(**restaurant.payment_details),
         claim=claim_of(bill),
         voided=[
-            VoidedLine(name=v.name, option_label=v.option_label, quantity=v.quantity)
+            VoidedLine(
+                name=v.name,
+                option_label=v.option_label,
+                quantity=v.quantity,
+                choices=v.choices,
+            )
             for v in voided
         ],
         order_status=order_status,

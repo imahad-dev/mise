@@ -69,6 +69,7 @@ def _build_kitchen_order_response(
                 allergen_verified=item.allergen_verified,
                 conflict_with_order_allergens=has_conflict,
                 matched_allergens=matched,
+                choices=item.choices,
             )
         )
 

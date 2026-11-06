@@ -8,6 +8,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from src.schemas.orders import LineChoice
+
 Method = Literal["cash", "card", "wallet", "raast", "bank_transfer"]
 # Payment references, guest and staff alike. ASCII only: Unicode digits and spaces, control
 # characters and markup are refused.
@@ -20,6 +22,7 @@ class BillLine(BaseModel):
     quantity: int
     unit_price: Decimal
     line_total: Decimal
+    choices: list[LineChoice] = []
 
 
 class TaxPreview(BaseModel):
