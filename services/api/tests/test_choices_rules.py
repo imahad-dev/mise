@@ -56,6 +56,7 @@ def test_resolve_keeps_only_this_dishes_choices():
     with pytest.raises(HTTPException) as e:
         resolve_choices(item, [mild.id, uuid.uuid4()])
     assert e.value.status_code == 422
+    assert e.value.detail == {"error": "choices_changed", "menu_item_id": str(item.id)}
 
 
 def test_sold_out_choice_is_409_naming_it():
@@ -124,7 +125,20 @@ def test_snapshot_keeps_group_kind_and_money_as_strings():
 
 
 @pytest.mark.parametrize(
-    "label", ["Nut free", "Sugar-free", "ALLERGY safe", "allergen check", "Safe for kids"]
+    "label",
+    [
+        "Nut free",
+        "Sugar-free",
+        "ALLERGY safe",
+        "allergen check",
+        "Safe for kids",
+        "No allergens",
+        "Good for allergies",
+        "Nutfree",
+        "Hypoallergenic",
+        "Safer for kids",
+        "Per allergici",
+    ],
 )
 def test_labels_cannot_promise_safety(label):
     with pytest.raises(HTTPException) as e:
@@ -144,6 +158,50 @@ def test_leave_out_choices_are_free_and_carry_no_allergens():
         {"allergens": ["milk"]},
     ):
         fields = {"price_delta": Decimal("0"), "cost_delta": Decimal("0"), "allergens": [], **bad}
-        with pytest.raises(HTTPException):
+        with pytest.raises(HTTPException) as e:
             check_choice("leave_out", **fields)
+        assert e.value.status_code == 422
     check_choice("add", price_delta=Decimal("1"), cost_delta=Decimal("1"), allergens=["milk"])
+
+
+def test_unverified_dish_makes_the_line_unverified():
+    item = dish(allergens=["gluten"], verified=False)
+    assert line_allergens(item, [])[1] is False
+    ok = choice("Milk")
+    assert line_allergens(dish(group("Extras", "add", 0, 1, ok), verified=False), [ok])[1] is False
+
+
+def test_verified_choice_beside_unverified_one_is_unverified():
+    a, b = choice("Milk"), choice("Honey", verified=False)
+    item = dish(group("Extras", "add", 0, 2, a, b))
+    assert line_allergens(item, [a, b])[1] is False
+
+
+def test_shared_allergen_is_not_duplicated():
+    milk = choice("Extra milk", allergens=["milk"])
+    item = dish(group("Extras", "add", 0, 1, milk), allergens=["milk"])
+    assert line_allergens(item, [milk])[0] == ["milk"]
+
+
+def test_snapshot_is_in_menu_order_and_skips_unpicked():
+    a, b, c = choice("Milk"), choice("Honey"), choice("Oat")
+    item = dish(group("Extras", "add", 0, 3, a, b, c))
+    assert [s["label"] for s in snapshot_choices(item, [b, a])] == ["Milk", "Honey"]
+
+
+def test_two_group_dish_needs_its_required_pick():
+    mild, milk = choice("Mild"), choice("Milk")
+    item = dish(group("Spice", "pick", 1, 1, mild), group("Extras", "add", 0, 2, milk))
+    assert resolve_choices(item, [mild.id, milk.id]) == [mild, milk]
+    with pytest.raises(HTTPException) as e:
+        resolve_choices(item, [milk.id])
+    assert error(e)[1]["error"] == "choices_changed"
+
+
+def test_group_needing_two_with_one_available_stops_the_dish():
+    item = dish(group("Sides", "pick", 2, 2, choice("Rice"), choice("Naan", available=False)))
+    assert not can_be_ordered(item)
+
+
+def test_zero_decimals_pass_leave_out():
+    check_choice("leave_out", price_delta=Decimal("0.00"), cost_delta=Decimal("0.00"), allergens=[])

@@ -11,8 +11,9 @@ from fastapi import HTTPException, status
 
 from src.models.menu import MenuChoice, MenuItem
 
-# Whole words: "Freekeh" and "Saffron" are fine, "Nut free" and "Sugar-free" are not.
-PROMISES_SAFETY = re.compile(r"\b(free|allergy|allergen|safe)\b", re.IGNORECASE)
+# Words ending in "free", containing "allerg", or starting "safe": "Nutfree", "Allergens",
+# "Hypoallergenic" and "Safer" are refused; "Freekeh" and "Saffron" pass.
+PROMISES_SAFETY = re.compile(r"\b(\w*free|\w*allerg\w*|safe\w*)\b", re.IGNORECASE)
 
 
 def resolve_choices(item: MenuItem, choice_ids: list[uuid.UUID]) -> list[MenuChoice]:
@@ -23,7 +24,7 @@ def resolve_choices(item: MenuItem, choice_ids: list[uuid.UUID]) -> list[MenuCho
     if any(i not in known for i in choice_ids):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail=f"Unknown choice for {item.id}",
+            detail={"error": "choices_changed", "menu_item_id": str(item.id)},
         )
     chosen = [known[i] for i in choice_ids]
     sold_out = [c for c in chosen if not c.available]
@@ -85,7 +86,7 @@ def check_label(label: str) -> None:
     if PROMISES_SAFETY.search(label):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail='A choice can\'t promise safety. Write "No sugar", not "Sugar free".',
+            detail='A choice can\'t promise safety. Name what it is, like "Extra milk".',
         )
 
 
