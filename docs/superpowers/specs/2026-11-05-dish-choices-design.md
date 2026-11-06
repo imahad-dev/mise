@@ -50,6 +50,7 @@ Database checks:
 - `price_delta >= 0`, `cost_delta >= 0`.
 - `allergens` uses the same fourteen values as `menu_item`.
 - `NOT (is_vegan AND NOT is_vegetarian)`, and a vegan choice carries no animal allergen.
+- A vegetarian choice carries no fish, crustaceans or molluscs, as for dishes.
 - Labels are unique inside their parent.
 
 `allergen_verified`, `is_vegetarian` and `is_vegan` default to false, which is the safe answer for

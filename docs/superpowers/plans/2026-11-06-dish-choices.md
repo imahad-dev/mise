@@ -1244,6 +1244,7 @@ router = APIRouter(prefix="/api/restaurants/{slug}", tags=["owner"])
 MAX_GROUPS = 8
 MAX_CHOICES = 20
 ANIMAL = {"milk", "eggs", "fish", "crustaceans", "molluscs"}
+SEAFOOD = {"fish", "crustaceans", "molluscs"}
 
 
 def _refuse(detail: str) -> HTTPException:
@@ -1310,6 +1311,8 @@ def _check_defaults(group: MenuChoiceGroup) -> None:
 def _check_flags(is_vegetarian: bool, is_vegan: bool, allergens: list[str]) -> None:
     if is_vegan and (not is_vegetarian or ANIMAL & set(allergens)):
         raise _refuse("A vegan choice must be vegetarian and carry no animal allergen")
+    if is_vegetarian and SEAFOOD & set(allergens):
+        raise _refuse("A vegetarian choice can't carry fish or shellfish")
 
 
 def _check_unique(labels: list[str], label: str) -> None:
