@@ -170,6 +170,11 @@ async def test_unconfirmed_choice_needs_the_acknowledgement(client, tea_setup):
     resp = await order(client, "k4", [line(s, s.mild, s.honey)])
     assert resp.status_code == 409
     assert resp.json()["detail"]["items"][0]["status"] == "unverified"
+    resp = await order(client, "k4", [line(s, s.mild, s.honey)], ack=True)
+    assert resp.status_code == 201
+    item = resp.json()["items"][0]
+    assert item["allergen_status"] == "unverified"
+    assert item["allergen_verified"] is False
 
 
 async def test_leave_out_changes_nothing(client, tea_setup):
@@ -222,8 +227,20 @@ async def test_retry_with_choices_in_any_order_is_a_retry(client, tea_setup):
 
 async def test_same_key_with_other_choices_conflicts(client, tea_setup):
     s = tea_setup
-    assert (await order(client, "k11", [line(s, s.mild)])).status_code == 201
-    assert (await order(client, "k11", [line(s, s.hot)])).status_code == 409
+    first = await order(client, "k11", [line(s, s.mild)])
+    assert first.status_code == 201
+    again = await order(client, "k11", [line(s, s.hot)])
+    assert again.status_code == 409
+    assert again.json()["detail"] == {"error": "already_sent", "order_id": first.json()["id"]}
+
+
+async def test_retry_with_lines_reversed_is_a_retry(client, tea_setup):
+    s = tea_setup
+    first = await order(client, "k18", [line(s, s.mild), line(s, s.hot)])
+    again = await order(client, "k18", [line(s, s.hot), line(s, s.mild)])
+    assert first.status_code == 201
+    assert again.status_code == 200
+    assert again.json()["id"] == first.json()["id"]
 
 
 def test_a_line_without_choices_keeps_its_old_hash():
@@ -294,9 +311,11 @@ async def _soup(db_session, restaurant, extras_min=0):
 
 async def test_unknown_choice_is_choices_changed(client, tea_setup):
     s = tea_setup
-    resp = await order(client, "k13", [line(s, s.mild)])
-    assert resp.status_code == 201
-    bogus = {"menu_item_id": str(s.tea.id), "quantity": 1, "choice_ids": [str(uuid.uuid4())]}
+    bogus = {
+        "menu_item_id": str(s.tea.id),
+        "quantity": 1,
+        "choice_ids": [str(s.mild.id), str(uuid.uuid4())],
+    }
     resp = await order(client, "k14", [bogus])
     assert resp.status_code == 422
     assert resp.json()["detail"]["error"] == "choices_changed"
