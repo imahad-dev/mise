@@ -17,7 +17,7 @@ from sqlalchemy import (
     func,
     text,
 )
-from sqlalchemy.dialects.postgresql import ARRAY, UUID
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.database import Base
@@ -198,6 +198,10 @@ class OrderItem(Base):
         nullable=True,
     )
     option_label: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Immutable snapshot of what the guest chose: old bills never change.
+    choices: Mapped[list[dict]] = mapped_column(
+        JSONB, nullable=False, server_default=text("'[]'::jsonb")
+    )
     quantity: Mapped[int] = mapped_column(Integer, nullable=False)
     unit_price: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     unit_cost: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)

@@ -2,6 +2,7 @@
 
 import uuid
 from datetime import date
+from decimal import Decimal
 from typing import Any
 
 import pytest
@@ -894,3 +895,45 @@ async def test_bill_tax_rate_and_pricing_come_together(db_session: AsyncSession)
             {"rid": rid},
             "chk_bills_tax_pricing_pair",
         )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "group_kwargs",
+    [{"min_select": 2, "max_select": 1}, {"min_select": 0, "max_select": 0}, {"kind": "other"}],
+)
+async def test_choice_group_constraints(db_session, group_kwargs):
+    from src.models.menu import MenuChoiceGroup
+
+    rid = await _create_test_restaurant(db_session)
+    mid = uuid.UUID(await _create_test_menu_item(db_session, rid))
+    base = {"label": "Spice", "kind": "pick", "min_select": 1, "max_select": 1}
+    db_session.add(MenuChoiceGroup(menu_item_id=mid, **{**base, **group_kwargs}))
+    with pytest.raises(IntegrityError):
+        await db_session.flush()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "choice_kwargs",
+    [
+        {"price_delta": Decimal("-1")},
+        {"cost_delta": Decimal("-1")},
+        {"allergens": ["bananas"]},
+        {"is_vegan": True, "is_vegetarian": False},
+        {"is_vegan": True, "is_vegetarian": True, "allergens": ["milk"]},
+    ],
+)
+async def test_choice_constraints(db_session, choice_kwargs):
+    from src.models.menu import MenuChoice, MenuChoiceGroup
+
+    rid = await _create_test_restaurant(db_session)
+    mid = uuid.UUID(await _create_test_menu_item(db_session, rid))
+    group = MenuChoiceGroup(
+        menu_item_id=mid, label="Extras", kind="add", min_select=0, max_select=3
+    )
+    db_session.add(group)
+    await db_session.flush()
+    db_session.add(MenuChoice(group_id=group.id, label="Milk", **choice_kwargs))
+    with pytest.raises(IntegrityError):
+        await db_session.flush()
