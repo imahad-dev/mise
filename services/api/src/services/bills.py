@@ -225,7 +225,8 @@ def bill_lines(orders: list[Order]) -> tuple[list[BillLine], Decimal]:
     chosen: dict[tuple, list[dict]] = {}
     for order in orders:
         for oi in order.items:
-            names = tuple(f"{c['group']}: {c['label']}" for c in oi.choices)
+            # Sorted: reordering groups mid-visit must not split identical choices.
+            names = tuple(sorted(f"{c['group']}: {c['label']}" for c in oi.choices))
             key = (oi.item_name, oi.option_label, oi.unit_price, names)
             qty[key] = qty.get(key, 0) + oi.quantity
             chosen[key] = oi.choices
