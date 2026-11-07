@@ -42,8 +42,12 @@ export function firstMissing(groups: ChoiceGroup[], picked: string[]): ChoiceGro
   return groups.find((g) => inGroup(g, picked).length < g.min_select) ?? null;
 }
 
-/** The picks after tapping `id`. A radio button swaps; a full group ignores another tick. */
+/**
+ * The picks after tapping `id`. A radio button swaps (tapping it again keeps it); a full group
+ * ignores another tick; a sold-out choice or one from another group changes nothing.
+ */
 export function toggle(group: ChoiceGroup, picked: string[], id: string): string[] {
+  if (!group.choices.some((c) => c.id === id && c.available)) return picked;
   const mine = inGroup(group, picked);
   const others = picked.filter((p) => !mine.includes(p));
   if (isRadio(group)) return [...others, id];

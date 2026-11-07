@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { addToCart } from "./cart";
 import {
   defaultPicks, firstMissing, needsPage, pickedChoices, requirement, toggle, unitPrice, worstStatus,
   type ChoiceGroup,
@@ -41,6 +42,23 @@ describe("dish page rules", () => {
     const one = { ...extras, max_select: 1 };
     expect(toggle(one, ["milk"], "shot")).toEqual(["shot"]);
     expect(toggle(one, ["shot"], "shot")).toEqual([]);
+  });
+  it("ignores a sold-out choice or one from another group", () => {
+    const gone = { ...extras, choices: [...extras.choices, c("cream", { available: false })] };
+    expect(toggle(gone, ["milk"], "cream")).toEqual(["milk"]);
+    expect(toggle(extras, ["milk"], "hot")).toEqual(["milk"]);
+    expect(toggle(spice, ["mild"], "nope")).toEqual(["mild"]);
+  });
+  it("tapping the picked radio again keeps it picked", () => {
+    expect(toggle(spice, ["normal", "hot"], "hot")).toEqual(["normal", "hot"]);
+  });
+  it("addToCart takes choices only as its own argument", () => {
+    // Exhaustive: the build fails if the item type gains (or loses) a key.
+    type Item = Parameters<typeof addToCart>[0];
+    const keys: Record<keyof Item, true> = {
+      menuItemId: true, name: true, price: true, notes: true, allergenStatus: true, matchedAllergens: true,
+    };
+    expect("choices" in keys).toBe(false);
   });
   it("adds prices to the base", () => {
     expect(unitPrice(3, [extras], ["milk", "shot"])).toBeCloseTo(4.3);

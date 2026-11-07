@@ -102,7 +102,7 @@ function sameLine(a: CartItem, menuItemId: string, optionId?: string, notes?: st
 }
 
 export function addToCart(
-  item: Omit<CartItem, "quantity" | "optionId" | "optionLabel">,
+  item: Omit<CartItem, "quantity" | "optionId" | "optionLabel" | "choices">,
   quantity = 1,
   option?: CartOption,
   choices: CartChoice[] = [],
