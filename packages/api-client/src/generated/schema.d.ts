@@ -1053,6 +1053,76 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/restaurants/{slug}/menu-items/{item_id}/choice-groups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Group */
+        post: operations["create_group_api_restaurants__slug__menu_items__item_id__choice_groups_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/restaurants/{slug}/choice-groups/{group_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Group */
+        delete: operations["delete_group_api_restaurants__slug__choice_groups__group_id__delete"];
+        options?: never;
+        head?: never;
+        /** Patch Group */
+        patch: operations["patch_group_api_restaurants__slug__choice_groups__group_id__patch"];
+        trace?: never;
+    };
+    "/api/restaurants/{slug}/choice-groups/{group_id}/choices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Choice */
+        post: operations["create_choice_api_restaurants__slug__choice_groups__group_id__choices_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/restaurants/{slug}/choices/{choice_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Choice */
+        delete: operations["delete_choice_api_restaurants__slug__choices__choice_id__delete"];
+        options?: never;
+        head?: never;
+        /** Patch Choice */
+        patch: operations["patch_choice_api_restaurants__slug__choices__choice_id__patch"];
+        trace?: never;
+    };
     "/api/restaurants": {
         parameters: {
             query?: never;
@@ -1214,6 +1284,11 @@ export interface components {
             unit_price: string;
             /** Line Total */
             line_total: string;
+            /**
+             * Choices
+             * @default []
+             */
+            choices: components["schemas"]["LineChoice"][];
         };
         /** BillListResponse */
         BillListResponse: {
@@ -1379,6 +1454,75 @@ export interface components {
             /** Collected At */
             collected_at: string | null;
         };
+        /** CreateChoice */
+        CreateChoice: {
+            /** Label */
+            label: string;
+            /**
+             * Price Delta
+             * @default 0
+             */
+            price_delta: number | string;
+            /**
+             * Cost Delta
+             * @default 0
+             */
+            cost_delta: number | string;
+            /**
+             * Allergens
+             * @default []
+             */
+            allergens: ("gluten" | "milk" | "eggs" | "fish" | "crustaceans" | "molluscs" | "tree_nuts" | "peanuts" | "soy" | "celery" | "mustard" | "sesame" | "sulphites" | "lupin")[];
+            /**
+             * Allergen Verified
+             * @default false
+             */
+            allergen_verified: boolean;
+            /**
+             * Is Vegetarian
+             * @default false
+             */
+            is_vegetarian: boolean;
+            /**
+             * Is Vegan
+             * @default false
+             */
+            is_vegan: boolean;
+            /**
+             * Available
+             * @default true
+             */
+            available: boolean;
+            /**
+             * Is Default
+             * @default false
+             */
+            is_default: boolean;
+            /** Sort Order */
+            sort_order?: number | null;
+        };
+        /** CreateChoiceGroup */
+        CreateChoiceGroup: {
+            /** Label */
+            label: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "pick" | "add" | "leave_out";
+            /**
+             * Min Select
+             * @default 0
+             */
+            min_select: number;
+            /**
+             * Max Select
+             * @default 1
+             */
+            max_select: number;
+            /** Sort Order */
+            sort_order?: number | null;
+        };
         /** CreateGuestSessionRequest */
         CreateGuestSessionRequest: {
             /** Qr Token */
@@ -1453,6 +1597,7 @@ export interface components {
             tax_split_by_method: boolean;
             /** Service Charge Collected */
             service_charge_collected: string;
+            extras: components["schemas"]["ExtrasSummary"];
             pay_forward: components["schemas"]["PayForwardTotals"];
             forecast: components["schemas"]["ForecastSummary"];
             /** Actions */
@@ -1505,6 +1650,15 @@ export interface components {
             qr_token: string;
             /** Table Label */
             table_label: string;
+        };
+        /** ExtrasSummary */
+        ExtrasSummary: {
+            /** Attach Rate Pct */
+            attach_rate_pct: number;
+            /** Sales */
+            sales: number;
+            /** Top */
+            top: components["schemas"]["TopExtra"][];
         };
         /** FloorResponse */
         FloorResponse: {
@@ -1678,6 +1832,50 @@ export interface components {
             /** Bill Requested At */
             bill_requested_at: string | null;
         };
+        /** GuestMenuChoice */
+        GuestMenuChoice: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Label */
+            label: string;
+            /** Price Delta */
+            price_delta: string;
+            /** Allergens */
+            allergens: string[];
+            /** Is Vegetarian */
+            is_vegetarian: boolean;
+            /** Is Vegan */
+            is_vegan: boolean;
+            /** Available */
+            available: boolean;
+            /** Is Default */
+            is_default: boolean;
+            /** Allergen Status */
+            allergen_status: string;
+            /** Matched Allergens */
+            matched_allergens: string[];
+        };
+        /** GuestMenuChoiceGroup */
+        GuestMenuChoiceGroup: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Label */
+            label: string;
+            /** Kind */
+            kind: string;
+            /** Min Select */
+            min_select: number;
+            /** Max Select */
+            max_select: number;
+            /** Choices */
+            choices: components["schemas"]["GuestMenuChoice"][];
+        };
         /** GuestMenuItemResponse */
         GuestMenuItemResponse: {
             /**
@@ -1724,6 +1922,11 @@ export interface components {
              * @default []
              */
             options: components["schemas"]["GuestMenuOption"][];
+            /**
+             * Choice Groups
+             * @default []
+             */
+            choice_groups: components["schemas"]["GuestMenuChoiceGroup"][];
         };
         /** GuestMenuOption */
         GuestMenuOption: {
@@ -1909,6 +2112,11 @@ export interface components {
             conflict_with_order_allergens: boolean;
             /** Matched Allergens */
             matched_allergens: string[];
+            /**
+             * Choices
+             * @default []
+             */
+            choices: components["schemas"]["LineChoice"][];
         };
         /** KitchenOrderResponse */
         KitchenOrderResponse: {
@@ -1968,6 +2176,28 @@ export interface components {
             contribution_margin: number;
             /** Margin Pct */
             margin_pct: number;
+        };
+        /**
+         * LineChoice
+         * @description One chosen choice as guests and staff see it. Never carries cost.
+         */
+        LineChoice: {
+            /**
+             * Choice Id
+             * Format: uuid
+             */
+            choice_id: string;
+            /** Group */
+            group: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "pick" | "add" | "leave_out";
+            /** Label */
+            label: string;
+            /** Price Delta */
+            price_delta: string;
         };
         /** LoginRequest */
         LoginRequest: {
@@ -2125,6 +2355,8 @@ export interface components {
             menu_item_id: string;
             /** Option Id */
             option_id?: string | null;
+            /** Choice Ids */
+            choice_ids?: string[];
             /** Quantity */
             quantity: number;
             /** Notes */
@@ -2146,6 +2378,11 @@ export interface components {
             option_id: string | null;
             /** Option Label */
             option_label: string | null;
+            /**
+             * Choices
+             * @default []
+             */
+            choices: components["schemas"]["LineChoice"][];
             /** Quantity */
             quantity: number;
             /** Unit Price */
@@ -2213,6 +2450,60 @@ export interface components {
             /** Cancel Reason */
             cancel_reason?: ("declined" | "table_closed" | "voided") | null;
         };
+        /** OwnerChoice */
+        OwnerChoice: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Label */
+            label: string;
+            /** Price Delta */
+            price_delta: string;
+            /** Cost Delta */
+            cost_delta: string;
+            /** Allergens */
+            allergens: string[];
+            /** Allergen Verified */
+            allergen_verified: boolean;
+            /** Is Vegetarian */
+            is_vegetarian: boolean;
+            /** Is Vegan */
+            is_vegan: boolean;
+            /** Available */
+            available: boolean;
+            /** Is Default */
+            is_default: boolean;
+            /** Sort Order */
+            sort_order: number;
+        };
+        /** OwnerChoiceGroup */
+        OwnerChoiceGroup: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Label */
+            label: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "pick" | "add" | "leave_out";
+            /** Min Select */
+            min_select: number;
+            /** Max Select */
+            max_select: number;
+            /** Sort Order */
+            sort_order: number;
+            /**
+             * Choices
+             * @default []
+             */
+            choices: components["schemas"]["OwnerChoice"][];
+        };
         /** OwnerMenuItemResponse */
         OwnerMenuItemResponse: {
             /**
@@ -2260,6 +2551,11 @@ export interface components {
             image_url?: string | null;
             /** Translations */
             translations: components["schemas"]["OwnerMenuTranslation"][];
+            /**
+             * Choice Groups
+             * @default []
+             */
+            choice_groups: components["schemas"]["OwnerChoiceGroup"][];
             /** Deleted At */
             deleted_at?: string | null;
         };
@@ -2310,6 +2606,43 @@ export interface components {
             orders_together: number;
             /** Lift */
             lift: number;
+        };
+        /** PatchChoice */
+        PatchChoice: {
+            /** Label */
+            label?: string | null;
+            /** Price Delta */
+            price_delta?: number | string | null;
+            /** Cost Delta */
+            cost_delta?: number | string | null;
+            /** Allergens */
+            allergens?: ("gluten" | "milk" | "eggs" | "fish" | "crustaceans" | "molluscs" | "tree_nuts" | "peanuts" | "soy" | "celery" | "mustard" | "sesame" | "sulphites" | "lupin")[] | null;
+            /** Allergen Verified */
+            allergen_verified?: boolean | null;
+            /** Is Vegetarian */
+            is_vegetarian?: boolean | null;
+            /** Is Vegan */
+            is_vegan?: boolean | null;
+            /** Available */
+            available?: boolean | null;
+            /** Is Default */
+            is_default?: boolean | null;
+            /** Sort Order */
+            sort_order?: number | null;
+        };
+        /**
+         * PatchChoiceGroup
+         * @description `kind` is fixed once created: it decides which save rules its choices passed.
+         */
+        PatchChoiceGroup: {
+            /** Label */
+            label?: string | null;
+            /** Min Select */
+            min_select?: number | null;
+            /** Max Select */
+            max_select?: number | null;
+            /** Sort Order */
+            sort_order?: number | null;
         };
         /** PatchGuestSessionRequest */
         PatchGuestSessionRequest: {
@@ -2672,6 +3005,13 @@ export interface components {
              */
             pricing: "on_top" | "included";
         };
+        /** TopExtra */
+        TopExtra: {
+            /** Label */
+            label: string;
+            /** Count */
+            count: number;
+        };
         /** ValidationError */
         ValidationError: {
             /** Location */
@@ -2703,6 +3043,11 @@ export interface components {
             option_label: string | null;
             /** Quantity */
             quantity: number;
+            /**
+             * Choices
+             * @default []
+             */
+            choices: components["schemas"]["LineChoice"][];
         };
         /** WhatIfRequest */
         WhatIfRequest: {
@@ -3480,7 +3825,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Table not open, already sent under this key (with its order_id), unavailable items, or allergen ack required */
+            /** @description Table not open, already sent under this key (with its order_id), unavailable items or choices, or allergen ack required */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -5320,6 +5665,214 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_group_api_restaurants__slug__menu_items__item_id__choice_groups_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: string;
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateChoiceGroup"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OwnerChoiceGroup"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_group_api_restaurants__slug__choice_groups__group_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                group_id: string;
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatusOkResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    patch_group_api_restaurants__slug__choice_groups__group_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                group_id: string;
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PatchChoiceGroup"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OwnerChoiceGroup"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_choice_api_restaurants__slug__choice_groups__group_id__choices_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                group_id: string;
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateChoice"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OwnerChoice"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_choice_api_restaurants__slug__choices__choice_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                choice_id: string;
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatusOkResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    patch_choice_api_restaurants__slug__choices__choice_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                choice_id: string;
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PatchChoice"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OwnerChoice"];
+                };
             };
             /** @description Validation Error */
             422: {
