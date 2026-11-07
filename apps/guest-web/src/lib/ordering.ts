@@ -40,6 +40,8 @@ export type OrderOutcome =
   | "ended"
   | "allergen"
   | "unavailable"
+  | "choice_gone"
+  | "choices_changed"
   | "already_sent"
   | "failed";
 
@@ -53,9 +55,11 @@ export function orderOutcome(status: number, body: unknown): OrderOutcome {
     if (error === "table_not_open") return "not_open";
     if (error === "allergen_ack_required") return "allergen";
     if (error === "unavailable_items") return "unavailable";
+    if (error === "unavailable_choices") return "choice_gone";
     if (error === "already_sent") return "already_sent";
     if (detail === VISIT_ENDED) return "ended";
   }
+  if (status === 422 && error === "choices_changed") return "choices_changed";
   if (status === 422 && Array.isArray(detail) && detail.some((d) => String(d?.msg).includes("big order"))) {
     return "too_big";
   }
@@ -75,6 +79,18 @@ export function sentOrderId(body: unknown): string | null {
 export function soldOutIds(body: unknown): string[] {
   const items = detailOf(body)?.unavailable_items;
   return Array.isArray(items) ? items.map((i) => String(i?.menu_item_id)) : [];
+}
+
+/** The choices the server refused as sold out (409 unavailable_choices). */
+export function soldOutChoices(body: unknown): { id: string; label: string }[] {
+  const gone = detailOf(body)?.unavailable_choices;
+  return Array.isArray(gone) ? gone.map((c) => ({ id: String(c?.choice_id), label: String(c?.label) })) : [];
+}
+
+/** The dish whose choices changed under the guest (422 choices_changed). */
+export function changedDish(body: unknown): string | null {
+  const id = detailOf(body)?.menu_item_id;
+  return typeof id === "string" ? id : null;
 }
 
 export const cartQuantity = (items: { quantity: number }[]) => items.reduce((s, i) => s + i.quantity, 0);

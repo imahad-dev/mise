@@ -4,11 +4,13 @@ import {
   ASK_WAITER,
   TOO_MANY_TRIES,
   cartQuantity,
+  changedDish,
   claimRestore,
   nextStatusCheck,
   orderOutcome,
   orderStage,
   sentOrderId,
+  soldOutChoices,
   soldOutIds,
   typeDigits,
 } from "./ordering";
@@ -118,4 +120,13 @@ describe("order stage", () => {
 
 it("counts portions across lines", () => {
   expect(cartQuantity([{ quantity: 20 }, { quantity: 11 }])).toBe(31);
+});
+
+describe("choice refusals", () => {
+  it("reads choice refusals", () => {
+    expect(orderOutcome(409, { detail: { error: "unavailable_choices", unavailable_choices: [] } })).toBe("choice_gone");
+    expect(orderOutcome(422, { detail: { error: "choices_changed", menu_item_id: "x" } })).toBe("choices_changed");
+    expect(soldOutChoices({ detail: { unavailable_choices: [{ choice_id: "a", label: "Extra milk" }] } })).toEqual([{ id: "a", label: "Extra milk" }]);
+    expect(changedDish({ detail: { error: "choices_changed", menu_item_id: "x" } })).toBe("x");
+  });
 });

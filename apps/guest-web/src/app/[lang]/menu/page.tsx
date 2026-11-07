@@ -312,6 +312,8 @@ export default function GuestMenuPage({
             too_fast: dict.order.tooFast,
             too_big: dict.order.tooBig,
             unavailable: dict.order.unavailable,
+            choice_gone: dict.order.unavailable,
+            choices_changed: dict.order.unavailable,
             failed: dict.order.failed,
           }[outcome],
         );
