@@ -157,8 +157,8 @@ size, then each choice group, then a fixed footer with quantity, the live total 
   "Choose spice", and tapping it scrolls to that group, highlights it and moves focus there. The
   button is never disabled, because a disabled button can't explain itself.
 - The total updates on every tap and is announced politely to screen readers.
-- The menu's + button adds in one tap when the dish has no size and its defaults satisfy every
-  required group. Otherwise it opens the dish page.
+- The menu's + button adds in one tap when the dish has no size and its defaults are free, carry no
+  allergen warning, and satisfy every required group. Otherwise it opens the dish page.
 - A dish with no sizes and no groups still opens the page from its photo, with quantity and Add.
 
 **Cart.** A line's identity becomes dish + size + sorted choice ids. Two coffees with different

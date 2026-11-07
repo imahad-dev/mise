@@ -2008,9 +2008,16 @@ export function worstStatus(dish: AllergenStatus, groups: ChoiceGroup[], picked:
   return [dish, ...statuses].reduce((a, b) => (RANK.indexOf(b) > RANK.indexOf(a) ? b : a));
 }
 
+/** + opens the page for a size, an empty required group, or a default that costs money or warns. */
 export function needsPage(item: { options?: unknown[]; choice_groups?: ChoiceGroup[] }): boolean {
   const groups = item.choice_groups ?? [];
-  return (item.options?.length ?? 0) > 0 || firstMissing(groups, defaultPicks(groups)) !== null;
+  const picks = defaultPicks(groups);
+  const loud = groups.some((g) =>
+    g.choices.some(
+      (c) => picks.includes(c.id) && (Number(c.price_delta) > 0 || c.allergen_status !== "no_declared_match"),
+    ),
+  );
+  return (item.options?.length ?? 0) > 0 || loud || firstMissing(groups, picks) !== null;
 }
 
 export function requirement(g: ChoiceGroup): { key: "chooseOne" | "choose" | "upTo" | "optional"; n: number } {

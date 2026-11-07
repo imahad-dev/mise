@@ -76,9 +76,25 @@ export function worstStatus(dish: AllergenStatus, groups: ChoiceGroup[], picked:
   return [dish, ...statuses].reduce((a, b) => (RANK.indexOf(b) > RANK.indexOf(a) ? b : a));
 }
 
+/** The dish's own matches plus those of the picked choices, once each. For display only. */
+export function matchedAllergens(dish: string[] | undefined, groups: ChoiceGroup[], picked: string[]): string[] {
+  const picks = groups.flatMap((g) => g.choices.filter((c) => picked.includes(c.id)));
+  return [...new Set([...(dish ?? []), ...picks.flatMap((c) => c.matched_allergens)])];
+}
+
+/**
+ * Whether + must open the dish page: a size to choose, a required group the defaults leave empty,
+ * or a default that costs money or carries an allergen warning (one tap never hides either).
+ */
 export function needsPage(item: { options?: unknown[]; choice_groups?: ChoiceGroup[] }): boolean {
   const groups = item.choice_groups ?? [];
-  return (item.options?.length ?? 0) > 0 || firstMissing(groups, defaultPicks(groups)) !== null;
+  const picks = defaultPicks(groups);
+  const loud = groups.some((g) =>
+    g.choices.some(
+      (c) => picks.includes(c.id) && (Number(c.price_delta) > 0 || c.allergen_status !== "no_declared_match"),
+    ),
+  );
+  return (item.options?.length ?? 0) > 0 || loud || firstMissing(groups, picks) !== null;
 }
 
 export function requirement(g: ChoiceGroup): { key: "chooseOne" | "choose" | "upTo" | "optional"; n: number } {

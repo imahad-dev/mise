@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { addToCart } from "./cart";
 import {
-  defaultPicks, firstMissing, needsPage, pickedChoices, requirement, toggle, unitPrice, worstStatus,
+  defaultPicks, firstMissing, matchedAllergens, needsPage, pickedChoices, requirement, toggle, unitPrice, worstStatus,
   type ChoiceGroup,
 } from "./choices";
 
@@ -73,6 +73,25 @@ describe("dish page rules", () => {
     expect(needsPage({ options: [], choice_groups: [sugar, extras] })).toBe(false);
     expect(needsPage({ options: [], choice_groups: [spice] })).toBe(true);
     expect(needsPage({ options: [{ id: "h", label: "Half", price: "1" }], choice_groups: [] })).toBe(true);
+  });
+  it("+ opens the page when a default costs money or carries an allergen warning", () => {
+    const paid = { ...extras, choices: [c("milk", { is_default: true, price_delta: "0.50" })] };
+    const risky = { ...extras, choices: [c("milk", { is_default: true, allergen_status: "unverified" })] };
+    const paidButGone = {
+      ...extras, choices: [c("milk", { is_default: true, available: false, price_delta: "0.50" })],
+    };
+    expect(needsPage({ choice_groups: [sugar, paid] })).toBe(true);
+    expect(needsPage({ choice_groups: [sugar, risky] })).toBe(true);
+    expect(needsPage({ choice_groups: [sugar, paidButGone] })).toBe(false);
+  });
+  it("adds the picked choices' allergen matches to the dish's, once each", () => {
+    const milky = {
+      ...extras,
+      choices: [c("milk", { matched_allergens: ["milk"] }), c("oat", { matched_allergens: ["gluten"] })],
+    };
+    expect(matchedAllergens(["milk"], [milky], ["milk"])).toEqual(["milk"]);
+    expect(matchedAllergens(undefined, [milky], ["milk", "oat"])).toEqual(["milk", "gluten"]);
+    expect(matchedAllergens(["eggs"], [milky], [])).toEqual(["eggs"]);
   });
   it("says what a group needs in words", () => {
     expect(requirement(spice)).toEqual({ key: "chooseOne", n: 1 });

@@ -22,7 +22,14 @@ import {
   soldOutChoices,
   soldOutIds,
 } from "../../../lib/ordering";
-import { defaultPicks, needsPage, pickedChoices, worstStatus, type ChoiceGroup } from "../../../lib/choices";
+import {
+  defaultPicks,
+  matchedAllergens,
+  needsPage,
+  pickedChoices,
+  worstStatus,
+  type ChoiceGroup,
+} from "../../../lib/choices";
 import { Badge, Button, Sheet, formatPrice as formatAmount } from "ui";
 import { menuTaxNote, serviceLine } from "../../../lib/pay";
 import {
@@ -101,6 +108,8 @@ export default function GuestMenuPage({
   // Stable, or the dish page's Back handler re-runs and pushes another history entry.
   const closeDish = useCallback(() => setDishOpen(null), []);
   const [goneChoices, setGoneChoices] = useState<Set<string>>(new Set());
+  // A sold-out mark belongs to the cart it was refused with; any change to the cart clears it.
+  useEffect(() => setGoneChoices(new Set()), [cart]);
   const [submittingOrder, setSubmittingOrder] = useState(false);
   const [orderError, setOrderError] = useState<string | null>(null);
   const { status, reload: loadStatus } = useTableStatus();
@@ -192,7 +201,7 @@ export default function GuestMenuPage({
               price: Number(item.price),
               notes: line.notes ?? undefined,
               allergenStatus: worstStatus(item.allergen_status, groups, ids),
-              matchedAllergens: item.matched_allergens || [],
+              matchedAllergens: matchedAllergens(item.matched_allergens, groups, ids),
             },
             line.quantity,
             option && { id: option.id, label: option.label, price: Number(option.price) },
@@ -217,7 +226,7 @@ export default function GuestMenuPage({
         name: item.name,
         price: Number(item.price),
         allergenStatus: worstStatus(item.allergen_status, groups, picks),
-        matchedAllergens: item.matched_allergens || [],
+        matchedAllergens: matchedAllergens(item.matched_allergens, groups, picks),
       },
       1,
       undefined,
@@ -327,7 +336,21 @@ export default function GuestMenuPage({
       } else if (outcome === "choice_gone") {
         // The order stays in the cart with the line marked; the guest decides what to change.
         const gone = soldOutChoices(body);
-        setGoneChoices(new Set(gone.map((c) => c.id)));
+        const goneIds = new Set(gone.map((c) => c.id));
+        setGoneChoices(goneIds);
+        setMenu(
+          (m) =>
+            m && {
+              ...m,
+              items: m.items.map((i) => ({
+                ...i,
+                choice_groups: i.choice_groups?.map((g) => ({
+                  ...g,
+                  choices: g.choices.map((c) => (goneIds.has(c.id) ? { ...c, available: false } : c)),
+                })),
+              })),
+            },
+        );
         showError(dict.dish.choiceGone.replace("{names}", gone.map((c) => c.label).join(", ")));
       } else if (outcome === "choices_changed") {
         const id = changedDish(body);

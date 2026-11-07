@@ -5,7 +5,7 @@ import { Badge, Button, Sheet } from "ui";
 import { AllergenChip } from "./allergen-chip";
 import type { TranslationDict } from "../i18n/types";
 import {
-  defaultPicks, firstMissing, isRadio, pickedChoices, requirement, toggle, unitPrice, worstStatus,
+  defaultPicks, firstMissing, isRadio, matchedAllergens, pickedChoices, requirement, toggle, unitPrice, worstStatus,
   type AllergenStatus, type CartChoice, type ChoiceGroup,
 } from "../lib/choices";
 
@@ -50,9 +50,12 @@ export function DishSheet({ item, lang, dict, formatPrice, dietary, onClose, onA
 
   // The phone's Back closes the sheet. pushState(null) keeps Next's own history state;
   // an entry with custom state makes the router reload the page on Back.
+  // Pushed once per sheet: StrictMode's second run (or a new onClose) must not push again.
   useEffect(() => {
-    window.history.pushState(null, "");
-    pushed.current = true;
+    if (!pushed.current) {
+      window.history.pushState(null, "");
+      pushed.current = true;
+    }
     const onPop = () => {
       pushed.current = false;
       onClose();
@@ -78,7 +81,7 @@ export function DishSheet({ item, lang, dict, formatPrice, dietary, onClose, onA
   const action = missingSize
     ? dict.dish.chooseGroup.replace("{group}", dict.dish.size.toLowerCase())
     : missing
-      ? dict.dish.chooseGroup.replace("{group}", missing.label.toLowerCase())
+      ? dict.dish.chooseGroup.replace("{group}", missing.label)
       : dict.dish.addToOrder.replace("{total}", total);
 
   const add = () => {
@@ -90,17 +93,12 @@ export function DishSheet({ item, lang, dict, formatPrice, dietary, onClose, onA
       el?.focus();
       return;
     }
-    const status = worstStatus(item.allergen_status, groups, picked);
-    const matched = [
-      ...(item.matched_allergens ?? []),
-      ...groups.flatMap((g) => g.choices.filter((c) => picked.includes(c.id)).flatMap((c) => c.matched_allergens)),
-    ];
     onAdd(
       size && { id: size.id, label: size.label, price: Number(size.price) },
       pickedChoices(groups, picked),
       quantity,
-      status,
-      [...new Set(matched)],
+      worstStatus(item.allergen_status, groups, picked),
+      matchedAllergens(item.matched_allergens, groups, picked),
     );
     close();
   };
