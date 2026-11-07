@@ -13,7 +13,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.models.bill import Bill
-from src.models.menu import MenuItem
+from src.models.menu import MenuChoice, MenuChoiceGroup, MenuItem
 from src.models.order import Order, OrderItem
 from src.models.restaurant import Restaurant
 from src.services.simulator import (
@@ -308,3 +308,22 @@ def test_choices_never_shift_the_order_stream():
     picks = [ids for o in drawn for ids in o.choices.values()]
     assert picks and all(any(s in ids for s in SPICE) for ids in picks)
     assert any(EXTRA in ids for ids in picks)
+
+
+@pytest.mark.asyncio
+@pytest.mark.timeout(240)
+async def test_dish_with_a_sold_out_required_group_is_never_simulated(db_session: AsyncSession):
+    restaurant = await _seeded(db_session)
+    karahi = uuid.uuid5(SEED_ITEM_NAMESPACE, "angeethi-house:chicken_karahi")
+    required = select(MenuChoiceGroup.id).where(
+        MenuChoiceGroup.menu_item_id == karahi, MenuChoiceGroup.min_select > 0
+    )
+    for c in await db_session.scalars(select(MenuChoice).where(MenuChoice.group_id.in_(required))):
+        c.available = False
+    await db_session.flush()
+    a = SimAssumptions.from_profile(restaurant.onboarding["simulation"])
+    assert (await persist_simulation(db_session, restaurant, a))["orders_created"] > 0
+    sold = await db_session.scalar(
+        select(func.count()).select_from(OrderItem).where(OrderItem.menu_item_id == karahi)
+    )
+    assert sold == 0

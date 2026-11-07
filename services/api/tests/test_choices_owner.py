@@ -294,3 +294,19 @@ async def test_new_groups_and_choices_keep_creation_order(client, owner_setup):
     one = (await client.post(url, json={"label": "One"})).json()
     two = (await client.post(url, json={"label": "Two"})).json()
     assert (one["sort_order"], two["sort_order"]) == (0, 1)
+
+
+async def test_new_sort_order_follows_the_highest_after_a_delete(client, owner_setup):
+    s = owner_setup
+    base = f"/api/restaurants/{s.restaurant.slug}"
+    a = (await client.post(groups_url(s), json={**SPICE, "label": "A"})).json()
+    b = (await client.post(groups_url(s), json={**SPICE, "label": "B"})).json()
+    assert (await client.delete(f"{base}/choice-groups/{a['id']}")).status_code == 200
+    c = (await client.post(groups_url(s), json={**SPICE, "label": "C"})).json()
+    assert (b["sort_order"], c["sort_order"]) == (1, 2)
+    url = f"{base}/choice-groups/{b['id']}/choices"
+    one = (await client.post(url, json={"label": "One"})).json()
+    two = (await client.post(url, json={"label": "Two"})).json()
+    assert (await client.delete(f"{base}/choices/{one['id']}")).status_code == 200
+    three = (await client.post(url, json={"label": "Three"})).json()
+    assert (two["sort_order"], three["sort_order"]) == (1, 2)

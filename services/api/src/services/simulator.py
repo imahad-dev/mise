@@ -29,6 +29,7 @@ from src.models.menu import MenuChoice, MenuChoiceGroup, MenuItem
 from src.models.order import Order
 from src.models.restaurant import Restaurant
 from src.models.session import GuestSession
+from src.services.choices import can_be_ordered
 from src.services.order_snapshot import line_total, snapshot_order_item
 from src.services.tax import (
     PAYMENT_METHODS,
@@ -389,6 +390,7 @@ async def persist_simulation(
             )
         ).scalars()
     )
+    items = [i for i in items if can_be_ordered(i)]  # a sold-out required group can't be ordered
     by_id = {i.id: i for i in items}
     options = {o.id: o for i in items for o in i.options}
     simulated_items = sim_items(restaurant, items)

@@ -142,7 +142,7 @@ async def create_group(
     _check_unique([g.label for g in item.choice_groups], payload.label)
     data = payload.model_dump()
     if data["sort_order"] is None:
-        data["sort_order"] = len(item.choice_groups)
+        data["sort_order"] = max((g.sort_order for g in item.choice_groups), default=-1) + 1
     group = MenuChoiceGroup(menu_item_id=item.id, **data)
     db.add(group)
     await db.flush()
@@ -219,7 +219,7 @@ async def create_choice(
     _check_flags(payload.is_vegetarian, payload.is_vegan, payload.allergens)
     data = payload.model_dump()
     if data["sort_order"] is None:
-        data["sort_order"] = len(group.choices)
+        data["sort_order"] = max((c.sort_order for c in group.choices), default=-1) + 1
     choice = MenuChoice(**data)
     _settle_leave_out(group, choice)
     group.choices.append(choice)

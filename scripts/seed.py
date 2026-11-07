@@ -115,6 +115,18 @@ async def seed_choices(
     session: AsyncSession, slug: str, item_data: dict[str, Any], item_id: uuid.UUID
 ) -> None:
     """Replace a dish's choices with the file's; ids are stable, and past orders keep snapshots."""
+    # Expunge first: the bulk delete leaves the old objects in the session, and re-adding the
+    # same ids then raises an SAWarning.
+    old_groups = {
+        o.id
+        for o in session.identity_map.values()
+        if isinstance(o, MenuChoiceGroup) and o.menu_item_id == item_id
+    }
+    for o in list(session.identity_map.values()):
+        if (isinstance(o, MenuChoiceGroup) and o.id in old_groups) or (
+            isinstance(o, MenuChoice) and o.group_id in old_groups
+        ):
+            session.expunge(o)
     await session.execute(
         delete(MenuChoiceGroup).where(MenuChoiceGroup.menu_item_id == item_id)
     )

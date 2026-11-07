@@ -1,6 +1,7 @@
 """Tests for database seed idempotency, row counts, and QR token stability."""
 
 import uuid
+import warnings
 from datetime import UTC, date, datetime
 
 import pytest
@@ -13,6 +14,7 @@ from scripts.seed import (
     seed_demo_users,
 )
 from sqlalchemy import func, select, update
+from sqlalchemy.exc import SAWarning
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -362,7 +364,9 @@ async def test_seed_creates_choices_with_stable_ids_and_reseeds_cleanly(db_sessi
     data = load_seed_data(ANGEETHI)
     await seed_data(data, db_session, rotate_qr=False)
     first = {c.id for c in (await db_session.scalars(select(MenuChoice))).all()}
-    await seed_data(data, db_session, rotate_qr=False)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", SAWarning)
+        await seed_data(data, db_session, rotate_qr=False)
     second = {c.id for c in (await db_session.scalars(select(MenuChoice))).all()}
     assert first and first == second
 
