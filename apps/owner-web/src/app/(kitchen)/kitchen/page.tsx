@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { LineChoice } from "ui";
+import { KitchenChoices } from "../../../components/KitchenChoices";
 import { useSse } from "../../../hooks/use-sse";
 import { useVenue } from "../../../lib/venue";
 
@@ -387,21 +388,7 @@ export default function KitchenDisplayPage() {
                         </span>
                       </div>
 
-                      {(item.choices ?? []).length > 0 && (
-                        <ul className="mt-1.5 space-y-0.5 text-right text-sm">
-                          {item.choices!.map((c) =>
-                            c.kind === "leave_out" ? (
-                              <li key={c.label} className="font-black uppercase text-kds-warn">
-                                NO {c.label}
-                              </li>
-                            ) : (
-                              <li key={c.label} className="text-cream">
-                                {c.label}
-                              </li>
-                            ),
-                          )}
-                        </ul>
-                      )}
+                      <KitchenChoices choices={item.choices} />
 
                       {/* Prominent Solid Red Allergy Banner on Affected Items */}
                       {item.conflict_with_order_allergens && (

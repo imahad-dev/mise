@@ -173,3 +173,17 @@ describe("PaySheet in a venue without service charge", () => {
     expect(bodies(fetchMock)[0]).toEqual({ method: "card", reference: null, service_included: false });
   });
 });
+
+describe("PaySheet choices", () => {
+  it("lists choices under a live line and in a voided line, with the translated leave-out", () => {
+    const onions = { choice_id: "c", group: "Leave out", kind: "leave_out" as const, label: "Onions", price_delta: "0" };
+    const milk = { choice_id: "m", group: "Extras", kind: "add" as const, label: "Extra milk", price_delta: "0.50" };
+    sheet({
+      ...ukBill,
+      lines: [{ ...ukBill.lines[0], choices: [milk, onions] }],
+      voided: [{ name: "Tea", option_label: null, quantity: 1, choices: [onions] }],
+    });
+    expect(screen.getByText("Extra milk +£0.50, No onions")).toBeTruthy();
+    expect(screen.getByText(/Tea, No onions/)).toBeTruthy();
+  });
+});

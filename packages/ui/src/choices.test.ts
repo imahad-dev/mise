@@ -13,6 +13,9 @@ describe("choiceLine", () => {
   it("says No for a leave-out", () => {
     expect(choiceLine({ kind: "leave_out", label: "Onions", price_delta: "0" }, money)).toBe("No onions");
   });
+  it("keeps an acronym leave-out as written", () => {
+    expect(choiceLine({ kind: "leave_out", label: "BBQ sauce", price_delta: "0" }, money)).toBe("No BBQ sauce");
+  });
   it("uses a translated leave-out template when given", () => {
     expect(choiceLine({ kind: "leave_out", label: "Onions", price_delta: "0" }, money, "Senza {label}")).toBe("Senza onions");
   });
