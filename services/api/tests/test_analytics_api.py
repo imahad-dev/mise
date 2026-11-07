@@ -728,3 +728,30 @@ async def test_brief_carries_extras_but_the_model_never_sees_them(
     assert extras["attach_rate_pct"] == 50.0
     assert extras["top"] == [{"label": "Extra milk", "count": 2}]
     assert seen and "extras" not in seen
+
+
+@pytest.mark.asyncio
+async def test_extras_summary_line_with_two_priced_extras(
+    db_session: AsyncSession, seeded_restaurant: Restaurant
+):
+    """One line, quantity 2, extras +0.50 and +0.80 (tax on top): sales sum both, the line is
+    one attach, and each label counts twice."""
+    from src.services import analytics
+
+    await _settled_order(
+        db_session,
+        seeded_restaurant,
+        [("6.30", 2, [_extra("Extra milk", "0.50"), _extra("Extra shot", "0.80")])],
+        n=1,
+        pricing="on_top",
+        rate="0.1600",
+        tax="2.02",
+        jurisdiction="PB",
+    )
+    summary = await analytics.extras_summary(db_session, _window(seeded_restaurant))
+    assert summary["attach_rate_pct"] == 100.0
+    assert summary["sales"] == pytest.approx(2.6)  # 2 x (0.50 + 0.80)
+    assert summary["top"] == [
+        {"label": "Extra milk", "count": 2},
+        {"label": "Extra shot", "count": 2},
+    ]
