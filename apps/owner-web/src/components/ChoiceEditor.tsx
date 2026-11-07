@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useRef, useState } from "react";
+import React, { createContext, useContext, useRef, useState } from "react";
 import { Button } from "ui";
 
 export const ALLERGENS = [
@@ -38,6 +38,9 @@ const PRESET = {
   add: { min_select: 0, max_select: 3 },
   leave_out: { min_select: 0, max_select: 5 },
 };
+
+// True while a save is in flight; controls say so but stay focusable (no focus jump).
+const Busy = createContext(false);
 
 type Req = [path: string, method: string, body?: unknown];
 type Send = (reqs: Req[]) => Promise<boolean>;
@@ -112,7 +115,8 @@ export function ChoiceEditor({ slug, itemId, groups, money, onChanged }: Props) 
     <div className="space-y-3 border-t border-line pt-3" aria-busy={busy}>
       <h4 ref={headingRef} tabIndex={-1} className="text-sm font-semibold text-ink">Choices</h4>
       {error && <p role="alert" className="text-sm text-danger-fg">{error}</p>}
-      <fieldset disabled={busy} className="space-y-3">
+      <Busy.Provider value={busy}>
+      <div className="space-y-3">
         {groups.map((g, i) => (
           <div key={g.id} className="space-y-2 rounded-xl bg-paper-2 p-3">
             <div className="flex items-center justify-between gap-2 text-sm font-semibold text-ink">
@@ -120,9 +124,10 @@ export function ChoiceEditor({ slug, itemId, groups, money, onChanged }: Props) 
                 {g.label} · {KINDS[g.kind]} · {g.min_select > 0 ? "required" : "optional"}, up to {g.max_select}
               </span>
               <span className="flex gap-1">
-                <Button variant="outline" size="icon" aria-label={`Move ${g.label} up`} disabled={i === 0} onClick={() => void send(moveRequests("/choice-groups", groupIds, i, -1))}>↑</Button>
-                <Button variant="outline" size="icon" aria-label={`Move ${g.label} down`} disabled={i === groups.length - 1} onClick={() => void send(moveRequests("/choice-groups", groupIds, i, 1))}>↓</Button>
+                <Button aria-disabled={busy} variant="outline" size="icon" aria-label={`Move ${g.label} up`} disabled={i === 0} onClick={() => void send(moveRequests("/choice-groups", groupIds, i, -1))}>↑</Button>
+                <Button aria-disabled={busy} variant="outline" size="icon" aria-label={`Move ${g.label} down`} disabled={i === groups.length - 1} onClick={() => void send(moveRequests("/choice-groups", groupIds, i, 1))}>↓</Button>
                 <Button
+                  aria-disabled={busy}
                   variant="outline"
                   aria-label={`Delete ${g.label}`}
                   onClick={() => void send([[`/choice-groups/${g.id}`, "DELETE"]]).then((ok) => ok && headingRef.current?.focus())}
@@ -131,7 +136,7 @@ export function ChoiceEditor({ slug, itemId, groups, money, onChanged }: Props) 
                 </Button>
               </span>
             </div>
-            {g.min_select > 0 && !g.choices.some((c) => c.available) && (
+            {g.choices.filter((c) => c.available).length < g.min_select && (
               <p className="text-xs text-danger-fg">Guests can&apos;t order this dish until this group has a choice.</p>
             )}
             <GroupEdit key={`${g.label}|${g.min_select}|${g.max_select}`} group={g} send={send} />
@@ -163,22 +168,24 @@ export function ChoiceEditor({ slug, itemId, groups, money, onChanged }: Props) 
         >
           <label className="text-xs text-ink-muted">
             New group
-            <input required value={label} onChange={(e) => setLabel(e.target.value)} className={input} />
+            <input aria-disabled={busy} required value={label} onChange={(e) => setLabel(e.target.value)} className={input} />
           </label>
           <label className="text-xs text-ink-muted">
             Type
-            <select value={kind} onChange={(e) => setKind(e.target.value as keyof typeof KINDS)} className={input}>
+            <select aria-disabled={busy} value={kind} onChange={(e) => setKind(e.target.value as keyof typeof KINDS)} className={input}>
               {Object.entries(KINDS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
             </select>
           </label>
-          <Button type="submit" variant="outline">Add group</Button>
+          <Button aria-disabled={busy} type="submit" variant="outline">Add group</Button>
         </form>
-      </fieldset>
+      </div>
+      </Busy.Provider>
     </div>
   );
 }
 
 function GroupEdit({ group: g, send }: { group: OwnerChoiceGroup; send: Send }) {
+  const busy = useContext(Busy);
   const [label, setLabel] = useState(g.label);
   const [min, setMin] = useState(String(g.min_select));
   const [max, setMax] = useState(String(g.max_select));
@@ -193,17 +200,17 @@ function GroupEdit({ group: g, send }: { group: OwnerChoiceGroup; send: Send }) 
     >
       <label className="text-xs text-ink-muted">
         Group name
-        <input required aria-label={`Name of ${g.label}`} value={label} onChange={(e) => setLabel(e.target.value)} className={input} />
+        <input aria-disabled={busy} required aria-label={`Name of ${g.label}`} value={label} onChange={(e) => setLabel(e.target.value)} className={input} />
       </label>
       <label className="text-xs text-ink-muted">
         At least
-        <input type="number" min="0" max="20" aria-label={`Minimum for ${g.label}`} value={min} onChange={(e) => setMin(e.target.value)} className={num} />
+        <input aria-disabled={busy} type="number" min="0" max="20" aria-label={`At least, ${g.label}`} value={min} onChange={(e) => setMin(e.target.value)} className={num} />
       </label>
       <label className="text-xs text-ink-muted">
         At most
-        <input type="number" min="1" max="20" aria-label={`Maximum for ${g.label}`} value={max} onChange={(e) => setMax(e.target.value)} className={num} />
+        <input aria-disabled={busy} type="number" min="1" max="20" aria-label={`At most, ${g.label}`} value={max} onChange={(e) => setMax(e.target.value)} className={num} />
       </label>
-      <Button type="submit" variant="outline" aria-label={`Save ${g.label}`}>Save</Button>
+      <Button aria-disabled={busy} type="submit" variant="outline" aria-label={`Save ${g.label}`}>Save</Button>
     </form>
   );
 }
@@ -220,6 +227,7 @@ function ChoiceRow({
   move: (by: number) => Promise<boolean>;
   afterDelete: () => void;
 }) {
+  const busy = useContext(Busy);
   const patch = (body: object) => void send([[`/choices/${c.id}`, "PATCH", body]]);
   const toggleAllergen = (a: string) =>
     patch({ allergens: c.allergens.includes(a) ? c.allergens.filter((x) => x !== a) : [...c.allergens, a] });
@@ -233,15 +241,16 @@ function ChoiceRow({
           {!leaveOut && <span className="tabular-nums text-xs font-normal text-ink-muted"> · cost {money(Number(c.cost_delta))}</span>}
         </span>
         <span className="flex flex-wrap items-center gap-3 text-xs">
-          <Button variant="outline" size="icon" aria-label={`Move ${c.label} up`} disabled={first} onClick={() => void move(-1)}>↑</Button>
-          <Button variant="outline" size="icon" aria-label={`Move ${c.label} down`} disabled={last} onClick={() => void move(1)}>↓</Button>
+          <Button aria-disabled={busy} variant="outline" size="icon" aria-label={`Move ${c.label} up`} disabled={first} onClick={() => void move(-1)}>↑</Button>
+          <Button aria-disabled={busy} variant="outline" size="icon" aria-label={`Move ${c.label} down`} disabled={last} onClick={() => void move(1)}>↓</Button>
           <label className="flex items-center gap-1">
-            <input type="checkbox" aria-label={`On sale: ${c.label}`} checked={c.available} onChange={(e) => patch({ available: e.target.checked })} /> On sale
+            <input aria-disabled={busy} type="checkbox" aria-label={`On sale: ${c.label}`} checked={c.available} onChange={(e) => patch({ available: e.target.checked })} /> On sale
           </label>
           <label className="flex items-center gap-1">
-            <input type="checkbox" aria-label={`Starts selected: ${c.label}`} checked={c.is_default} onChange={(e) => patch({ is_default: e.target.checked })} /> Starts selected
+            <input aria-disabled={busy} type="checkbox" aria-label={`Starts selected: ${c.label}`} checked={c.is_default} onChange={(e) => patch({ is_default: e.target.checked })} /> Starts selected
           </label>
           <button
+            aria-disabled={busy}
             type="button"
             className="underline"
             aria-label={`Delete ${c.label}`}
@@ -262,19 +271,19 @@ function ChoiceRow({
           <div className="mt-1 flex flex-wrap gap-2">
             {ALLERGENS.map((a) => (
               <label key={a} className="flex items-center gap-1">
-                <input type="checkbox" aria-label={`${a} in ${c.label}`} checked={c.allergens.includes(a)} onChange={() => toggleAllergen(a)} /> {a}
+                <input aria-disabled={busy} type="checkbox" aria-label={`${a} in ${c.label}`} checked={c.allergens.includes(a)} onChange={() => toggleAllergen(a)} /> {a}
               </label>
             ))}
           </div>
           <div className="mt-1 flex flex-wrap gap-3">
             <label className="flex items-center gap-1">
-              <input type="checkbox" aria-label={`Allergens confirmed for ${c.label}`} checked={c.allergen_verified} onChange={(e) => patch({ allergen_verified: e.target.checked })} /> Allergens confirmed
+              <input aria-disabled={busy} type="checkbox" aria-label={`Allergens confirmed for ${c.label}`} checked={c.allergen_verified} onChange={(e) => patch({ allergen_verified: e.target.checked })} /> Allergens confirmed
             </label>
             <label className="flex items-center gap-1">
-              <input type="checkbox" aria-label={`Vegetarian: ${c.label}`} checked={c.is_vegetarian} onChange={(e) => patch({ is_vegetarian: e.target.checked })} /> Vegetarian
+              <input aria-disabled={busy} type="checkbox" aria-label={`Vegetarian: ${c.label}`} checked={c.is_vegetarian} onChange={(e) => patch({ is_vegetarian: e.target.checked })} /> Vegetarian
             </label>
             <label className="flex items-center gap-1">
-              <input type="checkbox" aria-label={`Vegan: ${c.label}`} checked={c.is_vegan} onChange={(e) => patch({ is_vegan: e.target.checked })} /> Vegan
+              <input aria-disabled={busy} type="checkbox" aria-label={`Vegan: ${c.label}`} checked={c.is_vegan} onChange={(e) => patch({ is_vegan: e.target.checked })} /> Vegan
             </label>
           </div>
         </details>
@@ -284,6 +293,7 @@ function ChoiceRow({
 }
 
 function ChoiceEdit({ choice: c, leaveOut, send }: { choice: OwnerChoice; leaveOut: boolean; send: Send }) {
+  const busy = useContext(Busy);
   const [label, setLabel] = useState(c.label);
   const [price, setPrice] = useState(c.price_delta);
   const [cost, setCost] = useState(c.cost_delta);
@@ -300,27 +310,28 @@ function ChoiceEdit({ choice: c, leaveOut, send }: { choice: OwnerChoice; leaveO
       >
         <label className="text-ink-muted">
           Name
-          <input required aria-label={`Name of ${c.label}`} value={label} onChange={(e) => setLabel(e.target.value)} className={input} />
+          <input aria-disabled={busy} required aria-label={`Name of ${c.label}`} value={label} onChange={(e) => setLabel(e.target.value)} className={input} />
         </label>
         {!leaveOut && (
           <>
             <label className="text-ink-muted">
               Price
-              <input type="number" min="0" step="0.01" aria-label={`Price of ${c.label}`} value={price} onChange={(e) => setPrice(e.target.value)} className={num} />
+              <input aria-disabled={busy} type="number" min="0" step="0.01" aria-label={`Price of ${c.label}`} value={price} onChange={(e) => setPrice(e.target.value)} className={num} />
             </label>
             <label className="text-ink-muted">
               Cost
-              <input type="number" min="0" step="0.01" aria-label={`Cost of ${c.label}`} value={cost} onChange={(e) => setCost(e.target.value)} className={num} />
+              <input aria-disabled={busy} type="number" min="0" step="0.01" aria-label={`Cost of ${c.label}`} value={cost} onChange={(e) => setCost(e.target.value)} className={num} />
             </label>
           </>
         )}
-        <Button type="submit" variant="outline" aria-label={`Save ${c.label}`}>Save</Button>
+        <Button aria-disabled={busy} type="submit" variant="outline" aria-label={`Save ${c.label}`}>Save</Button>
       </form>
     </details>
   );
 }
 
 function NewChoice({ group: g, send }: { group: OwnerChoiceGroup; send: Send }) {
+  const busy = useContext(Busy);
   const [label, setLabel] = useState("");
   const [price, setPrice] = useState("0");
   const [cost, setCost] = useState("0");
@@ -338,21 +349,21 @@ function NewChoice({ group: g, send }: { group: OwnerChoiceGroup; send: Send }) 
     >
       <label className="text-xs text-ink-muted">
         New choice
-        <input required aria-label={`New choice name for ${g.label}`} value={label} onChange={(e) => setLabel(e.target.value)} className={`${input} w-40`} />
+        <input aria-disabled={busy} required aria-label={`New choice name for ${g.label}`} value={label} onChange={(e) => setLabel(e.target.value)} className={`${input} w-40`} />
       </label>
       {!leaveOut && (
         <>
           <label className="text-xs text-ink-muted">
             Price
-            <input type="number" min="0" step="0.01" aria-label={`New choice price for ${g.label}`} value={price} onChange={(e) => setPrice(e.target.value)} className={num} />
+            <input aria-disabled={busy} type="number" min="0" step="0.01" aria-label={`New choice price for ${g.label}`} value={price} onChange={(e) => setPrice(e.target.value)} className={num} />
           </label>
           <label className="text-xs text-ink-muted">
             Cost
-            <input type="number" min="0" step="0.01" aria-label={`New choice cost for ${g.label}`} value={cost} onChange={(e) => setCost(e.target.value)} className={num} />
+            <input aria-disabled={busy} type="number" min="0" step="0.01" aria-label={`New choice cost for ${g.label}`} value={cost} onChange={(e) => setCost(e.target.value)} className={num} />
           </label>
         </>
       )}
-      <Button type="submit" variant="outline" aria-label={`Add choice to ${g.label}`}>Add</Button>
+      <Button aria-disabled={busy} type="submit" variant="outline" aria-label={`Add choice to ${g.label}`}>Add</Button>
     </form>
   );
 }

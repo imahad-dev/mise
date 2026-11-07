@@ -90,6 +90,10 @@ describe("ChoiceEditor", () => {
     cleanup();
     render(editor([{ ...GROUP, choices: [] }]));
     expect(screen.queryByText(warn)).toBeNull();
+    cleanup();
+    // Needs two, only one on sale: guests still can't order.
+    render(editor([{ ...GROUP, min_select: 2, choices: [CHOICE, { ...CHOICE, id: "c9", label: "Soy", available: false }] }]));
+    expect(screen.getByText(warn)).toBeTruthy();
   });
 
   it("shows the server's message as it comes, and keeps it until a save works", async () => {
@@ -101,7 +105,7 @@ describe("ChoiceEditor", () => {
     render(editor([GROUP]));
     fireEvent.click(screen.getByLabelText("On sale: Extra milk"));
     await waitFor(() => expect(screen.getByRole("alert").textContent).toBe("A label can't promise safety"));
-    await waitFor(() => expect(screen.getByLabelText("On sale: Extra milk").matches(":disabled")).toBe(false));
+    await waitFor(() => expect(screen.getByLabelText("On sale: Extra milk").getAttribute("aria-disabled")).toBe("false"));
     fireEvent.click(screen.getByLabelText("On sale: Extra milk"));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
@@ -125,7 +129,7 @@ describe("ChoiceEditor", () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     expect(calls(fetchMock)[0][0]).toBe("/api/restaurants/v/choices/c1");
     expect(bodies(fetchMock)[0]).toEqual({ allergens: ["milk", "gluten"] });
-    await waitFor(() => expect(screen.getByLabelText("Allergens confirmed for Extra milk").matches(":disabled")).toBe(false));
+    await waitFor(() => expect(screen.getByLabelText("Allergens confirmed for Extra milk").getAttribute("aria-disabled")).toBe("false"));
     fireEvent.click(screen.getByLabelText("Allergens confirmed for Extra milk"));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
     expect(bodies(fetchMock)[1]).toEqual({ allergen_verified: true });
@@ -138,8 +142,9 @@ describe("ChoiceEditor", () => {
     const { container } = render(editor([GROUP]));
     fireEvent.click(screen.getByLabelText("gluten in Extra milk"));
     await waitFor(() => expect(container.querySelector("[aria-busy='true']")).toBeTruthy());
-    expect(screen.getByLabelText("eggs in Extra milk").matches(":disabled")).toBe(true);
+    expect(screen.getByLabelText("eggs in Extra milk").getAttribute("aria-disabled")).toBe("true");
     fireEvent.click(screen.getByLabelText("eggs in Extra milk"));
+    fireEvent.click(screen.getByLabelText("Delete Extra milk"));
     expect(fetchMock).toHaveBeenCalledTimes(1);
     finish(ok());
     await waitFor(() => expect(container.querySelector("[aria-busy='true']")).toBeNull());
@@ -196,8 +201,8 @@ describe("ChoiceEditor", () => {
     vi.stubGlobal("fetch", fetchMock);
     render(editor([GROUP]));
     fireEvent.change(screen.getByLabelText("Name of Extras"), { target: { value: "Add-ons" } });
-    fireEvent.change(screen.getByLabelText("Minimum for Extras"), { target: { value: "1" } });
-    fireEvent.change(screen.getByLabelText("Maximum for Extras"), { target: { value: "2" } });
+    fireEvent.change(screen.getByLabelText("At least, Extras"), { target: { value: "1" } });
+    fireEvent.change(screen.getByLabelText("At most, Extras"), { target: { value: "2" } });
     fireEvent.click(screen.getByLabelText("Save Extras"));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     expect(calls(fetchMock)[0][0]).toBe("/api/restaurants/v/choice-groups/g1");
@@ -262,7 +267,7 @@ describe("ChoiceEditor", () => {
     render(editor([GROUP]));
     fireEvent.click(screen.getByLabelText("Delete Extra milk"));
     await waitFor(() => expect(document.activeElement?.id).toBe("choice-group-g1"));
-    await waitFor(() => expect(screen.getByLabelText("Delete Extras").matches(":disabled")).toBe(false));
+    await waitFor(() => expect(screen.getByLabelText("Delete Extras").getAttribute("aria-disabled")).toBe("false"));
     fireEvent.click(screen.getByLabelText("Delete Extras"));
     await waitFor(() => expect(document.activeElement?.textContent).toBe("Choices"));
   });
