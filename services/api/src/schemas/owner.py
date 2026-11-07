@@ -58,7 +58,7 @@ class CreateChoiceGroup(BaseModel):
     kind: Literal["pick", "add", "leave_out"]
     min_select: int = Field(0, ge=0, le=20)
     max_select: int = Field(1, ge=1, le=20)
-    sort_order: int = 0
+    sort_order: int | None = None
 
     @model_validator(mode="after")
     def _range(self) -> "CreateChoiceGroup":
@@ -86,7 +86,7 @@ class CreateChoice(BaseModel):
     is_vegan: bool = False
     available: bool = True
     is_default: bool = False
-    sort_order: int = 0
+    sort_order: int | None = None
 
 
 class PatchChoice(BaseModel):

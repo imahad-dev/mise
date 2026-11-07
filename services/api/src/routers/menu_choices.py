@@ -38,13 +38,19 @@ def _not_found() -> HTTPException:
     return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
 
 
-def _audit(db: AsyncSession, access: RestaurantAccess, action: str, target: uuid.UUID) -> None:
+def _audit(
+    db: AsyncSession,
+    access: RestaurantAccess,
+    action: str,
+    target: uuid.UUID,
+    **extra: object,
+) -> None:
     db.add(
         AuditLog(
             restaurant_id=access.restaurant.id,
             event_type="owner_choice_edit",
             actor=f"user:{access.user.id}",
-            payload={"action": action, "id": str(target)},
+            payload={"action": action, "id": str(target), **extra},
         )
     )
 
@@ -53,7 +59,7 @@ async def _item(db: AsyncSession, access: RestaurantAccess, item_id: uuid.UUID) 
     item = await db.scalar(
         select(MenuItem)
         .options(selectinload(MenuItem.choice_groups))
-        .execution_options(populate_existing=True)
+        .execution_options(populate_existing=True)  # tests share one session; harmless per request
         .where(
             MenuItem.id == item_id,
             MenuItem.restaurant_id == access.restaurant.id,
@@ -72,7 +78,7 @@ async def _group(
         select(MenuChoiceGroup)
         .join(MenuItem)
         .options(selectinload(MenuChoiceGroup.choices))
-        .execution_options(populate_existing=True)
+        .execution_options(populate_existing=True)  # tests share one session; harmless per request
         .where(MenuChoiceGroup.id == group_id, MenuItem.restaurant_id == access.restaurant.id)
     )
     if group is None:
@@ -87,7 +93,10 @@ async def _choice(
     if group_id is None:
         raise _not_found()
     group = await _group(db, access, group_id)
-    return next(c for c in group.choices if c.id == choice_id), group
+    choice = next((c for c in group.choices if c.id == choice_id), None)
+    if choice is None:
+        raise _not_found()
+    return choice, group
 
 
 def _check_defaults(group: MenuChoiceGroup) -> None:
@@ -131,11 +140,14 @@ async def create_group(
         raise _refuse(f"A dish can have up to {MAX_GROUPS} groups")
     check_label(payload.label)
     _check_unique([g.label for g in item.choice_groups], payload.label)
-    group = MenuChoiceGroup(menu_item_id=item.id, **payload.model_dump())
+    data = payload.model_dump()
+    if data["sort_order"] is None:
+        data["sort_order"] = len(item.choice_groups)
+    group = MenuChoiceGroup(menu_item_id=item.id, **data)
     db.add(group)
     await db.flush()
     _audit(db, access, "create_group", group.id)
-    response = OwnerChoiceGroup(id=group.id, choices=[], **payload.model_dump())
+    response = OwnerChoiceGroup(id=group.id, choices=[], **data)
     await db.commit()
     return response
 
@@ -151,6 +163,13 @@ async def patch_group(
     changes = payload.model_dump(exclude_none=True)
     if "label" in changes:
         check_label(changes["label"])
+        siblings = await db.scalars(
+            select(MenuChoiceGroup.label).where(
+                MenuChoiceGroup.menu_item_id == group.menu_item_id,
+                MenuChoiceGroup.id != group.id,
+            )
+        )
+        _check_unique(list(siblings), changes["label"])
     for field, value in changes.items():
         setattr(group, field, value)
     if group.min_select > group.max_select:
@@ -198,7 +217,10 @@ async def create_choice(
         allergens=payload.allergens,
     )
     _check_flags(payload.is_vegetarian, payload.is_vegan, payload.allergens)
-    choice = MenuChoice(**payload.model_dump())
+    data = payload.model_dump()
+    if data["sort_order"] is None:
+        data["sort_order"] = len(group.choices)
+    choice = MenuChoice(**data)
     _settle_leave_out(group, choice)
     group.choices.append(choice)
     _check_defaults(group)
@@ -220,9 +242,14 @@ async def patch_choice(
     changes = payload.model_dump(exclude_none=True)
     if "label" in changes:
         check_label(changes["label"])
-    # Same rule as dishes: changed allergens are unconfirmed until someone says otherwise.
+        _check_unique([c.label for c in group.choices if c.id != choice.id], changes["label"])
+    # Same rule as dishes: changed allergens are unconfirmed, even if the request says true.
+    # Confirming is a separate PATCH with only allergen_verified.
     if "allergens" in changes and changes["allergens"] != choice.allergens:
-        changes.setdefault("allergen_verified", False)
+        changes["allergen_verified"] = False
+    watched = ("allergens", "allergen_verified", "is_vegetarian", "is_vegan")
+    before = {f: getattr(choice, f) for f in watched}
+    before["allergens"] = list(before["allergens"])
     for field, value in changes.items():
         setattr(choice, field, value)
     _settle_leave_out(group, choice)
@@ -234,7 +261,10 @@ async def patch_choice(
     )
     _check_flags(choice.is_vegetarian, choice.is_vegan, choice.allergens)
     _check_defaults(group)
-    _audit(db, access, "patch_choice", choice.id)
+    after = {f: getattr(choice, f) for f in watched}
+    after["allergens"] = list(after["allergens"])
+    diff = {f: {"before": before[f], "after": after[f]} for f in watched if before[f] != after[f]}
+    _audit(db, access, "patch_choice", choice.id, **({"changed": diff} if diff else {}))
     response = OwnerChoice.model_validate(choice)
     await db.commit()
     return response

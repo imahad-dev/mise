@@ -6,8 +6,10 @@ from decimal import Decimal
 
 import pytest
 import pytest_asyncio
+from sqlalchemy import select
 from tests.helpers import as_member
 
+from src.models.audit import AuditLog
 from src.models.menu import MenuItem
 from src.models.restaurant import Restaurant
 
@@ -221,3 +223,74 @@ async def test_delete_group(client, owner_setup):
     group = (await client.post(groups_url(s), json=SPICE)).json()
     url = f"/api/restaurants/{s.restaurant.slug}/choice-groups/{group['id']}"
     assert (await client.delete(url)).status_code == 200
+
+
+async def _spice_choice(client, s, **body):
+    group = (await client.post(groups_url(s), json=SPICE)).json()
+    base = f"/api/restaurants/{s.restaurant.slug}"
+    resp = await client.post(
+        f"{base}/choice-groups/{group['id']}/choices", json={"label": "Hot", **body}
+    )
+    return base, group, resp.json()
+
+
+async def test_allergen_change_clears_confirmation_even_if_request_confirms(client, owner_setup):
+    s = owner_setup
+    base, _, choice = await _spice_choice(client, s, allergen_verified=True)
+    resp = await client.patch(
+        f"{base}/choices/{choice['id']}", json={"allergens": ["mustard"], "allergen_verified": True}
+    )
+    assert resp.json()["allergen_verified"] is False
+    confirmed = await client.patch(
+        f"{base}/choices/{choice['id']}", json={"allergen_verified": True}
+    )
+    assert confirmed.json()["allergen_verified"] is True
+
+
+async def test_renaming_to_a_used_label_is_422(client, owner_setup):
+    s = owner_setup
+    base, group, choice = await _spice_choice(client, s)
+    await client.post(f"{base}/choice-groups/{group['id']}/choices", json={"label": "Mild"})
+    resp = await client.patch(f"{base}/choices/{choice['id']}", json={"label": "Mild"})
+    assert resp.status_code == 422
+    same = await client.patch(f"{base}/choices/{choice['id']}", json={"label": "Hot"})
+    assert same.status_code == 200
+
+    other = (await client.post(groups_url(s), json={**SPICE, "label": "Size"})).json()
+    resp = await client.patch(f"{base}/choice-groups/{other['id']}", json={"label": "Spice"})
+    assert resp.status_code == 422
+    same = await client.patch(f"{base}/choice-groups/{other['id']}", json={"label": "Size"})
+    assert same.status_code == 200
+
+
+async def test_choice_patch_audits_diet_and_allergen_changes(client, owner_setup, db_session):
+    s = owner_setup
+    base, _, choice = await _spice_choice(client, s)
+    await client.patch(f"{base}/choices/{choice['id']}", json={"allergens": ["mustard"]})
+    rows = (
+        await db_session.scalars(
+            select(AuditLog).where(
+                AuditLog.restaurant_id == s.restaurant.id,
+                AuditLog.event_type == "owner_choice_edit",
+            )
+        )
+    ).all()
+    patch = next(r for r in rows if r.payload["action"] == "patch_choice")
+    assert patch.payload["changed"]["allergens"] == {"before": [], "after": ["mustard"]}
+
+
+async def test_missing_choice_is_404(client, owner_setup):
+    s = owner_setup
+    url = f"/api/restaurants/{s.restaurant.slug}/choices/{uuid.uuid4()}"
+    assert (await client.patch(url, json={"label": "X"})).status_code == 404
+
+
+async def test_new_groups_and_choices_keep_creation_order(client, owner_setup):
+    s = owner_setup
+    first = (await client.post(groups_url(s), json={**SPICE, "label": "A"})).json()
+    second = (await client.post(groups_url(s), json={**SPICE, "label": "B"})).json()
+    assert (first["sort_order"], second["sort_order"]) == (0, 1)
+    url = f"/api/restaurants/{s.restaurant.slug}/choice-groups/{first['id']}/choices"
+    one = (await client.post(url, json={"label": "One"})).json()
+    two = (await client.post(url, json={"label": "Two"})).json()
+    assert (one["sort_order"], two["sort_order"]) == (0, 1)
