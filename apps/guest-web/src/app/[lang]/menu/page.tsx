@@ -107,9 +107,6 @@ export default function GuestMenuPage({
   const [dishOpen, setDishOpen] = useState<MenuItem | null>(null);
   // Stable, or the dish page's Back handler re-runs and pushes another history entry.
   const closeDish = useCallback(() => setDishOpen(null), []);
-  const [goneChoices, setGoneChoices] = useState<Set<string>>(new Set());
-  // A sold-out mark belongs to the cart it was refused with; any change to the cart clears it.
-  useEffect(() => setGoneChoices(new Set()), [cart]);
   const [submittingOrder, setSubmittingOrder] = useState(false);
   const [orderError, setOrderError] = useState<string | null>(null);
   const { status, reload: loadStatus } = useTableStatus();
@@ -337,7 +334,6 @@ export default function GuestMenuPage({
         // The order stays in the cart with the line marked; the guest decides what to change.
         const gone = soldOutChoices(body);
         const goneIds = new Set(gone.map((c) => c.id));
-        setGoneChoices(goneIds);
         setMenu(
           (m) =>
             m && {
@@ -439,6 +435,10 @@ export default function GuestMenuPage({
     .filter((i) => i.allergenStatus !== "no_declared_match")
     .map((i) => i.name))];
   const catId = (cat: string) => `cat-${cat.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
+  // A cart line is marked while any of its choices is sold out in the current menu.
+  const soldOutChoiceIds = new Set(
+    menu.items.flatMap((i) => (i.choice_groups ?? []).flatMap((g) => g.choices.filter((c) => !c.available).map((c) => c.id))),
+  );
   const choiceText = (choices: CartChoice[]) =>
     choices
       .map((c) => (c.kind === "leave_out" ? dict.dish.leaveOut.replace("{label}", c.label.toLowerCase()) : c.label))
@@ -651,10 +651,10 @@ export default function GuestMenuPage({
                 </div>
                 {item.choices && item.choices.length > 0 && (
                   <p
-                    className={`text-xs ${item.choices.some((c) => goneChoices.has(c.id)) ? "text-danger-fg" : "text-ink-muted"}`}
+                    className={`text-xs ${item.choices.some((c) => soldOutChoiceIds.has(c.id)) ? "text-danger-fg" : "text-ink-muted"}`}
                   >
                     {choiceText(item.choices)}
-                    {item.choices.some((c) => goneChoices.has(c.id)) && ` · ${dict.dish.soldOut}`}
+                    {item.choices.some((c) => soldOutChoiceIds.has(c.id)) && ` · ${dict.dish.soldOut}`}
                   </p>
                 )}
                 <div className="flex items-center justify-between gap-3">
