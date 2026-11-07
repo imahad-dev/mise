@@ -206,6 +206,46 @@ async def service_charge_collected(db: AsyncSession, w: Window) -> Decimal:
     return Decimal(value).quantize(_CENTS)
 
 
+_PAID = (
+    "CROSS JOIN LATERAL jsonb_array_elements(oi.choices) e "
+    "WHERE (e->>'price_delta')::numeric > 0 AND "
+)
+
+
+async def extras_summary(db: AsyncSession, w: Window) -> dict:
+    """How often paid extras are added, what they sell (excl. VAT where included), the top five."""
+    join = f"FROM orders o JOIN order_item oi ON oi.order_id = o.id {_BILL}"
+    lines, with_extra = (
+        await db.execute(
+            text(
+                "SELECT count(*), count(*) FILTER (WHERE EXISTS ("
+                "SELECT 1 FROM jsonb_array_elements(oi.choices) e "
+                f"WHERE (e->>'price_delta')::numeric > 0)) {join} WHERE {_SCOPE}"
+            ),
+            w.params(),
+        )
+    ).one()
+    sales = await db.scalar(
+        text(
+            "SELECT coalesce(sum(oi.quantity * (e->>'price_delta')::numeric "
+            f"/ {_NET}), 0) {join} {_PAID}{_SCOPE}"
+        ),
+        w.params(),
+    )
+    top = await db.execute(
+        text(
+            f"SELECT e->>'label', sum(oi.quantity) {join} {_PAID}{_SCOPE} "
+            "GROUP BY 1 ORDER BY 2 DESC, 1 LIMIT 5"
+        ),
+        w.params(),
+    )
+    return {
+        "attach_rate_pct": round(100 * with_extra / lines, 1) if lines else 0.0,
+        "sales": round(float(sales), 2),
+        "top": [{"label": label, "count": int(n)} for label, n in top.all()],
+    }
+
+
 async def top_pairings(db: AsyncSession, w: Window, limit: int = 5) -> list[dict]:
     """Item pairs ordered together, ranked by lift = P(A and B) / (P(A) * P(B))."""
     rows = await db.execute(

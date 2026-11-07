@@ -350,6 +350,17 @@ class BriefAction(BaseModel):
     formula: str
 
 
+class TopExtra(BaseModel):
+    label: str
+    count: int
+
+
+class ExtrasSummary(BaseModel):
+    attach_rate_pct: float
+    sales: float
+    top: list[TopExtra]
+
+
 class DailyBriefResponse(BaseModel):
     date: str
     currency: str
@@ -365,6 +376,7 @@ class DailyBriefResponse(BaseModel):
     prices_include_tax: bool
     tax_split_by_method: bool
     service_charge_collected: Decimal
+    extras: ExtrasSummary
     pay_forward: PayForwardTotals
     forecast: ForecastSummary
     actions: list[BriefAction]

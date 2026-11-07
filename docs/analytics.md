@@ -28,6 +28,10 @@ Code: `services/api/src/services/` — `analytics.py`, `forecast.py`, `brief.py`
   their bill and counts as revenue once like any other item; the brief reports the
   pay-it-forward ledger separately as `pay_forward {bought, given}` over the last 7 local days
   (today included), not narrated and not revenue.
+- **Extras**: the brief's `extras {attach_rate_pct, sales, top}` counts priced dish choices from the order
+  line snapshot. Attach rate is lines with a priced choice / all lines in scope; sales exclude VAT like
+  revenue (`_NET`); `top` is the five most added by quantity. Zeros when there are no lines. Not
+  narrated: the model never sees these figures.
 - **Daypart**: daytime before 18:00 local time is `lunch`, the evening after is `dinner`.
 - Of the analysed sources, `live` and `simulated`, analytics include both; every response reports the
   count of each (`data_sources`) and the UI shows a "Simulated data" banner when any simulated

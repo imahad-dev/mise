@@ -624,7 +624,7 @@ async def daily_brief(
 ) -> DailyBriefResponse:
     """Deterministic analytics brief; the LLM only narrates. Cached for 10m in DEMO_MODE."""
     restaurant = access.restaurant
-    cache_key = f"cache:demo:brief:v5:{restaurant.slug}"
+    cache_key = f"cache:demo:brief:v6:{restaurant.slug}"
 
     if settings.demo_mode:
         try:
@@ -885,7 +885,7 @@ async def simulate_demo_orders(
     summary = await persist_simulation(db, restaurant, assumptions)
     await db.commit()
     try:
-        await redis_client.delete(f"cache:demo:brief:v5:{restaurant.slug}")
+        await redis_client.delete(f"cache:demo:brief:v6:{restaurant.slug}")
     except Exception as e:
         logger.warning("Redis error clearing brief cache: %s", e)
     return SimulateOrdersResponse(**summary)
