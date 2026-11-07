@@ -81,6 +81,8 @@ export interface DailyBrief {
   tax_split_by_method: boolean;
   /** Optional service charge on settled bills; for staff, not revenue. Decimal string. */
   service_charge_collected: string;
+  /** Dish extras: share of order lines with one, their sales, and the most added. */
+  extras: { attach_rate_pct: number; sales: number; top: { label: string; count: number }[] };
   /** Pay-it-forward chai over the last 7 days; not revenue. */
   pay_forward: { bought: number; given: number };
   forecast: {

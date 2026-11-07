@@ -133,7 +133,7 @@ export default function WhatIfPage() {
           What-if <span className="text-terracotta">Calculator</span>
         </h1>
         <p className="text-xs text-ink-muted mt-1">
-          Deterministic weekly estimate from the last 28 days of sales at current menu prices.
+          Deterministic weekly estimate from the last 28 days of sales at current menu prices. Changes base prices only; extras stay as they are.
           The AI model may only explain the result; it never produces the numbers.
         </p>
       </div>

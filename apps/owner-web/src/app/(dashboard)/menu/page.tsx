@@ -1,6 +1,8 @@
 "use client";
 
 import React, { useCallback, useEffect, useState } from "react";
+import { formatPrice } from "ui";
+import { ChoiceEditor, type OwnerChoiceGroup } from "../../../components/ChoiceEditor";
 import { useSlugRef, useVenue } from "../../../lib/venue";
 
 interface MenuTranslation {
@@ -23,6 +25,8 @@ interface OwnerMenuItem {
   is_vegan: boolean;
   is_gluten_free: boolean;
   available: boolean;
+  is_pay_forward: boolean;
+  choice_groups: OwnerChoiceGroup[];
   translations: MenuTranslation[];
 }
 
@@ -30,6 +34,7 @@ export default function MenuManagementPage() {
   const { venue } = useVenue();
   const slug = venue?.slug;
   const slugRef = useSlugRef(slug);
+  const money = (n: number) => formatPrice(n, venue?.currency ?? "EUR");
   const [items, setItems] = useState<OwnerMenuItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -136,8 +141,8 @@ export default function MenuManagementPage() {
           const isBusy = actionInProgress !== null;
 
           return (
+            <div key={item.id}>
             <div
-              key={item.id}
               className={`p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-colors ${
                 !item.available ? "bg-paper opacity-70" : "hover:bg-line"
               }`}
@@ -216,6 +221,15 @@ export default function MenuManagementPage() {
                   </button>
                 )}
               </div>
+            </div>
+            {!item.is_pay_forward && slug && (
+              <details className="px-5 pb-5">
+                <summary className="cursor-pointer text-sm font-semibold text-ink">
+                  Choices ({item.choice_groups.length})
+                </summary>
+                <ChoiceEditor slug={slug} itemId={item.id} groups={item.choice_groups} money={money} onChanged={loadMenuItems} />
+              </details>
+            )}
             </div>
           );
         })}
