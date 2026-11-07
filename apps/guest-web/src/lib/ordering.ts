@@ -19,6 +19,7 @@ export interface GuestStatus {
   id: string;
   table_state: TableMode;
   code_required: boolean;
+  dietary_preferences?: string[];
 }
 
 /**

@@ -70,9 +70,31 @@ export interface TranslationDict {
   menu: {
     taxNote: string;
     pricesIncludeVat: string;
-    chooseSize: string;
     from: string;
     serviceNotice: string;
+  };
+  dish: {
+    /** Contains {total}. */
+    addToOrder: string;
+    /** Contains {group}. */
+    chooseGroup: string;
+    chooseOne: string;
+    /** Contains {n}. */
+    choose: string;
+    /** Contains {n}. */
+    upTo: string;
+    optional: string;
+    soldOut: string;
+    size: string;
+    notVegan: string;
+    notVegetarian: string;
+    leaveOutNotice: string;
+    /** A left-out choice on a cart line. Contains {label}. */
+    leaveOut: string;
+    /** Contains {names}. */
+    choiceGone: string;
+    changed: string;
+    quantity: string;
   };
   bill: {
     /** Contains {billNo}. */
