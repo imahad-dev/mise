@@ -1,9 +1,10 @@
-import { formatPrice } from "ui";
+import { choiceLine, formatPrice, type LineChoice } from "ui";
 
 /** Mirrors services/api/src/schemas/bills.py. Decimals arrive as strings. */
 export interface BillLine {
   name: string;
   option_label: string | null;
+  choices?: LineChoice[];
   quantity: number;
   unit_price: string;
   line_total: string;
@@ -382,7 +383,7 @@ export function sampleBillPieces(bill: SampleBill) {
       ...(bill.table_label ? [`Table ${bill.table_label}`] : []),
     ],
     lines: bill.lines.map<BillRow>((l) => ({
-      label: `${l.quantity} × ${l.name}${l.option_label ? ` — ${l.option_label}` : ""}`,
+      label: [`${l.quantity} × ${l.name}${l.option_label ? ` — ${l.option_label}` : ""}`, ...(l.choices ?? []).map((c) => choiceLine(c, (n) => formatPrice(n, bill.currency)))].join(" · "),
       amount: money(l.line_total),
     })),
     totals: totalRows(bill),

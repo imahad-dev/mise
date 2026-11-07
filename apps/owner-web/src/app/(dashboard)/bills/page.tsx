@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Badge, Button, Card, PageHeader, Sheet, formatPrice } from "ui";
+import { Badge, Button, Card, PageHeader, Sheet, choiceLine, formatPrice } from "ui";
 import { useVenue, useSlugRef } from "../../../lib/venue";
 import { useSse } from "../../../hooks/use-sse";
 import { PayForwardTile } from "../../../components/PayForwardTile";
@@ -711,6 +711,11 @@ export default function BillsPage() {
                         <span>
                           {l.quantity} × {l.name}
                           {l.option_label && <span className="text-ink-muted"> — {l.option_label}</span>}
+                          {(l.choices ?? []).length > 0 && (
+                            <span className="block text-xs text-ink-muted">
+                              {l.choices!.map((c) => choiceLine(c, (n) => formatPrice(n, detail.currency))).join(", ")}
+                            </span>
+                          )}
                         </span>
                         <span className="text-ink-muted">{formatPrice(Number(l.line_total), detail.currency)}</span>
                       </li>

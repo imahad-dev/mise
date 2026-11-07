@@ -1,4 +1,4 @@
-import { formatPrice } from "ui";
+import { formatPrice, type LineChoice } from "ui";
 import type { TranslationDict } from "../i18n";
 
 /** Mirrors GuestBillDetail in services/api/src/schemas/payments.py. Decimals arrive as strings. */
@@ -37,13 +37,13 @@ export interface GuestBill {
   bill_no: number | null;
   status: "open" | "settled" | "cancelled" | string;
   bill_requested_at: string | null;
-  lines: { name: string; option_label: string | null; quantity: number; unit_price: string; line_total: string }[];
+  lines: { name: string; option_label: string | null; choices?: LineChoice[]; quantity: number; unit_price: string; line_total: string }[];
   subtotal: string;
   currency: string;
   methods: MethodPreview[];
   payment_details: PaymentDetails;
   claim: PaymentClaim | null;
-  voided: { name: string; option_label: string | null; quantity: number }[];
+  voided: { name: string; option_label: string | null; choices?: LineChoice[]; quantity: number }[];
   order_status: string | null;
   /** Set only on a settled bill. */
   payment_method: Method | null;

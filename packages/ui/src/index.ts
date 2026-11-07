@@ -5,3 +5,5 @@ export { Sheet } from "./sheet";
 export type { SheetProps } from "./sheet";
 export { AppShell } from "./app-shell";
 export type { AppShellProps, NavGroup, NavItem } from "./app-shell";
+export { choiceLine } from "./choices";
+export type { LineChoice } from "./choices";
