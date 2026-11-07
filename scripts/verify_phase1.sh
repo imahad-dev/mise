@@ -258,7 +258,7 @@ counter_and_pay_forward() {
 import json, sys
 items = json.load(sys.stdin)['items']
 chai = next(i for i in items if i['name'] == 'Pay-it-forward chai')
-dish = next(i for i in items if not i['options'] and i['id'] != chai['id'])
+dish = next(i for i in items if not i['options'] and i['id'] != chai['id'] and not any(g['min_select'] for g in i['choice_groups']))
 print(json.dumps([{'menu_item_id': dish['id'], 'quantity': 1}, {'menu_item_id': chai['id'], 'quantity': 1}]))") ||
     return 1
   curl -sf -b "$jar" -H "Content-Type: application/json" -X POST "$API/api/orders" \

@@ -14,14 +14,20 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import exists, func, select, update
+from sqlalchemy import delete, exists, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from src.config import settings
 from src.database import async_session_factory
 from src.models.bill import Bill
 from src.models.dining_table import DiningTable
-from src.models.menu import MenuItem, MenuItemOption, MenuTranslation
+from src.models.menu import (
+    MenuChoice,
+    MenuChoiceGroup,
+    MenuItem,
+    MenuItemOption,
+    MenuTranslation,
+)
 from src.models.restaurant import Restaurant
 from src.models.user import Membership, User
 from src.passwords import hash_password
@@ -103,6 +109,46 @@ def find_seed_for_slug(slug: str) -> dict[str, Any] | None:
                     return data
             return None
     return None
+
+
+async def seed_choices(
+    session: AsyncSession, slug: str, item_data: dict[str, Any], item_id: uuid.UUID
+) -> None:
+    """Replace a dish's choices with the file's; ids are stable, and past orders keep snapshots."""
+    await session.execute(
+        delete(MenuChoiceGroup).where(MenuChoiceGroup.menu_item_id == item_id)
+    )
+    for g_pos, g in enumerate(item_data.get("choice_groups", [])):
+        group_id = uuid.uuid5(
+            SEED_ITEM_NAMESPACE, f"{slug}:{item_data['key']}:group:{g['label']}"
+        )
+        session.add(
+            MenuChoiceGroup(
+                id=group_id,
+                menu_item_id=item_id,
+                label=g["label"],
+                kind=g["kind"],
+                min_select=g["min_select"],
+                max_select=g["max_select"],
+                sort_order=g_pos,
+            )
+        )
+        for c_pos, c in enumerate(g["choices"]):
+            session.add(
+                MenuChoice(
+                    id=uuid.uuid5(SEED_ITEM_NAMESPACE, f"{group_id}:{c['label']}"),
+                    group_id=group_id,
+                    label=c["label"],
+                    price_delta=c.get("price_delta", 0),
+                    cost_delta=c.get("cost_delta", 0),
+                    allergens=c.get("allergens", []),
+                    allergen_verified=c.get("allergen_verified", False),
+                    is_vegetarian=c.get("is_vegetarian", False),
+                    is_vegan=c.get("is_vegan", False),
+                    is_default=c.get("is_default", False),
+                    sort_order=c_pos,
+                )
+            )
 
 
 async def seed_data(
@@ -355,6 +401,8 @@ async def seed_data(
         for opt_id, opt in existing_options.items():
             if opt_id not in wanted_ids:
                 await session.delete(opt)
+        await session.flush()  # a just-created item must exist before its choices
+        await seed_choices(session, restaurant.slug, item_data, target_item.id)
 
     await session.flush()
     total_items = len(items_data)

@@ -193,6 +193,35 @@
       "option_weights": [
         0.65,
         0.35
+      ],
+      "choice_groups": [
+        {
+          "label": "Extras",
+          "kind": "add",
+          "min_select": 0,
+          "max_select": 2,
+          "choices": [
+            {
+              "label": "Extra shot",
+              "price_delta": 150,
+              "cost_delta": 40,
+              "allergen_verified": true,
+              "is_vegetarian": true,
+              "is_vegan": true
+            },
+            {
+              "label": "Almond milk",
+              "price_delta": 120,
+              "cost_delta": 50,
+              "allergens": [
+                "tree_nuts"
+              ],
+              "allergen_verified": true,
+              "is_vegetarian": true,
+              "is_vegan": true
+            }
+          ]
+        }
       ]
     },
     {
@@ -237,6 +266,35 @@
       "option_weights": [
         0.65,
         0.35
+      ],
+      "choice_groups": [
+        {
+          "label": "Extras",
+          "kind": "add",
+          "min_select": 0,
+          "max_select": 2,
+          "choices": [
+            {
+              "label": "Extra shot",
+              "price_delta": 150,
+              "cost_delta": 40,
+              "allergen_verified": true,
+              "is_vegetarian": true,
+              "is_vegan": true
+            },
+            {
+              "label": "Almond milk",
+              "price_delta": 120,
+              "cost_delta": 50,
+              "allergens": [
+                "tree_nuts"
+              ],
+              "allergen_verified": true,
+              "is_vegetarian": true,
+              "is_vegan": true
+            }
+          ]
+        }
       ]
     },
     {
@@ -448,7 +506,36 @@
           "description": "Strong tea boiled with milk and cardamom"
         }
       },
-      "sim_weight": 7
+      "sim_weight": 7,
+      "choice_groups": [
+        {
+          "label": "Sugar",
+          "kind": "pick",
+          "min_select": 1,
+          "max_select": 1,
+          "choices": [
+            {
+              "label": "Normal",
+              "allergen_verified": true,
+              "is_vegetarian": true,
+              "is_vegan": true,
+              "is_default": true
+            },
+            {
+              "label": "Less",
+              "allergen_verified": true,
+              "is_vegetarian": true,
+              "is_vegan": true
+            },
+            {
+              "label": "No sugar",
+              "allergen_verified": true,
+              "is_vegetarian": true,
+              "is_vegan": true
+            }
+          ]
+        }
+      ]
     },
     {
       "key": "kashmiri_chai",
@@ -506,7 +593,36 @@
           "description": "Green tea with saffron and cardamom"
         }
       },
-      "sim_weight": 3
+      "sim_weight": 3,
+      "choice_groups": [
+        {
+          "label": "Sugar",
+          "kind": "pick",
+          "min_select": 1,
+          "max_select": 1,
+          "choices": [
+            {
+              "label": "Normal",
+              "allergen_verified": true,
+              "is_vegetarian": true,
+              "is_vegan": true,
+              "is_default": true
+            },
+            {
+              "label": "Less",
+              "allergen_verified": true,
+              "is_vegetarian": true,
+              "is_vegan": true
+            },
+            {
+              "label": "No sugar",
+              "allergen_verified": true,
+              "is_vegetarian": true,
+              "is_vegan": true
+            }
+          ]
+        }
+      ]
     },
     {
       "key": "butter_croissant",
@@ -602,7 +718,29 @@
           "description": "Dense chocolate brownie"
         }
       },
-      "sim_weight": 6
+      "sim_weight": 6,
+      "choice_groups": [
+        {
+          "label": "Extras",
+          "kind": "add",
+          "min_select": 0,
+          "max_select": 1,
+          "choices": [
+            {
+              "label": "Vanilla ice cream",
+              "price_delta": 250,
+              "cost_delta": 80,
+              "allergens": [
+                "milk",
+                "eggs"
+              ],
+              "allergen_verified": true,
+              "is_vegetarian": true,
+              "is_vegan": false
+            }
+          ]
+        }
+      ]
     },
     {
       "key": "banana_bread",

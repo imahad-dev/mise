@@ -291,3 +291,20 @@ async def test_simulation_without_tax_jurisdiction_writes_no_bills(db_session: A
         )
     ).scalar_one()
     assert bills == 0
+
+
+SPICE = (uuid.UUID(int=201), uuid.UUID(int=202))
+EXTRA = uuid.UUID(int=203)
+
+
+def test_choices_never_shift_the_order_stream():
+    a = SimAssumptions(days=28, seed=5, promo_item_rank=None)
+    plain = generate_orders(ITEMS, START, a, TZ)
+    with_choices = [
+        replace(i, required=(SPICE,), extras=(EXTRA,)) if i.id == ITEMS[0].id else i for i in ITEMS
+    ]
+    drawn = generate_orders(with_choices, START, a, TZ)
+    assert _flat(plain) == _flat(drawn)
+    picks = [ids for o in drawn for ids in o.choices.values()]
+    assert picks and all(any(s in ids for s in SPICE) for ids in picks)
+    assert any(EXTRA in ids for ids in picks)

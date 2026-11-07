@@ -18,7 +18,7 @@ from sqlalchemy.orm import selectinload
 
 from src.models.bill import Bill
 from src.models.dining_table import DiningTable
-from src.models.menu import MenuItem, MenuItemOption, MenuTranslation
+from src.models.menu import MenuChoice, MenuItem, MenuItemOption, MenuTranslation
 from src.models.restaurant import Restaurant
 from src.models.user import Membership, User
 from src.services.tax import TaxRateError
@@ -355,3 +355,19 @@ async def test_seed_refuses_a_jurisdiction_in_another_currency(db_session: Async
     data["restaurant"]["tax_jurisdiction"] = "GB"  # the file bills in PKR
     with pytest.raises(TaxRateError, match="currency"):
         await seed_data(data, db_session)
+
+
+@pytest.mark.asyncio
+async def test_seed_creates_choices_with_stable_ids_and_reseeds_cleanly(db_session: AsyncSession):
+    data = load_seed_data(ANGEETHI)
+    await seed_data(data, db_session, rotate_qr=False)
+    first = {c.id for c in (await db_session.scalars(select(MenuChoice))).all()}
+    await seed_data(data, db_session, rotate_qr=False)
+    second = {c.id for c in (await db_session.scalars(select(MenuChoice))).all()}
+    assert first and first == second
+
+
+def test_seed_never_puts_choices_on_pay_it_forward():
+    for path in (ANGEETHI, KEHWA):
+        chai = next(i for i in load_seed_data(path)["items"] if i["key"] == "pay_forward_chai")
+        assert "choice_groups" not in chai
