@@ -2,6 +2,7 @@
 
 import uuid
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from decimal import Decimal
 
 import pytest
@@ -277,6 +278,19 @@ async def test_choice_patch_audits_diet_and_allergen_changes(client, owner_setup
     ).all()
     patch = next(r for r in rows if r.payload["action"] == "patch_choice")
     assert patch.payload["changed"]["allergens"] == {"before": [], "after": ["mustard"]}
+
+
+async def test_choices_on_a_deleted_dish_are_404(client, owner_setup, db_session):
+    s = owner_setup
+    group = (await client.post(groups_url(s), json=SPICE)).json()
+    base = f"/api/restaurants/{s.restaurant.slug}/choice-groups/{group['id']}"
+    choice = (await client.post(f"{base}/choices", json=MILK)).json()
+    s.dish.deleted_at = datetime.now(UTC)
+    await db_session.flush()
+    assert (await client.patch(base, json={"label": "X"})).status_code == 404
+    assert (await client.post(f"{base}/choices", json={**MILK, "label": "Oat"})).status_code == 404
+    url = f"/api/restaurants/{s.restaurant.slug}/choices/{choice['id']}"
+    assert (await client.patch(url, json={"label": "X"})).status_code == 404
 
 
 async def test_missing_choice_is_404(client, owner_setup):

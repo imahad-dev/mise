@@ -79,7 +79,11 @@ async def _group(
         .join(MenuItem)
         .options(selectinload(MenuChoiceGroup.choices))
         .execution_options(populate_existing=True)  # tests share one session; harmless per request
-        .where(MenuChoiceGroup.id == group_id, MenuItem.restaurant_id == access.restaurant.id)
+        .where(
+            MenuChoiceGroup.id == group_id,
+            MenuItem.restaurant_id == access.restaurant.id,
+            MenuItem.deleted_at.is_(None),
+        )
     )
     if group is None:
         raise _not_found()
