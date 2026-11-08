@@ -39,6 +39,17 @@ def _build_menu_context(items: list[MenuItem], language: str) -> str:
             trans = item.translations[0]
         name = trans.name if trans else "?"
         allergen_str = ", ".join(item.allergens) if item.allergens else "none"
+        # Menu data only: what the dish's available choices could add on top of its own allergens.
+        added = dict.fromkeys(
+            a
+            for g in item.choice_groups
+            for c in g.choices
+            if c.available
+            for a in c.allergens
+            if a not in item.allergens
+        )
+        if added:
+            allergen_str += f", choices may add: {', '.join(added)}"
         lines.append(
             f"- {name} (€{item.price}, allergens: {allergen_str}, "
             f"{'V' if item.is_vegetarian else ''}{'VG' if item.is_vegan else ''}"
