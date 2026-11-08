@@ -1,7 +1,8 @@
-import { expect, test, type Browser, type Page } from "@playwright/test";
+import { expect, test, type Browser, type BrowserContext, type Page } from "@playwright/test";
 import {
   ANGEETHI,
   GUEST,
+  KEHWA,
   OWNER,
   addWithChoices,
   approveOrder,
@@ -15,45 +16,70 @@ import {
   type VenueTable,
 } from "./helpers";
 
-// Dish page stories (spec 2026-11-05): real taps on a 375 px phone at an open Angeethi table.
+// Dish page stories (spec 2026-11-05): real taps on a 375 px phone at an open table.
 
 const PHONE = { viewport: { width: 375, height: 812 } };
 const PRINT = /\/bills\/[0-9a-f-]{36}\/print\?venue=angeethi-house$/;
-let T: Record<string, VenueTable> = {};
+const tables: Record<string, Record<string, VenueTable>> = {};
+let contexts: BrowserContext[] = [];
 
 test.beforeEach(() => clearDemoLimits());
+test.afterEach(async () => {
+  for (const c of contexts) await c.close();
+  contexts = [];
+});
+
+async function newPage(browser: Browser, options = {}): Promise<Page> {
+  const context = await browser.newContext(options);
+  contexts.push(context);
+  return context.newPage();
+}
 
 /** A phone at an open table, on the menu; `avoid` ticks allergens on the welcome screen first. */
-async function phoneAt(browser: Browser, label: string, avoid: string[] = []): Promise<Page> {
-  await openTable(ANGEETHI, label);
-  const page = await (await browser.newContext(PHONE)).newPage();
+async function phoneAt(browser: Browser, slug: string, label: string, avoid: string[] = []): Promise<Page> {
+  await openTable(slug, label);
+  const page = await newPage(browser, PHONE);
+  const qr = tables[slug][label].qr_token;
   if (avoid.length === 0) {
-    await openTableMenu(page, T[label].qr_token);
+    await openTableMenu(page, qr);
     return page;
   }
-  await page.goto(`${GUEST}/q/${T[label].qr_token}`);
+  await page.goto(`${GUEST}/q/${qr}`);
   for (const a of avoid) await page.getByRole("button", { name: new RegExp(`^${a}`) }).click();
   await page.getByRole("button", { name: "View Menu" }).click();
   await expect(page).toHaveURL(/\/en\/menu$/);
   return page;
 }
 
-async function staffBrowser(browser: Browser, path: string): Promise<Page> {
-  const page = await (await browser.newContext()).newPage();
-  await staffPage(page, ANGEETHI);
+async function staffBrowser(browser: Browser, slug: string, path: string): Promise<Page> {
+  const page = await newPage(browser);
+  await staffPage(page, slug);
   await page.goto(`${OWNER}${path}`);
   return page;
 }
 
+/** The staff confirm sheet of one table's open bill. */
+async function openTableBill(staff: Page, label: string) {
+  await staff.getByRole("button").filter({ hasText: `Table ${label}` }).click();
+  return staff.getByRole("dialog", { name: new RegExp(`^Table ${label} · Bill no\\. \\d{4}$`) });
+}
+
+/** Nothing on the page scrolls sideways at phone width. */
+async function noSidewaysScroll(page: Page) {
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+}
+
 test.describe.serial("Dish choices: a phone guest makes it theirs", () => {
   test.beforeAll(async () => {
-    await resetVenue(ANGEETHI);
-    T = await venueTables(ANGEETHI);
+    for (const slug of [ANGEETHI, KEHWA]) {
+      await resetVenue(slug);
+      tables[slug] = await venueTables(slug);
+    }
   });
 
   test("sent to what is missing, leave-out notice, Back, kitchen sees NO ONIONS, bill lists it", async ({ browser }) => {
     test.setTimeout(120_000);
-    const page = await phoneAt(browser, "T1");
+    const page = await phoneAt(browser, ANGEETHI, "T1");
     await page.getByRole("button", { name: "Add Chicken Karahi", exact: true }).click();
     const sheet = page.getByRole("dialog", { name: "Chicken Karahi" });
     await expect(sheet).toBeVisible();
@@ -82,7 +108,7 @@ test.describe.serial("Dish choices: a phone guest makes it theirs", () => {
     await approveOrder(id);
 
     // The kitchen cannot miss a leave-out: it is in capitals.
-    const staff = await staffBrowser(browser, "/kitchen");
+    const staff = await staffBrowser(browser, ANGEETHI, "/kitchen");
     const no = staff.getByText("NO Onions", { exact: true });
     await expect(no).toBeVisible();
     await expect(no).toHaveCSS("text-transform", "uppercase");
@@ -95,42 +121,81 @@ test.describe.serial("Dish choices: a phone guest makes it theirs", () => {
     await page.keyboard.press("Escape");
 
     await staff.goto(`${OWNER}/bills`);
-    await staff.getByRole("button").filter({ hasText: "Table T1" }).click();
-    const bill = staff.getByRole("dialog", { name: /^Table T1 · Bill no\. \d{4}$/ });
+    const bill = await openTableBill(staff, "T1");
     await expect(bill.getByText("Hot, No onions")).toBeVisible();
     await bill.getByRole("button", { name: "Confirm received" }).click();
     await expect(staff).toHaveURL(PRINT);
   });
 
   test("a chai with the Normal default adds in one tap", async ({ browser }) => {
-    const page = await phoneAt(browser, "T2");
+    const page = await phoneAt(browser, ANGEETHI, "T2");
     await page.getByRole("button", { name: "Add Doodh Patti Chai", exact: true }).click();
+    const bar = page.getByRole("button", { name: /View order · 1/ });
+    await expect(bar).toBeVisible();
     await expect(page.getByRole("dialog")).toHaveCount(0);
-    await page.getByRole("button", { name: /View order/ }).click();
+    await bar.click();
     await expect(page.getByRole("dialog", { name: "Your Order" }).getByText("Normal", { exact: true })).toBeVisible();
   });
 
-  test("extra milk warns a guest avoiding milk", async ({ browser }) => {
-    const page = await phoneAt(browser, "T3", ["Milk"]);
-    // Opened from the dish name this time.
-    await page.getByRole("heading", { name: "Doodh Patti Chai" }).getByRole("button").click();
-    const sheet = page.getByRole("dialog", { name: "Doodh Patti Chai" });
-    const extra = sheet.locator("label").filter({ hasText: "Extra milk" });
-    await expect(extra.getByTestId("allergen-chip-contains")).toContainText("Contains: Milk");
-    await extra.click();
+  test("an extra with nuts warns a guest avoiding tree nuts and stops at the acknowledgement", async ({ browser }) => {
+    test.setTimeout(120_000);
+    // The cappuccino has no tree nuts; its Almond milk extra has.
+    const page = await phoneAt(browser, KEHWA, "T1", ["Tree Nuts"]);
+    const cart = page.getByRole("dialog", { name: "Your Order" });
+
+    // Control: a paid extra without nuts is priced in the cart, and nothing says Contains.
+    await addWithChoices(page, "Cappuccino", ["Regular", "Extra shot"]);
+    await page.getByRole("button", { name: /View order/ }).click();
+    await expect(cart.getByText(/Extra shot \+Rs\s[\d,]+/)).toBeVisible();
+    await expect(cart.getByTestId("allergen-chip-contains")).toHaveCount(0);
+    await page.keyboard.press("Escape");
+    await expect(cart).toBeHidden();
+
+    // Opened from the dish name this time: the Almond milk row says what it contains.
+    await page.getByRole("heading", { name: "Cappuccino", exact: true }).getByRole("button").click();
+    const sheet = page.getByRole("dialog", { name: "Cappuccino" });
+    const almond = sheet.locator("label").filter({ hasText: "Almond milk" });
+    await expect(almond.getByTestId("allergen-chip-contains")).toContainText("Tree Nuts");
+    await sheet.getByText("Regular", { exact: true }).click();
+    await almond.click();
     await sheet.getByRole("button", { name: /Add to order/ }).click();
     await expect(sheet).toBeHidden();
+
     await page.getByRole("button", { name: /View order/ }).click();
-    await expect(page.getByText("Allergen Warning")).toBeVisible();
+    await expect(cart.getByTestId("allergen-chip-contains")).toHaveCount(1);
+    await expect(cart.getByTestId("allergen-chip-contains")).toContainText("Tree Nuts");
+    await expect(cart.getByText(/Almond milk \+Rs\s[\d,]+/)).toBeVisible();
+    await expect(cart.getByText("Allergen Warning")).toBeVisible();
+    await expect(cart.getByText("I have spoken with staff and understand the allergen risks")).toBeVisible();
+    await expect(cart.getByRole("button", { name: "Confirm Order" })).toBeDisabled();
+    const id = await placeOrder(page);
+    await approveOrder(id);
+
+    // The staff bill lists both extras with their prices.
+    const staff = await staffBrowser(browser, KEHWA, "/bills");
+    const bill = await openTableBill(staff, "T1");
+    await expect(bill.getByText(/Extra shot \+Rs\s[\d,]+/)).toBeVisible();
+    await expect(bill.getByText(/Almond milk \+Rs\s[\d,]+/)).toBeVisible();
   });
 
-  test("the phone-width dish page has no sideways scroll and a reachable action", async ({ browser }) => {
-    const page = await phoneAt(browser, "T4");
+  test("the phone-width menu, dish page and cart have no sideways scroll; the action is reachable", async ({ browser }) => {
+    const page = await phoneAt(browser, ANGEETHI, "T4");
+    await noSidewaysScroll(page);
+
     await page.getByRole("button", { name: "Add Chicken Karahi", exact: true }).click();
     const sheet = page.getByRole("dialog", { name: "Chicken Karahi" });
     await expect(sheet).toBeVisible();
-    const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
-    expect(overflow).toBe(false);
+    await noSidewaysScroll(page);
+    expect(await sheet.evaluate((e) => e.scrollWidth <= e.clientWidth)).toBe(true);
     await expect(sheet.getByRole("button", { name: "Choose size" })).toBeInViewport();
+    await page.keyboard.press("Escape");
+    await expect(sheet).toBeHidden();
+
+    await page.getByRole("button", { name: "Add Naan", exact: true }).click();
+    await page.getByRole("button", { name: /View order/ }).click();
+    const cart = page.getByRole("dialog", { name: "Your Order" });
+    await expect(cart).toBeVisible();
+    await noSidewaysScroll(page);
+    expect(await cart.evaluate((e) => e.scrollWidth <= e.clientWidth)).toBe(true);
   });
 });
