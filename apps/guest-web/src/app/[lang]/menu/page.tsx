@@ -28,6 +28,7 @@ import {
   matchedAllergens,
   needsPage,
   pickedChoices,
+  staleLines,
   worstStatus,
   type CartChoice,
   type ChoiceGroup,
@@ -353,8 +354,10 @@ export default function GuestMenuPage({
         const id = changedDish(body);
         const fresh = await fetchMenu();
         const dish = fresh?.items.find((i) => i.id === id);
-        if (id) {
-          const next = { ...cart, items: cart.items.filter((i) => i.menuItemId !== id) };
+        // Only the lines the fresh menu refuses go; without a fresh menu the cart stays as it is.
+        if (id && dish) {
+          const stale = staleLines(cart.items, id, dish.choice_groups ?? []);
+          const next = { ...cart, items: cart.items.filter((i) => !stale.includes(i)) };
           saveCart(next);
           setCart(next);
         }

@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { addToCart } from "./cart";
 import { getDictionary } from "../i18n";
 import {
-  cartChoiceText, defaultPicks, firstMissing, matchedAllergens, needsPage, pickedChoices, requirement, toggle, unitPrice, worstStatus,
+  cartChoiceText, defaultPicks, firstMissing, matchedAllergens, needsPage, pickedChoices, requirement, staleLines, toggle,
+  unitPrice, worstStatus,
   type CartChoice, type ChoiceGroup,
 } from "./choices";
 
@@ -118,5 +119,24 @@ describe("cartChoiceText", () => {
 
   it("uses the Italian leave-out wording", () => {
     expect(cartChoiceText(line, money, getDictionary("it").dish.leaveOut)).toBe("Hot, Extra shot +Rs 150, Senza onions");
+  });
+});
+
+describe("staleLines", () => {
+  const line = (dish: string, ids: string[]) => ({ menuItemId: dish, choices: ids.map((id) => ({ id })) as CartChoice[] });
+  const shots: ChoiceGroup = { ...extras, choices: [c("milk"), c("oat")] }; // "shot" was deleted
+
+  it("returns only the lines the changed menu refuses, never the still-valid ones", () => {
+    const plain = line("cap", []);
+    const withShot = line("cap", ["shot"]);
+    const other = line("tea", ["shot"]);
+    expect(staleLines([plain, withShot, other], "cap", [shots])).toEqual([withShot]);
+  });
+  it("refuses a line that no longer meets a group's count", () => {
+    const none = line("cap", []);
+    const one = line("cap", ["hot"]);
+    expect(staleLines([none, one], "cap", [spice])).toEqual([none]);
+    const two = line("cap", ["milk", "oat"]);
+    expect(staleLines([two], "cap", [{ ...shots, max_select: 1 }])).toEqual([two]);
   });
 });

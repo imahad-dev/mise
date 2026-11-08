@@ -58,6 +58,23 @@ export function toggle(group: ChoiceGroup, picked: string[], id: string): string
   return mine.length >= group.max_select ? picked : [...picked, id];
 }
 
+/**
+ * The cart lines of `dishId` that the dish's current groups refuse, as the server does for
+ * choices_changed: a choice no longer on the menu, or a group's count outside min..max.
+ */
+export function staleLines<T extends { menuItemId: string; choices?: { id: string }[] }>(
+  items: T[],
+  dishId: string,
+  groups: ChoiceGroup[],
+): T[] {
+  return items.filter((item) => {
+    if (item.menuItemId !== dishId) return false;
+    const ids = (item.choices ?? []).map((c) => c.id);
+    const known = ids.every((id) => groups.some((g) => g.choices.some((c) => c.id === id)));
+    return !known || firstMissing(groups, ids) !== null || groups.some((g) => inGroup(g, ids).length > g.max_select);
+  });
+}
+
 export function pickedChoices(groups: ChoiceGroup[], picked: string[]): CartChoice[] {
   return groups.flatMap((g) =>
     g.choices
