@@ -36,5 +36,6 @@ def test_chat_says_which_allergens_the_available_choices_may_add():
 
 
 def test_chat_omits_the_note_when_no_choice_adds_an_allergen():
-    context = _build_menu_context([_named("Tea", group("Extras", "add", 0, 1, choice("Plain")))], "en")
+    tea = _named("Tea", group("Extras", "add", 0, 1, choice("Plain")))
+    context = _build_menu_context([tea], "en")
     assert "choices may add" not in context
