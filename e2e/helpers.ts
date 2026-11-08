@@ -219,3 +219,13 @@ export async function approveOrder(orderId: string) {
 /** The Floor tile of one table. */
 export const floorTile = (page: Page, label: string) =>
   page.getByRole("listitem").filter({ has: page.getByText(label, { exact: true }) });
+
+/** Open a dish's page from its + button and add it with these picks (radio or checkbox names). */
+export async function addWithChoices(page: Page, dish: string, picks: string[]) {
+  await page.getByRole("button", { name: `Add ${dish}`, exact: true }).click();
+  const sheet = page.getByRole("dialog", { name: dish });
+  await expect(sheet).toBeVisible();
+  for (const pick of picks) await sheet.getByText(pick, { exact: true }).click();
+  await sheet.getByRole("button", { name: /Add to order/ }).click();
+  await expect(sheet).toBeHidden();
+}
