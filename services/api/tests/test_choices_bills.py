@@ -194,3 +194,28 @@ async def test_gb_service_charge_includes_extras(client, gb_tea, db_session):
     s = gb_tea
     bill = await settled_bill(client, db_session, s, [s.mild, s.extra_milk], service_included=True)
     assert (str(bill.service_charge_amount), str(bill.total)) == ("0.44", "3.94")
+
+
+async def test_same_labels_and_price_but_different_extra_prices_stay_separate():
+    from src.models.order import Order, OrderItem
+    from src.services.bills import bill_lines
+
+    def oi(delta):
+        return OrderItem(
+            item_name="Tea",
+            option_label=None,
+            unit_price=Decimal("450.00"),  # 300 + 150 before a price change, 250 + 200 after
+            quantity=1,
+            choices=[
+                {
+                    "choice_id": str(uuid.uuid4()),
+                    "group": "Extras",
+                    "kind": "add",
+                    "label": "Extra shot",
+                    "price_delta": delta,
+                }
+            ],
+        )
+
+    lines, _ = bill_lines([Order(items=[oi("150.00")]), Order(items=[oi("200.00")])])
+    assert sorted(ln.choices[0].price_delta for ln in lines) == [Decimal("150"), Decimal("200")]
