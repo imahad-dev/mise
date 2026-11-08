@@ -30,7 +30,7 @@ import {
   worstStatus,
   type ChoiceGroup,
 } from "../../../lib/choices";
-import { Badge, Button, Sheet, formatPrice as formatAmount } from "ui";
+import { Badge, Button, Sheet, choiceLine, formatPrice as formatAmount } from "ui";
 import { menuTaxNote, serviceLine } from "../../../lib/pay";
 import {
   addToCart,
@@ -440,9 +440,7 @@ export default function GuestMenuPage({
     menu.items.flatMap((i) => (i.choice_groups ?? []).flatMap((g) => g.choices.filter((c) => !c.available).map((c) => c.id))),
   );
   const choiceText = (choices: CartChoice[]) =>
-    choices
-      .map((c) => (c.kind === "leave_out" ? dict.dish.leaveOut.replace("{label}", c.label.toLowerCase()) : c.label))
-      .join(", ");
+    choices.map((c) => choiceLine({ ...c, price_delta: c.priceDelta }, formatPrice, dict.dish.leaveOut)).join(", ");
   // Two lines of one dish differ by size or choices, so their buttons say which.
   const lineLabel = (verb: string, item: CartState["items"][number]) =>
     [verb, item.name, item.optionLabel, item.choices?.length ? choiceText(item.choices) : null]
