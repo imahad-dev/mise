@@ -140,6 +140,20 @@ Sizes or portions of a dish (e.g. "½ kg" / "1 kg", "Regular" / "Large"). A dish
 - `created_at`, `updated_at` (TIMESTAMPTZ)
 *Constraint*: `UNIQUE (menu_item_id, label)`
 
+#### `menu_choice_group`
+Choices on a dish, grouped. `kind` is `pick` (choose from a list), `add` (extras) or `leave_out` (remove an ingredient).
+- `id` (UUID, PK), `menu_item_id` (UUID, FK → menu_item.id ON DELETE CASCADE)
+- `label` (TEXT, NOT NULL), `kind` (TEXT, `CHECK` in the three kinds), `min_select`, `max_select` (INTEGER, NOT NULL), `sort_order` (INTEGER)
+*Constraint*: `UNIQUE (menu_item_id, label)`
+
+#### `menu_choice`
+- `id` (UUID, PK), `group_id` (UUID, FK → menu_choice_group.id ON DELETE CASCADE)
+- `label` (TEXT, NOT NULL), `price_delta`, `cost_delta` (DECIMAL(10,2), NOT NULL, `>= 0`)
+- `allergens` (TEXT[], EU-14 check), `allergen_verified`, `is_vegetarian`, `is_vegan`, `available`, `is_default` (BOOLEAN), `sort_order` (INTEGER)
+*Constraint*: `UNIQUE (group_id, label)`
+
+Rules live in `services/api/src/services/choices.py`: the server resolves the chosen ids and prices them; a dish's allergens are the union of the dish and its choices, verified only when all are verified; a choice never removes an allergen and leave-out has no allergen effect; labels may not promise safety ("…free", "allerg…", "safe…"); stale ids answer 422 `choices_changed`, sold-out choices 409 `unavailable_choices`; a required group with nothing on sale makes the dish sold out.
+
 #### `menu_translation`
 Localized titles and descriptions for menu items.
 - `id` (UUID, PK)
@@ -205,6 +219,7 @@ Immutable line item with allergen disclosures snapshotted at placement time.
 - `unit_price` (DECIMAL(10,2), NOT NULL, `CHECK (unit_price >= 0)`)
 - `unit_cost` (DECIMAL(10,2), NOT NULL, `CHECK (unit_cost >= 0)`)
 - `option_id` (UUID, FK → menu_item_option.id, Nullable), `option_label` (TEXT, Nullable) — chosen size, snapshotted; price and cost come from the option on the server
+- `choices` (JSONB, NOT NULL DEFAULT `[]`) — the chosen choices, snapshotted as `{choice_id, group, kind, label, price_delta, cost_delta, allergens}`; `unit_price` and `unit_cost` already include the deltas, and `allergens` / `allergen_verified` are the dish-plus-choices union
 - `item_name` (TEXT, NOT NULL) — snapshotted in guest language
 - `kitchen_name` (TEXT, NOT NULL) — snapshotted in restaurant default language
 - `allergens` (TEXT[], NOT NULL DEFAULT '{}') — snapshotted from item

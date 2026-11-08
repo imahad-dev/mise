@@ -214,6 +214,8 @@ the assumptions applied.
 | `promotion` | item, discount % (1…90), elasticity (default −2.0) | price′ = p(1−d); units′ = units × max(0, 1 + e·(−d)) |
 | `demand_surge` | multiplier (0…5] | units′ = units × m for every item |
 
+The what-if tool changes base prices only: extras keep their own prices (the owner What-if page says so).
+
 Not modeled: cannibalization or halo effects on other items, kitchen capacity, staffing cost.
 The model may write an explanation under the same numbers guard; otherwise a template is used.
 
