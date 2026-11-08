@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { addToCart } from "./cart";
+import { getDictionary } from "../i18n";
 import {
-  defaultPicks, firstMissing, matchedAllergens, needsPage, pickedChoices, requirement, toggle, unitPrice, worstStatus,
-  type ChoiceGroup,
+  cartChoiceText, defaultPicks, firstMissing, matchedAllergens, needsPage, pickedChoices, requirement, toggle, unitPrice, worstStatus,
+  type CartChoice, type ChoiceGroup,
 } from "./choices";
 
 const c = (id: string, extra = {}) => ({
@@ -100,5 +101,22 @@ describe("dish page rules", () => {
   });
   it("lists picks in menu order for the cart", () => {
     expect(pickedChoices([extras], ["shot", "milk"]).map((p) => p.id)).toEqual(["milk", "shot"]);
+  });
+});
+
+describe("cartChoiceText", () => {
+  const line: CartChoice[] = [
+    { id: "hot", group: "Spice", kind: "pick", label: "Hot", priceDelta: 0 },
+    { id: "shot", group: "Extras", kind: "add", label: "Extra shot", priceDelta: 150 },
+    { id: "onion", group: "Leave out", kind: "leave_out", label: "Onions", priceDelta: 0 },
+  ];
+  const money = (n: number) => `Rs ${n}`;
+
+  it("reads like the bill in English", () => {
+    expect(cartChoiceText(line, money, getDictionary("en").dish.leaveOut)).toBe("Hot, Extra shot +Rs 150, No onions");
+  });
+
+  it("uses the Italian leave-out wording", () => {
+    expect(cartChoiceText(line, money, getDictionary("it").dish.leaveOut)).toBe("Hot, Extra shot +Rs 150, Senza onions");
   });
 });

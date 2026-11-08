@@ -1,3 +1,5 @@
+import { choiceLine } from "ui";
+
 export type AllergenStatus = "contains" | "unverified" | "no_declared_match";
 
 export interface Choice {
@@ -102,3 +104,7 @@ export function requirement(g: ChoiceGroup): { key: "chooseOne" | "choose" | "up
   if (g.min_select > 0) return { key: "choose", n: g.min_select };
   return g.max_select > 1 ? { key: "upTo", n: g.max_select } : { key: "optional", n: 1 };
 }
+
+/** A cart line's choices as bills print them: "Hot, Extra shot +Rs 150, No onions". */
+export const cartChoiceText = (choices: CartChoice[], money: (n: number) => string, noLabel: string) =>
+  choices.map((c) => choiceLine({ ...c, price_delta: c.priceDelta }, money, noLabel)).join(", ");

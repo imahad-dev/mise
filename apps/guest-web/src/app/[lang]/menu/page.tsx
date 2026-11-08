@@ -23,14 +23,16 @@ import {
   soldOutIds,
 } from "../../../lib/ordering";
 import {
+  cartChoiceText,
   defaultPicks,
   matchedAllergens,
   needsPage,
   pickedChoices,
   worstStatus,
+  type CartChoice,
   type ChoiceGroup,
 } from "../../../lib/choices";
-import { Badge, Button, Sheet, choiceLine, formatPrice as formatAmount } from "ui";
+import { Badge, Button, Sheet, formatPrice as formatAmount } from "ui";
 import { menuTaxNote, serviceLine } from "../../../lib/pay";
 import {
   addToCart,
@@ -45,7 +47,6 @@ import {
   updateCartItemQuantity,
   type CartState,
 } from "../../../lib/cart";
-import type { CartChoice } from "../../../lib/choices";
 
 interface MenuItem {
   id: string;
@@ -440,7 +441,7 @@ export default function GuestMenuPage({
     menu.items.flatMap((i) => (i.choice_groups ?? []).flatMap((g) => g.choices.filter((c) => !c.available).map((c) => c.id))),
   );
   const choiceText = (choices: CartChoice[]) =>
-    choices.map((c) => choiceLine({ ...c, price_delta: c.priceDelta }, formatPrice, dict.dish.leaveOut)).join(", ");
+    cartChoiceText(choices, formatPrice, dict.dish.leaveOut);
   // Two lines of one dish differ by size or choices, so their buttons say which.
   const lineLabel = (verb: string, item: CartState["items"][number]) =>
     [verb, item.name, item.optionLabel, item.choices?.length ? choiceText(item.choices) : null]
