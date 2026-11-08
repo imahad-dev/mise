@@ -118,9 +118,10 @@ class SimItem:
     weight: float = 1.0
     # (option id, weight) in menu order; an item with options always gets one of them
     options: tuple[tuple[uuid.UUID, float], ...] = ()
-    # Each required group's choice ids (one is always drawn), then optional extras.
-    required: tuple[tuple[uuid.UUID, ...], ...] = ()
-    extras: tuple[uuid.UUID, ...] = ()
+    # Per required group (min_select, choice ids): that many distinct ids are always drawn.
+    required: tuple[tuple[int, tuple[uuid.UUID, ...]], ...] = ()
+    # Per optional add group (max_select, choice ids): each id drawn at EXTRA_RATE, up to the max.
+    extras: tuple[tuple[int, tuple[uuid.UUID, ...]], ...] = ()
 
 
 LineKey = tuple[uuid.UUID, uuid.UUID | None]  # (menu item id, option id)
@@ -222,9 +223,13 @@ def generate_orders(
                         option_id = item.options[pick][0]
                     key = (item.id, option_id)
                     if key not in order.choices and (item.required or item.extras):
-                        drawn = [ids[int(picks.integers(len(ids)))] for ids in item.required]
-                        # shortcut: extras ignore max_select; cap per group if seeds exceed it
-                        drawn += [e for e in item.extras if picks.random() < EXTRA_RATE]
+                        drawn = [
+                            ids[int(i)]
+                            for n, ids in item.required
+                            for i in picks.choice(len(ids), size=n, replace=False)
+                        ]
+                        for hi, ids in item.extras:
+                            drawn += [e for e in ids if picks.random() < EXTRA_RATE][:hi]
                         order.choices[key] = tuple(drawn)
                     order.lines[key] = min(20, order.lines.get(key, 0) + 1)
                 order.payment_method = methods[int(extra.choice(len(methods), p=method_p))]
@@ -257,16 +262,14 @@ def sim_items(restaurant: Restaurant, items: list[MenuItem]) -> list[SimItem]:
                 weight=weights.get(item.id, 1.0),
                 options=tuple((o.id, float(w)) for o, w in zip(item.options, ow, strict=True)),
                 required=tuple(
-                    ids
+                    (g.min_select, ids)
                     for g in item.choice_groups
                     if g.min_select > 0 and (ids := tuple(c.id for c in g.choices if c.available))
                 ),
                 extras=tuple(
-                    c.id
+                    (g.max_select, tuple(c.id for c in g.choices if c.available))
                     for g in item.choice_groups
                     if g.kind == "add" and g.min_select == 0
-                    for c in g.choices
-                    if c.available
                 ),
             )
         )
