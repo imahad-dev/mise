@@ -102,6 +102,28 @@ from another brand.
   keeps its disclaimer and never carries a fiscal number, QR code, authority logo or the words
   "invoice", "FBR integrated" or "compliant".
 
+### One venue per guest
+
+A guest sees only the venue whose QR code they scanned, from the scan to the end of the visit:
+no other venue's name, logo, menu or link, no venue list or picker, and no "Mise" name or logo.
+
+- **Scan page** (`/q/[token]`): today it shows the Mise logo. It shows a neutral, nameless
+  loading state until the token resolves, then the venue's brand. A bad or expired token shows a
+  neutral "Scan the QR code on your table again" message with no venue or Mise name.
+- **Expired guest session:** the menu page now redirects to `/` on a 401. `/` is the demo
+  landing page and lists all four venues. It redirects to the same neutral "scan again" message
+  instead. No guest page links to `/`.
+- **Installed-app details:** `public/manifest.json` ("Mise - Guest Dining") is replaced by a
+  manifest per venue (name, colours, icon), served for venue pages only. The page title,
+  `themeColor` and icon are the venue's.
+- **Not-found page:** neutral, with no venue or Mise name.
+- **Assistant:** it already answers from the session's own venue (`guest_chat` scopes by
+  `session.restaurant_id`); its title is the venue's name.
+- **API:** every guest endpoint already scopes by the session's venue. A test confirms a guest
+  session at one venue gets 404 or nothing for another venue's menu, bill and service calls.
+- **Demo landing (`/`)** stays as the Mise-branded presenter page that lists the demo venues. No
+  QR code or guest flow leads to it.
+
 ### Identities
 
 Final colour values are chosen from the user's shared palette set and must pass the contrast test.
@@ -198,6 +220,10 @@ Noor & Za'atar and Tikka Town packages follow phase 1, from their round-1 logos.
 
 - **Isolation:** no file in `brands/<a>/` imports from `brands/<b>/`; the rendered menu for each
   venue contains no other venue's name, logo file or font, and no "Mise".
+- **One venue per guest (e2e):** scan venue A and walk every guest page (scan, welcome, menu,
+  dish sheet, chat, order status, pay, sample bill, expired session, not found); the page text,
+  title, manifest and image sources never contain another venue's name or "Mise". Run for all
+  four venues.
 - **Contrast:** every brand's text and background pairs pass WCAG 2 AA (4.5:1 body text, 3:1 large
   text and UI parts).
 - **Fixed styles:** price, allergen chip and checkout total render with the same classes under all
