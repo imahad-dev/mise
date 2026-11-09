@@ -6,6 +6,7 @@ import type { LineChoice } from "ui";
 import { KitchenChoices } from "../../../components/KitchenChoices";
 import { useSse } from "../../../hooks/use-sse";
 import { useVenue } from "../../../lib/venue";
+import { activeLabel, keepUnits } from "../../../lib/kitchen";
 
 interface KitchenOrderItem {
   id: string;
@@ -271,7 +272,7 @@ export default function KitchenDisplayPage() {
             {new Date(nowServer).toLocaleTimeString()}
           </span>
           <span className="px-3 py-1 rounded-full bg-kds-card text-xs font-bold text-kds-muted">
-            {placedOrders.length} ORDERS ACTIVE
+            {activeLabel(placedOrders.length)}
           </span>
         </div>
 
@@ -383,8 +384,8 @@ export default function KitchenDisplayPage() {
                       <div className="flex items-baseline justify-between text-base font-black">
                         <span className="text-xl text-kds-accent font-mono">{item.quantity}x</span>
                         <span className="flex-1 text-right text-lg text-cream">
-                          {item.kitchen_name}
-                          {item.option_label && <span className="text-kds-accent"> — {item.option_label}</span>}
+                          {keepUnits(item.kitchen_name)}
+                          {item.option_label && <span className="text-kds-accent"> — {keepUnits(item.option_label)}</span>}
                         </span>
                       </div>
 

@@ -231,6 +231,7 @@ test.describe.serial("4. Kehwa counter: pay first, then collect", () => {
     await expect(guest.getByText("Paid — preparing your order")).toBeVisible(POLL);
 
     await expect(kitchen.getByRole("heading", { name: `PICKUP ${label}` })).toBeVisible();
+    await expect(kitchen.getByText("1 ORDER ACTIVE")).toBeVisible();
     await kitchen.getByRole("button", { name: "BUMP" }).click();
     await expect(guest.getByText(`Ready — collect ${label} at the counter`)).toBeVisible(POLL);
 
