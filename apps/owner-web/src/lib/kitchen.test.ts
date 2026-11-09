@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { activeLabel, keepUnits } from "./kitchen";
 
-const N = " ";
+const N = "\u00a0";
 
 describe("activeLabel", () => {
   it("is singular only for exactly one", () => {
@@ -26,6 +26,10 @@ describe("keepUnits", () => {
     for (const s of ["2 garlic naan", "10 lemons", "2 grams of saffron", "3 pcsx"]) {
       expect(keepUnits(s)).toBe(s);
     }
+  });
+
+  it("really inserts a non-ASCII space", () => {
+    expect(keepUnits("1 kg")).not.toBe("1 kg");
   });
 
   it("is idempotent", () => {
