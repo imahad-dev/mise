@@ -19,7 +19,7 @@ TRANSLATION = {
 
 DAILY_BRIEF = {
     "date": "2026-10-11",
-    "summary": "Expected busy Saturday. Consider featuring pasta specials.",
+    "summary": "Steady trade expected. Keep prep in line with the forecast and watch the slowest dishes.",
     "actions": [
         {"type": "prep", "item": "Tiramisu", "reason": "High demand predicted"},
         {"type": "promote", "item": "House Wine", "reason": "Low margin, needs push"},
