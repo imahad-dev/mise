@@ -20,6 +20,7 @@ from src.models.order import Order, OrderItem
 from src.models.restaurant import Restaurant
 from src.redis_client import redis_client
 from src.services.analytics import Window
+from src.services.brief import fmt_money
 from src.services.narrative import numbers_grounded
 
 
@@ -113,7 +114,8 @@ async def test_simulated_orders_feed_brief_and_forecast(
     assert brief["summary_source"] == "template"
     assert "simulated" in brief["summary"]
     assert brief["currency"] == "PKR"
-    assert "PKR " in brief["summary"] and "EUR" not in brief["summary"]
+    assert "Rs " in brief["summary"] and "PKR" not in brief["summary"]
+    assert "EUR" not in brief["summary"]
     assert brief["data_sources"]["live"] == 0
     assert brief["data_sources"]["simulated"] > 0
 
@@ -183,7 +185,7 @@ async def test_simulated_orders_feed_brief_and_forecast(
     assert pm["bills"]["standard"] > 0 and pm["bills"]["digital"] > 0
     assert pm["revenue_share"]["digital"] > 0
     assert "Digital payments were" in brief["summary"]
-    assert f"PKR {pm['digital_tax_saving']} in tax" in brief["summary"]
+    assert f"{fmt_money('PKR', float(pm['digital_tax_saving']))} in tax" in brief["summary"]
     assert f"Digital payments were {pm['digital_revenue_pct']}%" in brief["summary"]
     # Every number the summary states can be traced to the response itself.
     assert numbers_grounded(brief["summary"], {k: v for k, v in brief.items() if k != "summary"})
