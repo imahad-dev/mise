@@ -58,8 +58,8 @@ describe("activeLabel", () => {
 
 describe("keepUnits", () => {
   it("joins a quantity to its unit with a non-breaking space", () => {
-    expect(keepUnits("Mutton karahi 1 kg")).toBe("Mutton karahi 1 kg");
-    expect(keepUnits("Half 0.5 kg, 250 g, 330 ml")).toBe("Half 0.5 kg, 250 g, 330 ml");
+    expect(keepUnits("Mutton karahi 1 kg")).toBe("Mutton karahi 1\u00a0kg");
+    expect(keepUnits("Half 0.5 kg, 250 g, 330 ml")).toBe("Half 0.5\u00a0kg, 250\u00a0g, 330\u00a0ml");
   });
 
   it("leaves words that only start with a unit letter alone", () => {
@@ -85,7 +85,7 @@ export function activeLabel(n: number): string {
 
 /** Keeps "1 kg" on one line: a non-breaking space between a number and its unit. */
 export function keepUnits(text: string): string {
-  return text.replace(/(\d) (kg|g|ml|l|pc|pcs)\b/gi, "$1 $2");
+  return text.replace(/(\d) (kg|g|ml|l|pc|pcs)\b/gi, "$1\u00a0$2");
 }
 ```
 
@@ -450,7 +450,7 @@ git commit -m "fix(guest): menu bottom padding clears the assistant button"
 
 **Task 1 — kitchen.** In `kitchen.test.ts` also assert:
 - `activeLabel(100)` → `"100 ORDERS ACTIVE"`.
-- `keepUnits("")` → `""`; `keepUnits("1kg")` unchanged (no space, nothing to join); `keepUnits("1 KG")` → `"1 KG"`.
+- `keepUnits("")` → `""`; `keepUnits("1kg")` unchanged (no space, nothing to join); `keepUnits("1 KG")` → `"1\u00a0KG"`.
 - Words that merely start with a unit stay alone: `"10 lemons"`, `"2 grams of saffron"`, `"3 pcsx"` unchanged.
 - Idempotent: `keepUnits(keepUnits("1 kg")) === keepUnits("1 kg")`.
 - Several in one string: `"1 kg + 2 kg"` → both joined.
