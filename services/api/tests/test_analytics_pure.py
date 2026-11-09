@@ -614,8 +614,11 @@ def test_template_summary_negative_and_near_zero_amounts():
     }
     text = template_summary(facts)
     assert numbers_grounded(text, facts)
-    assert "-Rs 500" in text and f"{round(-12.35, 1)}%" in text
-    assert "-0" not in text and "-Rs 0" not in text
+    assert "Rs 12,344" in text  # 12344.5 rounds half-to-even
+    assert "average order Rs 0" in text
+    assert "-Rs 500" in text
+    assert "-12.3%" in text  # follows Python's float rounding of -12.35
+    assert "-Rs 0" not in text
 
 
 def test_template_summary_no_top_action_without_impact():

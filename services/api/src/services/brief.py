@@ -317,8 +317,9 @@ def fmt_money(currency: str, amount: float | Decimal) -> str:
     # shortcut: Python rounds .5 to even, so a .5 rupee can differ by 1 from the UI;
     # switch both this and narrative.numbers_grounded to half-up if it matters.
     pkr = currency == "PKR"
-    value = round(abs(float(amount)), 0 if pkr else 2)
-    sign = "-" if float(amount) < 0 and value else ""
+    x = float(amount)
+    value = round(abs(x), 0 if pkr else 2)
+    sign = "-" if x < 0 and value else ""
     if pkr:
         return f"{sign}Rs {value:,.0f}"
     return f"{sign}{_SYMBOLS.get(currency, currency + ' ')}{value:,.2f}"
