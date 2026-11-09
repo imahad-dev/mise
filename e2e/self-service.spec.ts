@@ -722,9 +722,10 @@ test.describe.serial("Sheets on a phone", () => {
     await context.close();
   });
 
-  // The floating assistant button sits over the bottom of the page; the last dish row (price, chips and + button) must clear it,
-  // both normally and raised above the order bar (shown for a table that is not open yet).
-  for (const [width, height, normal, raised] of [
+  // The menu's fixed bottom stack (assistant, then the order bar and View order) must never cover a
+  // dish: the last dish row (price, chips and + button) clears it, with and without the order bar
+  // (shown for a table that is not open yet).
+  for (const [width, height, plain, withBar] of [
     [375, 812, "T2", "T5"],
     [320, 568, "T3", "T6"],
   ] as const) {
@@ -740,11 +741,11 @@ test.describe.serial("Sheets on a phone", () => {
         expect(apart, `${when}: assistant ${JSON.stringify(chat)} vs last dish row ${JSON.stringify(row)}`).toBe(true);
       };
 
-      await openTable(ANGEETHI, normal);
-      await openTableMenu(guest, T[normal].qr_token);
+      await openTable(ANGEETHI, plain);
+      await openTableMenu(guest, T[plain].qr_token);
       await clears("menu");
 
-      await openTableMenu(guest, T[raised].qr_token); // not opened: the bar says the table is not ready
+      await openTableMenu(guest, T[withBar].qr_token); // not opened: the bar says the table is not ready
       const waiting = shown(guest, "Your table will be ready in a moment. A waiter is on the way.").first();
       await guest.getByRole("button", { name: "Add Naan", exact: true }).click();
       await expect(waiting).toBeVisible();
@@ -757,6 +758,23 @@ test.describe.serial("Sheets on a phone", () => {
       const chat = await guest.getByRole("button", { name: "Ask Mise Assistant" }).boundingBox();
       const bar = await waiting.boundingBox();
       expect(chat!.y + chat!.height, "assistant button sits above the order bar").toBeLessThanOrEqual(bar!.y);
+
+      // A tap in the stack's empty width, level with the assistant, reaches the page underneath.
+      const hit = await guest.evaluate(
+        ({ x, y }) => Boolean(document.elementFromPoint(x, y)?.closest(".fixed")),
+        { x: 24, y: chat!.y + chat!.height / 2 },
+      );
+      expect(hit, "the empty part of the bottom stack lets taps through").toBe(false);
+
+      // The open chat fits the screen: its close button is reachable and nothing is cut off.
+      await guest.getByRole("button", { name: "Ask Mise Assistant" }).click();
+      const close = await guest.getByRole("button", { name: "Close", exact: true }).boundingBox();
+      expect(close!.y, "chat close button is below the top of the screen").toBeGreaterThanOrEqual(0);
+      const panel = await guest.getByRole("heading", { name: "Ask Mise Assistant" }).locator("xpath=../../..").boundingBox();
+      expect(panel!.x, "chat panel starts inside the screen").toBeGreaterThanOrEqual(0);
+      expect(panel!.x + panel!.width, "chat panel ends inside the screen").toBeLessThanOrEqual(width);
+      expect(panel!.y, "chat panel top is on screen").toBeGreaterThanOrEqual(0);
+      await guest.getByRole("button", { name: "Close", exact: true }).click();
       await context.close();
     });
   }

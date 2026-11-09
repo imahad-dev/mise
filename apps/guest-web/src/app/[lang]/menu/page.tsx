@@ -451,7 +451,7 @@ export default function GuestMenuPage({
       .filter(Boolean)
       .join(" ");
 
-  // Bottom padding clears the assistant button (chat-panel.tsx: bottom-20, or bottom-64 above the order bar).
+  // Bottom padding clears the fixed bottom stack (assistant, order bar, View order).
   return (
     <div className={`min-h-screen bg-paper text-ink ${barText ? "pb-80" : "pb-36"}`}>
       {/* Always mounted, so a screen reader hears each new bar message. */}
@@ -590,25 +590,25 @@ export default function GuestMenuPage({
         </div>
         {barText && (
           <div className="pointer-events-auto space-y-3 rounded-2xl border border-line bg-card p-4 shadow-lg">
-              <p className="text-base font-semibold text-ink">{barText}</p>
-              {mode === "waiting" && (
-                <div className="[&_button]:min-h-12 [&_button]:w-full [&_button]:text-base">
-                  <CallWaiter lang={lang} />
-                </div>
-              )}
-            </div>
-          )}
-          {cartCount > 0 && (
-            <Button
-              className="pointer-events-auto min-h-12 w-full justify-between py-3.5 text-base"
-              onClick={() => setCartOpen(true)}
-            >
-              <span>
-                {dict.ui.checkout} · {cartCount}
-              </span>
-              <span className="tabular-nums">{formatPrice(cartTotal)}</span>
-            </Button>
-          )}
+            <p className="text-base font-semibold text-ink">{barText}</p>
+            {mode === "waiting" && (
+              <div className="[&_button]:min-h-12 [&_button]:w-full [&_button]:text-base">
+                <CallWaiter lang={lang} />
+              </div>
+            )}
+          </div>
+        )}
+        {cartCount > 0 && (
+          <Button
+            className="pointer-events-auto min-h-12 w-full justify-between py-3.5 text-base"
+            onClick={() => setCartOpen(true)}
+          >
+            <span>
+              {dict.ui.checkout} · {cartCount}
+            </span>
+            <span className="tabular-nums">{formatPrice(cartTotal)}</span>
+          </Button>
+        )}
       </div>
 
       <Sheet

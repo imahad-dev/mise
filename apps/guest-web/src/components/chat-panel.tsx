@@ -83,7 +83,8 @@ export function ChatPanel({ locale = "en", docked = false }: ChatPanelProps) {
           {dict.ui.chatTitle}
         </button>
       ) : (
-        <div className="w-80 sm:w-96 rounded-2xl bg-card border border-line shadow-2xl flex flex-col max-h-[500px] overflow-hidden">
+        // Fits a 320 px phone: never wider than the screen minus its gutters, never taller than the space above the order bar.
+        <div className="w-[min(20rem,calc(100vw-2rem))] sm:w-96 rounded-2xl bg-card border border-line shadow-2xl flex flex-col max-h-[min(500px,calc(100dvh-18rem))] overflow-hidden">
           {/* Header */}
           <div className="px-4 py-3 bg-paper-2 border-b border-line flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -105,7 +106,7 @@ export function ChatPanel({ locale = "en", docked = false }: ChatPanelProps) {
           </div>
 
           {/* Messages */}
-          <div className="p-3 flex-1 overflow-y-auto space-y-2 min-h-[160px] max-h-[300px] text-xs">
+          <div className="p-3 flex-1 overflow-y-auto space-y-2 min-h-24 max-h-[300px] text-xs">
             {messages.length === 0 ? (
               <p className="text-ink-muted text-center py-6 italic">
                 Ask about dish ingredients or dietary options.
