@@ -612,8 +612,8 @@ async def test_uk_brief_excludes_vat_and_reports_service_apart(client, db_sessio
     assert (b["prices_include_tax"], b["tax_split_by_method"]) == (True, False)
     # One VAT rate for every method: the payment mix says nothing worth narrating.
     assert "Digital payments" not in b["summary"]
-    assert "revenue GBP 17.5 (excl. VAT), average order GBP 17.5 (excl. VAT)" in b["summary"]
-    assert "contribution margin GBP 14.5 (excl. VAT;" in b["summary"]
+    assert "revenue £17.50 (excl. VAT), average order £17.50 (excl. VAT)" in b["summary"]
+    assert "contribution margin £14.50 (excl. VAT;" in b["summary"]
     assert "2.63" not in b["summary"]
 
 

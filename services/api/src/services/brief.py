@@ -309,6 +309,21 @@ def build_actions(
     return actions
 
 
+_SYMBOLS = {"EUR": "€", "GBP": "£"}
+
+
+def fmt_money(currency: str, amount: float | Decimal) -> str:
+    """Money as the owner app shows it: PKR whole rupees, EUR/GBP symbol, else CODE."""
+    # shortcut: Python rounds .5 to even, so a .5 rupee can differ by 1 from the UI;
+    # switch both this and narrative.numbers_grounded to half-up if it matters.
+    pkr = currency == "PKR"
+    value = round(abs(float(amount)), 0 if pkr else 2)
+    sign = "-" if float(amount) < 0 and value else ""
+    if pkr:
+        return f"{sign}Rs {value:,.0f}"
+    return f"{sign}{_SYMBOLS.get(currency, currency + ' ')}{value:,.2f}"
+
+
 def template_summary(facts: dict) -> str:
     k, w = facts["kpis"], facts["window"]
     if not k["orders"]:
@@ -321,20 +336,21 @@ def template_summary(facts: dict) -> str:
     net, net_sep = (" (excl. VAT)", " (excl. VAT; ") if vat else ("", " (")
     text = (
         f"In the {w['days']} days to {w['end']}: {k['orders']} orders, revenue "
-        f"{cur} {k['revenue']}{net}, average order {cur} {k['aov']}{net}, contribution margin "
-        f"{cur} {k['contribution_margin']}{net_sep}{k['margin_pct']}%)."
+        f"{fmt_money(cur, k['revenue'])}{net}, average order {fmt_money(cur, k['aov'])}{net}, "
+        f"contribution margin {fmt_money(cur, k['contribution_margin'])}{net_sep}"
+        f"{round(k['margin_pct'], 1)}%)."
     )
     money = [a for a in facts["actions"] if a["estimated_impact_per_week"] is not None]
     if money:
         text += (
             f" Top action: {money[0]['title']} "
-            f"(estimated {cur} {money[0]['estimated_impact_per_week']} per week)."
+            f"(estimated {fmt_money(cur, money[0]['estimated_impact_per_week'])} per week)."
         )
     pm = facts.get("payment_mix")
     if pm and (pm["bills"]["standard"] or pm["bills"]["digital"]):
         text += (
             f" Digital payments were {pm['digital_revenue_pct']}% of billed revenue and saved "
-            f"guests {cur} {pm['digital_tax_saving']} in tax."
+            f"guests {fmt_money(cur, pm['digital_tax_saving'])} in tax."
         )
     if facts["data_sources"]["simulated"]:
         text += " Figures include simulated demo orders."
