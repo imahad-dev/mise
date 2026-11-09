@@ -8,6 +8,7 @@ import {
   claimRestore,
   nextStatusCheck,
   orderOutcome,
+  orderRef,
   orderStage,
   sentOrderId,
   soldOutChoices,
@@ -128,5 +129,21 @@ describe("choice refusals", () => {
     expect(orderOutcome(422, { detail: { error: "choices_changed", menu_item_id: "x" } })).toBe("choices_changed");
     expect(soldOutChoices({ detail: { unavailable_choices: [{ choice_id: "a", label: "Extra milk" }] } })).toEqual([{ id: "a", label: "Extra milk" }]);
     expect(changedDish({ detail: { error: "choices_changed", menu_item_id: "x" } })).toBe("x");
+  });
+});
+
+describe("orderRef", () => {
+  it("shows the first 6 characters, upper case, with a #", () => {
+    expect(orderRef("3f9a1c2e-7b44-4d1e-9a0b-1234567890ab")).toBe("#3F9A1C");
+  });
+  it("does not throw on a short or empty id", () => {
+    expect(orderRef("ab")).toBe("#AB");
+    expect(orderRef("")).toBe("#");
+  });
+  it("gives the same ref for upper- and lower-case ids", () => {
+    expect(orderRef("3F9A1C2E-7B44")).toBe(orderRef("3f9a1c2e-7b44"));
+  });
+  it("is only a reading aid: ids that differ after character 6 share a ref, the full id stays the key", () => {
+    expect(orderRef("3f9a1c-aaaa")).toBe(orderRef("3f9a1c-bbbb"));
   });
 });

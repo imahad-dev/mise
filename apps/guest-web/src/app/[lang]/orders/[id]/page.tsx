@@ -9,7 +9,7 @@ import { ChatPanel } from "../../../../components/chat-panel";
 import { useSse } from "../../../../hooks/use-sse";
 import { getDictionary } from "../../../../i18n";
 import { Button, choiceLine, formatPrice, type LineChoice } from "ui";
-import { orderStage } from "../../../../lib/ordering";
+import { orderRef, orderStage } from "../../../../lib/ordering";
 import { VISIT_ENDED, billState, claimMessage, counterState, paidText, payForwardThanks, type GuestBill } from "../../../../lib/pay";
 
 interface OrderItem {
@@ -188,7 +188,7 @@ export default function OrderStatusPage({
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <h1 className="text-xl font-bold text-ink">{dict.ui.orderStatus}</h1>
-              <p className="text-xs text-ink-muted font-mono mt-0.5 break-all">ID: {id}</p>
+              <p className="text-xs text-ink-muted font-mono mt-0.5">{orderRef(id)}</p>
             </div>
             <CallWaiter lang={lang} />
           </div>
