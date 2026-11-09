@@ -722,7 +722,7 @@ test.describe.serial("Sheets on a phone", () => {
     await context.close();
   });
 
-  // The floating assistant button sits over the bottom of the page; the last price must clear it,
+  // The floating assistant button sits over the bottom of the page; the last dish row (price, chips and + button) must clear it,
   // both normally and raised above the order bar (shown for a table that is not open yet).
   for (const [width, height, normal, raised] of [
     [375, 812, "T2", "T5"],
@@ -733,11 +733,11 @@ test.describe.serial("Sheets on a phone", () => {
       const guest = await context.newPage();
       const clears = async (when: string) => {
         await guest.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-        const price = await guest.locator("main li").last().boundingBox(); // the whole row: price, chips and + button
+        const row = await guest.locator("main li").last().boundingBox(); // the whole row: price, chips and + button
         const chat = await guest.getByRole("button", { name: "Ask Mise Assistant" }).boundingBox();
-        expect(price && chat, `${when}: price and assistant button are on screen`).toBeTruthy();
-        const apart = chat!.y >= price!.y + price!.height || chat!.y + chat!.height <= price!.y;
-        expect(apart, `${when}: assistant ${JSON.stringify(chat)} vs last dish row ${JSON.stringify(price)}`).toBe(true);
+        expect(row && chat, `${when}: last dish row and assistant button are on screen`).toBeTruthy();
+        const apart = chat!.y >= row!.y + row!.height || chat!.y + chat!.height <= row!.y;
+        expect(apart, `${when}: assistant ${JSON.stringify(chat)} vs last dish row ${JSON.stringify(row)}`).toBe(true);
       };
 
       await openTable(ANGEETHI, normal);
