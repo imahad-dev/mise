@@ -443,3 +443,38 @@ git commit -m "fix(guest): menu bottom padding clears the assistant button"
 - [ ] **Step 1:** Run `make ci`. Expected: lint, Python tests, TS tests and the branding check all pass.
 - [ ] **Step 2:** With the stack up (`LLM_PROVIDER=mock DEMO_MODE=true make up`), run `pnpm exec playwright test e2e/self-service.spec.ts`. Expected: PASS, including the new "1 ORDER ACTIVE" line.
 - [ ] **Step 3:** Open the owner brief for Angeethi House and confirm the summary shows amounts like `Rs 12,346` with a one-decimal margin %, and that the Service report mentions no pasta.
+
+---
+
+## Worst-case tests (added on review; part of each task, same commit)
+
+**Task 1 — kitchen.** In `kitchen.test.ts` also assert:
+- `activeLabel(100)` → `"100 ORDERS ACTIVE"`.
+- `keepUnits("")` → `""`; `keepUnits("1kg")` unchanged (no space, nothing to join); `keepUnits("1 KG")` → `"1 KG"`.
+- Words that merely start with a unit stay alone: `"10 lemons"`, `"2 grams of saffron"`, `"3 pcsx"` unchanged.
+- Idempotent: `keepUnits(keepUnits("1 kg")) === keepUnits("1 kg")`.
+- Several in one string: `"1 kg + 2 kg"` → both joined.
+
+**Task 2 — brief money.** In `test_analytics_pure.py` also assert:
+- `fmt_money("PKR", 0)` → `"Rs 0"`; `fmt_money("PKR", -0.4)` → `"Rs 0"` (no `-Rs 0`); `fmt_money("EUR", -0.001)` → `"€0.00"`.
+- `fmt_money("PKR", Decimal("2527.00"))` → `"Rs 2,527"` (Decimal input).
+- `fmt_money("GBP", 1_234_567_890.5)` → `"£1,234,567,890.50"`.
+- Half values stay grounded: a PKR summary with `revenue=12344.5`, `aov=0.5`, a negative `contribution_margin=-500.25` and `margin_pct=-12.35` passes `numbers_grounded`, shows `-Rs 500` and `-12.3%` or `-12.4%` as Python's `round` gives, and never prints `-0`.
+  Use Python's `round` (not half-up) so the text matches the number check; add the comment
+  `# shortcut: Python rounds .5 to even, so a .5 rupee can differ by 1 from the UI; switch both this and narrative.numbers_grounded to half-up if it matters.`
+- Unknown currency `"XYZ"` → `"XYZ 1.50"`.
+- Summary with `actions` whose `estimated_impact_per_week` is `None` for every action: no "Top action" sentence.
+
+**Task 3 — mock text.** After the change run
+`uv run --project services/api python -c "import ast,re,pathlib; t=pathlib.Path('services/inference/mock/src/canned.py').read_text(encoding='utf-8'); s=re.search(r'\"summary\": \"([^\"]*)\"', t).group(1); assert not re.search(r'\d', s), s; assert 'pasta' not in s.lower(); print('ok')"`
+Expected: `ok` (no digits, so it always passes the number check; no dish).
+
+**Task 4 — order ref.** In `ordering.test.ts` also assert:
+- `orderRef("ab")` → `"#AB"` (short id, no throw); `orderRef("")` → `"#"`.
+- An already upper-case id gives the same result as lower-case.
+- Two UUIDs differing only after character 6 give the same ref (documents the limit; the full id stays in the URL).
+
+**Task 5 — assistant button.** Add a Playwright test in `e2e/self-service.spec.ts` (or the file that already opens a guest menu; follow its helpers) at viewport 375 × 812:
+- Scroll the menu to the bottom; the last dish's price element's bounding box does not intersect the assistant button's bounding box.
+- Add a dish so the order bar shows, scroll to the bottom again, assert the same.
+- Repeat at 320 × 568 (smallest common phone).
