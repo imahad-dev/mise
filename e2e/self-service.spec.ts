@@ -745,10 +745,18 @@ test.describe.serial("Sheets on a phone", () => {
       await clears("menu");
 
       await openTableMenu(guest, T[raised].qr_token); // not opened: the bar says the table is not ready
-      // dispatchEvent: on a 320 px screen the header, order bar and assistant button already cover Add.
-      await guest.getByRole("button", { name: "Add Naan", exact: true }).dispatchEvent("click");
-      await expect(shown(guest, "Your table will be ready in a moment. A waiter is on the way.").first()).toBeVisible();
+      const waiting = shown(guest, "Your table will be ready in a moment. A waiter is on the way.").first();
+      await guest.getByRole("button", { name: "Add Naan", exact: true }).click();
+      await expect(waiting).toBeVisible();
       await clears("menu with the order bar");
+
+      // Worst case: with the order bar up, Add still takes a normal tap, and the assistant button
+      // sits in the bottom stack above the bar instead of floating over the dishes.
+      await guest.getByRole("button", { name: "Add Naan", exact: true }).click();
+      await expect(guest.getByRole("button", { name: /View order · 2/})).toBeVisible();
+      const chat = await guest.getByRole("button", { name: "Ask Mise Assistant" }).boundingBox();
+      const bar = await waiting.boundingBox();
+      expect(chat!.y + chat!.height, "assistant button sits above the order bar").toBeLessThanOrEqual(bar!.y);
       await context.close();
     });
   }

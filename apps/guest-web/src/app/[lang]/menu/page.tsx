@@ -580,10 +580,16 @@ export default function GuestMenuPage({
         ))}
       </main>
 
-      {(cartCount > 0 || barText) && (
-        <div className="fixed inset-x-4 bottom-4 z-20 mx-auto max-w-md space-y-2">
-          {barText && (
-            <div className="space-y-3 rounded-2xl border border-line bg-card p-4 shadow-lg">
+      {/* One bottom stack: the assistant sits above the order bar, so neither covers a dish. The
+          stack lets taps through its empty width; only its cards and buttons catch them. */}
+      <div className="pointer-events-none fixed inset-x-4 bottom-4 z-40 mx-auto max-w-md space-y-2">
+        <div className="flex justify-end">
+          <div className="pointer-events-auto">
+            <ChatPanel locale={lang} docked />
+          </div>
+        </div>
+        {barText && (
+          <div className="pointer-events-auto space-y-3 rounded-2xl border border-line bg-card p-4 shadow-lg">
               <p className="text-base font-semibold text-ink">{barText}</p>
               {mode === "waiting" && (
                 <div className="[&_button]:min-h-12 [&_button]:w-full [&_button]:text-base">
@@ -593,15 +599,17 @@ export default function GuestMenuPage({
             </div>
           )}
           {cartCount > 0 && (
-            <Button className="min-h-12 w-full justify-between py-3.5 text-base" onClick={() => setCartOpen(true)}>
+            <Button
+              className="pointer-events-auto min-h-12 w-full justify-between py-3.5 text-base"
+              onClick={() => setCartOpen(true)}
+            >
               <span>
                 {dict.ui.checkout} · {cartCount}
               </span>
               <span className="tabular-nums">{formatPrice(cartTotal)}</span>
             </Button>
           )}
-        </div>
-      )}
+      </div>
 
       <Sheet
         open={cartOpen}
@@ -769,7 +777,6 @@ export default function GuestMenuPage({
         )}
       </Sheet>
 
-      <ChatPanel locale={lang} raised={Boolean(barText)} />
     </div>
   );
 }

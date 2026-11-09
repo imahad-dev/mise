@@ -5,8 +5,8 @@ import { getDictionary } from "../i18n";
 
 export interface ChatPanelProps {
   locale?: string;
-  /** Sit above a tall bottom bar on phones. */
-  raised?: boolean;
+  /** Placed by the parent (e.g. in the menu's bottom stack) instead of floating over the page. */
+  docked?: boolean;
 }
 
 interface ChatMessage {
@@ -14,7 +14,7 @@ interface ChatMessage {
   text: string;
 }
 
-export function ChatPanel({ locale = "en", raised = false }: ChatPanelProps) {
+export function ChatPanel({ locale = "en", docked = false }: ChatPanelProps) {
   const dict = getDictionary(locale);
   const [isOpen, setIsOpen] = useState(false);
   const [hidden, setHidden] = useState(false);
@@ -70,7 +70,7 @@ export function ChatPanel({ locale = "en", raised = false }: ChatPanelProps) {
   };
 
   return (
-    <div className={`fixed right-4 sm:bottom-4 z-40 ${raised ? "bottom-64" : "bottom-20"}`}>
+    <div className={docked ? "relative" : "fixed right-4 bottom-20 sm:bottom-4 z-40"}>
       {!isOpen ? (
         <button
           onClick={() => setIsOpen(true)}
