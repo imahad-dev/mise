@@ -171,8 +171,8 @@ describe("Cart and idempotency-key management", () => {
     const full = { id: "opt-full", label: "1 kg", price: 3900 };
 
     it("keys a line by dish and option", () => {
-      expect(lineKey({ menuItemId: "karahi", optionId: "opt-half" })).toBe("karahi:opt-half");
-      expect(lineKey({ menuItemId: "naan" })).toBe("naan:");
+      expect(lineKey({ menuItemId: "karahi", optionId: "opt-half" })).toBe("karahi:opt-half:");
+      expect(lineKey({ menuItemId: "naan" })).toBe("naan::");
     });
 
     it("keeps two sizes of one dish as two lines", () => {
@@ -206,9 +206,37 @@ describe("Cart and idempotency-key management", () => {
       addToCart(karahi, 1, full);
       addToCart({ ...karahi, menuItemId: "naan", name: "Naan", price: 60 });
       expect(toOrderPayload(getCart()).items).toEqual([
-        { menu_item_id: "karahi", option_id: "opt-full", quantity: 1, notes: null },
-        { menu_item_id: "naan", option_id: null, quantity: 1, notes: null },
+        { menu_item_id: "karahi", option_id: "opt-full", quantity: 1, notes: null, choice_ids: [] },
+        { menu_item_id: "naan", option_id: null, quantity: 1, notes: null, choice_ids: [] },
       ]);
+    });
+
+    it("two coffees with different choices are two lines; the same choices merge in any order", () => {
+      const coffee = { menuItemId: "c", name: "Coffee", price: 3, allergenStatus: "no_declared_match" as const, matchedAllergens: [] };
+      const milk = { id: "m", group: "Extras", kind: "add" as const, label: "Milk", priceDelta: 0.5 };
+      const shot = { id: "s", group: "Extras", kind: "add" as const, label: "Shot", priceDelta: 0.8 };
+      addToCart(coffee, 1, undefined, [milk]);
+      addToCart(coffee, 1, undefined, [milk, shot]);
+      const cart = addToCart(coffee, 1, undefined, [shot, milk]);
+      expect(cart.items.map((i) => i.quantity)).toEqual([1, 2]);
+      expect(cart.items[1].price).toBeCloseTo(4.3);
+      expect(toOrderPayload(cart).items[1].choice_ids).toEqual(["m", "s"]);
+    });
+
+    it("quantity changes reach only the line with those choices", () => {
+      const coffee = { menuItemId: "c", name: "Coffee", price: 3, allergenStatus: "no_declared_match" as const, matchedAllergens: [] };
+      const milk = { id: "m", group: "Extras", kind: "add" as const, label: "Milk", priceDelta: 0.5 };
+      addToCart(coffee, 1);
+      addToCart(coffee, 1, undefined, [milk]);
+      const cart = updateCartItemQuantity("c", 0, undefined, undefined, ["m"]);
+      expect(cart.items).toHaveLength(1);
+      expect(cart.items[0].choices ?? []).toEqual([]);
+    });
+
+    it("an old cart saved without choices still merges and updates", () => {
+      saveCart({ idempotencyKey: "k", acknowledged: false, items: [{ ...karahi, quantity: 1 }] });
+      expect(addToCart(karahi, 1).items.map((i) => i.quantity)).toEqual([2]);
+      expect(updateCartItemQuantity("karahi", 0).items).toEqual([]);
     });
   });
 });

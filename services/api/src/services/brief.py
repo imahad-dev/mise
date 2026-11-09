@@ -448,6 +448,8 @@ async def compute_brief(
         "tax_split_by_method": splits_by_method(restaurant.tax_jurisdiction),
         # Not narrated and not revenue: the optional service charge is staff money.
         "service_charge_collected": await analytics.service_charge_collected(db, w),
+        # Not narrated: the model gets no new figures.
+        "extras": await analytics.extras_summary(db, w),
         # Not narrated and not revenue: chai bought for others and handed out this week
         # (the last 7 local days, today included).
         "pay_forward": await pay_forward.window_totals(

@@ -14,7 +14,7 @@ from sqlalchemy.orm import selectinload
 
 from src.inference.metrics import record_metrics
 from src.models.audit import AuditLog
-from src.models.menu import MenuItem, MenuTranslation
+from src.models.menu import MenuChoiceGroup, MenuItem, MenuTranslation
 from src.schemas.owner import AIMenuIngestResult
 
 if TYPE_CHECKING:
@@ -126,7 +126,10 @@ async def ingest_menu_from_image(
     item_ids = [item.id for item in created_items]
     stmt = (
         select(MenuItem)
-        .options(selectinload(MenuItem.translations))
+        .options(
+            selectinload(MenuItem.translations),
+            selectinload(MenuItem.choice_groups).selectinload(MenuChoiceGroup.choices),
+        )
         .where(MenuItem.id.in_(item_ids))
         .order_by(MenuItem.sort_order)
     )

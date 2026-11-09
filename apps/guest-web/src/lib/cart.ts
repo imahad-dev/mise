@@ -1,3 +1,5 @@
+import type { CartChoice } from "./choices";
+
 export interface CartItem {
   menuItemId: string;
   name: string;
@@ -5,6 +7,7 @@ export interface CartItem {
   quantity: number;
   optionId?: string;
   optionLabel?: string;
+  choices?: CartChoice[];
   notes?: string;
   allergenStatus: "contains" | "unverified" | "no_declared_match";
   matchedAllergens: string[];
@@ -82,29 +85,40 @@ export interface CartOption {
   price: number;
 }
 
-/** A cart line is one dish in one size: Half and Full of the same dish are separate lines. */
-export function lineKey(item: { menuItemId: string; optionId?: string }): string {
-  return item.menuItemId + ":" + (item.optionId ?? "");
+const choiceKey = (ids?: string[]) => [...(ids ?? [])].sort().join(",");
+
+/** A cart line is one dish in one size with one set of choices. */
+export function lineKey(item: { menuItemId: string; optionId?: string; choices?: CartChoice[] }): string {
+  return `${item.menuItemId}:${item.optionId ?? ""}:${choiceKey(item.choices?.map((c) => c.id))}`;
 }
 
-function sameLine(a: CartItem, menuItemId: string, optionId?: string, notes?: string): boolean {
-  return lineKey(a) === lineKey({ menuItemId, optionId }) && (a.notes || "") === (notes || "");
+function sameLine(a: CartItem, menuItemId: string, optionId?: string, notes?: string, choiceIds?: string[]): boolean {
+  return (
+    a.menuItemId === menuItemId &&
+    (a.optionId ?? "") === (optionId ?? "") &&
+    choiceKey(a.choices?.map((c) => c.id)) === choiceKey(choiceIds) &&
+    (a.notes || "") === (notes || "")
+  );
 }
 
 export function addToCart(
-  item: Omit<CartItem, "quantity" | "optionId" | "optionLabel">,
+  item: Omit<CartItem, "quantity" | "optionId" | "optionLabel" | "choices">,
   quantity = 1,
   option?: CartOption,
+  choices: CartChoice[] = [],
 ): CartState {
   const cart = getCart();
-  const existing = cart.items.find((i) => sameLine(i, item.menuItemId, option?.id, item.notes));
+  const ids = choices.map((c) => c.id);
+  const existing = cart.items.find((i) => sameLine(i, item.menuItemId, option?.id, item.notes, ids));
 
   if (existing) {
     existing.quantity += quantity;
   } else {
     cart.items.push({
       ...item,
-      ...(option && { optionId: option.id, optionLabel: option.label, price: option.price }),
+      ...(option && { optionId: option.id, optionLabel: option.label }),
+      ...(choices.length > 0 && { choices }),
+      price: choices.reduce((sum, c) => sum + c.priceDelta, option?.price ?? item.price),
       quantity,
     });
   }
@@ -122,12 +136,13 @@ export function updateCartItemQuantity(
   quantity: number,
   notes?: string,
   optionId?: string,
+  choiceIds?: string[],
 ): CartState {
   const cart = getCart();
   if (quantity <= 0) {
-    cart.items = cart.items.filter((i) => !sameLine(i, menuItemId, optionId, notes));
+    cart.items = cart.items.filter((i) => !sameLine(i, menuItemId, optionId, notes, choiceIds));
   } else {
-    const target = cart.items.find((i) => sameLine(i, menuItemId, optionId, notes));
+    const target = cart.items.find((i) => sameLine(i, menuItemId, optionId, notes, choiceIds));
     if (target) {
       target.quantity = quantity;
     }
@@ -161,6 +176,7 @@ export function toOrderPayload(cart: CartState) {
     items: cart.items.map((i) => ({
       menu_item_id: i.menuItemId,
       option_id: i.optionId ?? null,
+      choice_ids: (i.choices ?? []).map((c) => c.id),
       quantity: i.quantity,
       notes: i.notes || null,
     })),

@@ -5,6 +5,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict
 
+from src.schemas.orders import LineChoice
+
 
 class KitchenOrderItemResponse(BaseModel):
     id: uuid.UUID
@@ -18,6 +20,7 @@ class KitchenOrderItemResponse(BaseModel):
     allergen_verified: bool
     conflict_with_order_allergens: bool
     matched_allergens: list[str]
+    choices: list[LineChoice] = []
 
     model_config = ConfigDict(from_attributes=True)
 

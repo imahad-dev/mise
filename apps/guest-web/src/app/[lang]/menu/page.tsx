@@ -1,24 +1,38 @@
 "use client";
 
-import React, { use, useEffect, useRef, useState } from "react";
+import React, { use, useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AllergenChip } from "../../../components/allergen-chip";
 import { CallWaiter } from "../../../components/CallWaiter";
 import { CodeEntry } from "../../../components/CodeEntry";
+import { DishSheet } from "../../../components/DishSheet";
 import { ChatPanel } from "../../../components/chat-panel";
 import { useTableStatus } from "../../../hooks/use-table-status";
 import { getDictionary } from "../../../i18n";
 import {
   MAX_ITEMS_PER_ORDER,
   cartQuantity,
+  changedDish,
   claimRestore,
   orderOutcome,
   orderStage,
   rememberNumber,
   rememberedNumber,
   sentOrderId,
+  soldOutChoices,
   soldOutIds,
 } from "../../../lib/ordering";
+import {
+  cartChoiceText,
+  defaultPicks,
+  matchedAllergens,
+  needsPage,
+  pickedChoices,
+  staleLines,
+  worstStatus,
+  type CartChoice,
+  type ChoiceGroup,
+} from "../../../lib/choices";
 import { Badge, Button, Sheet, formatPrice as formatAmount } from "ui";
 import { menuTaxNote, serviceLine } from "../../../lib/pay";
 import {
@@ -52,6 +66,8 @@ interface MenuItem {
   is_gluten_free: boolean;
   available: boolean;
   options?: MenuOption[];
+  image_url?: string | null;
+  choice_groups?: ChoiceGroup[];
 }
 
 interface MenuOption {
@@ -90,11 +106,9 @@ export default function GuestMenuPage({
   const [error, setError] = useState<string | null>(null);
   const [cart, setCart] = useState<CartState>(getCart());
   const [cartOpen, setCartOpen] = useState(false);
-  const [sizePickerItem, setSizePickerItem] = useState<MenuItem | null>(null);
-  // Last picked dish, so the size sheet keeps its title and rows while it closes.
-  const lastPickedItem = useRef<MenuItem | null>(null);
-  if (sizePickerItem) lastPickedItem.current = sizePickerItem;
-  const pickerItem = sizePickerItem ?? lastPickedItem.current;
+  const [dishOpen, setDishOpen] = useState<MenuItem | null>(null);
+  // Stable, or the dish page's Back handler re-runs and pushes another history entry.
+  const closeDish = useCallback(() => setDishOpen(null), []);
   const [submittingOrder, setSubmittingOrder] = useState(false);
   const [orderError, setOrderError] = useState<string | null>(null);
   const { status, reload: loadStatus } = useTableStatus();
@@ -118,20 +132,25 @@ export default function GuestMenuPage({
     return () => clearInterval(tick);
   }, [lockedUntil]);
 
-  // Load menu from /api/guest/menu
+  // Load menu from /api/guest/menu; sets it and returns it, or null after a redirect.
+  const fetchMenu = useCallback(async (): Promise<MenuResponse | null> => {
+    const res = await fetch("/api/guest/menu");
+    if (res.status === 401) {
+      router.push("/");
+      return null;
+    }
+    if (!res.ok) {
+      throw new Error(`Failed to load menu (${res.status})`);
+    }
+    const data = (await res.json()) as MenuResponse;
+    setMenu(data);
+    return data;
+  }, [router]);
+
   useEffect(() => {
     async function loadMenu() {
       try {
-        const res = await fetch("/api/guest/menu");
-        if (res.status === 401) {
-          router.push("/");
-          return;
-        }
-        if (!res.ok) {
-          throw new Error(`Failed to load menu (${res.status})`);
-        }
-        const data = await res.json();
-        setMenu(data);
+        await fetchMenu();
       } catch (err: unknown) {
         setError(err instanceof Error ? err.message : String(err));
       } finally {
@@ -139,7 +158,7 @@ export default function GuestMenuPage({
       }
     }
     loadMenu();
-  }, [router]);
+  }, [fetchMenu]);
 
   // Back from a declined first order: its dishes go back in the cart, once.
   useEffect(() => {
@@ -154,7 +173,13 @@ export default function GuestMenuPage({
         const order = (await res.json()) as {
           status: string;
           cancel_reason?: string | null;
-          items: { menu_item_id: string; option_id?: string | null; quantity: number; notes?: string | null }[];
+          items: {
+            menu_item_id: string;
+            option_id?: string | null;
+            choices?: { choice_id: string }[];
+            quantity: number;
+            notes?: string | null;
+          }[];
         };
         if (orderStage(order.status, order.cancel_reason) !== "declined") return;
         setNotice(dict.order.declined);
@@ -163,18 +188,23 @@ export default function GuestMenuPage({
         for (const line of order.items) {
           const item = menu.items.find((i) => i.id === line.menu_item_id);
           const option = item?.options?.find((o) => o.id === line.option_id);
-          if (!item || item.available === false || (line.option_id && !option)) continue;
+          const groups = item?.choice_groups ?? [];
+          const ids = (line.choices ?? []).map((c) => c.choice_id);
+          const picks = pickedChoices(groups, ids);
+          // A dish whose size or choices have gone stays out: never swapped for something else.
+          if (!item || item.available === false || (line.option_id && !option) || picks.length !== ids.length) continue;
           updated = addToCart(
             {
               menuItemId: item.id,
               name: item.name,
               price: Number(item.price),
               notes: line.notes ?? undefined,
-              allergenStatus: item.allergen_status,
-              matchedAllergens: item.matched_allergens || [],
+              allergenStatus: worstStatus(item.allergen_status, groups, ids),
+              matchedAllergens: matchedAllergens(item.matched_allergens, groups, ids),
             },
             line.quantity,
             option && { id: option.id, label: option.label, price: Number(option.price) },
+            picks,
           );
         }
         if (updated) setCart({ ...updated });
@@ -184,18 +214,22 @@ export default function GuestMenuPage({
     })();
   }, [menu, lang, router, dict.order.declined]);
 
-  const handleAddToCart = (item: MenuItem, option?: MenuOption) => {
+  // One tap from the menu: no size, and the dish's defaults fill every required group.
+  const handleAddToCart = (item: MenuItem) => {
     setNotice(null);
+    const groups = item.choice_groups ?? [];
+    const picks = defaultPicks(groups);
     const updated = addToCart(
       {
         menuItemId: item.id,
         name: item.name,
         price: Number(item.price),
-        allergenStatus: item.allergen_status,
-        matchedAllergens: item.matched_allergens || [],
+        allergenStatus: worstStatus(item.allergen_status, groups, picks),
+        matchedAllergens: matchedAllergens(item.matched_allergens, groups, picks),
       },
       1,
-      option && { id: option.id, label: option.label, price: Number(option.price) },
+      undefined,
+      pickedChoices(groups, picks),
     );
     setCart({ ...updated });
   };
@@ -205,8 +239,9 @@ export default function GuestMenuPage({
     qty: number,
     notes?: string,
     optionId?: string,
+    choiceIds?: string[],
   ) => {
-    const updated = updateCartItemQuantity(menuItemId, qty, notes, optionId);
+    const updated = updateCartItemQuantity(menuItemId, qty, notes, optionId, choiceIds);
     setCart({ ...updated });
   };
 
@@ -297,6 +332,38 @@ export default function GuestMenuPage({
         setCart(next);
         setMenu((m) => m && { ...m, items: m.items.map((i) => (gone.has(i.id) ? { ...i, available: false } : i)) });
         showError(dict.order.soldOut.replace("{names}", names.join(", ")));
+      } else if (outcome === "choice_gone") {
+        // The order stays in the cart with the line marked; the guest decides what to change.
+        const gone = soldOutChoices(body);
+        const goneIds = new Set(gone.map((c) => c.id));
+        setMenu(
+          (m) =>
+            m && {
+              ...m,
+              items: m.items.map((i) => ({
+                ...i,
+                choice_groups: i.choice_groups?.map((g) => ({
+                  ...g,
+                  choices: g.choices.map((c) => (goneIds.has(c.id) ? { ...c, available: false } : c)),
+                })),
+              })),
+            },
+        );
+        showError(dict.dish.choiceGone.replace("{names}", gone.map((c) => c.label).join(", ")));
+      } else if (outcome === "choices_changed") {
+        const id = changedDish(body);
+        const fresh = await fetchMenu();
+        const dish = fresh?.items.find((i) => i.id === id);
+        // Only the lines the fresh menu refuses go; without a fresh menu the cart stays as it is.
+        if (id && dish) {
+          const stale = staleLines(cart.items, id, dish.choice_groups ?? []);
+          const next = { ...cart, items: cart.items.filter((i) => !stale.includes(i)) };
+          saveCart(next);
+          setCart(next);
+        }
+        setCartOpen(false);
+        setNotice(dict.dish.changed);
+        if (dish) setDishOpen(dish);
       } else if (outcome === "allergen") {
         showError(dict.ui.allergenWarningDescription);
         setCart((c) => {
@@ -372,6 +439,17 @@ export default function GuestMenuPage({
     .filter((i) => i.allergenStatus !== "no_declared_match")
     .map((i) => i.name))];
   const catId = (cat: string) => `cat-${cat.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
+  // A cart line is marked while any of its choices is sold out in the current menu.
+  const soldOutChoiceIds = new Set(
+    menu.items.flatMap((i) => (i.choice_groups ?? []).flatMap((g) => g.choices.filter((c) => !c.available).map((c) => c.id))),
+  );
+  const choiceText = (choices: CartChoice[]) =>
+    cartChoiceText(choices, formatPrice, dict.dish.leaveOut);
+  // Two lines of one dish differ by size or choices, so their buttons say which.
+  const lineLabel = (verb: string, item: CartState["items"][number]) =>
+    [verb, item.name, item.optionLabel, item.choices?.length ? choiceText(item.choices) : null]
+      .filter(Boolean)
+      .join(" ");
 
   return (
     <div className={`min-h-screen bg-paper text-ink ${barText ? "pb-56" : "pb-28"}`}>
@@ -431,8 +509,36 @@ export default function GuestMenuPage({
                       key={item.id}
                       className={`border-b border-dotted border-line py-4 ${isAvailable ? "" : "opacity-50"}`}
                     >
+                      {item.image_url && isAvailable && (
+                        <button
+                          type="button"
+                          aria-label={item.name}
+                          className="mb-2 block w-full"
+                          onClick={() => setDishOpen(item)}
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element -- venue photos come from any host */}
+                          <img
+                            src={item.image_url}
+                            loading="lazy"
+                            alt=""
+                            className="aspect-[16/9] w-full rounded-xl object-cover"
+                          />
+                        </button>
+                      )}
                       <div className="flex items-baseline justify-between gap-3">
-                        <h3 className="text-base font-semibold text-ink">{item.name}</h3>
+                        <h3 className="text-base font-semibold text-ink">
+                          {isAvailable ? (
+                            <button
+                              type="button"
+                              className="text-left underline-offset-2 hover:underline"
+                              onClick={() => setDishOpen(item)}
+                            >
+                              {item.name}
+                            </button>
+                          ) : (
+                            item.name
+                          )}
+                        </h3>
                         <span className="whitespace-nowrap font-semibold tabular-nums text-ink">
                           {options.length > 0
                             ? `${dict.menu.from} ${formatPrice(Math.min(...options.map((o) => Number(o.price))))}`
@@ -457,9 +563,7 @@ export default function GuestMenuPage({
                           <Button
                             size="icon"
                             aria-label={`${dict.ui.addToCart} ${item.name}`}
-                            onClick={() =>
-                              options.length > 0 ? setSizePickerItem(item) : handleAddToCart(item)
-                            }
+                            onClick={() => (needsPage(item) ? setDishOpen(item) : handleAddToCart(item))}
                           >
                             +
                           </Button>
@@ -547,6 +651,14 @@ export default function GuestMenuPage({
                     {formatPrice(item.price * item.quantity)}
                   </span>
                 </div>
+                {item.choices && item.choices.length > 0 && (
+                  <p
+                    className={`text-xs ${item.choices.some((c) => soldOutChoiceIds.has(c.id)) ? "text-danger-fg" : "text-ink-muted"}`}
+                  >
+                    {choiceText(item.choices)}
+                    {item.choices.some((c) => soldOutChoiceIds.has(c.id)) && ` · ${dict.dish.soldOut}`}
+                  </p>
+                )}
                 <div className="flex items-center justify-between gap-3">
                   <AllergenChip
                     status={item.allergenStatus}
@@ -557,9 +669,15 @@ export default function GuestMenuPage({
                     <Button
                       variant="outline"
                       size="icon"
-                      aria-label={`${dict.ui.decrease} ${item.name}${item.optionLabel ? ` ${item.optionLabel}` : ""}`}
+                      aria-label={lineLabel(dict.ui.decrease, item)}
                       onClick={() =>
-                        handleUpdateQuantity(item.menuItemId, item.quantity - 1, item.notes, item.optionId)
+                        handleUpdateQuantity(
+                          item.menuItemId,
+                          item.quantity - 1,
+                          item.notes,
+                          item.optionId,
+                          item.choices?.map((c) => c.id),
+                        )
                       }
                     >
                       −
@@ -570,9 +688,15 @@ export default function GuestMenuPage({
                     <Button
                       variant="outline"
                       size="icon"
-                      aria-label={`${dict.ui.increase} ${item.name}${item.optionLabel ? ` ${item.optionLabel}` : ""}`}
+                      aria-label={lineLabel(dict.ui.increase, item)}
                       onClick={() =>
-                        handleUpdateQuantity(item.menuItemId, item.quantity + 1, item.notes, item.optionId)
+                        handleUpdateQuantity(
+                          item.menuItemId,
+                          item.quantity + 1,
+                          item.notes,
+                          item.optionId,
+                          item.choices?.map((c) => c.id),
+                        )
                       }
                     >
                       +
@@ -603,31 +727,33 @@ export default function GuestMenuPage({
         )}
       </Sheet>
 
-      <Sheet
-        open={sizePickerItem !== null}
-        onClose={() => setSizePickerItem(null)}
-        title={pickerItem?.name ?? ""}
-      >
-        <p className="text-sm text-ink-muted">{dict.menu.chooseSize}</p>
-        <ul className="space-y-2">
-          {(pickerItem?.options ?? []).map((option) => (
-            <li key={option.id}>
-              <Button
-                variant="outline"
-                className="w-full justify-between"
-                aria-label={`${dict.ui.addToCart} ${pickerItem?.name} ${option.label}`}
-                onClick={() => {
-                  if (sizePickerItem) handleAddToCart(sizePickerItem, option);
-                  setSizePickerItem(null);
-                }}
-              >
-                <span>{option.label}</span>
-                <span className="tabular-nums">{formatPrice(Number(option.price))}</span>
-              </Button>
-            </li>
-          ))}
-        </ul>
-      </Sheet>
+      {dishOpen && (
+        <DishSheet
+          key={dishOpen.id}
+          item={dishOpen}
+          lang={lang}
+          dict={dict}
+          formatPrice={formatPrice}
+          dietary={status?.dietary_preferences ?? []}
+          onClose={closeDish}
+          onAdd={(option, choices, quantity, allergenStatus, matched) => {
+            setNotice(null);
+            const updated = addToCart(
+              {
+                menuItemId: dishOpen.id,
+                name: dishOpen.name,
+                price: Number(dishOpen.price),
+                allergenStatus,
+                matchedAllergens: matched,
+              },
+              quantity,
+              option,
+              choices,
+            );
+            setCart({ ...updated });
+          }}
+        />
+      )}
 
       <Sheet open={codeOpen} onClose={() => setCodeOpen(false)} title={dict.order.numberTitle}>
         {codeOpen && (

@@ -286,7 +286,7 @@ async def test_void_takes_an_order_off_the_bill(client, db_session, pv, monkeypa
 
     guest(client, pv.session_t1)
     g = (await client.get("/api/guest/bill")).json()
-    assert g["voided"] == [{"name": "Naan", "option_label": None, "quantity": 2}]
+    assert g["voided"] == [{"name": "Naan", "option_label": None, "quantity": 2, "choices": []}]
     assert g["subtotal"] == "2340.00"
 
     await as_member(client, db_session, pv.r.id, "staff")

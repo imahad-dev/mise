@@ -14,8 +14,9 @@ from sqlalchemy.orm import selectinload
 
 from src.inference.metrics import record_metrics
 from src.inference.rate_limit import check_guest_chat_limit
-from src.models.menu import MenuItem
+from src.models.menu import MenuChoiceGroup, MenuItem
 from src.schemas.guest import AIChatResult
+from src.services.choices import can_be_ordered
 
 if TYPE_CHECKING:
     import uuid
@@ -31,13 +32,24 @@ def _build_menu_context(items: list[MenuItem], language: str) -> str:
     """Build a concise menu summary for the system prompt."""
     lines: list[str] = []
     for item in items:
-        if not item.available:
+        if not item.available or not can_be_ordered(item):
             continue
         trans = next((t for t in item.translations if t.language == language), None)
         if not trans and item.translations:
             trans = item.translations[0]
         name = trans.name if trans else "?"
         allergen_str = ", ".join(item.allergens) if item.allergens else "none"
+        # Menu data only: what the dish's available choices could add on top of its own allergens.
+        added = dict.fromkeys(
+            a
+            for g in item.choice_groups
+            for c in g.choices
+            if c.available
+            for a in c.allergens
+            if a not in item.allergens
+        )
+        if added:
+            allergen_str += f", choices may add: {', '.join(added)}"
         lines.append(
             f"- {name} (€{item.price}, allergens: {allergen_str}, "
             f"{'V' if item.is_vegetarian else ''}{'VG' if item.is_vegan else ''}"
@@ -68,7 +80,10 @@ async def handle_guest_chat(
     # Fetch menu for context
     stmt = (
         select(MenuItem)
-        .options(selectinload(MenuItem.translations))
+        .options(
+            selectinload(MenuItem.translations),
+            selectinload(MenuItem.choice_groups).selectinload(MenuChoiceGroup.choices),
+        )
         .where(
             MenuItem.restaurant_id == restaurant_id,
             MenuItem.deleted_at.is_(None),

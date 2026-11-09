@@ -8,7 +8,7 @@ import { PaySheet } from "../../../../components/PaySheet";
 import { ChatPanel } from "../../../../components/chat-panel";
 import { useSse } from "../../../../hooks/use-sse";
 import { getDictionary } from "../../../../i18n";
-import { Button, formatPrice } from "ui";
+import { Button, choiceLine, formatPrice, type LineChoice } from "ui";
 import { orderStage } from "../../../../lib/ordering";
 import { VISIT_ENDED, billState, claimMessage, counterState, paidText, payForwardThanks, type GuestBill } from "../../../../lib/pay";
 
@@ -16,6 +16,7 @@ interface OrderItem {
   id: string;
   item_name: string;
   option_label?: string | null;
+  choices?: LineChoice[];
   quantity: number;
   unit_price: string | number;
   notes?: string | null;
@@ -283,7 +284,7 @@ export default function OrderStatusPage({
               {bill?.voided.map((v, i) => (
                 <p key={i} className="text-danger-fg">
                   {dict.pay.removed
-                    .replace("{name}", v.option_label ? `${v.name} — ${v.option_label}` : v.name)
+                    .replace("{name}", [v.option_label ? `${v.name} — ${v.option_label}` : v.name, ...(v.choices ?? []).map((c) => choiceLine(c, (n) => formatPrice(n, bill.currency, lang), dict.dish.leaveOut))].join(", "))
                     .replace("{qty}", String(v.quantity))}
                 </p>
               ))}
@@ -323,6 +324,11 @@ export default function OrderStatusPage({
                         {item.quantity}x {item.item_name}
                         {item.option_label && ` — ${item.option_label}`}
                       </div>
+                      {(item.choices ?? []).length > 0 && (
+                        <span className="block text-xs text-ink-muted">
+                          {item.choices!.map((c) => choiceLine(c, (n) => formatPrice(n, order.currency, lang), dict.dish.leaveOut)).join(", ")}
+                        </span>
+                      )}
                       {item.notes && (
                         <p className="text-xs text-ink-muted italic mt-0.5">Note: {item.notes}</p>
                       )}

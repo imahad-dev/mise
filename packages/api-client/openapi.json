@@ -722,7 +722,7 @@
             "description": "The table code is required or wrong"
           },
           "409": {
-            "description": "Table not open, already sent under this key (with its order_id), unavailable items, or allergen ack required"
+            "description": "Table not open, already sent under this key (with its order_id), unavailable items or choices, or allergen ack required"
           },
           "429": {
             "description": "Too many orders or wrong table codes from this phone"
@@ -2819,6 +2819,354 @@
         }
       }
     },
+    "/api/restaurants/{slug}/menu-items/{item_id}/choice-groups": {
+      "post": {
+        "tags": [
+          "owner"
+        ],
+        "summary": "Create Group",
+        "operationId": "create_group_api_restaurants__slug__menu_items__item_id__choice_groups_post",
+        "parameters": [
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Item Id"
+            }
+          },
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Slug"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateChoiceGroup"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OwnerChoiceGroup"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/restaurants/{slug}/choice-groups/{group_id}": {
+      "patch": {
+        "tags": [
+          "owner"
+        ],
+        "summary": "Patch Group",
+        "operationId": "patch_group_api_restaurants__slug__choice_groups__group_id__patch",
+        "parameters": [
+          {
+            "name": "group_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Group Id"
+            }
+          },
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Slug"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchChoiceGroup"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OwnerChoiceGroup"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "owner"
+        ],
+        "summary": "Delete Group",
+        "operationId": "delete_group_api_restaurants__slug__choice_groups__group_id__delete",
+        "parameters": [
+          {
+            "name": "group_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Group Id"
+            }
+          },
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Slug"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusOkResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/restaurants/{slug}/choice-groups/{group_id}/choices": {
+      "post": {
+        "tags": [
+          "owner"
+        ],
+        "summary": "Create Choice",
+        "operationId": "create_choice_api_restaurants__slug__choice_groups__group_id__choices_post",
+        "parameters": [
+          {
+            "name": "group_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Group Id"
+            }
+          },
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Slug"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateChoice"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OwnerChoice"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/restaurants/{slug}/choices/{choice_id}": {
+      "patch": {
+        "tags": [
+          "owner"
+        ],
+        "summary": "Patch Choice",
+        "operationId": "patch_choice_api_restaurants__slug__choices__choice_id__patch",
+        "parameters": [
+          {
+            "name": "choice_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Choice Id"
+            }
+          },
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Slug"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchChoice"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OwnerChoice"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "owner"
+        ],
+        "summary": "Delete Choice",
+        "operationId": "delete_choice_api_restaurants__slug__choices__choice_id__delete",
+        "parameters": [
+          {
+            "name": "choice_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Choice Id"
+            }
+          },
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Slug"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusOkResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/restaurants": {
       "get": {
         "tags": [
@@ -3380,6 +3728,14 @@
           "line_total": {
             "type": "string",
             "title": "Line Total"
+          },
+          "choices": {
+            "items": {
+              "$ref": "#/components/schemas/LineChoice"
+            },
+            "type": "array",
+            "title": "Choices",
+            "default": []
           }
         },
         "type": "object",
@@ -3856,6 +4212,157 @@
         ],
         "title": "CollectResponse"
       },
+      "CreateChoice": {
+        "properties": {
+          "label": {
+            "type": "string",
+            "maxLength": 60,
+            "minLength": 1,
+            "title": "Label"
+          },
+          "price_delta": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Price Delta",
+            "default": "0"
+          },
+          "cost_delta": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Cost Delta",
+            "default": "0"
+          },
+          "allergens": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "gluten",
+                "milk",
+                "eggs",
+                "fish",
+                "crustaceans",
+                "molluscs",
+                "tree_nuts",
+                "peanuts",
+                "soy",
+                "celery",
+                "mustard",
+                "sesame",
+                "sulphites",
+                "lupin"
+              ]
+            },
+            "type": "array",
+            "title": "Allergens",
+            "default": []
+          },
+          "allergen_verified": {
+            "type": "boolean",
+            "title": "Allergen Verified",
+            "default": false
+          },
+          "is_vegetarian": {
+            "type": "boolean",
+            "title": "Is Vegetarian",
+            "default": false
+          },
+          "is_vegan": {
+            "type": "boolean",
+            "title": "Is Vegan",
+            "default": false
+          },
+          "available": {
+            "type": "boolean",
+            "title": "Available",
+            "default": true
+          },
+          "is_default": {
+            "type": "boolean",
+            "title": "Is Default",
+            "default": false
+          },
+          "sort_order": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sort Order"
+          }
+        },
+        "type": "object",
+        "required": [
+          "label"
+        ],
+        "title": "CreateChoice"
+      },
+      "CreateChoiceGroup": {
+        "properties": {
+          "label": {
+            "type": "string",
+            "maxLength": 60,
+            "minLength": 1,
+            "title": "Label"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "pick",
+              "add",
+              "leave_out"
+            ],
+            "title": "Kind"
+          },
+          "min_select": {
+            "type": "integer",
+            "maximum": 20.0,
+            "minimum": 0.0,
+            "title": "Min Select",
+            "default": 0
+          },
+          "max_select": {
+            "type": "integer",
+            "maximum": 20.0,
+            "minimum": 1.0,
+            "title": "Max Select",
+            "default": 1
+          },
+          "sort_order": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sort Order"
+          }
+        },
+        "type": "object",
+        "required": [
+          "label",
+          "kind"
+        ],
+        "title": "CreateChoiceGroup"
+      },
       "CreateGuestSessionRequest": {
         "properties": {
           "qr_token": {
@@ -4061,6 +4568,9 @@
             "type": "string",
             "title": "Service Charge Collected"
           },
+          "extras": {
+            "$ref": "#/components/schemas/ExtrasSummary"
+          },
           "pay_forward": {
             "$ref": "#/components/schemas/PayForwardTotals"
           },
@@ -4103,6 +4613,7 @@
           "prices_include_tax",
           "tax_split_by_method",
           "service_charge_collected",
+          "extras",
           "pay_forward",
           "forecast",
           "actions",
@@ -4227,6 +4738,32 @@
           "table_label"
         ],
         "title": "DemoVenueInfo"
+      },
+      "ExtrasSummary": {
+        "properties": {
+          "attach_rate_pct": {
+            "type": "number",
+            "title": "Attach Rate Pct"
+          },
+          "sales": {
+            "type": "number",
+            "title": "Sales"
+          },
+          "top": {
+            "items": {
+              "$ref": "#/components/schemas/TopExtra"
+            },
+            "type": "array",
+            "title": "Top"
+          }
+        },
+        "type": "object",
+        "required": [
+          "attach_rate_pct",
+          "sales",
+          "top"
+        ],
+        "title": "ExtrasSummary"
       },
       "FloorResponse": {
         "properties": {
@@ -4785,6 +5322,115 @@
         ],
         "title": "GuestBillResponse"
       },
+      "GuestMenuChoice": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "price_delta": {
+            "type": "string",
+            "title": "Price Delta"
+          },
+          "allergens": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Allergens"
+          },
+          "is_vegetarian": {
+            "type": "boolean",
+            "title": "Is Vegetarian"
+          },
+          "is_vegan": {
+            "type": "boolean",
+            "title": "Is Vegan"
+          },
+          "available": {
+            "type": "boolean",
+            "title": "Available"
+          },
+          "is_default": {
+            "type": "boolean",
+            "title": "Is Default"
+          },
+          "allergen_status": {
+            "type": "string",
+            "title": "Allergen Status"
+          },
+          "matched_allergens": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Matched Allergens"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "label",
+          "price_delta",
+          "allergens",
+          "is_vegetarian",
+          "is_vegan",
+          "available",
+          "is_default",
+          "allergen_status",
+          "matched_allergens"
+        ],
+        "title": "GuestMenuChoice"
+      },
+      "GuestMenuChoiceGroup": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "min_select": {
+            "type": "integer",
+            "title": "Min Select"
+          },
+          "max_select": {
+            "type": "integer",
+            "title": "Max Select"
+          },
+          "choices": {
+            "items": {
+              "$ref": "#/components/schemas/GuestMenuChoice"
+            },
+            "type": "array",
+            "title": "Choices"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "label",
+          "kind",
+          "min_select",
+          "max_select",
+          "choices"
+        ],
+        "title": "GuestMenuChoiceGroup"
+      },
       "GuestMenuItemResponse": {
         "properties": {
           "id": {
@@ -4889,6 +5535,14 @@
             },
             "type": "array",
             "title": "Options",
+            "default": []
+          },
+          "choice_groups": {
+            "items": {
+              "$ref": "#/components/schemas/GuestMenuChoiceGroup"
+            },
+            "type": "array",
+            "title": "Choice Groups",
             "default": []
           }
         },
@@ -5397,6 +6051,14 @@
             },
             "type": "array",
             "title": "Matched Allergens"
+          },
+          "choices": {
+            "items": {
+              "$ref": "#/components/schemas/LineChoice"
+            },
+            "type": "array",
+            "title": "Choices",
+            "default": []
           }
         },
         "type": "object",
@@ -5575,6 +6237,46 @@
           "margin_pct"
         ],
         "title": "Kpis"
+      },
+      "LineChoice": {
+        "properties": {
+          "choice_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Choice Id"
+          },
+          "group": {
+            "type": "string",
+            "title": "Group"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "pick",
+              "add",
+              "leave_out"
+            ],
+            "title": "Kind"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "price_delta": {
+            "type": "string",
+            "title": "Price Delta"
+          }
+        },
+        "type": "object",
+        "required": [
+          "choice_id",
+          "group",
+          "kind",
+          "label",
+          "price_delta"
+        ],
+        "title": "LineChoice",
+        "description": "One chosen choice as guests and staff see it. Never carries cost."
       },
       "LoginRequest": {
         "properties": {
@@ -5937,6 +6639,15 @@
             ],
             "title": "Option Id"
           },
+          "choice_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "maxItems": 30,
+            "title": "Choice Ids"
+          },
           "quantity": {
             "type": "integer",
             "maximum": 20.0,
@@ -5997,6 +6708,14 @@
               }
             ],
             "title": "Option Label"
+          },
+          "choices": {
+            "items": {
+              "$ref": "#/components/schemas/LineChoice"
+            },
+            "type": "array",
+            "title": "Choices",
+            "default": []
           },
           "quantity": {
             "type": "integer",
@@ -6188,6 +6907,125 @@
         ],
         "title": "OrderResponse"
       },
+      "OwnerChoice": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "price_delta": {
+            "type": "string",
+            "title": "Price Delta"
+          },
+          "cost_delta": {
+            "type": "string",
+            "title": "Cost Delta"
+          },
+          "allergens": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Allergens"
+          },
+          "allergen_verified": {
+            "type": "boolean",
+            "title": "Allergen Verified"
+          },
+          "is_vegetarian": {
+            "type": "boolean",
+            "title": "Is Vegetarian"
+          },
+          "is_vegan": {
+            "type": "boolean",
+            "title": "Is Vegan"
+          },
+          "available": {
+            "type": "boolean",
+            "title": "Available"
+          },
+          "is_default": {
+            "type": "boolean",
+            "title": "Is Default"
+          },
+          "sort_order": {
+            "type": "integer",
+            "title": "Sort Order"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "label",
+          "price_delta",
+          "cost_delta",
+          "allergens",
+          "allergen_verified",
+          "is_vegetarian",
+          "is_vegan",
+          "available",
+          "is_default",
+          "sort_order"
+        ],
+        "title": "OwnerChoice"
+      },
+      "OwnerChoiceGroup": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "pick",
+              "add",
+              "leave_out"
+            ],
+            "title": "Kind"
+          },
+          "min_select": {
+            "type": "integer",
+            "title": "Min Select"
+          },
+          "max_select": {
+            "type": "integer",
+            "title": "Max Select"
+          },
+          "sort_order": {
+            "type": "integer",
+            "title": "Sort Order"
+          },
+          "choices": {
+            "items": {
+              "$ref": "#/components/schemas/OwnerChoice"
+            },
+            "type": "array",
+            "title": "Choices",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "label",
+          "kind",
+          "min_select",
+          "max_select",
+          "sort_order"
+        ],
+        "title": "OwnerChoiceGroup"
+      },
       "OwnerMenuItemResponse": {
         "properties": {
           "id": {
@@ -6280,6 +7118,14 @@
             },
             "type": "array",
             "title": "Translations"
+          },
+          "choice_groups": {
+            "items": {
+              "$ref": "#/components/schemas/OwnerChoiceGroup"
+            },
+            "type": "array",
+            "title": "Choice Groups",
+            "default": []
           },
           "deleted_at": {
             "anyOf": [
@@ -6425,6 +7271,208 @@
           "lift"
         ],
         "title": "Pairing"
+      },
+      "PatchChoice": {
+        "properties": {
+          "label": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 60,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "price_delta": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price Delta"
+          },
+          "cost_delta": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cost Delta"
+          },
+          "allergens": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "gluten",
+                    "milk",
+                    "eggs",
+                    "fish",
+                    "crustaceans",
+                    "molluscs",
+                    "tree_nuts",
+                    "peanuts",
+                    "soy",
+                    "celery",
+                    "mustard",
+                    "sesame",
+                    "sulphites",
+                    "lupin"
+                  ]
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Allergens"
+          },
+          "allergen_verified": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Allergen Verified"
+          },
+          "is_vegetarian": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Vegetarian"
+          },
+          "is_vegan": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Vegan"
+          },
+          "available": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Available"
+          },
+          "is_default": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Default"
+          },
+          "sort_order": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sort Order"
+          }
+        },
+        "type": "object",
+        "title": "PatchChoice"
+      },
+      "PatchChoiceGroup": {
+        "properties": {
+          "label": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 60,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "min_select": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 20.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Select"
+          },
+          "max_select": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 20.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Select"
+          },
+          "sort_order": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sort Order"
+          }
+        },
+        "type": "object",
+        "title": "PatchChoiceGroup",
+        "description": "`kind` is fixed once created: it decides which save rules its choices passed."
       },
       "PatchGuestSessionRequest": {
         "properties": {
@@ -7502,6 +8550,24 @@
         ],
         "title": "TaxRule"
       },
+      "TopExtra": {
+        "properties": {
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "count": {
+            "type": "integer",
+            "title": "Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "label",
+          "count"
+        ],
+        "title": "TopExtra"
+      },
       "ValidationError": {
         "properties": {
           "loc": {
@@ -7580,6 +8646,14 @@
           "quantity": {
             "type": "integer",
             "title": "Quantity"
+          },
+          "choices": {
+            "items": {
+              "$ref": "#/components/schemas/LineChoice"
+            },
+            "type": "array",
+            "title": "Choices",
+            "default": []
           }
         },
         "type": "object",

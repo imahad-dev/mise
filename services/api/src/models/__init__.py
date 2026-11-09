@@ -4,7 +4,13 @@ from src.models.audit import AuditLog
 from src.models.bill import Bill
 from src.models.dining_table import DiningTable
 from src.models.forecast import ForecastRun
-from src.models.menu import MenuItem, MenuItemOption, MenuTranslation
+from src.models.menu import (
+    MenuChoice,
+    MenuChoiceGroup,
+    MenuItem,
+    MenuItemOption,
+    MenuTranslation,
+)
 from src.models.metrics import MetricsSample
 from src.models.order import Order, OrderItem
 from src.models.pay_forward import PayForward
@@ -21,6 +27,8 @@ __all__ = [
     "ForecastRun",
     "GuestSession",
     "Membership",
+    "MenuChoice",
+    "MenuChoiceGroup",
     "MenuItem",
     "MenuItemOption",
     "MenuTranslation",

@@ -4,6 +4,7 @@ import {
   GUEST,
   KEHWA,
   OWNER,
+  addWithChoices,
   confirmOrder,
   demoApi,
   demoInfo,
@@ -35,12 +36,14 @@ test.describe.serial("two venues: guest, kitchen, bills, owner", () => {
     await page.setViewportSize({ width: 375, height: 812 });
     await page.screenshot({ path: "test-results/screens/guest-menu-phone.png", fullPage: true });
 
+    // The size is chosen on the dish page now, with the spice.
     await page.getByRole("button", { name: "Add Chicken Karahi", exact: true }).click();
-    const size = page.getByRole("button", { name: "Add Chicken Karahi 1 kg", exact: true });
-    await expect(size).toBeVisible();
-    await page.screenshot({ path: "test-results/screens/size-sheet-phone.png" });
-    await size.click();
-    await expect(size).toBeHidden();
+    const dish = page.getByRole("dialog", { name: "Chicken Karahi" });
+    await expect(dish).toBeVisible();
+    await page.screenshot({ path: "test-results/screens/dish-sheet-phone.png" });
+    await page.keyboard.press("Escape");
+    await expect(dish).toBeHidden();
+    await addWithChoices(page, "Chicken Karahi", ["1 kg", "Medium"]);
     await page.getByRole("button", { name: "Add Naan", exact: true }).click();
 
     const orderBar = page.getByRole("button", { name: /View order/ });
@@ -153,8 +156,7 @@ test.describe.serial("two venues: guest, kitchen, bills, owner", () => {
     await openTable(KEHWA, venue.table_label);
     await openTableMenu(page, venue.qr_token);
     await expect(page.getByRole("heading", { name: "Kehwa & Crumb" })).toBeVisible();
-    await page.getByRole("button", { name: "Add Cappuccino", exact: true }).click();
-    await page.getByRole("button", { name: "Add Cappuccino Regular", exact: true }).click();
+    await addWithChoices(page, "Cappuccino", ["Regular"]);
     await page.getByRole("button", { name: /View order/ }).click();
     await confirmOrder(page);
 

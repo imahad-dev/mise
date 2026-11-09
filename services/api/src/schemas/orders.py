@@ -10,11 +10,28 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 MAX_ITEMS_PER_ORDER = 30  # portions across all lines
 
 
+class LineChoice(BaseModel):
+    """One chosen choice as guests and staff see it. Never carries cost."""
+
+    choice_id: uuid.UUID
+    group: str
+    kind: Literal["pick", "add", "leave_out"]
+    label: str
+    price_delta: Decimal
+
+
 class OrderItemRequest(BaseModel):
     menu_item_id: uuid.UUID
     option_id: uuid.UUID | None = None
+    choice_ids: list[uuid.UUID] = Field(default_factory=list, max_length=30)
     quantity: int = Field(..., ge=1, le=20)
     notes: str | None = Field(default=None, max_length=500)
+
+    @model_validator(mode="after")
+    def _no_repeats(self) -> "OrderItemRequest":
+        if len(set(self.choice_ids)) != len(self.choice_ids):
+            raise ValueError("A choice can only be picked once")
+        return self
 
 
 class CreateOrderRequest(BaseModel):
@@ -36,6 +53,7 @@ class OrderItemResponse(BaseModel):
     menu_item_id: uuid.UUID
     option_id: uuid.UUID | None
     option_label: str | None
+    choices: list[LineChoice] = []
     quantity: int
     unit_price: Decimal
     item_name: str

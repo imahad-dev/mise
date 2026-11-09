@@ -1,5 +1,6 @@
 """API tests: simulated demo orders, deterministic brief, forecast_run storage and what-if."""
 
+import uuid
 from datetime import date, timedelta
 from unittest.mock import patch
 
@@ -522,3 +523,235 @@ async def test_demo_tools_404_for_non_demo_venue_even_in_demo_mode(
         select(func.count()).select_from(Order).where(Order.restaurant_id == real.id)
     )
     assert count == 0
+
+
+async def _settled_order(
+    db: AsyncSession,
+    restaurant: Restaurant,
+    lines: list[tuple[str, int, list[dict]]],
+    *,
+    n: int,
+    pricing: str,
+    rate: str,
+    tax: str,
+    jurisdiction: str,
+) -> None:
+    """One settled bill with one order. lines: (unit_price, quantity, choices snapshot)."""
+    from datetime import UTC, datetime
+    from decimal import Decimal
+
+    from src.models.session import GuestSession
+
+    placed = datetime.now(UTC) - timedelta(days=1)
+    item = (
+        await db.execute(select(MenuItem).where(MenuItem.restaurant_id == restaurant.id).limit(1))
+    ).scalar_one()
+    guest = GuestSession(
+        restaurant_id=restaurant.id, language="en", expires_at=placed + timedelta(hours=4)
+    )
+    db.add(guest)
+    subtotal = sum(Decimal(p) * q for p, q, _ in lines)
+    bill = Bill(
+        restaurant_id=restaurant.id,
+        bill_no=n,
+        status="settled",
+        source="live",
+        payment_method="cash",
+        subtotal=subtotal,
+        tax_jurisdiction=jurisdiction,
+        tax_rate=Decimal(rate),
+        tax_pricing=pricing,
+        tax_amount=Decimal(tax),
+        total=subtotal + (Decimal(tax) if pricing == "on_top" else 0),
+        opened_at=placed,
+        settled_at=placed,
+    )
+    db.add(bill)
+    await db.flush()
+    order = Order(
+        guest_session_id=guest.id,
+        restaurant_id=restaurant.id,
+        bill_id=bill.id,
+        status="bumped",
+        source="live",
+        total=subtotal,
+        idempotency_key=f"extras-{n}",
+        payload_hash="x",
+        placed_at=placed,
+        bumped_at=placed,
+    )
+    db.add(order)
+    await db.flush()
+    for price, qty, choices in lines:
+        db.add(
+            OrderItem(
+                order_id=order.id,
+                menu_item_id=item.id,
+                quantity=qty,
+                unit_price=Decimal(price),
+                unit_cost=Decimal("1.00"),
+                item_name="Coffee",
+                kitchen_name="Coffee",
+                allergen_verified=True,
+                allergen_status="no_declared_match",
+                choices=choices,
+            )
+        )
+    await db.commit()
+
+
+def _extra(label: str, delta: str) -> dict:
+    return {
+        "choice_id": str(uuid.uuid4()),
+        "group": "Extras",
+        "kind": "extra",
+        "label": label,
+        "price_delta": delta,
+        "cost_delta": "0.00",
+        "allergens": [],
+    }
+
+
+def _window(restaurant: Restaurant) -> Window:
+    today = date.today()
+    return Window(
+        restaurant.id, restaurant.timezone, today - timedelta(days=3), today + timedelta(days=2)
+    )
+
+
+@pytest.mark.asyncio
+async def test_extras_summary(db_session: AsyncSession, seeded_restaurant: Restaurant):
+    """GB bill, VAT 20% included. Line A: 5.50 x2 with a 0.50 extra; line B: 3.00 plain.
+
+    subtotal 14.00, VAT 2.33, so net factor 14.00 / 11.67; extras 2 x 0.50 / 1.19966 = 0.83.
+    One of two lines carries a priced extra.
+    """
+    from src.services import analytics
+
+    await _settled_order(
+        db_session,
+        seeded_restaurant,
+        [("5.50", 2, [_extra("Extra milk", "0.50")]), ("3.00", 1, [])],
+        n=1,
+        pricing="included",
+        rate="0.2000",
+        tax="2.33",
+        jurisdiction="GB",
+    )
+    summary = await analytics.extras_summary(db_session, _window(seeded_restaurant))
+    assert summary["attach_rate_pct"] == 50.0
+    assert summary["sales"] == pytest.approx(0.83, abs=0.005)
+    assert summary["top"] == [{"label": "Extra milk", "count": 2}]
+
+
+@pytest.mark.asyncio
+async def test_extras_summary_tax_on_top_is_not_scaled(
+    db_session: AsyncSession, seeded_restaurant: Restaurant
+):
+    """Tax on top (Pakistan): the extra counts at full price; free choices never count."""
+    from src.services import analytics
+
+    await _settled_order(
+        db_session,
+        seeded_restaurant,
+        [
+            ("5.50", 2, [_extra("Extra milk", "0.50"), _extra("Oat swap", "0.00")]),
+            ("3.00", 1, [_extra("No sugar", "0.00")]),
+        ],
+        n=1,
+        pricing="on_top",
+        rate="0.1600",
+        tax="2.24",
+        jurisdiction="PB",
+    )
+    summary = await analytics.extras_summary(db_session, _window(seeded_restaurant))
+    assert summary == {
+        "attach_rate_pct": 50.0,
+        "sales": 1.0,
+        "top": [{"label": "Extra milk", "count": 2}],
+    }
+
+
+@pytest.mark.asyncio
+async def test_extras_summary_empty(db_session: AsyncSession, seeded_restaurant: Restaurant):
+    """An empty window, and one with only plain lines, give zeros, not a division error."""
+    from src.services import analytics
+
+    assert await analytics.extras_summary(db_session, _window(seeded_restaurant)) == {
+        "attach_rate_pct": 0.0,
+        "sales": 0.0,
+        "top": [],
+    }
+    await _settled_order(
+        db_session,
+        seeded_restaurant,
+        [("3.00", 1, [])],
+        n=1,
+        pricing="on_top",
+        rate="0.1600",
+        tax="0.48",
+        jurisdiction="PB",
+    )
+    assert await analytics.extras_summary(db_session, _window(seeded_restaurant)) == {
+        "attach_rate_pct": 0.0,
+        "sales": 0.0,
+        "top": [],
+    }
+
+
+@pytest.mark.asyncio
+async def test_brief_carries_extras_but_the_model_never_sees_them(
+    client: AsyncClient, db_session: AsyncSession, seeded_restaurant: Restaurant, monkeypatch
+):
+    await _settled_order(
+        db_session,
+        seeded_restaurant,
+        [("5.50", 2, [_extra("Extra milk", "0.50")]), ("3.00", 1, [])],
+        n=1,
+        pricing="included",
+        rate="0.2000",
+        tax="2.33",
+        jurisdiction="GB",
+    )
+    seen: dict = {}
+
+    async def spy(inference, db, facts, template, task):
+        seen.update(facts)
+        return template, "template"
+
+    monkeypatch.setattr("src.services.brief.narrate", spy)
+    await as_member(client, db_session, seeded_restaurant.id, "owner")
+    with patch.object(settings, "demo_mode", False):
+        resp = await client.get(f"/api/restaurants/{seeded_restaurant.slug}/ai/brief")
+    assert resp.status_code == 200, resp.text
+    extras = resp.json()["extras"]
+    assert extras["attach_rate_pct"] == 50.0
+    assert extras["top"] == [{"label": "Extra milk", "count": 2}]
+    assert seen and "extras" not in seen
+
+
+@pytest.mark.asyncio
+async def test_extras_summary_line_with_two_priced_extras(
+    db_session: AsyncSession, seeded_restaurant: Restaurant
+):
+    """One line, quantity 2, extras +0.50 and +0.80 (tax on top): sales sum both, the line is
+    one attach, and each label counts twice."""
+    from src.services import analytics
+
+    await _settled_order(
+        db_session,
+        seeded_restaurant,
+        [("6.30", 2, [_extra("Extra milk", "0.50"), _extra("Extra shot", "0.80")])],
+        n=1,
+        pricing="on_top",
+        rate="0.1600",
+        tax="2.02",
+        jurisdiction="PB",
+    )
+    summary = await analytics.extras_summary(db_session, _window(seeded_restaurant))
+    assert summary["attach_rate_pct"] == 100.0
+    assert summary["sales"] == pytest.approx(2.6)  # 2 x (0.50 + 0.80)
+    assert summary["top"] == [
+        {"label": "Extra milk", "count": 2},
+        {"label": "Extra shot", "count": 2},
+    ]

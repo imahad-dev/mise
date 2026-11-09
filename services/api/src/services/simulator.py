@@ -25,10 +25,11 @@ from sqlalchemy.orm import selectinload
 from src.models.audit import AuditLog
 from src.models.bill import Bill
 from src.models.forecast import ForecastRun
-from src.models.menu import MenuItem
+from src.models.menu import MenuChoice, MenuChoiceGroup, MenuItem
 from src.models.order import Order
 from src.models.restaurant import Restaurant
 from src.models.session import GuestSession
+from src.services.choices import can_be_ordered
 from src.services.order_snapshot import line_total, snapshot_order_item
 from src.services.tax import (
     PAYMENT_METHODS,
@@ -117,6 +118,10 @@ class SimItem:
     weight: float = 1.0
     # (option id, weight) in menu order; an item with options always gets one of them
     options: tuple[tuple[uuid.UUID, float], ...] = ()
+    # Per required group (min_select, choice ids): that many distinct ids are always drawn.
+    required: tuple[tuple[int, tuple[uuid.UUID, ...]], ...] = ()
+    # Per optional add group (max_select, choice ids): each id drawn at EXTRA_RATE, up to the max.
+    extras: tuple[tuple[int, tuple[uuid.UUID, ...]], ...] = ()
 
 
 LineKey = tuple[uuid.UUID, uuid.UUID | None]  # (menu item id, option id)
@@ -128,6 +133,10 @@ class SimOrder:
     lines: dict[LineKey, int] = field(default_factory=dict)
     payment_method: str = "cash"
     settle_after: int = 0  # minutes from placement to bill settlement
+    choices: dict[LineKey, tuple[uuid.UUID, ...]] = field(default_factory=dict)
+
+
+EXTRA_RATE = 0.2  # Share of lines with an optional extra, so demos show the report.
 
 
 def popularity_ranking(items: list[SimItem]) -> list[uuid.UUID]:
@@ -163,12 +172,14 @@ def generate_orders(
 
     Arrival times, party sizes and dishes come from `default_rng(seed)`; option, payment and
     settle-time draws come from a second generator seeded `[seed, 1]`, so options or the
-    payment mix never shift the order stream itself.
+    payment mix never shift the order stream itself. Choices come from a third generator
+    seeded `[seed, 2]`, so they shift neither.
     """
     if not items:
         return []
     rng = np.random.default_rng(a.seed)
     extra = np.random.default_rng([a.seed, 1])
+    picks = np.random.default_rng([a.seed, 2])
     by_id = {i.id: i for i in items}
     ranked = [by_id[i] for i in popularity_ranking(items)]
     base_weights = _probabilities([i.weight for i in ranked])
@@ -211,6 +222,15 @@ def generate_orders(
                         pick = int(extra.choice(len(item.options), p=option_p[item.id]))
                         option_id = item.options[pick][0]
                     key = (item.id, option_id)
+                    if key not in order.choices and (item.required or item.extras):
+                        drawn = [
+                            ids[int(i)]
+                            for n, ids in item.required
+                            for i in picks.choice(len(ids), size=n, replace=False)
+                        ]
+                        for hi, ids in item.extras:
+                            drawn += [e for e in ids if picks.random() < EXTRA_RATE][:hi]
+                        order.choices[key] = tuple(drawn)
                     order.lines[key] = min(20, order.lines.get(key, 0) + 1)
                 order.payment_method = methods[int(extra.choice(len(methods), p=method_p))]
                 order.settle_after = int(extra.integers(settle_lo, settle_hi + 1))
@@ -241,6 +261,16 @@ def sim_items(restaurant: Restaurant, items: list[MenuItem]) -> list[SimItem]:
                 id=item.id,
                 weight=weights.get(item.id, 1.0),
                 options=tuple((o.id, float(w)) for o, w in zip(item.options, ow, strict=True)),
+                required=tuple(
+                    (g.min_select, ids)
+                    for g in item.choice_groups
+                    if g.min_select > 0 and (ids := tuple(c.id for c in g.choices if c.available))
+                ),
+                extras=tuple(
+                    (g.max_select, tuple(c.id for c in g.choices if c.available))
+                    for g in item.choice_groups
+                    if g.kind == "add" and g.min_select == 0
+                ),
             )
         )
     return out
@@ -348,7 +378,11 @@ async def persist_simulation(
         (
             await db.execute(
                 select(MenuItem)
-                .options(selectinload(MenuItem.translations), selectinload(MenuItem.options))
+                .options(
+                    selectinload(MenuItem.translations),
+                    selectinload(MenuItem.options),
+                    selectinload(MenuItem.choice_groups).selectinload(MenuChoiceGroup.choices),
+                )
                 .where(
                     MenuItem.restaurant_id == restaurant.id,
                     MenuItem.deleted_at.is_(None),
@@ -359,6 +393,7 @@ async def persist_simulation(
             )
         ).scalars()
     )
+    items = [i for i in items if can_be_ordered(i)]  # a sold-out required group can't be ordered
     by_id = {i.id: i for i in items}
     options = {o.id: o for i in items for o in i.options}
     simulated_items = sim_items(restaurant, items)
@@ -380,6 +415,12 @@ async def persist_simulation(
     rates = default_rates()
     orders: list[Order] = []
     bills: list[Bill] = []
+
+    def chosen(so: SimOrder, key: LineKey) -> list[MenuChoice]:
+        ids = set(so.choices.get(key, ()))
+        item = by_id[key[0]]
+        return [c for g in item.choice_groups for c in g.choices if c.id in ids] if ids else []
+
     for n, so in enumerate(sim_orders):
         lines = sorted(so.lines.items(), key=lambda kv: (kv[0][0], str(kv[0][1])))
         snaps = [
@@ -391,11 +432,16 @@ async def persist_simulation(
                 default_language=restaurant.default_language,
                 guest_allergens_to_avoid=[],
                 option=options[option_id] if option_id else None,
+                choices=chosen(so, (item_id, option_id)),
             )
             for (item_id, option_id), qty in lines
         ]
         canonical = json.dumps(
-            [[str(i), str(o) if o else None, q] for (i, o), q in lines], separators=(",", ":")
+            [
+                [str(i), str(o) if o else None, q, *map(str, so.choices.get((i, o), ()))]
+                for (i, o), q in lines
+            ],
+            separators=(",", ":"),
         )
         total = sum((line_total(s) for s in snaps), Decimal("0.00"))
         bill = _simulated_bill(restaurant, so, total, tz, rates)

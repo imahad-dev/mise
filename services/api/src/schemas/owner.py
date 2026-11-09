@@ -5,7 +5,16 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StringConstraints,
+    field_validator,
+    model_validator,
+)
+
+from src.schemas.guest import EU14Allergen
 
 
 class OwnerMenuTranslation(BaseModel):
@@ -14,6 +23,83 @@ class OwnerMenuTranslation(BaseModel):
     description: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class OwnerChoice(BaseModel):
+    id: uuid.UUID
+    label: str
+    price_delta: Decimal
+    cost_delta: Decimal
+    allergens: list[str]
+    allergen_verified: bool
+    is_vegetarian: bool
+    is_vegan: bool
+    available: bool
+    is_default: bool
+    sort_order: int
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class OwnerChoiceGroup(BaseModel):
+    id: uuid.UUID
+    label: str
+    kind: Literal["pick", "add", "leave_out"]
+    min_select: int
+    max_select: int
+    sort_order: int
+    choices: list[OwnerChoice] = []
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class CreateChoiceGroup(BaseModel):
+    label: str = Field(..., min_length=1, max_length=60)
+    kind: Literal["pick", "add", "leave_out"]
+    min_select: int = Field(0, ge=0, le=20)
+    max_select: int = Field(1, ge=1, le=20)
+    sort_order: int | None = None
+
+    @model_validator(mode="after")
+    def _range(self) -> "CreateChoiceGroup":
+        if self.min_select > self.max_select:
+            raise ValueError("The minimum can't be above the maximum")
+        return self
+
+
+class PatchChoiceGroup(BaseModel):
+    """`kind` is fixed once created: it decides which save rules its choices passed."""
+
+    label: str | None = Field(None, min_length=1, max_length=60)
+    min_select: int | None = Field(None, ge=0, le=20)
+    max_select: int | None = Field(None, ge=1, le=20)
+    sort_order: int | None = None
+
+
+class CreateChoice(BaseModel):
+    label: str = Field(..., min_length=1, max_length=60)
+    price_delta: Decimal = Field(Decimal("0"), ge=0, max_digits=10, decimal_places=2)
+    cost_delta: Decimal = Field(Decimal("0"), ge=0, max_digits=10, decimal_places=2)
+    allergens: list[EU14Allergen] = []
+    allergen_verified: bool = False
+    is_vegetarian: bool = False
+    is_vegan: bool = False
+    available: bool = True
+    is_default: bool = False
+    sort_order: int | None = None
+
+
+class PatchChoice(BaseModel):
+    label: str | None = Field(None, min_length=1, max_length=60)
+    price_delta: Decimal | None = Field(None, ge=0, max_digits=10, decimal_places=2)
+    cost_delta: Decimal | None = Field(None, ge=0, max_digits=10, decimal_places=2)
+    allergens: list[EU14Allergen] | None = None
+    allergen_verified: bool | None = None
+    is_vegetarian: bool | None = None
+    is_vegan: bool | None = None
+    available: bool | None = None
+    is_default: bool | None = None
+    sort_order: int | None = None
 
 
 class OwnerMenuItemResponse(BaseModel):
@@ -35,6 +121,7 @@ class OwnerMenuItemResponse(BaseModel):
     sort_order: int
     image_url: str | None = None
     translations: list[OwnerMenuTranslation]
+    choice_groups: list[OwnerChoiceGroup] = []
     deleted_at: datetime | None = None
 
     model_config = ConfigDict(from_attributes=True)
@@ -263,6 +350,17 @@ class BriefAction(BaseModel):
     formula: str
 
 
+class TopExtra(BaseModel):
+    label: str
+    count: int
+
+
+class ExtrasSummary(BaseModel):
+    attach_rate_pct: float
+    sales: float
+    top: list[TopExtra]
+
+
 class DailyBriefResponse(BaseModel):
     date: str
     currency: str
@@ -278,6 +376,7 @@ class DailyBriefResponse(BaseModel):
     prices_include_tax: bool
     tax_split_by_method: bool
     service_charge_collected: Decimal
+    extras: ExtrasSummary
     pay_forward: PayForwardTotals
     forecast: ForecastSummary
     actions: list[BriefAction]

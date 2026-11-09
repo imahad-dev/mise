@@ -20,7 +20,7 @@ from src.inference.client import (
 from src.models.audit import AuditLog
 from src.models.bill import Bill
 from src.models.dining_table import DiningTable
-from src.models.menu import MenuItem, MenuItemOption
+from src.models.menu import MenuChoiceGroup, MenuItem, MenuItemOption
 from src.models.order import Order
 from src.models.restaurant import Restaurant
 from src.models.sitting import TableSitting
@@ -94,6 +94,7 @@ def _build_owner_item_response(item: MenuItem) -> OwnerMenuItemResponse:
         sort_order=item.sort_order,
         image_url=item.image_url,
         translations=translations,
+        choice_groups=item.choice_groups,
         deleted_at=item.deleted_at,
     )
 
@@ -117,7 +118,11 @@ async def list_owner_menu_items(
 
     stmt = (
         select(MenuItem)
-        .options(selectinload(MenuItem.translations))
+        .options(
+            selectinload(MenuItem.translations),
+            selectinload(MenuItem.choice_groups).selectinload(MenuChoiceGroup.choices),
+        )
+        .execution_options(populate_existing=True)
         .where(
             MenuItem.restaurant_id == restaurant.id,
             MenuItem.deleted_at.is_(None),
@@ -155,7 +160,11 @@ async def patch_menu_item(
 
     stmt = (
         select(MenuItem)
-        .options(selectinload(MenuItem.translations))
+        .options(
+            selectinload(MenuItem.translations),
+            selectinload(MenuItem.choice_groups).selectinload(MenuChoiceGroup.choices),
+        )
+        .execution_options(populate_existing=True)
         .where(
             MenuItem.id == id,
             MenuItem.restaurant_id == restaurant.id,
@@ -179,6 +188,11 @@ async def patch_menu_item(
 
     if payload.is_pay_forward is not None and payload.is_pay_forward != item.is_pay_forward:
         if payload.is_pay_forward:
+            if item.choice_groups:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                    detail="A dish with choices can't be pay-it-forward",
+                )
             await pay_forward.ensure_can_flag(db, restaurant.id, item.id)
         else:
             await pay_forward.ensure_can_remove(db, restaurant.id)
@@ -256,7 +270,13 @@ async def patch_menu_item(
 
     await db.commit()
     res_item = await db.execute(
-        select(MenuItem).options(selectinload(MenuItem.translations)).where(MenuItem.id == item.id)
+        select(MenuItem)
+        .options(
+            selectinload(MenuItem.translations),
+            selectinload(MenuItem.choice_groups).selectinload(MenuChoiceGroup.choices),
+        )
+        .execution_options(populate_existing=True)
+        .where(MenuItem.id == item.id)
     )
     item = res_item.scalar_one()
     return _build_owner_item_response(item)
@@ -282,7 +302,11 @@ async def verify_menu_item(
 
     stmt = (
         select(MenuItem)
-        .options(selectinload(MenuItem.translations))
+        .options(
+            selectinload(MenuItem.translations),
+            selectinload(MenuItem.choice_groups).selectinload(MenuChoiceGroup.choices),
+        )
+        .execution_options(populate_existing=True)
         .where(
             MenuItem.id == id,
             MenuItem.restaurant_id == restaurant.id,
@@ -306,7 +330,13 @@ async def verify_menu_item(
     db.add(audit)
     await db.commit()
     res_item = await db.execute(
-        select(MenuItem).options(selectinload(MenuItem.translations)).where(MenuItem.id == item.id)
+        select(MenuItem)
+        .options(
+            selectinload(MenuItem.translations),
+            selectinload(MenuItem.choice_groups).selectinload(MenuChoiceGroup.choices),
+        )
+        .execution_options(populate_existing=True)
+        .where(MenuItem.id == item.id)
     )
     item = res_item.scalar_one()
     return _build_owner_item_response(item)
@@ -594,7 +624,7 @@ async def daily_brief(
 ) -> DailyBriefResponse:
     """Deterministic analytics brief; the LLM only narrates. Cached for 10m in DEMO_MODE."""
     restaurant = access.restaurant
-    cache_key = f"cache:demo:brief:v5:{restaurant.slug}"
+    cache_key = f"cache:demo:brief:v6:{restaurant.slug}"
 
     if settings.demo_mode:
         try:
@@ -855,7 +885,7 @@ async def simulate_demo_orders(
     summary = await persist_simulation(db, restaurant, assumptions)
     await db.commit()
     try:
-        await redis_client.delete(f"cache:demo:brief:v5:{restaurant.slug}")
+        await redis_client.delete(f"cache:demo:brief:v6:{restaurant.slug}")
     except Exception as e:
         logger.warning("Redis error clearing brief cache: %s", e)
     return SimulateOrdersResponse(**summary)

@@ -6,6 +6,7 @@ from typing import Literal
 from pydantic import BaseModel, Field, model_validator
 
 from src.schemas.bills import REFERENCE, BillLine, GuestBillResponse, MethodPreview, PaymentClaim
+from src.schemas.orders import LineChoice
 
 NEEDS_REFERENCE = {"wallet", "raast", "bank_transfer"}
 
@@ -23,6 +24,7 @@ class VoidedLine(BaseModel):
     name: str
     option_label: str | None
     quantity: int
+    choices: list[LineChoice] = []
 
 
 class GuestPaymentRequest(BaseModel):

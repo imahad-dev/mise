@@ -266,6 +266,60 @@
       "option_weights": [
         0.55,
         0.45
+      ],
+      "choice_groups": [
+        {
+          "label": "Spice",
+          "kind": "pick",
+          "min_select": 1,
+          "max_select": 1,
+          "choices": [
+            {
+              "label": "Mild",
+              "allergen_verified": true,
+              "is_vegetarian": true,
+              "is_vegan": true
+            },
+            {
+              "label": "Medium",
+              "allergen_verified": true,
+              "is_vegetarian": true,
+              "is_vegan": true
+            },
+            {
+              "label": "Hot",
+              "allergen_verified": true,
+              "is_vegetarian": true,
+              "is_vegan": true
+            }
+          ]
+        },
+        {
+          "label": "Leave out",
+          "kind": "leave_out",
+          "min_select": 0,
+          "max_select": 3,
+          "choices": [
+            {
+              "label": "Onions",
+              "allergen_verified": true,
+              "is_vegetarian": true,
+              "is_vegan": true
+            },
+            {
+              "label": "Green chilli",
+              "allergen_verified": true,
+              "is_vegetarian": true,
+              "is_vegan": true
+            },
+            {
+              "label": "Ginger",
+              "allergen_verified": true,
+              "is_vegetarian": true,
+              "is_vegan": true
+            }
+          ]
+        }
       ]
     },
     {
@@ -310,6 +364,60 @@
       "option_weights": [
         0.55,
         0.45
+      ],
+      "choice_groups": [
+        {
+          "label": "Spice",
+          "kind": "pick",
+          "min_select": 1,
+          "max_select": 1,
+          "choices": [
+            {
+              "label": "Mild",
+              "allergen_verified": true,
+              "is_vegetarian": true,
+              "is_vegan": true
+            },
+            {
+              "label": "Medium",
+              "allergen_verified": true,
+              "is_vegetarian": true,
+              "is_vegan": true
+            },
+            {
+              "label": "Hot",
+              "allergen_verified": true,
+              "is_vegetarian": true,
+              "is_vegan": true
+            }
+          ]
+        },
+        {
+          "label": "Leave out",
+          "kind": "leave_out",
+          "min_select": 0,
+          "max_select": 3,
+          "choices": [
+            {
+              "label": "Onions",
+              "allergen_verified": true,
+              "is_vegetarian": true,
+              "is_vegan": true
+            },
+            {
+              "label": "Green chilli",
+              "allergen_verified": true,
+              "is_vegetarian": true,
+              "is_vegan": true
+            },
+            {
+              "label": "Ginger",
+              "allergen_verified": true,
+              "is_vegetarian": true,
+              "is_vegan": true
+            }
+          ]
+        }
       ]
     },
     {
@@ -1030,7 +1138,55 @@
           "description": "Tea simmered in milk"
         }
       },
-      "sim_weight": 4
+      "sim_weight": 4,
+      "choice_groups": [
+        {
+          "label": "Sugar",
+          "kind": "pick",
+          "min_select": 1,
+          "max_select": 1,
+          "choices": [
+            {
+              "label": "Normal",
+              "allergen_verified": true,
+              "is_vegetarian": true,
+              "is_vegan": true,
+              "is_default": true
+            },
+            {
+              "label": "Less",
+              "allergen_verified": true,
+              "is_vegetarian": true,
+              "is_vegan": true
+            },
+            {
+              "label": "No sugar",
+              "allergen_verified": true,
+              "is_vegetarian": true,
+              "is_vegan": true
+            }
+          ]
+        },
+        {
+          "label": "Extras",
+          "kind": "add",
+          "min_select": 0,
+          "max_select": 1,
+          "choices": [
+            {
+              "label": "Extra milk",
+              "price_delta": 50,
+              "cost_delta": 15,
+              "allergens": [
+                "milk"
+              ],
+              "allergen_verified": true,
+              "is_vegetarian": true,
+              "is_vegan": false
+            }
+          ]
+        }
+      ]
     },
     {
       "key": "pay_forward_chai",

@@ -69,6 +69,32 @@ class GuestMenuOption(BaseModel):
     model_config = ConfigDict(from_attributes=True, extra="forbid")
 
 
+class GuestMenuChoice(BaseModel):
+    id: uuid.UUID
+    label: str
+    price_delta: Decimal
+    allergens: list[str]
+    is_vegetarian: bool
+    is_vegan: bool
+    available: bool
+    is_default: bool
+    allergen_status: str
+    matched_allergens: list[str]
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class GuestMenuChoiceGroup(BaseModel):
+    id: uuid.UUID
+    label: str
+    kind: str
+    min_select: int
+    max_select: int
+    choices: list[GuestMenuChoice]
+
+    model_config = ConfigDict(extra="forbid")
+
+
 class GuestMenuItemResponse(BaseModel):
     id: uuid.UUID
     category: str
@@ -89,6 +115,7 @@ class GuestMenuItemResponse(BaseModel):
     allergen_status: str
     matched_allergens: list[str]
     options: list[GuestMenuOption] = []
+    choice_groups: list[GuestMenuChoiceGroup] = []
 
     # Explicitly guarantee unit_cost is not in schema
     model_config = ConfigDict(from_attributes=True, extra="forbid")

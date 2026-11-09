@@ -2,6 +2,8 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import type { LineChoice } from "ui";
+import { KitchenChoices } from "../../../components/KitchenChoices";
 import { useSse } from "../../../hooks/use-sse";
 import { useVenue } from "../../../lib/venue";
 
@@ -10,6 +12,7 @@ interface KitchenOrderItem {
   menu_item_id: string;
   kitchen_name: string;
   option_label?: string | null;
+  choices?: LineChoice[];
   quantity: number;
   notes?: string | null;
   allergens: string[];
@@ -384,6 +387,8 @@ export default function KitchenDisplayPage() {
                           {item.option_label && <span className="text-kds-accent"> — {item.option_label}</span>}
                         </span>
                       </div>
+
+                      <KitchenChoices choices={item.choices} />
 
                       {/* Prominent Solid Red Allergy Banner on Affected Items */}
                       {item.conflict_with_order_allergens && (

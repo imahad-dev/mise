@@ -78,6 +78,10 @@ export function getDictionary(locale: string | undefined | null): TranslationDic
       ...en.menu,
       ...(raw.menu || {}),
     },
+    dish: {
+      ...en.dish,
+      ...(raw.dish || {}),
+    },
     bill: {
       ...en.bill,
       ...(raw.bill || {}),

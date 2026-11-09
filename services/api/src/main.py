@@ -15,6 +15,7 @@ from src.routers.floor import router as floor_router
 from src.routers.guest import router as guest_router
 from src.routers.health import router as health_router
 from src.routers.kitchen import router as kitchen_router
+from src.routers.menu_choices import router as menu_choices_router
 from src.routers.metrics import router as metrics_router
 from src.routers.orders import router as orders_router
 from src.routers.owner import router as owner_router
@@ -67,6 +68,7 @@ app.include_router(kitchen_router)
 app.include_router(bills_router)
 app.include_router(floor_router)
 app.include_router(owner_router)
+app.include_router(menu_choices_router)
 app.include_router(restaurants_router)
 
 

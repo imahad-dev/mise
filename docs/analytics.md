@@ -28,6 +28,10 @@ Code: `services/api/src/services/` — `analytics.py`, `forecast.py`, `brief.py`
   their bill and counts as revenue once like any other item; the brief reports the
   pay-it-forward ledger separately as `pay_forward {bought, given}` over the last 7 local days
   (today included), not narrated and not revenue.
+- **Extras**: the brief's `extras {attach_rate_pct, sales, top}` counts priced dish choices from the order
+  line snapshot. Attach rate is lines with a priced choice / all lines in scope; sales exclude VAT like
+  revenue (`_NET`); `top` is the five most added by quantity. Zeros when there are no lines. Not
+  narrated: the model never sees these figures.
 - **Daypart**: daytime before 18:00 local time is `lunch`, the evening after is `dinner`.
 - Of the analysed sources, `live` and `simulated`, analytics include both; every response reports the
   count of each (`data_sources`) and the UI shows a "Simulated data" banner when any simulated
@@ -209,6 +213,8 @@ the assumptions applied.
 | `price_change` | item, change % (−90…+100), elasticity (default −0.8) | price′ = p(1+c); units′ = units × max(0, 1 + e·c) |
 | `promotion` | item, discount % (1…90), elasticity (default −2.0) | price′ = p(1−d); units′ = units × max(0, 1 + e·(−d)) |
 | `demand_surge` | multiplier (0…5] | units′ = units × m for every item |
+
+The what-if tool changes base prices only: extras keep their own prices (the owner What-if page says so).
 
 Not modeled: cannibalization or halo effects on other items, kitchen capacity, staffing cost.
 The model may write an explanation under the same numbers guard; otherwise a template is used.

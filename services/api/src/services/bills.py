@@ -220,24 +220,32 @@ async def revive_expired(
 
 
 def bill_lines(orders: list[Order]) -> tuple[list[BillLine], Decimal]:
-    """Lines grouped by (dish, option, unit price), sorted by dish then price; and subtotal."""
-    qty: dict[tuple[str, str | None, Decimal], int] = {}
+    """Lines grouped by (dish, option, unit price, choices), sorted by dish then price; subtotal."""
+    qty: dict[tuple, int] = {}
+    chosen: dict[tuple, list[dict]] = {}
     for order in orders:
         for oi in order.items:
-            key = (oi.item_name, oi.option_label, oi.unit_price)
+            # Sorted: reordering groups mid-visit must not split identical choices.
+            # The delta too: same labels and unit price can hide different extra prices.
+            names = tuple(
+                sorted((c["group"], c["label"], Decimal(c["price_delta"])) for c in oi.choices)
+            )
+            key = (oi.item_name, oi.option_label, oi.unit_price, names)
             qty[key] = qty.get(key, 0) + oi.quantity
+            chosen[key] = oi.choices
     # Sorted, not first-seen: orders of one transaction share placed_at, so arrival order
     # is not recoverable from the database.
     lines = [
         BillLine(
-            name=name,
-            option_label=label,
+            name=key[0],
+            option_label=key[1],
             quantity=q,
-            unit_price=price,
-            line_total=price * Decimal(q),
+            unit_price=key[2],
+            line_total=key[2] * Decimal(q),
+            choices=chosen[key],
         )
-        for (name, label, price), q in sorted(
-            qty.items(), key=lambda kv: (kv[0][0], kv[0][2], kv[0][1] or "")
+        for key, q in sorted(
+            qty.items(), key=lambda kv: (kv[0][0], kv[0][2], kv[0][1] or "", kv[0][3])
         )
     ]
     return lines, sum((line.line_total for line in lines), Decimal("0.00"))

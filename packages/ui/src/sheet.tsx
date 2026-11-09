@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useId, useRef } from "react";
+import React, { useEffect, useId, useLayoutEffect, useRef } from "react";
 
 export interface SheetProps {
   open: boolean;
@@ -17,6 +17,18 @@ export interface SheetProps {
 export function Sheet({ open, onClose, title, children, footer }: SheetProps) {
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
+  const gone = useRef(false);
+
+  // Close on unmount too, so the browser returns focus to the opener. The close event comes
+  // later: `gone` (or a dialog StrictMode has reopened) keeps it from reaching onClose.
+  useLayoutEffect(() => {
+    const dialog = ref.current;
+    gone.current = false;
+    return () => {
+      gone.current = true;
+      if (dialog?.open) dialog.close();
+    };
+  }, []);
 
   useEffect(() => {
     const dialog = ref.current;
@@ -30,7 +42,9 @@ export function Sheet({ open, onClose, title, children, footer }: SheetProps) {
       ref={ref}
       className="sheet"
       aria-labelledby={titleId}
-      onClose={onClose}
+      onClose={() => {
+        if (!gone.current && !ref.current?.open) onClose();
+      }}
       onClick={(e) => {
         if (e.target === e.currentTarget) e.currentTarget.close(); // click on the backdrop
       }}

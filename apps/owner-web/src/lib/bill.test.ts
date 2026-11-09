@@ -15,6 +15,17 @@ describe("sample bill", () => {
     lines: [{ name: "Chicken Karahi", option_label: "1 kg", quantity: 1, unit_price: "2100.00", line_total: "2100.00" }],
     subtotal: "2100.00", tax_rate: "0.08", tax_amount: "168.00", total: "2268.00", payment_method: "card",
   };
+  it("a printed line lists its choices and keeps the footer", () => {
+    const withMilk = { ...bill, lines: [{ ...bill.lines[0], choices: [
+      { kind: "add" as const, label: "Extra milk", price_delta: "50" },
+      { kind: "leave_out" as const, label: "Onions", price_delta: "0" },
+    ] }] };
+    const text = sampleBillText(withMilk);
+    expect(text).toContain("Extra milk");
+    expect(text).toContain("No onions");
+    expect(text).toContain(SAMPLE_BILL_FOOTER);
+    expect(text.replace(SAMPLE_BILL_FOOTER, "").toLowerCase()).not.toContain("invoice");
+  });
   it("always carries the not-a-tax-invoice footer", () => {
     expect(SAMPLE_BILL_FOOTER).toBe("Sample bill — not a tax invoice. Not connected to FBR or any provincial revenue authority.");
     expect(sampleBillText(bill)).toContain(SAMPLE_BILL_FOOTER);

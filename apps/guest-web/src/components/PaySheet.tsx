@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { Button, Sheet, formatPrice } from "ui";
+import { Button, Sheet, choiceLine, formatPrice } from "ui";
 import { getDictionary } from "../i18n";
 import {
   claimMessage,
@@ -132,6 +132,11 @@ export function PaySheet({ lang, bill, orderId, open, onClose, onUpdated, onConf
             <span className="text-ink">
               {l.quantity} × {l.name}
               {l.option_label && <span className="text-ink-muted"> — {l.option_label}</span>}
+              {(l.choices ?? []).length > 0 && (
+                <span className="block text-xs text-ink-muted">
+                  {l.choices!.map((c) => choiceLine(c, (n) => money(String(n)), dict.dish.leaveOut)).join(", ")}
+                </span>
+              )}
             </span>
             <span className="text-ink-muted">{money(l.line_total)}</span>
           </li>
@@ -139,7 +144,7 @@ export function PaySheet({ lang, bill, orderId, open, onClose, onUpdated, onConf
       </ul>
       {bill.voided.map((v, i) => (
         <p key={i} className="text-sm text-danger-fg">
-          {dict.pay.removed.replace("{name}", v.option_label ? `${v.name} — ${v.option_label}` : v.name).replace("{qty}", String(v.quantity))}
+          {dict.pay.removed.replace("{name}", [v.option_label ? `${v.name} — ${v.option_label}` : v.name, ...(v.choices ?? []).map((c) => choiceLine(c, (n) => money(String(n)), dict.dish.leaveOut))].join(", ")).replace("{qty}", String(v.quantity))}
         </p>
       ))}
       <p className="flex justify-between text-sm font-semibold text-ink">

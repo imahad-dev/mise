@@ -2,6 +2,7 @@
 
 import uuid
 from datetime import date
+from decimal import Decimal
 from typing import Any
 
 import pytest
@@ -894,3 +895,141 @@ async def test_bill_tax_rate_and_pricing_come_together(db_session: AsyncSession)
             {"rid": rid},
             "chk_bills_tax_pricing_pair",
         )
+
+
+async def _flush_violates(db: AsyncSession, obj: Any, constraint: str) -> None:
+    with pytest.raises(IntegrityError) as exc_info:
+        async with db.begin_nested():
+            db.add(obj)
+            await db.flush()
+    assert constraint in str(exc_info.value)
+
+
+async def _item_and_group(db: AsyncSession, **kw: Any):
+    from src.models.menu import MenuChoiceGroup
+
+    rid = await _create_test_restaurant(db)
+    mid = uuid.UUID(await _create_test_menu_item(db, rid))
+    base = {"label": "Extras", "kind": "add", "min_select": 0, "max_select": 3}
+    group = MenuChoiceGroup(menu_item_id=mid, **{**base, **kw})
+    db.add(group)
+    await db.flush()
+    return mid, group
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "group_kwargs, constraint",
+    [
+        ({"min_select": 2, "max_select": 1}, "chk_choice_group_select"),
+        ({"min_select": 0, "max_select": 0}, "chk_choice_group_select"),
+        ({"min_select": -1, "max_select": 1}, "chk_choice_group_select"),
+        ({"kind": "other"}, "chk_choice_group_kind"),
+    ],
+)
+async def test_choice_group_constraints(db_session, group_kwargs, constraint):
+    from src.models.menu import MenuChoiceGroup
+
+    rid = await _create_test_restaurant(db_session)
+    mid = uuid.UUID(await _create_test_menu_item(db_session, rid))
+    base = {"label": "Spice", "kind": "pick", "min_select": 1, "max_select": 1}
+    await _flush_violates(
+        db_session, MenuChoiceGroup(menu_item_id=mid, **{**base, **group_kwargs}), constraint
+    )
+
+
+@pytest.mark.asyncio
+async def test_choice_group_label_unique_per_item(db_session):
+    from src.models.menu import MenuChoiceGroup
+
+    mid, _ = await _item_and_group(db_session)
+    dup = MenuChoiceGroup(menu_item_id=mid, label="Extras", kind="add", min_select=0, max_select=3)
+    await _flush_violates(db_session, dup, "uq_choice_group_label")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "choice_kwargs, constraint",
+    [
+        ({"price_delta": Decimal("-1")}, "chk_choice_money"),
+        ({"cost_delta": Decimal("-1")}, "chk_choice_money"),
+        ({"allergens": ["bananas"]}, "chk_choice_allergens"),
+        ({"is_vegan": True, "is_vegetarian": False}, "chk_choice_vegan_vegetarian"),
+        (
+            {"is_vegan": True, "is_vegetarian": True, "allergens": ["milk"]},
+            "chk_choice_vegan_allergens",
+        ),
+        ({"is_vegetarian": True, "allergens": ["fish"]}, "chk_choice_vegetarian_allergens"),
+    ],
+)
+async def test_choice_constraints(db_session, choice_kwargs, constraint):
+    from src.models.menu import MenuChoice
+
+    _, group = await _item_and_group(db_session)
+    await _flush_violates(
+        db_session, MenuChoice(group_id=group.id, label="Milk", **choice_kwargs), constraint
+    )
+
+
+@pytest.mark.asyncio
+async def test_choice_label_unique_per_group(db_session):
+    from src.models.menu import MenuChoice
+
+    _, group = await _item_and_group(db_session)
+    db_session.add(MenuChoice(group_id=group.id, label="Milk"))
+    await db_session.flush()
+    await _flush_violates(
+        db_session, MenuChoice(group_id=group.id, label="Milk"), "uq_choice_label"
+    )
+
+
+@pytest.mark.asyncio
+async def test_vegan_choice_with_gluten_accepted(db_session):
+    from src.models.menu import MenuChoice
+
+    _, group = await _item_and_group(db_session)
+    db_session.add(
+        MenuChoice(
+            group_id=group.id,
+            label="Oat crumb",
+            is_vegan=True,
+            is_vegetarian=True,
+            allergens=["gluten"],
+        )
+    )
+    await db_session.flush()
+
+
+@pytest.mark.asyncio
+async def test_order_item_choices_default_empty(db_session):
+    rest_id = await _create_test_restaurant(db_session)
+    item_id = await _create_test_menu_item(db_session, rest_id)
+    session_id = await _create_test_session(db_session, rest_id)
+    order_id = await _create_test_order(db_session, rest_id, session_id)
+    result = await db_session.execute(
+        text(
+            """
+            INSERT INTO order_item (
+                order_id, menu_item_id, quantity, unit_price, unit_cost,
+                item_name, kitchen_name, allergen_verified, allergen_status
+            )
+            VALUES (:o, :m, 1, 12.00, 3.00, 'Pasta', 'Pasta', true, 'no_declared_match')
+            RETURNING choices
+            """
+        ),
+        {"o": order_id, "m": item_id},
+    )
+    assert result.scalar_one() == []
+
+
+@pytest.mark.asyncio
+async def test_deleting_menu_item_cascades_to_groups_and_choices(db_session):
+    from src.models.menu import MenuChoice
+
+    mid, group = await _item_and_group(db_session)
+    db_session.add(MenuChoice(group_id=group.id, label="Milk"))
+    await db_session.flush()
+    await db_session.execute(text("DELETE FROM menu_item WHERE id = :id"), {"id": mid})
+    for table in ("menu_choice_group", "menu_choice"):
+        count = await db_session.execute(text(f"SELECT count(*) FROM {table}"))
+        assert count.scalar_one() == 0

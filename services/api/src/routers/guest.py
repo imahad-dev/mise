@@ -18,7 +18,7 @@ from src.inference.client import InferenceClient, get_inference_client
 from src.models.audit import AuditLog
 from src.models.bill import Bill
 from src.models.dining_table import DiningTable
-from src.models.menu import MenuItem
+from src.models.menu import MenuChoice, MenuChoiceGroup, MenuItem
 from src.models.order import Order
 from src.models.pay_forward import PayForward
 from src.models.restaurant import Restaurant
@@ -38,6 +38,8 @@ from src.schemas.guest import (
     ChatMessageRequest,
     ChatMessageResponse,
     CreateGuestSessionRequest,
+    GuestMenuChoice,
+    GuestMenuChoiceGroup,
     GuestMenuItemResponse,
     GuestMenuOption,
     GuestMenuResponse,
@@ -68,6 +70,7 @@ from src.services.bills import (
     session_is_current,
     session_started_at,
 )
+from src.services.choices import can_be_ordered
 from src.services.counter import order_status as counter_order_status
 from src.services.counter import pickup_label
 from src.services.guest_chat import handle_guest_chat
@@ -192,6 +195,28 @@ async def patch_guest_session(
     return GuestSessionResponse.model_validate(session)
 
 
+def _guest_choice(c: MenuChoice, avoid: list[str]) -> GuestMenuChoice:
+    status_val = compute_allergen_status(
+        item_allergens=c.allergens,
+        allergen_verified=c.allergen_verified,
+        guest_allergens_to_avoid=avoid,
+    )
+    return GuestMenuChoice(
+        id=c.id,
+        label=c.label,
+        price_delta=c.price_delta,
+        allergens=c.allergens,
+        is_vegetarian=c.is_vegetarian,
+        is_vegan=c.is_vegan,
+        available=c.available,
+        is_default=c.is_default,
+        allergen_status=status_val,
+        matched_allergens=[a for a in c.allergens if a in avoid]
+        if status_val == "contains"
+        else [],
+    )
+
+
 @router.get(
     "/menu",
     response_model=GuestMenuResponse,
@@ -218,7 +243,11 @@ async def get_guest_menu(
     # 2. Fetch active menu items with eager loaded translations
     stmt_items = (
         select(MenuItem)
-        .options(selectinload(MenuItem.translations), selectinload(MenuItem.options))
+        .options(
+            selectinload(MenuItem.translations),
+            selectinload(MenuItem.options),
+            selectinload(MenuItem.choice_groups).selectinload(MenuChoiceGroup.choices),
+        )
         .where(
             MenuItem.restaurant_id == session.restaurant_id,
             MenuItem.deleted_at.is_(None),
@@ -267,7 +296,7 @@ async def get_guest_menu(
                 is_vegetarian=item.is_vegetarian,
                 is_vegan=item.is_vegan,
                 is_gluten_free=item.is_gluten_free,
-                available=item.available,
+                available=item.available and can_be_ordered(item),
                 featured=item.featured,
                 sort_order=item.sort_order,
                 image_url=item.image_url,
@@ -275,6 +304,17 @@ async def get_guest_menu(
                 matched_allergens=matched_allergens,
                 options=[
                     GuestMenuOption(id=o.id, label=o.label, price=o.price) for o in item.options
+                ],
+                choice_groups=[
+                    GuestMenuChoiceGroup(
+                        id=g.id,
+                        label=g.label,
+                        kind=g.kind,
+                        min_select=g.min_select,
+                        max_select=g.max_select,
+                        choices=[_guest_choice(c, session.allergens_to_avoid) for c in g.choices],
+                    )
+                    for g in item.choice_groups
                 ],
             )
         )
@@ -487,7 +527,12 @@ async def _bill_detail(
         payment_details=PaymentDetails(**restaurant.payment_details),
         claim=claim_of(bill),
         voided=[
-            VoidedLine(name=v.name, option_label=v.option_label, quantity=v.quantity)
+            VoidedLine(
+                name=v.name,
+                option_label=v.option_label,
+                quantity=v.quantity,
+                choices=v.choices,
+            )
             for v in voided
         ],
         order_status=order_status,

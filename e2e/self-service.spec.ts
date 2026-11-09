@@ -5,6 +5,7 @@ import {
   KEHWA,
   OWNER,
   acknowledgeAllergens,
+  addWithChoices,
   approveOrder,
   billOf,
   clearDemoLimits,
@@ -83,8 +84,7 @@ test.describe.serial("1. Angeethi family: order, water, Raast, confirm, print, c
 
   test("karahi and naan, a call for water, Raast with a reference, then Needs clearing → Free", async ({ browser }) => {
     const guest = await guestAt(browser, "T1");
-    await guest.getByRole("button", { name: "Add Chicken Karahi", exact: true }).click();
-    await guest.getByRole("button", { name: "Add Chicken Karahi 1 kg", exact: true }).click();
+    await addWithChoices(guest, "Chicken Karahi", ["1 kg", "Medium"]);
     await guest.getByRole("button", { name: "Add Naan", exact: true }).click();
     await guest.getByRole("button", { name: /View order/ }).click();
     await confirmOrder(guest);

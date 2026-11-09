@@ -231,6 +231,13 @@ export default function DailyBriefPage() {
                   sub="Not revenue. UK law: staff receive all of it."
                 />
               )}
+              {brief.extras.top.length > 0 && (
+                <StatTile
+                  label={exVat("Extras sales", vat)}
+                  value={money(brief.extras.sales, brief.currency)}
+                  sub={`Added to ${brief.extras.attach_rate_pct}% of lines. Top: ${brief.extras.top.map((t) => `${t.label} (${t.count})`).join(", ")}`}
+                />
+              )}
             </div>
 
             <div className="mise-card p-6 space-y-3">

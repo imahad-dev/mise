@@ -13,7 +13,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.models.bill import Bill
-from src.models.menu import MenuItem
+from src.models.menu import MenuChoice, MenuChoiceGroup, MenuItem
 from src.models.order import Order, OrderItem
 from src.models.restaurant import Restaurant
 from src.services.simulator import (
@@ -291,3 +291,55 @@ async def test_simulation_without_tax_jurisdiction_writes_no_bills(db_session: A
         )
     ).scalar_one()
     assert bills == 0
+
+
+SPICE = (uuid.UUID(int=201), uuid.UUID(int=202))
+EXTRA = uuid.UUID(int=203)
+
+
+def test_choices_never_shift_the_order_stream():
+    a = SimAssumptions(days=28, seed=5, promo_item_rank=None)
+    plain = generate_orders(ITEMS, START, a, TZ)
+    with_choices = [
+        replace(i, required=((1, SPICE),), extras=((1, (EXTRA,)),)) if i.id == ITEMS[0].id else i
+        for i in ITEMS
+    ]
+    drawn = generate_orders(with_choices, START, a, TZ)
+    assert _flat(plain) == _flat(drawn)
+    picks = [ids for o in drawn for ids in o.choices.values()]
+    assert picks and all(any(s in ids for s in SPICE) for ids in picks)
+    assert any(EXTRA in ids for ids in picks)
+
+
+@pytest.mark.asyncio
+@pytest.mark.timeout(240)
+async def test_dish_with_a_sold_out_required_group_is_never_simulated(db_session: AsyncSession):
+    restaurant = await _seeded(db_session)
+    karahi = uuid.uuid5(SEED_ITEM_NAMESPACE, "angeethi-house:chicken_karahi")
+    required = select(MenuChoiceGroup.id).where(
+        MenuChoiceGroup.menu_item_id == karahi, MenuChoiceGroup.min_select > 0
+    )
+    for c in await db_session.scalars(select(MenuChoice).where(MenuChoice.group_id.in_(required))):
+        c.available = False
+    await db_session.flush()
+    a = SimAssumptions.from_profile(restaurant.onboarding["simulation"])
+    assert (await persist_simulation(db_session, restaurant, a))["orders_created"] > 0
+    sold = await db_session.scalar(
+        select(func.count()).select_from(OrderItem).where(OrderItem.menu_item_id == karahi)
+    )
+    assert sold == 0
+
+
+def test_required_groups_draw_their_minimum_and_extras_respect_their_maximum():
+    sides = tuple(uuid.UUID(int=210 + n) for n in range(4))
+    adds = tuple(uuid.UUID(int=220 + n) for n in range(6))
+    a = SimAssumptions(days=28, seed=5, promo_item_rank=None)
+    items = [
+        replace(i, required=((2, sides),), extras=((1, adds),)) if i.id == ITEMS[0].id else i
+        for i in ITEMS
+    ]
+    picks = [ids for o in generate_orders(items, START, a, TZ) for ids in o.choices.values()]
+    assert picks
+    for ids in picks:
+        assert len({s for s in ids if s in sides}) == sum(s in sides for s in ids) == 2
+        assert sum(e in adds for e in ids) <= 1
