@@ -451,8 +451,9 @@ export default function GuestMenuPage({
       .filter(Boolean)
       .join(" ");
 
+  // Bottom padding clears the assistant button (chat-panel.tsx: bottom-20, or bottom-64 above the order bar).
   return (
-    <div className={`min-h-screen bg-paper text-ink ${barText ? "pb-56" : "pb-28"}`}>
+    <div className={`min-h-screen bg-paper text-ink ${barText ? "pb-80" : "pb-36"}`}>
       {/* Always mounted, so a screen reader hears each new bar message. */}
       <p aria-live="polite" className="sr-only">
         {barText}

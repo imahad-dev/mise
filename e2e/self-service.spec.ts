@@ -721,4 +721,35 @@ test.describe.serial("Sheets on a phone", () => {
     expect(Math.round(box!.y + box!.height)).toBe(812);
     await context.close();
   });
+
+  // The floating assistant button sits over the bottom of the page; the last price must clear it,
+  // both normally and raised above the order bar (shown for a table that is not open yet).
+  for (const [width, height, normal, raised] of [
+    [375, 812, "T2", "T5"],
+    [320, 568, "T3", "T6"],
+  ] as const) {
+    test(`the assistant button never covers the last dish's price or add button at ${width} px`, async ({ browser }) => {
+      const context = await browser.newContext({ viewport: { width, height } });
+      const guest = await context.newPage();
+      const clears = async (when: string) => {
+        await guest.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+        const price = await guest.locator("main li").last().boundingBox(); // the whole row: price, chips and + button
+        const chat = await guest.getByRole("button", { name: "Ask Mise Assistant" }).boundingBox();
+        expect(price && chat, `${when}: price and assistant button are on screen`).toBeTruthy();
+        const apart = chat!.y >= price!.y + price!.height || chat!.y + chat!.height <= price!.y;
+        expect(apart, `${when}: assistant ${JSON.stringify(chat)} vs last dish row ${JSON.stringify(price)}`).toBe(true);
+      };
+
+      await openTable(ANGEETHI, normal);
+      await openTableMenu(guest, T[normal].qr_token);
+      await clears("menu");
+
+      await openTableMenu(guest, T[raised].qr_token); // not opened: the bar says the table is not ready
+      // dispatchEvent: on a 320 px screen the header, order bar and assistant button already cover Add.
+      await guest.getByRole("button", { name: "Add Naan", exact: true }).dispatchEvent("click");
+      await expect(shown(guest, "Your table will be ready in a moment. A waiter is on the way.").first()).toBeVisible();
+      await clears("menu with the order bar");
+      await context.close();
+    });
+  }
 });
