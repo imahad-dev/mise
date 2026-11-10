@@ -125,5 +125,20 @@ async def test_a_guest_never_gets_another_venues_menu_order_bill_or_call(client,
     assert (await client.get(f"/api/orders/{b_order}")).status_code == 404
     assert (await client.get(f"/api/guest/bill?order_id={b_order}")).status_code == 404
     current = await client.get("/api/guest/service-calls/current")
-    assert current.status_code in (200, 204, 404)
-    assert "water" not in current.text
+    assert current.status_code == 200
+    assert current.json()["call"] is None
+
+
+@pytest.mark.asyncio
+async def test_session_create_with_a_nul_byte_token_is_404(client):
+    res = await client.post(
+        "/api/guest/sessions",
+        json={
+            "qr_token": "abc" + chr(0) + "def",
+            "language": "en",
+            "dietary_preferences": [],
+            "allergens_to_avoid": [],
+        },
+    )
+    assert res.status_code == 404
+    assert res.json()["detail"] == "Unknown QR token"

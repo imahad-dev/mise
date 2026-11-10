@@ -80,6 +80,12 @@ from src.services.tax import jurisdiction_of, methods_for, service_charge_for
 router = APIRouter(prefix="/api/guest", tags=["guest"])
 
 
+def _refuse_nul(qr_token: str) -> None:
+    """Postgres rejects NUL in text, and a NUL can never be a real token."""
+    if "\x00" in qr_token:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Unknown QR token")
+
+
 def _session_fields(s: GuestSession) -> dict:
     return {
         "id": s.id,
@@ -125,6 +131,7 @@ async def create_guest_session(
     await enforce_ip_limit(
         request, "guest_session", 60, 600, "Please ask your waiter to help you order."
     )
+    _refuse_nul(payload.qr_token)
     stmt_table = select(DiningTable).where(DiningTable.qr_token == payload.qr_token)
     res_table = await db.execute(stmt_table)
     table = res_table.scalar_one_or_none()
@@ -166,8 +173,7 @@ async def venue_for_qr(qr_token: str, db: AsyncSession = Depends(get_db)) -> Gue
     No IP limit: the guest app's server calls it for every guest from one address. The token is
     unguessable and the answer is only a public venue name.
     """
-    if "\x00" in qr_token:  # Postgres rejects NUL in text; it can never be a real token
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Unknown QR token")
+    _refuse_nul(qr_token)
     row = (
         await db.execute(
             select(Restaurant.slug, Restaurant.name)
