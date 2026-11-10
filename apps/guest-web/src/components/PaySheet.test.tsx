@@ -26,6 +26,9 @@ HTMLDialogElement.prototype.close = function (this: HTMLDialogElement) {
   this.removeAttribute("open");
 };
 
+// The amount sits in its own span (fixed money face), so match the whole paragraph's text.
+const sentence = (t: string) => screen.getByText((_, el) => el?.tagName === "P" && el.textContent === t);
+
 const sheet = (bill: GuestBill) =>
   render(<PaySheet lang="en" bill={bill} open onClose={() => {}} onUpdated={() => {}} onConflict={() => {}} />);
 
@@ -48,7 +51,7 @@ afterEach(() => {
 describe("PaySheet in a VAT-inclusive venue", () => {
   it("shows one total with VAT included and the optional service switch", () => {
     sheet(ukBill);
-    expect(screen.getByText("Includes VAT 20%: £3.50")).toBeTruthy();
+    expect(sentence("Includes VAT 20%: £3.50")).toBeTruthy();
     const sw = screen.getByRole("switch", { name: "Add optional service (12.5%): £2.63" });
     expect(sw.getAttribute("aria-checked")).toBe("true");
     expect(screen.getByTestId("pay-total").textContent).toBe("£23.63");
@@ -128,7 +131,7 @@ describe("PaySheet in a VAT-inclusive venue", () => {
     expect(fetchMock).not.toHaveBeenCalled();
     expect(screen.queryByText("Payment sent — waiting for staff to confirm.")).toBeNull();
     expect(screen.getByText("You changed the service — tap “I've paid” again to update your payment.")).toBeTruthy();
-    expect(screen.getByText("Send £21.00 to:")).toBeTruthy();
+    expect(sentence("Send £21.00 to:")).toBeTruthy();
   });
 
   it("names the rate the Italian way", () => {
@@ -145,7 +148,7 @@ describe("PaySheet in a VAT-inclusive venue", () => {
     };
     sheet(bill);
     fireEvent.click(screen.getByRole("button", { name: /Bank transfer/ }));
-    expect(screen.getByText("Send £23.63 to:")).toBeTruthy();
+    expect(sentence("Send £23.63 to:")).toBeTruthy();
   });
 });
 

@@ -63,6 +63,8 @@ export function BrandShell({
 
   useEffect(() => {
     let live = true;
+    // A chunk request that hangs must not leave the welcome pending forever.
+    const cap = setTimeout(() => setWelcome((w) => (w === "pending" ? "done" : w)), WELCOME_CAP_MS);
     loadBrand(venue.slug)
       .then((p) => {
         if (!live) return;
@@ -72,11 +74,16 @@ export function BrandShell({
       .catch(() => live && setWelcome("done")); // a failed chunk leaves the neutral fallback
     return () => {
       live = false;
+      clearTimeout(cap);
     };
   }, [venue.slug]);
 
   useEffect(() => {
     if (welcome !== "pending" || !pkg || !welcomeFor) return;
+    if (!pkg.Welcome) {
+      setWelcome("done"); // nothing to play: do not consume the visit
+      return;
+    }
     let storage: Storage | null = null;
     try {
       storage = window.sessionStorage;

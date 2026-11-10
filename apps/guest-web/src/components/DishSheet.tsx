@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { Badge, Button, Sheet } from "ui";
 import { AllergenChip } from "./allergen-chip";
 import type { TranslationDict } from "../i18n/types";
+import { figureParts } from "../lib/figure";
 import {
   defaultPicks, firstMissing, isRadio, matchedAllergens, pickedChoices, requirement, toggle, unitPrice, worstStatus,
   type AllergenStatus, type CartChoice, type ChoiceGroup,
@@ -78,11 +79,11 @@ export function DishSheet({ item, lang, dict, formatPrice, dietary, onClose, onA
   const missing = firstMissing(groups, picked);
   const unit = unitPrice(Number(size?.price ?? item.price), groups, picked);
   const total = formatPrice(unit * quantity);
-  const action = missingSize
+  const action: React.ReactNode = missingSize
     ? dict.dish.chooseGroup.replace("{group}", dict.dish.size.toLowerCase())
     : missing
       ? dict.dish.chooseGroup.replace("{group}", missing.label)
-      : dict.dish.addToOrder.replace("{total}", total);
+      : figureParts(dict.dish.addToOrder, { total });
 
   const add = () => {
     const target = missingSize ? "size" : missing?.id;

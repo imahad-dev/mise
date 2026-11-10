@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { Button, Sheet, choiceLine, formatPrice } from "ui";
 import { getDictionary } from "../i18n";
+import { figureParts } from "../lib/figure";
 import {
   claimMessage,
   copyText,
@@ -161,7 +162,7 @@ export function PaySheet({ lang, bill, orderId, open, onClose, onUpdated, onConf
           onClick={toggleService}
           className="flex min-h-12 w-full items-center justify-between gap-3 rounded-xl border border-line bg-card px-4 py-3 text-left text-sm text-ink"
         >
-          <span>{serviceLine(bill.service_charge_rate, dict.pay.service, lang).replace("{amount}", money(bill.service_charge_amount))}</span>
+          <span>{figureParts(serviceLine(bill.service_charge_rate, dict.pay.service, lang), { amount: money(bill.service_charge_amount) })}</span>
           <span aria-hidden className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${withService ? "bg-terracotta" : "bg-line"}`}>
             <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-paper shadow transition-all ${withService ? "left-[22px]" : "left-0.5"}`} />
           </span>
@@ -172,10 +173,10 @@ export function PaySheet({ lang, bill, orderId, open, onClose, onUpdated, onConf
         <div className="space-y-1">
           <p className="flex justify-between text-base font-semibold text-ink">
             <span>{dict.pay.total}</span>
-            <span data-testid="pay-total">{toPay(bill.methods[0])}</span>
+            <span data-testid="pay-total" className="figure">{toPay(bill.methods[0])}</span>
           </p>
           <p className="text-xs text-ink-muted">
-            {dict.pay.vatIncluded.replace("{rate}", percent(bill.methods[0].tax_rate, lang)).replace("{amount}", money(bill.methods[0].tax_amount))}
+            {figureParts(dict.pay.vatIncluded.replace("{rate}", percent(bill.methods[0].tax_rate, lang)), { amount: money(bill.methods[0].tax_amount) })}
           </p>
         </div>
       )}
@@ -198,7 +199,7 @@ export function PaySheet({ lang, bill, orderId, open, onClose, onUpdated, onConf
                 <span className="block font-semibold text-ink">{dict.pay.methods[m.method] ?? m.label}</span>
                 {!included && <span className="block text-xs text-ink-muted">{dict.pay.taxRate.replace("{rate}", percent(m.tax_rate, lang))}</span>}
               </span>
-              {!included && <span className="font-semibold text-ink">{toPay(m)}</span>}
+              {!included && <span className="figure font-semibold text-ink">{toPay(m)}</span>}
             </button>
           ))}
         </fieldset>
@@ -212,7 +213,7 @@ export function PaySheet({ lang, bill, orderId, open, onClose, onUpdated, onConf
             }`}
           >
             {bill.payment_details.sample && <p className="font-semibold text-warn-fg">{dict.pay.sampleBanner}</p>}
-            <p className="text-ink">{dict.pay.payTo.replace("{total}", toPay(preview))}</p>
+            <p className="text-ink">{figureParts(dict.pay.payTo, { total: toPay(preview) })}</p>
             {details.map((d) => (
               <div key={d.key} className="flex flex-wrap items-center justify-between gap-2">
                 <span>
