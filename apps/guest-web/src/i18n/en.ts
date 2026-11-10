@@ -30,7 +30,8 @@ export const en: TranslationDict = {
     no_declared_match: "No declared match",
   },
   ui: {
-    welcomeTitle: "Welcome to Mise",
+    welcomeTitle: "Welcome to {venue}",
+    scanAgain: "Scan the QR code on your table again.",
     welcomeSubtitle: "Customize your dining experience before viewing the menu.",
     selectLanguage: "Language",
     selectDietary: "Dietary Preferences",
@@ -63,7 +64,7 @@ export const en: TranslationDict = {
       "One or more items in your cart contains allergens you wish to avoid or has unverified allergens.",
     allergenAckCheckbox:
       "I have spoken with staff and understand the allergen risks for this order.",
-    chatTitle: "Ask Mise Assistant",
+    chatTitle: "Ask {venue}",
     chatPlaceholder: "Ask about dishes, ingredients...",
     chatSend: "Send",
     chatNotice: "Do not type personal or sensitive health information.",

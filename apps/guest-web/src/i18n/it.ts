@@ -30,7 +30,8 @@ export const it: TranslationDict = {
     no_declared_match: "Nessun allergene dichiarato",
   },
   ui: {
-    welcomeTitle: "Benvenuti da Mise",
+    welcomeTitle: "Benvenuti da {venue}",
+    scanAgain: "Scansiona di nuovo il codice QR sul tuo tavolo.",
     welcomeSubtitle: "Personalizza le tue preferenze prima di visualizzare il menu.",
     selectLanguage: "Lingua",
     selectDietary: "Preferenze Alimentari",
@@ -63,7 +64,7 @@ export const it: TranslationDict = {
       "Uno o più piatti nel carrello contengono allergeni che desideri evitare oppure presentano allergeni non verificati.",
     allergenAckCheckbox:
       "Ho parlato con il personale e comprendo i rischi allergenici per questo ordine.",
-    chatTitle: "Chiedi all'Assistente Mise",
+    chatTitle: "Chiedi a {venue}",
     chatPlaceholder: "Chiedi informazioni su piatti, ingredienti...",
     chatSend: "Invia",
     chatNotice: "Non inserire dati personali o sanitari riservati.",

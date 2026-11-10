@@ -28,6 +28,7 @@ export interface TranslationDict {
   };
   ui: {
     welcomeTitle: string;
+    scanAgain: string;
     welcomeSubtitle: string;
     selectLanguage: string;
     selectDietary: string;

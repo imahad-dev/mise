@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { translate, getDictionary, en, it as itDict } from "./index";
+import { translate, getDictionary, withVenue, en, it as itDict } from "./index";
 
 describe("i18n dictionary and fallback mechanism", () => {
   it("returns English strings for English locale", () => {
@@ -40,5 +40,24 @@ describe("i18n dictionary and fallback mechanism", () => {
   it("includes the mandatory 'please confirm with staff' notice in both dictionaries", () => {
     expect(en.staffNotice).toContain("confirm all allergen risks with staff");
     expect(itDict.staffNotice).toContain("con il personale");
+  });
+});
+
+describe("venue-named strings", () => {
+  it("puts the venue name into the titles in both languages", () => {
+    expect(withVenue(en.ui.welcomeTitle, "Angeethi House")).toBe("Welcome to Angeethi House");
+    expect(withVenue(en.ui.chatTitle, "Kehwa & Crumb")).toBe("Ask Kehwa & Crumb");
+    expect(withVenue(itDict.ui.welcomeTitle, "Angeethi House")).toBe("Benvenuti da Angeethi House");
+  });
+  it("treats special characters in a name as plain text", () => {
+    expect(withVenue("Ask {venue}", "A $& B $1")).toBe("Ask A $& B $1");
+  });
+  it("never names Mise in any guest string", () => {
+    expect(JSON.stringify(en)).not.toMatch(/\bMise\b/);
+    expect(JSON.stringify(itDict)).not.toMatch(/\bMise\b/);
+  });
+  it("has the neutral scan-again text", () => {
+    expect(en.ui.scanAgain).toBe("Scan the QR code on your table again.");
+    expect(itDict.ui.scanAgain).toBeTruthy();
   });
 });

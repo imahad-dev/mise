@@ -104,3 +104,8 @@ export function getDictionary(locale: string | undefined | null): TranslationDic
     },
   };
 }
+
+/** Puts the venue's name into a "{venue}" string; the name is inserted as plain text. */
+export function withVenue(text: string, venue: string): string {
+  return text.split("{venue}").join(venue);
+}
