@@ -318,6 +318,52 @@
         }
       }
     },
+    "/api/guest/venues/{qr_token}": {
+      "get": {
+        "tags": [
+          "guest"
+        ],
+        "summary": "Venue For Qr",
+        "description": "The venue a table QR code belongs to, so the scan page can show its brand before a session.\n\nNo IP limit: the guest app's server calls it for every guest from one address. The token is\nunguessable and the answer is only a public venue name.",
+        "operationId": "venue_for_qr_api_guest_venues__qr_token__get",
+        "parameters": [
+          {
+            "name": "qr_token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Qr Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GuestVenue"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown QR token"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/guest/session": {
       "get": {
         "tags": [
@@ -5775,6 +5821,9 @@
             "type": "string",
             "format": "date-time",
             "title": "Expires At"
+          },
+          "venue": {
+            "$ref": "#/components/schemas/GuestVenue"
           }
         },
         "type": "object",
@@ -5785,7 +5834,8 @@
           "language",
           "dietary_preferences",
           "allergens_to_avoid",
-          "expires_at"
+          "expires_at",
+          "venue"
         ],
         "title": "GuestSessionResponse"
       },
@@ -5836,6 +5886,9 @@
             "format": "date-time",
             "title": "Expires At"
           },
+          "venue": {
+            "$ref": "#/components/schemas/GuestVenue"
+          },
           "table_state": {
             "type": "string",
             "enum": [
@@ -5860,10 +5913,30 @@
           "dietary_preferences",
           "allergens_to_avoid",
           "expires_at",
+          "venue",
           "table_state",
           "code_required"
         ],
         "title": "GuestSessionStatusResponse"
+      },
+      "GuestVenue": {
+        "properties": {
+          "slug": {
+            "type": "string",
+            "title": "Slug"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "slug",
+          "name"
+        ],
+        "title": "GuestVenue",
+        "description": "The scanned venue as a guest may see it: its public slug and name, nothing else."
       },
       "HTTPValidationError": {
         "properties": {

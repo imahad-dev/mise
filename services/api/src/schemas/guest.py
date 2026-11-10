@@ -41,6 +41,13 @@ class PatchGuestSessionRequest(BaseModel):
     allergens_to_avoid: list[EU14Allergen] | None = None
 
 
+class GuestVenue(BaseModel):
+    """The scanned venue as a guest may see it: its public slug and name, nothing else."""
+
+    slug: str
+    name: str
+
+
 class GuestSessionResponse(BaseModel):
     id: uuid.UUID
     restaurant_id: uuid.UUID
@@ -49,6 +56,7 @@ class GuestSessionResponse(BaseModel):
     dietary_preferences: list[str]
     allergens_to_avoid: list[str]
     expires_at: datetime
+    venue: GuestVenue
 
     model_config = ConfigDict(from_attributes=True)
 

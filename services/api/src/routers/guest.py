@@ -46,6 +46,7 @@ from src.schemas.guest import (
     GuestMenuRestaurant,
     GuestSessionResponse,
     GuestSessionStatusResponse,
+    GuestVenue,
     PatchGuestSessionRequest,
 )
 from src.schemas.payments import (
@@ -77,6 +78,27 @@ from src.services.guest_chat import handle_guest_chat
 from src.services.tax import jurisdiction_of, methods_for, service_charge_for
 
 router = APIRouter(prefix="/api/guest", tags=["guest"])
+
+
+def _session_fields(s: GuestSession) -> dict:
+    return {
+        "id": s.id,
+        "restaurant_id": s.restaurant_id,
+        "table_id": s.table_id,
+        "language": s.language,
+        "dietary_preferences": s.dietary_preferences,
+        "allergens_to_avoid": s.allergens_to_avoid,
+        "expires_at": s.expires_at,
+    }
+
+
+async def venue_of(db: AsyncSession, restaurant_id: uuid.UUID) -> GuestVenue:
+    row = (
+        await db.execute(
+            select(Restaurant.slug, Restaurant.name).where(Restaurant.id == restaurant_id)
+        )
+    ).one()
+    return GuestVenue(slug=row.slug, name=row.name)
 
 
 @router.post(
@@ -128,7 +150,34 @@ async def create_guest_session(
     await db.refresh(guest_session)
 
     set_guest_cookie(response, guest_session.id)
-    return GuestSessionResponse.model_validate(guest_session)
+    return GuestSessionResponse.model_validate(
+        {**_session_fields(guest_session), "venue": await venue_of(db, guest_session.restaurant_id)}
+    )
+
+
+@router.get(
+    "/venues/{qr_token}",
+    response_model=GuestVenue,
+    responses={404: {"description": "Unknown QR token"}},
+)
+async def venue_for_qr(qr_token: str, db: AsyncSession = Depends(get_db)) -> GuestVenue:
+    """The venue a table QR code belongs to, so the scan page can show its brand before a session.
+
+    No IP limit: the guest app's server calls it for every guest from one address. The token is
+    unguessable and the answer is only a public venue name.
+    """
+    if "\x00" in qr_token:  # Postgres rejects NUL in text; it can never be a real token
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Unknown QR token")
+    row = (
+        await db.execute(
+            select(Restaurant.slug, Restaurant.name)
+            .join(DiningTable, DiningTable.restaurant_id == Restaurant.id)
+            .where(DiningTable.qr_token == qr_token)
+        )
+    ).one_or_none()
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Unknown QR token")
+    return GuestVenue(slug=row.slug, name=row.name)
 
 
 @router.get(
@@ -165,7 +214,8 @@ async def get_guest_session(
         else:
             code_required = sitting.code_required and session.sitting_id is None
     return GuestSessionStatusResponse(
-        **GuestSessionResponse.model_validate(session).model_dump(),
+        **_session_fields(session),
+        venue=await venue_of(db, session.restaurant_id),
         table_state=table_state,
         code_required=code_required,
     )
@@ -192,7 +242,9 @@ async def patch_guest_session(
 
     await db.commit()
     await db.refresh(session)
-    return GuestSessionResponse.model_validate(session)
+    return GuestSessionResponse.model_validate(
+        {**_session_fields(session), "venue": await venue_of(db, session.restaurant_id)}
+    )
 
 
 def _guest_choice(c: MenuChoice, avoid: list[str]) -> GuestMenuChoice:
