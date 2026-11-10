@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useState } from "react";
-import { getDictionary } from "../i18n";
+import { getDictionary, withVenue } from "../i18n";
+import { useVenue } from "./BrandShell";
 
 export interface ChatPanelProps {
   locale?: string;
@@ -16,6 +17,8 @@ interface ChatMessage {
 
 export function ChatPanel({ locale = "en", docked = false }: ChatPanelProps) {
   const dict = getDictionary(locale);
+  const { name } = useVenue();
+  const title = withVenue(dict.ui.chatTitle, name);
   const [isOpen, setIsOpen] = useState(false);
   const [hidden, setHidden] = useState(false);
   const [input, setInput] = useState("");
@@ -75,12 +78,12 @@ export function ChatPanel({ locale = "en", docked = false }: ChatPanelProps) {
         <button
           onClick={() => setIsOpen(true)}
           className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-terracotta hover:bg-terracotta-strong text-cream font-medium shadow-lg shadow-ink/10 transition-all text-sm active:scale-95"
-          aria-label={dict.ui.chatTitle}
+          aria-label={title}
         >
           <svg className="w-4 h-4 fill-current" viewBox="0 0 20 20">
             <path d="M2 5a2 2 0 012-2h12a2 2 0 012 2v8a2 2 0 01-2 2H6.414l-2.707 2.707A1 1 0 012 17V5z" />
           </svg>
-          {dict.ui.chatTitle}
+          {title}
         </button>
       ) : (
         // Fits a 320 px phone: never wider than the screen minus its gutters, never taller than the space above the order bar.
@@ -89,7 +92,7 @@ export function ChatPanel({ locale = "en", docked = false }: ChatPanelProps) {
           <div className="px-4 py-3 bg-paper-2 border-b border-line flex items-center justify-between">
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-olive" />
-              <h3 className="text-sm font-semibold text-ink">{dict.ui.chatTitle}</h3>
+              <h3 className="text-sm font-semibold text-ink">{title}</h3>
             </div>
             <button
               onClick={() => setIsOpen(false)}

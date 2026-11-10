@@ -29,10 +29,20 @@ export async function staffPage(page: Page, venue: string) {
   expect(res.ok()).toBeTruthy();
 }
 
+/** Wait until the venue's welcome has decided, then tap it away so tests can use the menu. */
+export async function skipWelcome(page: Page) {
+  const root = page.locator("[data-welcome]").first();
+  await expect(root).not.toHaveAttribute("data-welcome", "pending", { timeout: 10_000 });
+  const welcome = page.getByTestId("welcome");
+  if (await welcome.isVisible()) await welcome.click();
+  await expect(welcome).toBeHidden();
+}
+
 export async function openTableMenu(page: Page, qrToken: string) {
   await page.goto(`${GUEST}/q/${qrToken}`);
   await page.getByRole("button", { name: "View Menu" }).click();
   await expect(page).toHaveURL(/\/en\/menu$/);
+  await skipWelcome(page);
 }
 
 /** Tick the allergen acknowledgement when the open order sheet asks for it. */

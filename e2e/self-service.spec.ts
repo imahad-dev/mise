@@ -735,7 +735,7 @@ test.describe.serial("Sheets on a phone", () => {
       const clears = async (when: string) => {
         await guest.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
         const row = await guest.locator("main li").last().boundingBox(); // the whole row: price, chips and + button
-        const chat = await guest.getByRole("button", { name: "Ask Mise Assistant" }).boundingBox();
+        const chat = await guest.getByRole("button", { name: "Ask Angeethi House" }).boundingBox();
         expect(row && chat, `${when}: last dish row and assistant button are on screen`).toBeTruthy();
         const apart = chat!.y >= row!.y + row!.height || chat!.y + chat!.height <= row!.y;
         expect(apart, `${when}: assistant ${JSON.stringify(chat)} vs last dish row ${JSON.stringify(row)}`).toBe(true);
@@ -755,7 +755,7 @@ test.describe.serial("Sheets on a phone", () => {
       // sits in the bottom stack above the bar instead of floating over the dishes.
       await guest.getByRole("button", { name: "Add Naan", exact: true }).click();
       await expect(guest.getByRole("button", { name: /View order · 2/})).toBeVisible();
-      const chat = await guest.getByRole("button", { name: "Ask Mise Assistant" }).boundingBox();
+      const chat = await guest.getByRole("button", { name: "Ask Angeethi House" }).boundingBox();
       const bar = await waiting.boundingBox();
       expect(chat!.y + chat!.height, "assistant button sits above the order bar").toBeLessThanOrEqual(bar!.y);
 
@@ -767,10 +767,10 @@ test.describe.serial("Sheets on a phone", () => {
       expect(hit, "the empty part of the bottom stack lets taps through").toBe(false);
 
       // The open chat fits the screen: its close button is reachable and nothing is cut off.
-      await guest.getByRole("button", { name: "Ask Mise Assistant" }).click();
+      await guest.getByRole("button", { name: "Ask Angeethi House" }).click();
       const close = await guest.getByRole("button", { name: "Close", exact: true }).boundingBox();
       expect(close!.y, "chat close button is below the top of the screen").toBeGreaterThanOrEqual(0);
-      const panel = await guest.getByRole("heading", { name: "Ask Mise Assistant" }).locator("xpath=../../..").boundingBox();
+      const panel = await guest.getByRole("heading", { name: "Ask Angeethi House" }).locator("xpath=../../..").boundingBox();
       expect(panel!.x, "chat panel starts inside the screen").toBeGreaterThanOrEqual(0);
       expect(panel!.x + panel!.width, "chat panel ends inside the screen").toBeLessThanOrEqual(width);
       expect(panel!.y, "chat panel top is on screen").toBeGreaterThanOrEqual(0);

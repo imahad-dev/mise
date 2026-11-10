@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { AllergenChip } from "../../../components/allergen-chip";
 import { CallWaiter } from "../../../components/CallWaiter";
 import { CodeEntry } from "../../../components/CodeEntry";
+import { ScanAgain } from "../../../components/ScanAgain";
 import { DishSheet } from "../../../components/DishSheet";
 import { ChatPanel } from "../../../components/chat-panel";
 import { useTableStatus } from "../../../hooks/use-table-status";
@@ -103,6 +104,7 @@ export default function GuestMenuPage({
 
   const [menu, setMenu] = useState<MenuResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [expired, setExpired] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cart, setCart] = useState<CartState>(getCart());
   const [cartOpen, setCartOpen] = useState(false);
@@ -136,7 +138,7 @@ export default function GuestMenuPage({
   const fetchMenu = useCallback(async (): Promise<MenuResponse | null> => {
     const res = await fetch("/api/guest/menu");
     if (res.status === 401) {
-      router.push("/");
+      setExpired(true);
       return null;
     }
     if (!res.ok) {
@@ -145,7 +147,7 @@ export default function GuestMenuPage({
     const data = (await res.json()) as MenuResponse;
     setMenu(data);
     return data;
-  }, [router]);
+  }, []);
 
   useEffect(() => {
     async function loadMenu() {
@@ -407,6 +409,8 @@ export default function GuestMenuPage({
 
   const formatPrice = (amount: number) =>
     formatAmount(amount, menu?.restaurant?.currency || "EUR", lang);
+
+  if (expired) return <ScanAgain lang={lang} />;
 
   if (loading) {
     return (
