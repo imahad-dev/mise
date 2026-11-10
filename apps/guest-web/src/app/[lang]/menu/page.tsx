@@ -540,7 +540,7 @@ export default function GuestMenuPage({
                             item.name
                           )}
                         </h3>
-                        <span className="whitespace-nowrap font-semibold tabular-nums text-ink">
+                        <span className="figure whitespace-nowrap font-semibold text-ink">
                           {options.length > 0
                             ? `${dict.menu.from} ${formatPrice(Math.min(...options.map((o) => Number(o.price))))}`
                             : formatPrice(Number(item.price))}
@@ -606,7 +606,7 @@ export default function GuestMenuPage({
             <span>
               {dict.ui.checkout} · {cartCount}
             </span>
-            <span className="tabular-nums">{formatPrice(cartTotal)}</span>
+            <span className="figure">{formatPrice(cartTotal)}</span>
           </Button>
         )}
       </div>
@@ -620,7 +620,7 @@ export default function GuestMenuPage({
             <>
               <div className="flex items-center justify-between text-sm">
                 <span className="font-medium text-ink-muted">{dict.ui.total}</span>
-                <span className="text-lg font-semibold tabular-nums text-ink">
+                <span className="figure text-lg font-semibold text-ink">
                   {formatPrice(cartTotal)}
                 </span>
               </div>
@@ -656,7 +656,7 @@ export default function GuestMenuPage({
                   <span className="font-medium text-ink">
                     {item.optionLabel ? `${item.name} — ${item.optionLabel}` : item.name}
                   </span>
-                  <span className="font-semibold tabular-nums text-ink">
+                  <span className="figure font-semibold text-ink">
                     {formatPrice(item.price * item.quantity)}
                   </span>
                 </div>

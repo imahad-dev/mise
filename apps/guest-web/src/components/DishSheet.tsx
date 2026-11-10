@@ -170,7 +170,7 @@ export function DishSheet({ item, lang, dict, formatPrice, dietary, onClose, onA
                 className="h-5 w-5 accent-terracotta"
               />
               <span className="flex-1">{s.label}</span>
-              <span className="tabular-nums">{formatPrice(Number(s.price))}</span>
+              <span className="figure">{formatPrice(Number(s.price))}</span>
             </label>
           ))}
         </fieldset>
@@ -218,7 +218,7 @@ export function DishSheet({ item, lang, dict, formatPrice, dietary, onClose, onA
                   )}
                   {notFit && <Badge>{notFit}</Badge>}
                   {Number(c.price_delta) > 0 && (
-                    <span className="tabular-nums">+{formatPrice(Number(c.price_delta))}</span>
+                    <span className="figure">+{formatPrice(Number(c.price_delta))}</span>
                   )}
                 </label>
               );

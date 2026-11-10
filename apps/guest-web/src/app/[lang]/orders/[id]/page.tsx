@@ -333,7 +333,7 @@ export default function OrderStatusPage({
                         <p className="text-xs text-ink-muted italic mt-0.5">Note: {item.notes}</p>
                       )}
                     </div>
-                    <span className="font-semibold text-ink-muted">
+                    <span className="figure font-semibold text-ink-muted">
                       {formatPrice(Number(item.unit_price) * item.quantity, order.currency, lang)}
                     </span>
                   </div>
@@ -342,7 +342,7 @@ export default function OrderStatusPage({
 
               <div className="pt-3 border-t border-line flex items-center justify-between font-bold text-sm">
                 <span className="text-ink-muted">{paid ? dict.pay.subtotal : dict.ui.total}</span>
-                <span className="text-terracotta text-base">
+                <span className="figure text-terracotta text-base">
                   {formatPrice(Number(order.total), order.currency, lang)}
                 </span>
               </div>

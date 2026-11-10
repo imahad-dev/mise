@@ -138,7 +138,7 @@ export function PaySheet({ lang, bill, orderId, open, onClose, onUpdated, onConf
                 </span>
               )}
             </span>
-            <span className="text-ink-muted">{money(l.line_total)}</span>
+            <span className="figure text-ink-muted">{money(l.line_total)}</span>
           </li>
         ))}
       </ul>
@@ -149,7 +149,7 @@ export function PaySheet({ lang, bill, orderId, open, onClose, onUpdated, onConf
       ))}
       <p className="flex justify-between text-sm font-semibold text-ink">
         <span>{dict.pay.subtotal}</span>
-        <span>{money(bill.subtotal)}</span>
+        <span className="figure">{money(bill.subtotal)}</span>
       </p>
 
       {isOpen && hasService && (

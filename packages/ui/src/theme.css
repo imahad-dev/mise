@@ -193,6 +193,12 @@
       border-radius: 22px;
     }
   }
+
+  /* Money keeps one fixed face under every venue brand. */
+  .figure {
+    font-family: "Inter Variable", Inter, system-ui, sans-serif;
+    font-variant-numeric: tabular-nums;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -1,2 +1,25 @@
 @import "tailwindcss";
 @import "ui/theme.css";
+
+/* A brand root re-points the theme at its --brand-* variables. Ink, ink-muted and the allergen,
+   warning and safe colours are never re-pointed: prices, allergen chips, totals, payment details
+   and order status keep their fixed styles. */
+[data-brand] {
+  --color-paper: var(--brand-surface);
+  --color-paper-2: var(--brand-surface-2);
+  --color-card: var(--brand-card);
+  --color-line: var(--brand-line);
+  --color-terracotta: var(--brand-accent);
+  --color-terracotta-strong: var(--brand-accent-strong);
+  --color-cream: var(--brand-on-accent);
+  --font-serif: var(--brand-display);
+  --font-sans: var(--brand-text);
+  font-family: var(--font-sans);
+  background-color: var(--color-paper);
+}
+[data-brand] :is(.btn-primary, .btn-ghost, .btn-dark, .btn-danger) {
+  border-radius: var(--brand-button-radius);
+}
+[data-brand] .mise-card {
+  border-radius: var(--brand-card-radius);
+}
