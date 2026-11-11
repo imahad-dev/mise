@@ -24,7 +24,8 @@
   border-radius: var(--brand-card-radius);
 }
 
-[data-brand="kehwa-and-crumb"] :is(h1, h2, h3) {
-  font-weight: 300;
-  letter-spacing: 0.01em;
+/* A brand that sets a heading weight overrides the headings' own; without one, `revert-layer` leaves
+   them as the utilities and the reset set them. (The old 0.01em tracking was imperceptible and is dropped.) */
+[data-brand] :is(h1, h2, h3) {
+  font-weight: var(--brand-heading-weight, revert-layer);
 }

@@ -19,6 +19,8 @@ export interface BrandTokens {
   spark: string;
   buttonRadius: string;
   cardRadius: string;
+  /** Weight of h1-h3 on the guest pages; null keeps the weights each heading sets itself. */
+  headingWeight: string | null;
 }
 
 export interface VenueBrand {
@@ -44,6 +46,7 @@ export const NEUTRAL_TOKENS: BrandTokens = {
   spark: "#9a9a9a",
   buttonRadius: "10px",
   cardRadius: "12px",
+  headingWeight: null,
 };
 
 export const VENUE_BRANDS: Record<string, VenueBrand> = {
@@ -63,6 +66,7 @@ export const VENUE_BRANDS: Record<string, VenueBrand> = {
       spark: "#ff9a3d",
       buttonRadius: "4px",
       cardRadius: "6px",
+      headingWeight: null,
     },
     displayFont: "var(--brand-display-face, Impact), Impact, 'Arial Narrow', sans-serif",
     textFont: "var(--brand-text-face, system-ui), system-ui, sans-serif",
@@ -83,6 +87,7 @@ export const VENUE_BRANDS: Record<string, VenueBrand> = {
       spark: "#b8e68c",
       buttonRadius: "9999px",
       cardRadius: "20px",
+      headingWeight: "300",
     },
     displayFont: "var(--brand-display-face, 'Futura'), 'Futura', 'Century Gothic', sans-serif",
     textFont: "var(--brand-text-face, system-ui), system-ui, sans-serif",

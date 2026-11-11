@@ -13,6 +13,18 @@ describe("brand registry", () => {
   it("has a package for every venue brand and nothing more", () => {
     expect([...BRAND_SLUGS].sort()).toEqual(Object.keys(VENUE_BRANDS).sort());
   });
+  it("a brand package imports only its own files, ../types, gsap, react and next/font", () => {
+    const dir = path.join(process.cwd(), "src/brands");
+    const allowed = /^(\.\/[\w.-]+|\.\.\/types|gsap|@gsap\/react|react|next\/font\/google)$/;
+    for (const slug of BRAND_SLUGS) {
+      for (const file of readdirSync(path.join(dir, slug))) {
+        if (!/\.tsx?$/.test(file)) continue;
+        const src = readFileSync(path.join(dir, slug, file), "utf8");
+        const specs = [...src.matchAll(/(?:from\s+|import\s*\(?\s*|require\(\s*)["']([^"']+)["']/g)].map((m) => m[1]);
+        for (const spec of specs) expect(spec, `${slug}/${file}`).toMatch(allowed);
+      }
+    }
+  });
   it("no brand package imports another brand", () => {
     const dir = path.join(process.cwd(), "src/brands");
     for (const slug of BRAND_SLUGS) {

@@ -37,6 +37,15 @@ describe.each(all)("%s tokens", (_slug, t) => {
   });
 });
 
+describe("heading weight", () => {
+  it("is a CSS weight or null, and only Kehwa & Crumb sets one", () => {
+    for (const [slug, t] of all) expect(t.headingWeight === null || /^[1-9]00$/.test(t.headingWeight), slug).toBe(true);
+    expect(VENUE_BRANDS["kehwa-and-crumb"].tokens.headingWeight).toBe("300");
+    expect(VENUE_BRANDS["angeethi-house"].tokens.headingWeight).toBeNull();
+    expect(NEUTRAL_TOKENS.headingWeight).toBeNull();
+  });
+});
+
 describe("venueBrand", () => {
   it("finds a known venue and refuses anything else", () => {
     expect(venueBrand("angeethi-house")?.name).toBe("Angeethi House");

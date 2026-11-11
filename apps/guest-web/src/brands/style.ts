@@ -18,6 +18,7 @@ export function brandStyle(t: BrandTokens, fonts?: Pick<VenueBrand, "displayFont
     "--brand-spark": t.spark,
     "--brand-button-radius": t.buttonRadius,
     "--brand-card-radius": t.cardRadius,
+    ...(t.headingWeight ? { "--brand-heading-weight": t.headingWeight } : {}),
     "--brand-display": fonts?.displayFont ?? SYSTEM,
     "--brand-text": fonts?.textFont ?? SYSTEM,
   } as CSSProperties;

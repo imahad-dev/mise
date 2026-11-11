@@ -28,8 +28,12 @@ export const venueFromSession = cache(async (): Promise<ServerVenue | null> => {
   }
 });
 
+// Tokens are token_urlsafe(12) (scripts/seed.py): base64url characters only.
+const QR_TOKEN = /^[A-Za-z0-9_-]{1,128}$/;
+
 /** The venue a table QR token belongs to, or null for a bad token. */
 export const venueFromQr = cache(async (token: string): Promise<ServerVenue | null> => {
+  if (!QR_TOKEN.test(token)) return null;
   try {
     const res = await fetch(`${API_URL}/api/guest/venues/${encodeURIComponent(token)}`, { cache: "no-store" });
     if (!res.ok) return null;
