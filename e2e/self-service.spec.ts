@@ -114,6 +114,9 @@ test.describe.serial("1. Angeethi family: order, water, Raast, confirm, print, c
     await dialog.getByRole("button", { name: "Confirm received" }).click();
 
     await expect(staff).toHaveURL(PRINT);
+    await expect(staff.getByRole("img", { name: "Angeethi House" })).toBeVisible();
+    await expect(staff.locator("body")).not.toContainText(/(?<!not a tax )invoice|FBR integrated|compliant/i);
+    await expect(staff.locator('img[src*="/brand/logo-mark"]')).toHaveCount(0);
     await expect(staff.getByText("Sales tax (illustrative) 8% — card, wallet or QR")).toBeVisible();
     await expect(staff.getByText("1 × Chicken Karahi — 1 kg")).toBeVisible();
     await expect(guest.getByText(PAID)).toBeVisible(POLL);
