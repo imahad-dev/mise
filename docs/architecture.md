@@ -61,6 +61,21 @@ Mise is a revenue copilot and operational platform for independent restaurants. 
 - **Styling**: Tailwind CSS v4 (CSS-first engine via PostCSS)
 - **API Client**: openapi-fetch & openapi-typescript (fully type-safe contracts)
 - **Testing**: Vitest, React Testing Library, ESLint
+- **Animation**: GSAP with `@gsap/react` (venue welcome and loader only)
+
+### Venue Brands (guest app)
+A guest only ever sees the venue whose QR code they scanned. `[lang]/layout.tsx` and the scan page
+(`q/[token]`) ask the API on the server which venue the guest session or QR token belongs to, then
+set the page title, theme colour, icon and per-venue manifest (`/venues/<slug>/manifest.webmanifest`)
+and wrap the page in `BrandShell`. Colours, names and font stacks live in
+`packages/ui/src/venue-brands.ts` (contrast-tested); each venue's fonts, motif, welcome animation and
+loader live in `apps/guest-web/src/brands/<slug>/` and load lazily. `BrandShell` sets `--brand-*`
+CSS variables that `globals.css` maps onto the theme, so the shared screens carry no venue
+conditions; ink, allergen colours and money (`.figure`) keep fixed styles. The welcome plays once
+per visit, can be tapped away and closes within 3 s. A bad QR code, an expired visit or a missing
+page shows a neutral "scan again" screen with no venue or Mise name. The owner app stays
+Mise-branded; only the printed QR table cards and the sample bill use the venue's logo, colour
+and display face.
 
 ### Infrastructure & Services
 - **Database**: PostgreSQL 16 Alpine
