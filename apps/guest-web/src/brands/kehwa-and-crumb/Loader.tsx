@@ -34,7 +34,7 @@ export function Loader({ label, size = "md" }: { label: string; size?: "sm" | "m
   return (
     <span ref={root} role="status" className="inline-flex items-center gap-2 text-ink-muted">
       {reduced ? (
-        {/* eslint-disable-next-line @next/next/no-img-element -- a small static mark */}
+        // eslint-disable-next-line @next/next/no-img-element -- a small static mark
         <img src="/venues/kehwa-and-crumb/mark.svg" alt="" className={size === "sm" ? "h-5 w-5" : "h-8 w-8"} />
       ) : (
         <svg aria-hidden="true" viewBox="0 0 30 12" className={size === "sm" ? "w-6" : "w-12"}>
