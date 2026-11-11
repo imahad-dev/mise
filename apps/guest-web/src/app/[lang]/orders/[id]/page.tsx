@@ -9,9 +9,10 @@ import { PaySheet } from "../../../../components/PaySheet";
 import { ChatPanel } from "../../../../components/chat-panel";
 import { useSse } from "../../../../hooks/use-sse";
 import { getDictionary } from "../../../../i18n";
-import { Button, choiceLine, formatPrice, type LineChoice } from "ui";
+import { Button, formatPrice, type LineChoice } from "ui";
+import { choicesParts, figureParts, figureSentence } from "../../../../lib/figure";
 import { orderRef, orderStage } from "../../../../lib/ordering";
-import { VISIT_ENDED, billState, claimMessage, counterState, paidText, payForwardThanks, type GuestBill } from "../../../../lib/pay";
+import { VISIT_ENDED, billState, claimParts, counterState, paidParts, payForwardThanks, type GuestBill, type PaymentClaim } from "../../../../lib/pay";
 
 interface OrderItem {
   id: string;
@@ -93,7 +94,11 @@ export default function OrderStatusPage({
   const [paying, setPaying] = useState(false);
   const state = billState(bill, ended);
   const counter = counterState(bill);
-  const paid = bill ? paidText(bill, dict, lang) : null;
+  const paidP = bill ? paidParts(bill, dict, lang) : null;
+  const sayClaim = (claim: PaymentClaim, currency: string, counter = false) => {
+    return figureSentence(claimParts(claim, dict, lang, currency, counter));
+  };
+  const paid = paidP && figureSentence(paidP);
   const thanks = bill ? payForwardThanks(bill, dict) : null;
   // Settled or cancelled while the sheet is open: nothing left to pay, so close it.
   useEffect(() => {
@@ -257,7 +262,7 @@ export default function OrderStatusPage({
                   }
                 >
                   {counter === "awaiting" &&
-                    (bill.claim ? claimMessage(bill.claim, dict, lang, bill.currency, true) : dict.counter.payPrompt)}
+                    (bill.claim ? sayClaim(bill.claim, bill.currency, true) : dict.counter.payPrompt)}
                   {counter === "preparing" && dict.counter.preparing}
                   {counter === "ready" && dict.counter.ready.replace("{label}", bill.pickup_label ?? "")}
                   {counter === "collected" && dict.counter.collected}
@@ -281,13 +286,15 @@ export default function OrderStatusPage({
                 {state === "paid" && thanks && <span className="block mt-1">{thanks}</span>}
                 {state === "cancelled" && dict.pay.cancelled}
                 {state === "ended" && dict.pay.visitEnded}
-                {state === "claimed" && bill?.claim && claimMessage(bill.claim, dict, lang, bill.currency)}
+                {state === "claimed" && bill?.claim && sayClaim(bill.claim, bill.currency)}
               </p>
               {bill?.voided.map((v, i) => (
                 <p key={i} className="text-danger-fg">
-                  {dict.pay.removed
-                    .replace("{name}", [v.option_label ? `${v.name} — ${v.option_label}` : v.name, ...(v.choices ?? []).map((c) => choiceLine(c, (n) => formatPrice(n, bill.currency, lang), dict.dish.leaveOut))].join(", "))
-                    .replace("{qty}", String(v.quantity))}
+                  {(() => {
+                    const ch = choicesParts(v.choices ?? [], (n) => formatPrice(n, bill.currency, lang), dict.dish.leaveOut);
+                    const name = [v.option_label ? `${v.name} — ${v.option_label}` : v.name, ...(ch.template ? [ch.template] : [])].join(", ");
+                    return figureParts(dict.pay.removed.replace("{qty}", () => String(v.quantity)).replace("{name}", () => name), ch.values);
+                  })()}
                 </p>
               ))}
               {(state === "open" || state === "claimed") && (
@@ -328,7 +335,7 @@ export default function OrderStatusPage({
                       </div>
                       {(item.choices ?? []).length > 0 && (
                         <span className="block text-xs text-ink-muted">
-                          {item.choices!.map((c) => choiceLine(c, (n) => formatPrice(n, order.currency, lang), dict.dish.leaveOut)).join(", ")}
+                          {figureSentence(choicesParts(item.choices!, (n) => formatPrice(n, order.currency, lang), dict.dish.leaveOut))}
                         </span>
                       )}
                       {item.notes && (
@@ -344,7 +351,7 @@ export default function OrderStatusPage({
 
               <div className="pt-3 border-t border-line flex items-center justify-between font-bold text-sm">
                 <span className="text-ink-muted">{paid ? dict.pay.subtotal : dict.ui.total}</span>
-                <span className="figure text-terracotta text-base">
+                <span className="figure text-ink text-base">
                   {formatPrice(Number(order.total), order.currency, lang)}
                 </span>
               </div>

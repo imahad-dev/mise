@@ -1,11 +1,11 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { Button, Sheet, choiceLine, formatPrice } from "ui";
+import { Button, Sheet, formatPrice } from "ui";
 import { getDictionary } from "../i18n";
-import { figureParts } from "../lib/figure";
+import { choicesParts, figureParts, figureSentence } from "../lib/figure";
 import {
-  claimMessage,
+  claimParts,
   copyText,
   detailsFor,
   isValidReference,
@@ -135,7 +135,7 @@ export function PaySheet({ lang, bill, orderId, open, onClose, onUpdated, onConf
               {l.option_label && <span className="text-ink-muted"> — {l.option_label}</span>}
               {(l.choices ?? []).length > 0 && (
                 <span className="block text-xs text-ink-muted">
-                  {l.choices!.map((c) => choiceLine(c, (n) => money(String(n)), dict.dish.leaveOut)).join(", ")}
+                  {figureSentence(choicesParts(l.choices!, (n) => money(String(n)), dict.dish.leaveOut))}
                 </span>
               )}
             </span>
@@ -145,7 +145,11 @@ export function PaySheet({ lang, bill, orderId, open, onClose, onUpdated, onConf
       </ul>
       {bill.voided.map((v, i) => (
         <p key={i} className="text-sm text-danger-fg">
-          {dict.pay.removed.replace("{name}", [v.option_label ? `${v.name} — ${v.option_label}` : v.name, ...(v.choices ?? []).map((c) => choiceLine(c, (n) => money(String(n)), dict.dish.leaveOut))].join(", ")).replace("{qty}", String(v.quantity))}
+          {(() => {
+            const ch = choicesParts(v.choices ?? [], (n) => money(String(n)), dict.dish.leaveOut);
+            const name = [v.option_label ? `${v.name} — ${v.option_label}` : v.name, ...(ch.template ? [ch.template] : [])].join(", ");
+            return figureParts(dict.pay.removed.replace("{qty}", () => String(v.quantity)).replace("{name}", () => name), ch.values);
+          })()}
         </p>
       ))}
       <p className="flex justify-between text-sm font-semibold text-ink">
@@ -261,7 +265,7 @@ export function PaySheet({ lang, bill, orderId, open, onClose, onUpdated, onConf
           ? ""
           : staleClaim
             ? dict.pay.serviceChanged.replace("{button}", dict.pay.paid)
-            : claimMessage(bill.claim, dict, lang, bill.currency, Boolean(bill.pickup_label))}
+            : figureSentence(claimParts(bill.claim, dict, lang, bill.currency, Boolean(bill.pickup_label)))}
       </p>
     </Sheet>
   );

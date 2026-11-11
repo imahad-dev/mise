@@ -547,10 +547,13 @@ export default function GuestMenuPage({
                             item.name
                           )}
                         </h3>
-                        <span className="figure whitespace-nowrap font-semibold text-ink">
-                          {options.length > 0
-                            ? `${dict.menu.from} ${formatPrice(Math.min(...options.map((o) => Number(o.price))))}`
-                            : formatPrice(Number(item.price))}
+                        <span className="whitespace-nowrap font-semibold text-ink">
+                          {options.length > 0 && `${dict.menu.from} `}
+                          <span className="figure">
+                            {options.length > 0
+                              ? formatPrice(Math.min(...options.map((o) => Number(o.price))))
+                              : formatPrice(Number(item.price))}
+                          </span>
                         </span>
                       </div>
                       {item.description && (

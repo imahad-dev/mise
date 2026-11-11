@@ -101,9 +101,9 @@ describe("PaySheet in a VAT-inclusive venue", () => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ...ukBill, claim: claimOf("cash", "21.00", false) }) });
     vi.stubGlobal("fetch", fetchMock);
     render(<Harness initial={claimed} />);
-    expect(screen.getByText("A waiter is coming to collect £23.63.")).toBeTruthy();
+    expect(sentence("A waiter is coming to collect £23.63.")).toBeTruthy();
     fireEvent.click(screen.getByRole("switch"));
-    await waitFor(() => expect(screen.getByText("A waiter is coming to collect £21.00.")).toBeTruthy());
+    await waitFor(() => expect(sentence("A waiter is coming to collect £21.00.")).toBeTruthy());
     expect(bodies(fetchMock)).toEqual([{ method: "cash", reference: null, service_included: false }]);
   });
 
@@ -114,7 +114,7 @@ describe("PaySheet in a VAT-inclusive venue", () => {
     await waitFor(() => expect(screen.getByRole("alert").textContent).toBe("Couldn't reach the restaurant — tap again"));
     expect(screen.getByRole("switch").getAttribute("aria-checked")).toBe("true");
     expect(screen.getByTestId("pay-total").textContent).toBe("£23.63");
-    expect(screen.getByText("A waiter is coming to collect £23.63.")).toBeTruthy();
+    expect(sentence("A waiter is coming to collect £23.63.")).toBeTruthy();
   });
 
   it("asks to send a transfer again after the service changes", () => {
@@ -186,7 +186,9 @@ describe("PaySheet choices", () => {
       lines: [{ ...ukBill.lines[0], choices: [milk, onions] }],
       voided: [{ name: "Tea", option_label: null, quantity: 1, choices: [onions] }],
     });
-    expect(screen.getByText("Extra milk +£0.50, No onions")).toBeTruthy();
-    expect(screen.getByText(/Tea, No onions/)).toBeTruthy();
+    // each +amount is its own .figure span, so match the whole span's text
+    expect(screen.getByText((_, el) => el?.tagName === "SPAN" && el.textContent === "Extra milk +£0.50, No onions")).toBeTruthy();
+    expect(document.querySelectorAll("span.figure").length).toBeGreaterThan(0);
+    expect(sentence("Removed by staff: Tea, No onions ×1")).toBeTruthy();
   });
 });
