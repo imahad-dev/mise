@@ -4,6 +4,7 @@ import React, { use, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { CallWaiter } from "../../../../components/CallWaiter";
+import { useVenue } from "../../../../components/BrandShell";
 import { PaySheet } from "../../../../components/PaySheet";
 import { ChatPanel } from "../../../../components/chat-panel";
 import { useSse } from "../../../../hooks/use-sse";
@@ -83,6 +84,7 @@ export default function OrderStatusPage({
 }) {
   const { lang, id } = use(params);
   const dict = getDictionary(lang);
+  const { Loader } = useVenue();
   const router = useRouter();
   // Set by the menu when the first order was over the venue's cap: the waiter will check it.
   const [big, setBig] = useState(false);
@@ -350,8 +352,7 @@ export default function OrderStatusPage({
           </div>
         ) : (
           <div className="py-12 flex flex-col items-center justify-center gap-3">
-            <div className="w-6 h-6 border-2 border-terracotta border-t-transparent rounded-full animate-spin" />
-            <p className="text-xs text-ink-muted">Connecting to order stream...</p>
+            <Loader label="Connecting to order stream..." />
           </div>
         )}
 

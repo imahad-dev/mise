@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { AllergenChip } from "../../../components/allergen-chip";
 import { CallWaiter } from "../../../components/CallWaiter";
 import { CodeEntry } from "../../../components/CodeEntry";
+import { Masthead } from "../../../components/Masthead";
+import { useVenue } from "../../../components/BrandShell";
 import { ScanAgain } from "../../../components/ScanAgain";
 import { DishSheet } from "../../../components/DishSheet";
 import { ChatPanel } from "../../../components/chat-panel";
@@ -101,6 +103,7 @@ export default function GuestMenuPage({
   const { lang } = use(params);
   const router = useRouter();
   const dict = getDictionary(lang);
+  const { Motif, Loader } = useVenue();
 
   const [menu, setMenu] = useState<MenuResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -416,8 +419,7 @@ export default function GuestMenuPage({
     return (
       <div className="min-h-screen bg-paper text-ink flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">
-          <div className="w-8 h-8 border-2 border-terracotta border-t-transparent rounded-full animate-spin" />
-          <p className="text-xs text-ink-muted">Loading menu...</p>
+          <Loader label="Loading menu..." />
         </div>
       </div>
     );
@@ -462,6 +464,7 @@ export default function GuestMenuPage({
       <p aria-live="polite" className="sr-only">
         {barText}
       </p>
+      <Masthead />
       <header className="sticky top-0 z-30 border-b border-line bg-paper/95 px-4 pt-4 backdrop-blur sm:px-6">
         <div className="mx-auto max-w-3xl">
           <div className="flex items-start justify-between gap-3">
@@ -594,6 +597,7 @@ export default function GuestMenuPage({
         </div>
         {barText && (
           <div className="pointer-events-auto space-y-3 rounded-2xl border border-line bg-card p-4 shadow-lg">
+            <Motif variant="bar" />
             <p className="text-base font-semibold text-ink">{barText}</p>
             {mode === "waiting" && (
               <div className="[&_button]:min-h-12 [&_button]:w-full [&_button]:text-base">
@@ -634,7 +638,17 @@ export default function GuestMenuPage({
                   onClick={() => void handleCheckout()}
                   disabled={submittingOrder || (requiresAck && !cart.acknowledged)}
                 >
-                  {submittingOrder ? dict.ui.placingOrder : dict.ui.placeOrder}
+                  {submittingOrder ? (
+                    <span className="inline-flex items-center gap-2">
+                      {/* Hidden from assistive tech so the name says "Placing order" once, from the visible text. */}
+                      <span aria-hidden="true">
+                        <Loader label={dict.ui.placingOrder} size="sm" />
+                      </span>
+                      {dict.ui.placingOrder}
+                    </span>
+                  ) : (
+                    dict.ui.placeOrder
+                  )}
                 </Button>
               ) : (
                 <p className="text-base font-semibold text-ink">{closedText}</p>
