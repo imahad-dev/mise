@@ -34,6 +34,18 @@ describe("Angeethi House package", () => {
     const { getByRole } = render(<brand.Loader label="Loading menu" />);
     expect(getByRole("status").textContent).toContain("Loading menu");
   });
+  it("loader shows the animated dots normally and the venue's still mark under reduced motion", async () => {
+    const dots = render(<brand.Loader label="Loading menu" />);
+    expect(dots.container.querySelector("img")).toBeNull();
+    expect(dots.container.querySelector("svg")).not.toBeNull();
+    dots.unmount();
+    reducedMotion(true);
+    const { container } = render(<brand.Loader label="Loading menu" />);
+    await act(async () => {});
+    expect(container.querySelector("img")?.getAttribute("src")).toBe("/venues/angeethi-house/mark.svg");
+    expect(container.querySelector("svg")).toBeNull();
+    expect(container.textContent).toContain("Loading menu");
+  });
   it("welcome names the venue and finishes under reduced motion", async () => {
     vi.useFakeTimers();
     reducedMotion(true);

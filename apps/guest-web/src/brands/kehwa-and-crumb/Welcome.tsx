@@ -6,7 +6,7 @@ import { useGSAP } from "@gsap/react";
 
 gsap.registerPlugin(useGSAP);
 
-/** A cup fills with kehwa, crumbs settle, then the name. About 2 s; still under reduced motion. */
+/** A cup fills with kehwa, crumbs settle, then the name and the mark. About 2 s; the mark shows still under reduced motion. */
 export function Welcome({ name, onDone }: { name: string; onDone: () => void }) {
   const root = useRef<HTMLDivElement>(null);
   useGSAP(
@@ -18,7 +18,8 @@ export function Welcome({ name, onDone }: { name: string; onDone: () => void }) 
           .from(".kc-tea", { scaleY: 0, transformOrigin: "50% 100%", duration: 0.7, ease: "power2.out" })
           .from(".kc-crumb", { y: -40, opacity: 0, stagger: 0.07, duration: 0.45, ease: "bounce.out" }, "-=0.2")
           .from(".kc-name", { opacity: 0, y: 16, duration: 0.45 }, "-=0.1")
-          .to({}, { duration: 0.35 });
+          .from(".kc-mark", { opacity: 0, scale: 0.8, duration: 0.4, ease: "power2.out" }, "-=0.1")
+          .to({}, { duration: 0.2 });
       });
       mm.add("(prefers-reduced-motion: reduce)", () => {
         // Plain timer, not GSAP: nothing animates here, and it stays testable with fake timers.
@@ -39,6 +40,8 @@ export function Welcome({ name, onDone }: { name: string; onDone: () => void }) 
           <circle key={x} className="kc-crumb" cx={x} cy={i % 2 ? 66 : 64} r={2} fill="var(--brand-on-deep)" />
         ))}
       </svg>
+      {/* eslint-disable-next-line @next/next/no-img-element -- a small static mark */}
+      <img className="kc-mark h-14 w-14 rounded-xl" src="/venues/kehwa-and-crumb/mark.svg" alt="" />
       <p className="kc-name font-serif text-4xl">{name}</p>
     </div>
   );

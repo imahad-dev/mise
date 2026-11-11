@@ -1,14 +1,22 @@
 "use client";
 
-import React, { useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import gsap from "gsap";
 import { useGSAP } from "@gsap/react";
 
 gsap.registerPlugin(useGSAP);
 
-/** Crumbs fall and gather; still under reduced motion. */
+/** True when the guest prefers reduced motion; false on the server and where `matchMedia` is missing. */
+function useReducedMotion() {
+  const [reduced, setReduced] = useState(false);
+  useEffect(() => setReduced(window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false), []);
+  return reduced;
+}
+
+/** Crumbs fall and gather; the venue's still mark under reduced motion. */
 export function Loader({ label, size = "md" }: { label: string; size?: "sm" | "md" }) {
   const root = useRef<HTMLSpanElement>(null);
+  const reduced = useReducedMotion();
   useGSAP(
     () => {
       const mm = gsap.matchMedia();
@@ -25,11 +33,16 @@ export function Loader({ label, size = "md" }: { label: string; size?: "sm" | "m
   );
   return (
     <span ref={root} role="status" className="inline-flex items-center gap-2 text-ink-muted">
-      <svg aria-hidden="true" viewBox="0 0 30 12" className={size === "sm" ? "w-6" : "w-12"}>
-        {[6, 13, 20, 26].map((x) => (
-          <circle key={x} className="kc-bit" cx={x} cy={9} r={2} fill="var(--brand-accent)" />
-        ))}
-      </svg>
+      {reduced ? (
+        {/* eslint-disable-next-line @next/next/no-img-element -- a small static mark */}
+        <img src="/venues/kehwa-and-crumb/mark.svg" alt="" className={size === "sm" ? "h-5 w-5" : "h-8 w-8"} />
+      ) : (
+        <svg aria-hidden="true" viewBox="0 0 30 12" className={size === "sm" ? "w-6" : "w-12"}>
+          {[6, 13, 20, 26].map((x) => (
+            <circle key={x} className="kc-bit" cx={x} cy={9} r={2} fill="var(--brand-accent)" />
+          ))}
+        </svg>
+      )}
       <span className={size === "sm" ? "sr-only" : "text-xs"}>{label}</span>
     </span>
   );
