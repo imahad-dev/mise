@@ -32,6 +32,8 @@ export const en: TranslationDict = {
   ui: {
     welcomeTitle: "Welcome to {venue}",
     scanAgain: "Scan the QR code on your table again.",
+    noticeShort: "Allergen info is a guide only. Please check with staff before ordering.",
+    allergyToggle: "Allergies or a special diet? Tell us",
     welcomeSubtitle: "Customize your dining experience before viewing the menu.",
     selectLanguage: "Language",
     selectDietary: "Dietary Preferences",
@@ -89,6 +91,7 @@ export const en: TranslationDict = {
     soldOut: "Sold out",
     size: "Size",
     notVegan: "Not vegan",
+    ingredients: "Ingredients",
     notVegetarian: "Not vegetarian",
     leaveOutNotice: "Leaving something out doesn't make a dish safe for an allergy. Please ask a member of staff.",
     leaveOut: "No {label}",

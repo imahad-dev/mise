@@ -45,6 +45,7 @@ async function phoneAt(browser: Browser, slug: string, label: string, avoid: str
     return page;
   }
   await page.goto(`${GUEST}/q/${qr}`);
+  await page.getByText("Allergies or a special diet? Tell us").click(); // the choices are folded away
   for (const a of avoid) await page.getByRole("button", { name: new RegExp(`^${a}`) }).click();
   await page.getByRole("button", { name: "View Menu" }).click();
   await expect(page).toHaveURL(/\/en\/menu$/);

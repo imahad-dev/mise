@@ -29,6 +29,9 @@ export interface TranslationDict {
   ui: {
     welcomeTitle: string;
     scanAgain: string;
+    /** One-line allergen notice for the scan page; the full notice stays in the order sheet. */
+    noticeShort: string;
+    allergyToggle: string;
     welcomeSubtitle: string;
     selectLanguage: string;
     selectDietary: string;
@@ -88,6 +91,7 @@ export interface TranslationDict {
     soldOut: string;
     size: string;
     notVegan: string;
+    ingredients: string;
     notVegetarian: string;
     leaveOutNotice: string;
     /** A left-out choice on a cart line. Contains {label}. */

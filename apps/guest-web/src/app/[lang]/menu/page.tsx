@@ -6,6 +6,7 @@ import { AllergenChip } from "../../../components/allergen-chip";
 import { CallWaiter } from "../../../components/CallWaiter";
 import { CodeEntry } from "../../../components/CodeEntry";
 import { Masthead } from "../../../components/Masthead";
+import { mainIngredients } from "../../../lib/ingredients";
 import { useVenue } from "../../../components/BrandShell";
 import { ScanAgain } from "../../../components/ScanAgain";
 import { DishSheet } from "../../../components/DishSheet";
@@ -560,15 +561,19 @@ export default function GuestMenuPage({
                         <p className="mt-0.5 text-sm text-ink-muted">{item.description}</p>
                       )}
                       <div className="mt-2 flex items-center justify-between gap-3">
+                        {/* Main ingredients; allergen and diet details live in the dish sheet. The list
+                            warns only when the dish contains something this guest asked to avoid. */}
                         <div className="flex flex-wrap gap-1.5">
-                          <AllergenChip
-                            status={item.allergen_status}
-                            matchedAllergens={item.matched_allergens}
-                            locale={lang}
-                          />
-                          {item.is_vegetarian && <Badge>{dict.dietary.vegetarian}</Badge>}
-                          {item.is_vegan && <Badge>{dict.dietary.vegan}</Badge>}
-                          {item.is_gluten_free && <Badge>{dict.dietary.gluten_free}</Badge>}
+                          {item.allergen_status === "contains" && (
+                            <AllergenChip
+                              status={item.allergen_status}
+                              matchedAllergens={item.matched_allergens}
+                              locale={lang}
+                            />
+                          )}
+                          {mainIngredients(item.ingredients).map((name) => (
+                            <Badge key={name}>{name}</Badge>
+                          ))}
                         </div>
                         {isAvailable ? (
                           <Button

@@ -98,10 +98,8 @@ export function ScanForm({ token }: { token: string }) {
           <p className="text-sm text-ink-muted">{dict.ui.welcomeSubtitle}</p>
         </div>
 
-        {/* Staff Notice Alert */}
-        <div className="rounded-xl p-3.5 bg-warn-bg border border-warn-fg/30 text-xs text-warn-fg/90 leading-relaxed">
-          ℹ️ {dict.staffNotice}
-        </div>
+        {/* One line here; the full allergen notice stays in the order sheet before confirming. */}
+        <p className="text-center text-xs text-warn-fg">{dict.ui.noticeShort}</p>
 
         {error && (
           <div className="rounded-xl p-3 bg-danger-bg border border-danger-fg/40 text-xs text-danger-fg">
@@ -142,8 +140,17 @@ export function ScanForm({ token }: { token: string }) {
             </div>
           </div>
 
+          {/* Diet and allergen choices fold away, so most guests reach the menu in one tap. */}
+          <details className="group rounded-2xl border border-line bg-card">
+            <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-2 px-4 py-3 text-sm font-semibold text-ink">
+              <span>{dict.ui.allergyToggle}</span>
+              <span className="text-xs font-medium text-ink-muted">
+                {dietary.length + allergens.length > 0 ? `${dietary.length + allergens.length} ✓` : "+"}
+              </span>
+            </summary>
+            <div className="space-y-4 px-4 pb-4">
           {/* Diets selector */}
-          <div className="bg-card p-4 rounded-2xl border border-line space-y-2.5">
+          <div className="space-y-2.5">
             <label className="block text-xs font-semibold uppercase tracking-wider text-ink-muted">
               {dict.ui.selectDietary}
             </label>
@@ -169,7 +176,7 @@ export function ScanForm({ token }: { token: string }) {
           </div>
 
           {/* Allergens selector */}
-          <div className="bg-card p-4 rounded-2xl border border-line space-y-2.5">
+          <div className="space-y-2.5">
             <label className="block text-xs font-semibold uppercase tracking-wider text-ink-muted">
               {dict.ui.selectAllergens}
             </label>
@@ -196,6 +203,8 @@ export function ScanForm({ token }: { token: string }) {
               })}
             </div>
           </div>
+            </div>
+          </details>
 
           {/* Submit button */}
           <button

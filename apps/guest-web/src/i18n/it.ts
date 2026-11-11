@@ -32,6 +32,8 @@ export const it: TranslationDict = {
   ui: {
     welcomeTitle: "Benvenuti da {venue}",
     scanAgain: "Scansiona di nuovo il codice QR sul tuo tavolo.",
+    noticeShort: "Le informazioni sugli allergeni sono indicative. Verifica con lo staff prima di ordinare.",
+    allergyToggle: "Allergie o una dieta particolare? Dicci",
     welcomeSubtitle: "Personalizza le tue preferenze prima di visualizzare il menu.",
     selectLanguage: "Lingua",
     selectDietary: "Preferenze Alimentari",
@@ -89,6 +91,7 @@ export const it: TranslationDict = {
     soldOut: "Esaurito",
     size: "Porzione",
     notVegan: "Non vegano",
+    ingredients: "Ingredienti",
     notVegetarian: "Non vegetariano",
     leaveOutNotice: "Togliere un ingrediente non rende un piatto sicuro per chi ha un'allergia. Chiedi al personale.",
     leaveOut: "Senza {label}",

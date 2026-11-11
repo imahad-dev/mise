@@ -5,6 +5,7 @@ import { Badge, Button, Sheet } from "ui";
 import { AllergenChip } from "./allergen-chip";
 import type { TranslationDict } from "../i18n/types";
 import { figureParts } from "../lib/figure";
+import { mainIngredients } from "../lib/ingredients";
 import {
   defaultPicks, firstMissing, isRadio, matchedAllergens, pickedChoices, requirement, toggle, unitPrice, worstStatus,
   type AllergenStatus, type CartChoice, type ChoiceGroup,
@@ -18,6 +19,10 @@ export interface DishSheetItem {
   image_url?: string | null;
   allergen_status: AllergenStatus;
   matched_allergens?: string[];
+  ingredients?: string[];
+  is_vegetarian?: boolean;
+  is_vegan?: boolean;
+  is_gluten_free?: boolean;
   options?: { id: string; label: string; price: string }[];
   choice_groups?: ChoiceGroup[];
 }
@@ -150,7 +155,18 @@ export function DishSheet({ item, lang, dict, formatPrice, dietary, onClose, onA
         <img src={item.image_url} alt="" className="aspect-[4/3] w-full rounded-xl object-cover" />
       )}
       {item.description && <p className="text-sm text-ink-muted">{item.description}</p>}
-      <AllergenChip status={item.allergen_status} matchedAllergens={item.matched_allergens} locale={lang} />
+      <div className="flex flex-wrap gap-1.5">
+        <AllergenChip status={item.allergen_status} matchedAllergens={item.matched_allergens} locale={lang} />
+        {item.is_vegetarian && <Badge>{dict.dietary.vegetarian}</Badge>}
+        {item.is_vegan && <Badge>{dict.dietary.vegan}</Badge>}
+        {item.is_gluten_free && <Badge>{dict.dietary.gluten_free}</Badge>}
+      </div>
+      {mainIngredients(item.ingredients, Infinity).length > 0 && (
+        <p className="text-sm text-ink-muted">
+          <span className="font-semibold text-ink">{dict.dish.ingredients}: </span>
+          {mainIngredients(item.ingredients, Infinity).join(", ")}
+        </p>
+      )}
 
       {sizes.length > 0 && (
         <fieldset id="group-size" tabIndex={-1} className={box("size")}>
