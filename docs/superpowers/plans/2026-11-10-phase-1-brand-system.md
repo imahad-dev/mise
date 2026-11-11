@@ -27,6 +27,9 @@
 3. **Colours are hex, not OKLCH**, so a plain WCAG contrast test checks every pair. Values come from the user's palettes (Wine Red #7F011F / Light Sand #F5EBDD for Angeethi, Forest #064734 / Leaf #E0FFC2 for Kehwa) and the round-1 logos.
 4. **Logo files live in `public/venues/<slug>/`** of each app (`mark.svg`, `lockup.svg`), because icons and the manifest need public URLs. A test keeps both apps' copies identical to `docs/brand/round-1/`.
 5. **The QR-to-venue lookup has no IP rate limit.** The guest app's server calls it, so every guest would share one address; the token is unguessable and the answer is only a public venue name.
+6. **A failed brand package or font never changes behaviour.** The venue's static colours and radii still apply (they come from `packages/ui`, not the package), and fonts fall back to the stacks in `venue-brands.ts`; ordering, paying and every flow are independent of the brand.
+7. **The demo landing keeps `public/manifest.json`** (Mise, for the presenter); guest pages use the per-venue manifests.
+8. **The welcome key is the guest session id,** which the guest's own browser already holds in its cookie; remembering "welcome played" under it exposes nothing new.
 
 ---
 
