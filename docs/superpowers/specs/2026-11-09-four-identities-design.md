@@ -29,9 +29,12 @@ loader, and no trace of another venue or of Mise on any guest screen.
 5. **Dish photos for featured dishes only**, 6 to 8 per venue, freely licensed, with a recorded
    source per photo.
 6. **The five issues from the 2026-11-08 screenshot review are fixed first.**
-7. **Out of scope:** owner, kitchen and bills screen branding; Arabic (project languages are `en`
-   and `it`); owners editing their own brand; photos for non-featured dishes; photo upload; the
-   showcase video (deferred, see the end).
+7. **Out of scope:** owner, kitchen and bills screen branding and translation; owners editing their
+   own brand; photos for non-featured dishes; photo upload; the showcase video (deferred, see the
+   end).
+8. **Local languages (decided 2026-11-12):** Italian is removed. Each venue offers English plus
+   its local language: Urdu for the Pakistani venues, Arabic for Dubai, English only for
+   Manchester. See phase 1b.
 
 ## Phases
 
@@ -41,7 +44,8 @@ Each phase gets its own implementation plan and is built and reviewed on its own
 |---|---|---|
 | 0 | Screenshot-review fixes | — |
 | 1 | Brand system, Angeethi House and Kehwa & Crumb packages | 0 |
-| 2 | Noor & Za'atar and Tikka Town: data, menus, demo history, packages | 1 |
+| 1b | Local languages: Urdu, right-to-left layout, Italian removed | 1 |
+| 2 | Noor & Za'atar and Tikka Town: data, menus, demo history, packages, Arabic menu | 1b |
 | 3 | Featured dish photos | 2 |
 
 ## Phase 0 · Screenshot-review fixes
@@ -160,6 +164,82 @@ are vectors built from real letterforms and from what only that venue has.
 - Unknown slug: the existing not-found page, with no venue brand.
 - Welcome throws: it is skipped and the menu shows.
 
+## Phase 1b · Local languages
+
+Research: `docs/research/2026-10-22-pakistan-notes/urdu_ui.md` (fonts, digits, right-to-left,
+translation quality). This phase adds Urdu and the right-to-left layout; Arabic arrives with the
+Dubai venue in phase 2 and reuses all of it.
+
+### Languages per venue
+
+| Venue | `restaurant.languages` | Default |
+|---|---|---|
+| Angeethi House | `en`, `ur` | `en` |
+| Kehwa & Crumb | `en`, `ur` | `en` |
+| Noor & Za'atar (phase 2) | `en`, `ar` | `en` |
+| Tikka Town (phase 2) | `en` | `en` |
+
+- **Italian is removed everywhere:** the guest dictionary, the `it` route, the API's allowed
+  languages and the owner app's menu-import language list. No venue offers it.
+- **A venue offers only its own languages.** The guest venue response (QR lookup and session)
+  carries the venue's `languages`. The scan page shows a button per language, in that language's
+  own name ("English", "اردو", "العربية"); with one language it shows no picker.
+- **The API refuses a language the venue does not offer** when a guest session is created or
+  changed (422, a short reason). Allowed codes: `en`, `ur`, `ar`.
+- **Guest routes** are `/en/…`, `/ur/…` and `/ar/…`. Any other language segment is the neutral
+  not-found page. A guest on a language their venue doesn't offer is sent to the venue's default.
+
+### Right-to-left
+
+- For `ur` and `ar` the guest page root has `lang` and `dir="rtl"`, set on the server in
+  `[lang]/layout.tsx`, so the first paint is already in the right direction. Native sheets
+  (`<dialog>`) are inside the root and follow it.
+- Guest screens use direction-neutral layout (`ms-`/`me-`/`ps-`/`pe-`/`start-`/`end-`,
+  `text-start`/`text-end`) instead of left/right, so one set of classes works both ways. Arrows and
+  chevrons mirror; the plus, minus, check, allergen and clock icons do not.
+- **Money and numbers stay left-to-right in Latin digits** (`Rs 1,250`, table and order numbers,
+  quantities), each isolated (`<bdi>`, or `dir="ltr"` with isolation on `.figure`) so they never
+  jump inside Urdu text. Prices use the same formatter as English.
+- The bottom stack (assistant, order bar, View order) and the sheets keep working at 320 px in both
+  directions.
+
+### Fonts
+
+- Urdu and Arabic text use **Noto Naskh Arabic** (free, OFL), weights 400 and 700, loaded with
+  `next/font` only on `ur` and `ar` pages. Naskh, not Nastaliq: it is about a third of the size and
+  avoids the clipping and spacing problems the research found. Line height about 1.7 for Urdu and
+  Arabic text.
+- The venue's own fonts stay for Latin text (logo band, prices, English words). The venue logo is
+  the same in every language.
+
+### Words
+
+- **Guest screens:** a complete Urdu dictionary (`ur.ts`) replaces `it.ts`; every key present,
+  checked by a test. Polite register (آپ). Common loanwords stay as customers say them (آرڈر,
+  مینو, بل, ٹیبل).
+- **Menus:** every dish, size and choice in both Pakistani venues gets an Urdu name and
+  description in the seed data. Dish names are written as customers say them (چکن کڑاہی, not a
+  word-for-word translation). The 14 allergen names and the diet labels are in the dictionary.
+- **Allergen and safety text** (the notice, the warnings, "contains", the order acknowledgement)
+  is marked as a draft translation in the dictionary and in the README until a native speaker
+  has checked it. It is written by hand, never machine-generated, and the allergen status itself
+  stays server code in every language.
+- **Ingredient tags** stay as the menu data writes them (English) in this phase; translating
+  ingredient names is a later data task.
+- **The assistant** keeps answering in English; its title, placeholder and buttons are translated.
+- The owner app, kitchen screen, tickets and bills screen stay English. The printed QR card and
+  sample bill stay English except for the venue's logo.
+
+### Tests
+
+- Unit: the Urdu dictionary has every English key, no empty values and no "Mise"; the scan page
+  shows only the venue's languages and hides the picker for one language; the API refuses `it`
+  and refuses `ur` at a venue without it; money stays Latin-digit and isolated in an Urdu sentence.
+- End-to-end: at Angeethi House, choosing اردو gives an Urdu, right-to-left menu (`dir="rtl"`, an
+  Urdu dish name, `Rs` prices in Latin digits), an order can be placed and paid in Urdu, and at
+  320 px the assistant never covers a dish. The one-venue test also walks the Urdu pages. A
+  language a venue doesn't offer (`/ar/menu` at Angeethi) falls back to its default.
+
 ## Phase 2 · Noor & Za'atar and Tikka Town
 
 ### Data
@@ -183,7 +263,9 @@ app's venue picker lists all four venues.
 
 ### Menus
 
-Every dish carries the 14-allergen data and dish choices (3A) where they make sense.
+Every dish carries the 14-allergen data and dish choices (3A) where they make sense. Noor &
+Za'atar's menu is written in English and Arabic from the start, and an Arabic guest dictionary
+(`ar.ts`) is added on the phase 1b pattern (same draft-translation rule for safety text).
 
 **Noor & Za'atar** (Emirati home cooking first, then the Levantine and Pakistani dishes Dubai
 expects): chicken machboos, lamb machboos, harees, thareed, balaleet, luqaimat with date syrup,
