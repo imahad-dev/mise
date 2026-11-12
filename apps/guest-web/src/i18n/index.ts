@@ -1,13 +1,13 @@
 import { en } from "./en";
-import { it } from "./it";
+import { ur } from "./ur";
 import type { TranslationDict } from "./types";
 
 export * from "./types";
-export { en, it };
+export { en, ur };
 
 const dictionaries: Record<string, Partial<TranslationDict>> = {
   en,
-  it,
+  ur,
 };
 
 /**

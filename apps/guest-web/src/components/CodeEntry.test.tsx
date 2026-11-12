@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { CodeEntry, type CodeEntryProps } from "./CodeEntry";
-import { en, it as itDict } from "../i18n";
+import { en, ur } from "../i18n";
 
 const view = (p: Partial<CodeEntryProps>) =>
   renderToStaticMarkup(
@@ -27,7 +27,7 @@ describe("CodeEntry", () => {
     expect(html.match(/disabled=""/g)).toHaveLength(4);
   });
   it("uses only everyday words on screen", () => {
-    for (const dict of [en, itDict]) {
+    for (const dict of [en, ur]) {
       const text = Object.values(dict.order).join(" ").toLowerCase();
       for (const word of ["server", "session", "sitting", "approval", "pending", "code", "error", "sessione"]) {
         expect(text).not.toContain(word);

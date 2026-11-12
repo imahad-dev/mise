@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { formatPrice } from "ui";
 import { getDictionary } from "../i18n";
+import { ur } from "../i18n/ur";
 import { billState, claimMessage, counterState, paidText, payForwardThanks, referenceFor, copyText, detailsFor, isValidReference, menuTaxNote, needsReference, payTotal, percent, serviceLine, type GuestBill } from "./pay";
 
 const en = getDictionary("en");
@@ -31,7 +32,7 @@ describe("pay helpers", () => {
     for (const m of ["wallet", "raast", "bank_transfer"] as const) {
       expect(claimMessage(claim(m), en, "en", "PKR")).toBe("Payment sent — waiting for staff to confirm.");
     }
-    expect(claimMessage(claim("card"), getDictionary("it"), "it", "PKR")).toBe("Un cameriere porta il POS.");
+    expect(claimMessage(claim("card"), getDictionary("ur"), "ur", "PKR")).toBe(ur.pay.card);
   });
 
   it("lists the venue details for the chosen method", () => {
@@ -52,8 +53,10 @@ describe("pay helpers", () => {
   it("formats tax rates as percentages", () => {
     expect(percent("0.16", "en")).toBe("16");
     expect(percent("0.165", "en")).toBe("16.5");
-    expect(percent("0.1250", "it")).toBe("12,5");
-    expect(percent("0.2000", "it")).toBe("20");
+    expect(percent("0.1250", "ur")).toBe("12.5");
+    expect(percent("0.1250", "ar")).toBe("12.5");
+    expect(percent("0.1250", "ar-EG")).toBe("12.5"); // ar-EG defaults to Arabic-Indic digits
+    expect(percent("0.2000", "ur")).toBe("20");
   });
 });
 
@@ -78,17 +81,20 @@ describe("paid text", () => {
   } as GuestBill;
   it("says what was paid, with rate and method", () => {
     expect(paidText(settled, en, "en")).toBe(`Paid ${formatPrice(130, "PKR")} (incl. 8% sales tax) by Raast QR`);
-    expect(paidText({ ...settled, payment_method: "bank_transfer" }, getDictionary("it"), "it")).toBe(
-      `Pagato ${formatPrice(130, "PKR", "it")} (imposta 8% inclusa) con Bonifico`,
+    expect(paidText({ ...settled, payment_method: "bank_transfer" }, getDictionary("ur"), "ur")).toBe(
+      ur.pay.paidAmount.replace("{total}", formatPrice(130, "PKR", "ur")).replace("{rate}", "8").replace("{method}", ur.pay.methods.bank_transfer),
     );
   });
   it("says VAT was included for a VAT-inclusive venue", () => {
     const uk = { ...settled, currency: "GBP", payment_method: "card", tax_rate: "0.2000", total: "23.63", tax_included: true } as GuestBill;
     expect(paidText(uk, en, "en")).toBe("Paid £23.63 (VAT 20% included) by Card");
-    expect(paidText(uk, getDictionary("it"), "it")?.replace(/\s/g, " ")).toBe("Pagato 23,63 £ (IVA 20% inclusa) con Carta");
-    expect(paidText({ ...settled, tax_rate: "0.1650" }, getDictionary("it"), "it")).toBe(
-      `Pagato ${formatPrice(130, "PKR", "it")} (imposta 16,5% inclusa) con Raast QR`,
+    expect(paidText(uk, getDictionary("ur"), "ur")).toBe(
+      ur.pay.paidVatIncluded.replace("{total}", formatPrice(23.63, "GBP", "ur")).replace("{rate}", "20").replace("{method}", ur.pay.methods.card),
     );
+    expect(paidText({ ...settled, tax_rate: "0.1650" }, getDictionary("ur"), "ur")).toBe(
+      ur.pay.paidAmount.replace("{total}", formatPrice(130, "PKR", "ur")).replace("{rate}", "16.5").replace("{method}", ur.pay.methods.raast),
+    );
+    expect(paidText(uk, getDictionary("ur"), "ur")).not.toMatch(/[٠-٩۰-۹]/);
   });
   it("is empty until the bill is settled", () => {
     expect(paidText({ ...settled, status: "open", total: null, tax_rate: null, payment_method: null }, en, "en")).toBeNull();
@@ -154,8 +160,8 @@ describe("payTotal", () => {
   });
   it("names the service line with its rate", () => {
     expect(serviceLine("0.1250", "Add optional service ({rate}%)", "en")).toBe("Add optional service (12.5%)");
-    expect(serviceLine("0.1250", getDictionary("it").menu.serviceNotice, "it")).toBe(
-      "Ai conti al tavolo si aggiunge un servizio facoltativo del 12,5%.",
+    expect(serviceLine("0.1250", getDictionary("ur").menu.serviceNotice, "ur")).toBe(
+      ur.menu.serviceNotice.replace("{rate}", "12.5"),
     );
   });
 });
@@ -163,7 +169,7 @@ describe("payTotal", () => {
 describe("menuTaxNote", () => {
   it("says prices include VAT where they do, else the sales-tax note", () => {
     expect(menuTaxNote(true, en)).toBe("Prices include VAT.");
-    expect(menuTaxNote(true, getDictionary("it"))).toBe("Prezzi IVA inclusa.");
+    expect(menuTaxNote(true, getDictionary("ur"))).toBe(ur.menu.pricesIncludeVat);
     expect(menuTaxNote(false, en)).toBe("Prices exclude sales tax, which is added to your bill.");
   });
 });

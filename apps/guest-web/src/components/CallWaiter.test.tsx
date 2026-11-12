@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { ur } from "../i18n/ur";
 import { CallWaiterView, callOutcome, formatElapsed, type CallWaiterViewProps } from "./CallWaiter";
 
 const view = (p: Partial<CallWaiterViewProps>) =>
@@ -28,9 +29,9 @@ describe("CallWaiter", () => {
   it("renders the button and reasons in the guest's language", () => {
     expect(view({})).toContain("Call waiter");
     expect(view({})).toContain("Something else");
-    const it_ = view({ lang: "it", extraLabel: "More naan / roti" });
-    expect(it_).toContain("Chiama il cameriere");
-    expect(it_).toContain("More naan / roti");
+    const urdu = view({ lang: "ur", extraLabel: "More naan / roti" });
+    expect(urdu).toContain(ur.call.button);
+    expect(urdu).toContain("More naan / roti");
   });
   it("announces the call once and keeps the ticking timer out of the live region", () => {
     const html = view({ waitingMs: 65_000 });

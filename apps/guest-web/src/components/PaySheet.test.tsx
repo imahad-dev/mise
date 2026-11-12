@@ -2,8 +2,10 @@
 import React from "react";
 import { cleanup, render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { formatPrice } from "ui";
 import { PaySheet } from "./PaySheet";
 import type { GuestBill, PaymentClaim } from "../lib/pay";
+import { ur } from "../i18n/ur";
 
 const ukBill: GuestBill = {
   bill_no: 1, status: "open", bill_requested_at: null,
@@ -134,10 +136,11 @@ describe("PaySheet in a VAT-inclusive venue", () => {
     expect(sentence("Send £21.00 to:")).toBeTruthy();
   });
 
-  it("names the rate the Italian way", () => {
-    render(<PaySheet lang="it" bill={ukBill} open onClose={() => {}} onUpdated={() => {}} onConflict={() => {}} />);
-    expect(screen.getByRole("switch", { name: /\(12,5%\)/ })).toBeTruthy();
-    expect(screen.getByText(/^IVA 20% inclusa:/)).toBeTruthy();
+  it("names the rate in Urdu with Latin digits", () => {
+    render(<PaySheet lang="ur" bill={ukBill} open onClose={() => {}} onUpdated={() => {}} onConflict={() => {}} />);
+    expect(screen.getByRole("switch", { name: /\(12\.5%\)/ })).toBeTruthy();
+    expect(sentence(ur.pay.vatIncluded.replace("{rate}", "20").replace("{amount}", formatPrice(3.5, "GBP", "ur")))).toBeTruthy();
+    expect(screen.getByRole("dialog").textContent).not.toMatch(/[٠-٩۰-۹]/);
   });
 
   it("asks for the total with service on a transfer method", () => {

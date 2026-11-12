@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { AllergenChip } from "./allergen-chip";
+import { ur } from "../i18n/ur";
 
 describe("AllergenChip component", () => {
   it("renders 'contains' status with matched allergens badge", () => {
@@ -33,17 +34,17 @@ describe("AllergenChip component", () => {
     expect(html).toContain("No declared match");
   });
 
-  it("renders localized text for Italian locale", () => {
+  it("renders localized text for Urdu locale", () => {
     const html = renderToStaticMarkup(
       <AllergenChip
         status="contains"
         matchedAllergens={["gluten"]}
-        locale="it"
+        locale="ur"
       />
     );
 
     expect(html).toContain("allergen-chip-contains");
-    expect(html).toContain("Contiene");
-    expect(html).toContain("Glutine");
+    expect(html).toContain(ur.allergenStatus.contains);
+    expect(html).toContain(ur.allergens.gluten);
   });
 });

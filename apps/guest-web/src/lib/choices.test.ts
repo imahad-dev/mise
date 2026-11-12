@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { addToCart } from "./cart";
 import { getDictionary } from "../i18n";
+import { ur } from "../i18n/ur";
 import {
   cartChoiceText, defaultPicks, firstMissing, matchedAllergens, needsPage, pickedChoices, requirement, staleLines, toggle,
   unitPrice, worstStatus,
@@ -117,8 +118,10 @@ describe("cartChoiceText", () => {
     expect(cartChoiceText(line, money, getDictionary("en").dish.leaveOut)).toBe("Hot, Extra shot +Rs 150, No onions");
   });
 
-  it("uses the Italian leave-out wording", () => {
-    expect(cartChoiceText(line, money, getDictionary("it").dish.leaveOut)).toBe("Hot, Extra shot +Rs 150, Senza onions");
+  it("uses the Urdu leave-out wording", () => {
+    expect(cartChoiceText(line, money, getDictionary("ur").dish.leaveOut)).toBe(
+      "Hot, Extra shot +Rs 150, " + ur.dish.leaveOut.replace("{label}", "onions"),
+    );
   });
 });
 
