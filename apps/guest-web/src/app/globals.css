@@ -17,6 +17,13 @@
   font-family: var(--font-sans);
   background-color: var(--color-paper);
 }
+/* Urdu and Arabic pages: Naskh for Arabic-script text, the venue's own fonts for Latin text
+   (Naskh is limited to Arabic code points), and the taller line Naskh needs. */
+[dir="rtl"] [data-brand] {
+  --font-sans: var(--font-naskh), var(--brand-text);
+  --font-serif: var(--font-naskh), var(--brand-display);
+  line-height: 1.7;
+}
 [data-brand] :is(.btn-primary, .btn-ghost, .btn-dark, .btn-danger) {
   border-radius: var(--brand-button-radius);
 }

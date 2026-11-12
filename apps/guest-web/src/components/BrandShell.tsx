@@ -11,6 +11,8 @@ import { NeutralLoader } from "./NeutralLoader";
 export interface Venue {
   slug: string;
   name: string;
+  languages?: string[];
+  defaultLanguage?: string;
 }
 
 interface VenueContextValue extends Venue {
@@ -23,6 +25,8 @@ const NoMotif: BrandPackage["Motif"] = () => null;
 const VenueContext = createContext<VenueContextValue>({
   slug: "",
   name: "",
+  languages: ["en"],
+  defaultLanguage: "en",
   branded: false,
   Motif: NoMotif,
   Loader: NeutralLoader,

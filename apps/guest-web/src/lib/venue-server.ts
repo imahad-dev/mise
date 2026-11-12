@@ -9,6 +9,16 @@ export interface ServerVenue {
   name: string;
   /** The visit (guest session) id; only on session-resolved pages. */
   visitId?: string;
+  /** Languages this venue offers, and its default (phase 1b). */
+  languages: string[];
+  defaultLanguage: string;
+  /** The visit's chosen language; only on session-resolved pages. */
+  language?: string;
+}
+
+// An API answer without languages (older API) means English only.
+function venueOf(v: { slug: string; name: string; languages?: string[]; default_language?: string }) {
+  return { slug: v.slug, name: v.name, languages: v.languages ?? ["en"], defaultLanguage: v.default_language ?? "en" };
 }
 
 /** The venue of this browser's guest session, or null when there is none or it has expired. */
@@ -22,7 +32,7 @@ export const venueFromSession = cache(async (): Promise<ServerVenue | null> => {
     });
     if (!res.ok) return null;
     const s = await res.json();
-    return s?.venue?.slug ? { slug: s.venue.slug, name: s.venue.name, visitId: s.id } : null;
+    return s?.venue?.slug ? { ...venueOf(s.venue), visitId: s.id, language: s.language } : null;
   } catch {
     return null;
   }
@@ -38,7 +48,7 @@ export const venueFromQr = cache(async (token: string): Promise<ServerVenue | nu
     const res = await fetch(`${API_URL}/api/guest/venues/${encodeURIComponent(token)}`, { cache: "no-store" });
     if (!res.ok) return null;
     const v = await res.json();
-    return v?.slug ? { slug: v.slug, name: v.name } : null;
+    return v?.slug ? venueOf(v) : null;
   } catch {
     return null;
   }
