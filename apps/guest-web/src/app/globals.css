@@ -23,6 +23,8 @@
 [data-brand] [dir="rtl"] {
   --font-sans: var(--font-naskh,), var(--brand-text);
   --font-serif: var(--font-naskh,), var(--brand-display);
+  /* the brand root computed its font before an inner rtl element re-pointed the variable */
+  font-family: var(--font-sans);
   line-height: 1.7;
 }
 [data-brand] :is(.btn-primary, .btn-ghost, .btn-dark, .btn-danger) {
