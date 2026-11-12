@@ -1,12 +1,13 @@
 // @vitest-environment jsdom
 import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, within, fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 const push = vi.fn();
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
 let venue = { slug: "angeethi-house", name: "Angeethi House", branded: false, languages: ["en", "ur"], defaultLanguage: "en" };
 vi.mock("./BrandShell", () => ({ useVenue: () => venue }));
+vi.mock("../lib/naskh", () => ({ naskh: { variable: "naskh-var" } }));
 
 import { ScanForm } from "./ScanForm";
 
@@ -50,6 +51,12 @@ describe("ScanForm languages", () => {
     const { container } = render(<ScanForm token="t" />);
     expect(container.querySelector('[dir="rtl"]')).not.toBeNull();
     venue = { ...venue, defaultLanguage: "en" };
+  });
+
+  it("the language buttons form a named group", () => {
+    render(<ScanForm token="t" />);
+    const group = screen.getByRole("group", { name: "Language" });
+    expect(within(group).getAllByRole("button")).toHaveLength(2);
   });
 
   it("the selected language is announced as pressed", () => {

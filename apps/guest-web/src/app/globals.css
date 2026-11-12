@@ -19,7 +19,8 @@
 }
 /* Urdu and Arabic pages: Naskh for Arabic-script text, the venue's own fonts for Latin text
    (Naskh is limited to Arabic code points), and the taller line Naskh needs. */
-[dir="rtl"] [data-brand] {
+[dir="rtl"] [data-brand],
+[data-brand] [dir="rtl"] {
   --font-sans: var(--font-naskh,), var(--brand-text);
   --font-serif: var(--font-naskh,), var(--brand-display);
   line-height: 1.7;

@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useId, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getDictionary, withVenue } from "../i18n";
 import { LANGUAGE_NAMES, isGuestLanguage, isRtl, type GuestLanguage } from "../i18n/languages";
+import { naskh } from "../lib/naskh";
 import { useVenue } from "./BrandShell";
 
 const EU14_ALLERGENS = [
@@ -28,6 +29,7 @@ const DIETS = ["vegetarian", "vegan", "gluten_free"] as const;
 export function ScanForm({ token }: { token: string }) {
   const router = useRouter();
   const { slug, name, branded, languages = ["en"], defaultLanguage = "en" } = useVenue();
+  const langLabelId = useId();
   const offered = languages.filter(isGuestLanguage);
 
   const [language, setLanguage] = useState<GuestLanguage>(isGuestLanguage(defaultLanguage) ? defaultLanguage : "en");
@@ -86,7 +88,7 @@ export function ScanForm({ token }: { token: string }) {
   };
 
   return (
-    <div lang={language} dir={isRtl(language) ? "rtl" : "ltr"} className="min-h-screen bg-paper text-ink flex flex-col justify-center px-4 py-8 sm:px-6 lg:px-8">
+    <div lang={language} dir={isRtl(language) ? "rtl" : "ltr"} className={`${isRtl(language) ? `${naskh.variable} ` : ""}min-h-screen bg-paper text-ink flex flex-col justify-center px-4 py-8 sm:px-6 lg:px-8`}>
       <div className="max-w-md w-full mx-auto space-y-6">
         {/* Header */}
         <div className="text-center space-y-2">
@@ -114,8 +116,8 @@ export function ScanForm({ token }: { token: string }) {
           {/* Language selector: only the venue's own languages */}
           {offered.length > 1 && (
             <div className="bg-card p-4 rounded-2xl border border-line space-y-2.5">
-              <p className="block text-xs font-semibold uppercase tracking-wider text-ink-muted">{dict.ui.selectLanguage}</p>
-              <div className="grid grid-cols-2 gap-2">
+              <p id={langLabelId} className="block text-xs font-semibold uppercase tracking-wider text-ink-muted">{dict.ui.selectLanguage}</p>
+              <div role="group" aria-labelledby={langLabelId} className="grid grid-cols-2 gap-2">
                 {offered.map((code) => (
                   <button
                     key={code}
