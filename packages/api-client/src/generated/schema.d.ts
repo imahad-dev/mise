@@ -3445,7 +3445,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Language not offered by this venue */
+            /** @description Invalid request, or language not offered by this venue */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -3555,7 +3555,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Language not offered by this venue */
+            /** @description Invalid request, or language not offered by this venue */
             422: {
                 headers: {
                     [name: string]: unknown;

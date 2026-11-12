@@ -82,3 +82,16 @@ async def test_patch_refuses_unoffered_language_and_keeps_the_old_one(
     assert (await client.patch("/api/guest/session", json={"language": "en"})).json()[
         "language"
     ] == "en"
+
+
+async def test_refused_language_patch_changes_nothing_else(client: AsyncClient, angeethi):
+    _, qr = angeethi
+    created = await _session(client, qr, language="ur", dietary_preferences=["vegan"])
+    client.cookies.set(GUEST_COOKIE_NAME, created.cookies[GUEST_COOKIE_NAME])
+    resp = await client.patch(
+        "/api/guest/session", json={"language": "ar", "dietary_preferences": ["vegetarian"]}
+    )
+    assert resp.status_code == 422
+    kept = (await client.get("/api/guest/session")).json()
+    assert kept["dietary_preferences"] == ["vegan"]
+    assert kept["language"] == "ur"

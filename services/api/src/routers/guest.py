@@ -98,7 +98,12 @@ def _session_fields(s: GuestSession) -> dict:
     }
 
 
-VENUE_COLUMNS = (Restaurant.slug, Restaurant.name, Restaurant.languages, Restaurant.default_language)
+VENUE_COLUMNS = (
+    Restaurant.slug,
+    Restaurant.name,
+    Restaurant.languages,
+    Restaurant.default_language,
+)
 
 
 def _venue(row) -> GuestVenue:
@@ -113,15 +118,13 @@ def _venue(row) -> GuestVenue:
 def _offered(venue: GuestVenue, language: str) -> str:
     if language not in venue.languages:
         raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_ENTITY, detail="This venue does not offer that language"
+            status.HTTP_422_UNPROCESSABLE_CONTENT, detail="This venue does not offer that language"
         )
     return language
 
 
 async def venue_of(db: AsyncSession, restaurant_id: uuid.UUID) -> GuestVenue:
-    row = (
-        await db.execute(select(*VENUE_COLUMNS).where(Restaurant.id == restaurant_id))
-    ).one()
+    row = (await db.execute(select(*VENUE_COLUMNS).where(Restaurant.id == restaurant_id))).one()
     return _venue(row)
 
 
@@ -131,7 +134,7 @@ async def venue_of(db: AsyncSession, restaurant_id: uuid.UUID) -> GuestVenue:
     status_code=status.HTTP_201_CREATED,
     responses={
         404: {"description": "Unknown QR token"},
-        422: {"description": "Language not offered by this venue"},
+        422: {"description": "Invalid request, or language not offered by this venue"},
         429: {"description": "Too many new sessions from this address"},
     },
 )
@@ -178,9 +181,7 @@ async def create_guest_session(
     await db.refresh(guest_session)
 
     set_guest_cookie(response, guest_session.id)
-    return GuestSessionResponse.model_validate(
-        {**_session_fields(guest_session), "venue": venue}
-    )
+    return GuestSessionResponse.model_validate({**_session_fields(guest_session), "venue": venue})
 
 
 @router.get(
@@ -254,7 +255,7 @@ async def get_guest_session(
     status_code=status.HTTP_200_OK,
     responses={
         401: {"description": "Unauthenticated or expired session"},
-        422: {"description": "Language not offered by this venue"},
+        422: {"description": "Invalid request, or language not offered by this venue"},
     },
 )
 async def patch_guest_session(
@@ -273,8 +274,7 @@ async def patch_guest_session(
 
     await db.commit()
     await db.refresh(session)
-    return GuestSessionResponse.model_validate({**_session_fields(session), "venue": venue}
-    )
+    return GuestSessionResponse.model_validate({**_session_fields(session), "venue": venue})
 
 
 def _guest_choice(c: MenuChoice, avoid: list[str]) -> GuestMenuChoice:

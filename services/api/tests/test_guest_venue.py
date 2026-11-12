@@ -68,7 +68,12 @@ async def test_qr_token_names_its_venue_and_its_languages_and_nothing_else(clien
     r, t, _, _ = await _venue(db_session, "Venue A", "Dish A")
     res = await client.get(f"/api/guest/venues/{t.qr_token}")
     assert res.status_code == 200
-    assert res.json() == {"slug": r.slug, "name": "Venue A", "languages": ["en"], "default_language": "en"}
+    assert res.json() == {
+        "slug": r.slug,
+        "name": "Venue A",
+        "languages": ["en"],
+        "default_language": "en",
+    }
 
 
 @pytest.mark.asyncio
@@ -91,10 +96,20 @@ async def test_session_create_and_status_carry_the_venue(client, db_session):
         },
     )
     assert created.status_code == 201
-    assert created.json()["venue"] == {"slug": r.slug, "name": "Venue A", "languages": ["en"], "default_language": "en"}
+    assert created.json()["venue"] == {
+        "slug": r.slug,
+        "name": "Venue A",
+        "languages": ["en"],
+        "default_language": "en",
+    }
     status = await client.get("/api/guest/session")  # the create call set the cookie
     assert status.status_code == 200
-    assert status.json()["venue"] == {"slug": r.slug, "name": "Venue A", "languages": ["en"], "default_language": "en"}
+    assert status.json()["venue"] == {
+        "slug": r.slug,
+        "name": "Venue A",
+        "languages": ["en"],
+        "default_language": "en",
+    }
 
 
 @pytest.mark.asyncio

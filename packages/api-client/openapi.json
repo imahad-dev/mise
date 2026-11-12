@@ -303,7 +303,7 @@
             "description": "Unknown QR token"
           },
           "422": {
-            "description": "Language not offered by this venue"
+            "description": "Invalid request, or language not offered by this venue"
           },
           "429": {
             "description": "Too many new sessions from this address"
@@ -413,7 +413,7 @@
             "description": "Unauthenticated or expired session"
           },
           "422": {
-            "description": "Language not offered by this venue"
+            "description": "Invalid request, or language not offered by this venue"
           }
         }
       }
