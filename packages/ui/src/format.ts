@@ -1,4 +1,4 @@
-/** Currency amount for display, e.g. €13.00 (en), 13,00 € (it) or Rs 2,100 (PKR, whole rupees). */
+/** Currency amount for display, e.g. €13.00 (en), Rs 2,100 (PKR, whole rupees); digits are always Latin. */
 export function formatPrice(amount: number, currency = "EUR", locale = "en"): string {
   try {
     if (currency === "PKR") {
@@ -12,7 +12,7 @@ export function formatPrice(amount: number, currency = "EUR", locale = "en"): st
       // shortcut: ICU data varies; drop when en-PK symbol is stable
       return text.replace(/^PKR\s*/, "Rs ");
     }
-    return new Intl.NumberFormat(locale, { style: "currency", currency }).format(amount);
+    return new Intl.NumberFormat(locale, { style: "currency", currency, numberingSystem: "latn" }).format(amount);
   } catch {
     return `${currency} ${amount.toFixed(2)}`;
   }

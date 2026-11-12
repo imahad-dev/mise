@@ -199,6 +199,12 @@
     font-family: "Inter Variable", Inter, system-ui, sans-serif;
     font-variant-numeric: tabular-nums;
   }
+
+  /* Money reads left to right in Latin digits inside Urdu and Arabic text. */
+  [dir="rtl"] .figure {
+    direction: ltr;
+    unicode-bidi: isolate;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

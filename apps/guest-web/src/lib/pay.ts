@@ -153,9 +153,9 @@ export function payForwardThanks(bill: GuestBill, dict: TranslationDict): string
   return bill.status === "settled" && n > 0 ? dict.bill.payForward.replace("{count}", String(n)) : null;
 }
 
-/** A rate as a fraction ("0.125") to a percentage in the guest's language: "12.5" (en), "12,5" (it). */
+/** A rate as a fraction ("0.125") to a percentage in the guest's language, always in Latin digits: "12.5". */
 export const percent = (rate: string, lang: string) =>
-  new Intl.NumberFormat(lang, { maximumFractionDigits: 2 }).format(Number(rate) * 100);
+  new Intl.NumberFormat(lang, { maximumFractionDigits: 2, numberingSystem: "latn" }).format(Number(rate) * 100);
 
 /** What the guest pays for a method: the method total plus the optional service when chosen. */
 export const payTotal = (m: MethodPreview, serviceAmount: string, withService: boolean) =>
