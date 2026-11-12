@@ -34,6 +34,7 @@ describe("i18n dictionary and fallback mechanism", () => {
 
   it("includes the mandatory 'please confirm with staff' notice", () => {
     expect(en.staffNotice).toContain("confirm all allergen risks with staff");
+    expect(ur.staffNotice).toContain("عملے سے");
   });
 });
 

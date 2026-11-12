@@ -29,7 +29,7 @@ describe("CodeEntry", () => {
   it("uses only everyday words on screen", () => {
     for (const dict of [en, ur]) {
       const text = Object.values(dict.order).join(" ").toLowerCase();
-      for (const word of ["server", "session", "sitting", "approval", "pending", "code", "error", "sessione"]) {
+      for (const word of ["server", "session", "sitting", "approval", "pending", "code", "error", "sessione", "سیشن", "کوڈ", "سرور", "منظوری", "زیر التواء"]) {
         expect(text).not.toContain(word);
       }
     }
