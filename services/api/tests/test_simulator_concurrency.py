@@ -45,7 +45,7 @@ async def committed_restaurant():
                 name="Concurrency Trattoria",
                 slug=slug,
                 timezone="Europe/Rome",
-                languages=["en", "it"],
+                languages=["en", "ur"],
                 default_language="en",
                 currency="EUR",
             )

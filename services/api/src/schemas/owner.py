@@ -202,7 +202,7 @@ class MenuIngestRequest(BaseModel):
     """Request to analyze a menu photo or text via AI."""
 
     image_url: str
-    language: str = "it"
+    language: Literal["en", "ur", "ar"] = "en"
 
 
 class AIMenuItemParsed(BaseModel):

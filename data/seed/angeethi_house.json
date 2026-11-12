@@ -18,7 +18,8 @@
     "timezone": "Asia/Karachi",
     "currency": "PKR",
     "languages": [
-      "en"
+      "en",
+      "ur"
     ],
     "default_language": "en",
     "active": true

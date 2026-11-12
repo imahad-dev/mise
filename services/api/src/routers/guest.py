@@ -98,13 +98,31 @@ def _session_fields(s: GuestSession) -> dict:
     }
 
 
+VENUE_COLUMNS = (Restaurant.slug, Restaurant.name, Restaurant.languages, Restaurant.default_language)
+
+
+def _venue(row) -> GuestVenue:
+    return GuestVenue(
+        slug=row.slug,
+        name=row.name,
+        languages=list(row.languages),
+        default_language=row.default_language,
+    )
+
+
+def _offered(venue: GuestVenue, language: str) -> str:
+    if language not in venue.languages:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY, detail="This venue does not offer that language"
+        )
+    return language
+
+
 async def venue_of(db: AsyncSession, restaurant_id: uuid.UUID) -> GuestVenue:
     row = (
-        await db.execute(
-            select(Restaurant.slug, Restaurant.name).where(Restaurant.id == restaurant_id)
-        )
+        await db.execute(select(*VENUE_COLUMNS).where(Restaurant.id == restaurant_id))
     ).one()
-    return GuestVenue(slug=row.slug, name=row.name)
+    return _venue(row)
 
 
 @router.post(
@@ -113,6 +131,7 @@ async def venue_of(db: AsyncSession, restaurant_id: uuid.UUID) -> GuestVenue:
     status_code=status.HTTP_201_CREATED,
     responses={
         404: {"description": "Unknown QR token"},
+        422: {"description": "Language not offered by this venue"},
         429: {"description": "Too many new sessions from this address"},
     },
 )
@@ -142,11 +161,13 @@ async def create_guest_session(
             detail="Unknown QR token",
         )
 
+    venue = await venue_of(db, table.restaurant_id)
+    language = _offered(venue, payload.language or venue.default_language)
     expires_at = datetime.now(UTC) + timedelta(hours=4)
     guest_session = GuestSession(
         restaurant_id=table.restaurant_id,
         table_id=table.id,
-        language=payload.language,
+        language=language,
         dietary_preferences=list(payload.dietary_preferences),
         allergens_to_avoid=list(payload.allergens_to_avoid),
         expires_at=expires_at,
@@ -158,7 +179,7 @@ async def create_guest_session(
 
     set_guest_cookie(response, guest_session.id)
     return GuestSessionResponse.model_validate(
-        {**_session_fields(guest_session), "venue": await venue_of(db, guest_session.restaurant_id)}
+        {**_session_fields(guest_session), "venue": venue}
     )
 
 
@@ -176,14 +197,14 @@ async def venue_for_qr(qr_token: str, db: AsyncSession = Depends(get_db)) -> Gue
     _refuse_nul(qr_token)
     row = (
         await db.execute(
-            select(Restaurant.slug, Restaurant.name)
+            select(*VENUE_COLUMNS)
             .join(DiningTable, DiningTable.restaurant_id == Restaurant.id)
             .where(DiningTable.qr_token == qr_token)
         )
     ).one_or_none()
     if row is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Unknown QR token")
-    return GuestVenue(slug=row.slug, name=row.name)
+    return _venue(row)
 
 
 @router.get(
@@ -231,7 +252,10 @@ async def get_guest_session(
     "/session",
     response_model=GuestSessionResponse,
     status_code=status.HTTP_200_OK,
-    responses={401: {"description": "Unauthenticated or expired session"}},
+    responses={
+        401: {"description": "Unauthenticated or expired session"},
+        422: {"description": "Language not offered by this venue"},
+    },
 )
 async def patch_guest_session(
     payload: PatchGuestSessionRequest,
@@ -239,8 +263,9 @@ async def patch_guest_session(
     db: AsyncSession = Depends(get_db),
 ) -> GuestSessionResponse:
     """Update language, dietary preferences, or allergens to avoid for the session."""
+    venue = await venue_of(db, session.restaurant_id)
     if payload.language is not None:
-        session.language = payload.language
+        session.language = _offered(venue, payload.language)
     if payload.dietary_preferences is not None:
         session.dietary_preferences = list(payload.dietary_preferences)
     if payload.allergens_to_avoid is not None:
@@ -248,8 +273,7 @@ async def patch_guest_session(
 
     await db.commit()
     await db.refresh(session)
-    return GuestSessionResponse.model_validate(
-        {**_session_fields(session), "venue": await venue_of(db, session.restaurant_id)}
+    return GuestSessionResponse.model_validate({**_session_fields(session), "venue": venue}
     )
 
 

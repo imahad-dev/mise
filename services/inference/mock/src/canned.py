@@ -12,9 +12,9 @@ MENU_ANALYSIS = {
 }
 
 TRANSLATION = {
-    "language": "it",
-    "name": "Pizza Margherita",
-    "description": "Pizza classica con pomodoro, mozzarella e basilico fresco",
+    "language": "ur",
+    "name": "پیزا مارگریٹا",
+    "description": "ٹماٹر، موزاریلا اور تازہ تلسی کے ساتھ کلاسک پیزا",
 }
 
 DAILY_BRIEF = {

@@ -20,7 +20,7 @@ async def _create_test_restaurant(db: AsyncSession, slug: str | None = None) -> 
         text(
             """
             INSERT INTO restaurant (id, name, slug, languages, default_language)
-            VALUES (:id, 'Test Trattoria', :slug, ARRAY['en', 'it'], 'it')
+            VALUES (:id, 'Test Trattoria', :slug, ARRAY['en', 'ur'], 'ur')
             """
         ),
         {"id": rest_id, "slug": rest_slug},
@@ -59,7 +59,7 @@ async def _create_test_session(db: AsyncSession, restaurant_id: str) -> str:
                 id, restaurant_id, language, expires_at
             )
             VALUES (
-                :id, :restaurant_id, 'it', now() + interval '2 hours'
+                :id, :restaurant_id, 'ur', now() + interval '2 hours'
             )
             """
         ),
@@ -113,7 +113,7 @@ async def test_restaurant_default_language_not_in_languages(db_session: AsyncSes
     """CHECK constraint: default_language = ANY(languages) IS TRUE."""
     sql = """
     INSERT INTO restaurant (name, slug, languages, default_language)
-    VALUES ('Bad Lang', 'bad-lang', ARRAY['it'], 'fr')
+    VALUES ('Bad Lang', 'bad-lang', ARRAY['ur'], 'fr')
     """
     await assert_violates(db_session, sql, None, "chk_restaurant_default_language")
 
@@ -504,21 +504,21 @@ async def test_menu_translation_duplicate_item_language_rejected(db_session: Asy
     rest_id = await _create_test_restaurant(db_session)
     item_id = await _create_test_menu_item(db_session, rest_id)
 
-    # First translation for 'it'
+    # First translation for 'ur'
     await db_session.execute(
         text(
             """
             INSERT INTO menu_translation (menu_item_id, language, name)
-            VALUES (:item_id, 'it', 'Primo Nome')
+            VALUES (:item_id, 'ur', 'Primo Nome')
             """
         ),
         {"item_id": item_id},
     )
 
-    # Second translation for 'it' on same item must fail
+    # Second translation for 'ur' on same item must fail
     sql = """
     INSERT INTO menu_translation (menu_item_id, language, name)
-    VALUES (:item_id, 'it', 'Secondo Nome')
+    VALUES (:item_id, 'ur', 'Secondo Nome')
     """
     await assert_violates(db_session, sql, {"item_id": item_id}, "menu_translation_item_lang_key")
 

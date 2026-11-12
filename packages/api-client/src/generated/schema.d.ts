@@ -1550,12 +1550,8 @@ export interface components {
         CreateGuestSessionRequest: {
             /** Qr Token */
             qr_token: string;
-            /**
-             * Language
-             * @default en
-             * @enum {string}
-             */
-            language: "en" | "it";
+            /** Language */
+            language?: ("en" | "ur" | "ar") | null;
             /**
              * Dietary Preferences
              * @default []
@@ -2071,13 +2067,17 @@ export interface components {
         };
         /**
          * GuestVenue
-         * @description The scanned venue as a guest may see it: its public slug and name, nothing else.
+         * @description The scanned venue as a guest may see it: public slug, name and offered languages.
          */
         GuestVenue: {
             /** Slug */
             slug: string;
             /** Name */
             name: string;
+            /** Languages */
+            languages: string[];
+            /** Default Language */
+            default_language: string;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -2301,9 +2301,10 @@ export interface components {
             image_url: string;
             /**
              * Language
-             * @default it
+             * @default en
+             * @enum {string}
              */
-            language: string;
+            language: "en" | "ur" | "ar";
         };
         /**
          * MenuIngestResponse
@@ -2682,7 +2683,7 @@ export interface components {
         /** PatchGuestSessionRequest */
         PatchGuestSessionRequest: {
             /** Language */
-            language?: ("en" | "it") | null;
+            language?: ("en" | "ur" | "ar") | null;
             /** Dietary Preferences */
             dietary_preferences?: ("vegetarian" | "vegan" | "gluten_free")[] | null;
             /** Allergens To Avoid */
@@ -3444,14 +3445,12 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Validation Error */
+            /** @description Language not offered by this venue */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
+                content?: never;
             };
             /** @description Too many new sessions from this address */
             429: {
@@ -3556,14 +3555,12 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Validation Error */
+            /** @description Language not offered by this venue */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
+                content?: never;
             };
         };
     };
