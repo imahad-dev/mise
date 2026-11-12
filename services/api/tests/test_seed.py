@@ -77,14 +77,14 @@ async def test_seed_data_idempotent_and_stable_tokens(db_session: AsyncSession):
     )
     assert res_items.scalar() == 27
 
-    # 4. Assert exactly 27 menu translations (EN for each item) for this restaurant
+    # 4. Assert exactly 54 menu translations (EN and UR for each item) for this restaurant
     res_trans = await db_session.execute(
         select(func.count())
         .select_from(MenuTranslation)
         .join(MenuItem, MenuTranslation.menu_item_id == MenuItem.id)
         .where(MenuItem.restaurant_id == restaurant.id)
     )
-    assert res_trans.scalar() == 27
+    assert res_trans.scalar() == 54
 
     # 5. Assert every item is unverified (allergen_verified is False) for this restaurant
     res_unverified = await db_session.execute(

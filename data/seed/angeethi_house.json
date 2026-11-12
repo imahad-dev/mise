@@ -144,6 +144,10 @@
       "featured": false,
       "sort_order": 1,
       "translations": {
+        "ur": {
+          "name": "چکن تکہ",
+          "description": "دہی اور مصالحوں میں میرینیٹ کیا ہوا چکن لیگ پیس، کوئلوں پر گرل کیا ہوا"
+        },
         "en": {
           "name": "Chicken Tikka",
           "description": "Chargrilled chicken leg piece marinated in yogurt and spices"
@@ -172,6 +176,10 @@
       "featured": false,
       "sort_order": 2,
       "translations": {
+        "ur": {
+          "name": "سیخ کباب",
+          "description": "تندور سے بیف قیمے کے چار سیخ کباب"
+        },
         "en": {
           "name": "Seekh Kebab",
           "description": "Four skewered minced-beef kebabs from the tandoor"
@@ -202,6 +210,10 @@
       "featured": false,
       "sort_order": 3,
       "translations": {
+        "ur": {
+          "name": "ملائی بوٹی",
+          "description": "کریمی، ہلکے مصالحے والی بون لیس چکن بوٹیاں"
+        },
         "en": {
           "name": "Malai Boti",
           "description": "Creamy, mildly spiced boneless chicken cubes"
@@ -210,11 +222,17 @@
       "options": [
         {
           "label": "Half plate",
+          "translations": {
+            "ur": "ہاف پلیٹ"
+          },
           "price": 950,
           "unit_cost": 430
         },
         {
           "label": "Full plate",
+          "translations": {
+            "ur": "فل پلیٹ"
+          },
           "price": 1800,
           "unit_cost": 810
         }
@@ -246,6 +264,10 @@
       "featured": true,
       "sort_order": 4,
       "translations": {
+        "ur": {
+          "name": "چکن کڑاہی",
+          "description": "ٹماٹر، ادرک اور ہری مرچ کے ساتھ کڑاہی میں پکا چکن"
+        },
         "en": {
           "name": "Chicken Karahi",
           "description": "Wok-cooked chicken with tomato, ginger and green chilli"
@@ -254,11 +276,17 @@
       "options": [
         {
           "label": "½ kg",
+          "translations": {
+            "ur": "آدھا کلو"
+          },
           "price": 1100,
           "unit_cost": 500
         },
         {
           "label": "1 kg",
+          "translations": {
+            "ur": "ایک کلو"
+          },
           "price": 2100,
           "unit_cost": 950
         }
@@ -271,24 +299,36 @@
       "choice_groups": [
         {
           "label": "Spice",
+          "translations": {
+            "ur": "مرچ"
+          },
           "kind": "pick",
           "min_select": 1,
           "max_select": 1,
           "choices": [
             {
               "label": "Mild",
+              "translations": {
+                "ur": "ہلکی"
+              },
               "allergen_verified": true,
               "is_vegetarian": true,
               "is_vegan": true
             },
             {
               "label": "Medium",
+              "translations": {
+                "ur": "درمیانی"
+              },
               "allergen_verified": true,
               "is_vegetarian": true,
               "is_vegan": true
             },
             {
               "label": "Hot",
+              "translations": {
+                "ur": "تیز"
+              },
               "allergen_verified": true,
               "is_vegetarian": true,
               "is_vegan": true
@@ -297,24 +337,36 @@
         },
         {
           "label": "Leave out",
+          "translations": {
+            "ur": "یہ نہ ڈالیں"
+          },
           "kind": "leave_out",
           "min_select": 0,
           "max_select": 3,
           "choices": [
             {
               "label": "Onions",
+              "translations": {
+                "ur": "پیاز"
+              },
               "allergen_verified": true,
               "is_vegetarian": true,
               "is_vegan": true
             },
             {
               "label": "Green chilli",
+              "translations": {
+                "ur": "ہری مرچ"
+              },
               "allergen_verified": true,
               "is_vegetarian": true,
               "is_vegan": true
             },
             {
               "label": "Ginger",
+              "translations": {
+                "ur": "ادرک"
+              },
               "allergen_verified": true,
               "is_vegetarian": true,
               "is_vegan": true
@@ -344,6 +396,10 @@
       "featured": false,
       "sort_order": 5,
       "translations": {
+        "ur": {
+          "name": "مٹن کڑاہی",
+          "description": "ٹماٹر، ادرک اور کالی مرچ کے ساتھ کڑاہی میں پکا مٹن"
+        },
         "en": {
           "name": "Mutton Karahi",
           "description": "Wok-cooked mutton with tomato, ginger and black pepper"
@@ -352,11 +408,17 @@
       "options": [
         {
           "label": "½ kg",
+          "translations": {
+            "ur": "آدھا کلو"
+          },
           "price": 2300,
           "unit_cost": 1060
         },
         {
           "label": "1 kg",
+          "translations": {
+            "ur": "ایک کلو"
+          },
           "price": 4500,
           "unit_cost": 2070
         }
@@ -369,24 +431,36 @@
       "choice_groups": [
         {
           "label": "Spice",
+          "translations": {
+            "ur": "مرچ"
+          },
           "kind": "pick",
           "min_select": 1,
           "max_select": 1,
           "choices": [
             {
               "label": "Mild",
+              "translations": {
+                "ur": "ہلکی"
+              },
               "allergen_verified": true,
               "is_vegetarian": true,
               "is_vegan": true
             },
             {
               "label": "Medium",
+              "translations": {
+                "ur": "درمیانی"
+              },
               "allergen_verified": true,
               "is_vegetarian": true,
               "is_vegan": true
             },
             {
               "label": "Hot",
+              "translations": {
+                "ur": "تیز"
+              },
               "allergen_verified": true,
               "is_vegetarian": true,
               "is_vegan": true
@@ -395,24 +469,36 @@
         },
         {
           "label": "Leave out",
+          "translations": {
+            "ur": "یہ نہ ڈالیں"
+          },
           "kind": "leave_out",
           "min_select": 0,
           "max_select": 3,
           "choices": [
             {
               "label": "Onions",
+              "translations": {
+                "ur": "پیاز"
+              },
               "allergen_verified": true,
               "is_vegetarian": true,
               "is_vegan": true
             },
             {
               "label": "Green chilli",
+              "translations": {
+                "ur": "ہری مرچ"
+              },
               "allergen_verified": true,
               "is_vegetarian": true,
               "is_vegan": true
             },
             {
               "label": "Ginger",
+              "translations": {
+                "ur": "ادرک"
+              },
               "allergen_verified": true,
               "is_vegetarian": true,
               "is_vegan": true
@@ -444,6 +530,10 @@
       "featured": false,
       "sort_order": 6,
       "translations": {
+        "ur": {
+          "name": "چکن وائٹ کڑاہی",
+          "description": "کریم اور دہی کی گریوی میں سفید مرچ کے ساتھ چکن"
+        },
         "en": {
           "name": "Chicken White Karahi",
           "description": "Chicken in a cream and yogurt gravy with white pepper"
@@ -452,11 +542,17 @@
       "options": [
         {
           "label": "½ kg",
+          "translations": {
+            "ur": "آدھا کلو"
+          },
           "price": 1250,
           "unit_cost": 560
         },
         {
           "label": "1 kg",
+          "translations": {
+            "ur": "ایک کلو"
+          },
           "price": 2400,
           "unit_cost": 1080
         }
@@ -490,6 +586,10 @@
       "featured": false,
       "sort_order": 7,
       "translations": {
+        "ur": {
+          "name": "بون لیس چکن ہانڈی",
+          "description": "کریم کے ساتھ مٹی کی ہانڈی میں دھیمی آنچ پر پکا بون لیس چکن"
+        },
         "en": {
           "name": "Boneless Chicken Handi",
           "description": "Boneless chicken slow-cooked in a clay pot with cream"
@@ -498,11 +598,17 @@
       "options": [
         {
           "label": "Half",
+          "translations": {
+            "ur": "ہاف"
+          },
           "price": 1050,
           "unit_cost": 470
         },
         {
           "label": "Full",
+          "translations": {
+            "ur": "فل"
+          },
           "price": 1950,
           "unit_cost": 880
         }
@@ -536,6 +642,10 @@
       "featured": false,
       "sort_order": 8,
       "translations": {
+        "ur": {
+          "name": "مکھنی ہانڈی",
+          "description": "مکھن دار ٹماٹر اور کریم کی گریوی میں چکن"
+        },
         "en": {
           "name": "Makhni Handi",
           "description": "Chicken in a buttery tomato and cream gravy"
@@ -544,11 +654,17 @@
       "options": [
         {
           "label": "Half",
+          "translations": {
+            "ur": "ہاف"
+          },
           "price": 1150,
           "unit_cost": 500
         },
         {
           "label": "Full",
+          "translations": {
+            "ur": "فل"
+          },
           "price": 2150,
           "unit_cost": 950
         }
@@ -582,6 +698,10 @@
       "featured": false,
       "sort_order": 9,
       "translations": {
+        "ur": {
+          "name": "دال ماش",
+          "description": "لہسن اور مکھن کے تڑکے والی سفید دال"
+        },
         "en": {
           "name": "Daal Mash",
           "description": "White lentils finished with a garlic and butter tarka"
@@ -610,6 +730,10 @@
       "featured": false,
       "sort_order": 10,
       "translations": {
+        "ur": {
+          "name": "مکس سبزی",
+          "description": "پیاز اور ٹماٹر کے ساتھ پکی موسمی سبزیاں"
+        },
         "en": {
           "name": "Mix Sabzi",
           "description": "Seasonal vegetables cooked with onion and tomato"
@@ -640,6 +764,10 @@
       "featured": false,
       "sort_order": 11,
       "translations": {
+        "ur": {
+          "name": "پالک پنیر",
+          "description": "تازہ پنیر کے ٹکڑوں کے ساتھ پکی پالک"
+        },
         "en": {
           "name": "Palak Paneer",
           "description": "Spinach cooked with cubes of fresh cheese"
@@ -670,6 +798,10 @@
       "featured": false,
       "sort_order": 12,
       "translations": {
+        "ur": {
+          "name": "چکن بریانی",
+          "description": "میرینیٹ کیے ہوئے چکن کے ساتھ تہہ دار، مصالحے دار باسمتی چاول"
+        },
         "en": {
           "name": "Chicken Biryani",
           "description": "Spiced basmati rice layered with marinated chicken"
@@ -678,11 +810,17 @@
       "options": [
         {
           "label": "Single",
+          "translations": {
+            "ur": "سنگل"
+          },
           "price": 450,
           "unit_cost": 170
         },
         {
           "label": "Double",
+          "translations": {
+            "ur": "ڈبل"
+          },
           "price": 820,
           "unit_cost": 310
         }
@@ -713,6 +851,10 @@
       "featured": false,
       "sort_order": 13,
       "translations": {
+        "ur": {
+          "name": "مٹن پلاؤ",
+          "description": "مٹن کی یخنی اور ثابت مصالحوں میں پکے باسمتی چاول"
+        },
         "en": {
           "name": "Mutton Pulao",
           "description": "Basmati rice cooked in mutton stock with whole spices"
@@ -721,11 +863,17 @@
       "options": [
         {
           "label": "Single",
+          "translations": {
+            "ur": "سنگل"
+          },
           "price": 650,
           "unit_cost": 290
         },
         {
           "label": "Double",
+          "translations": {
+            "ur": "ڈبل"
+          },
           "price": 1200,
           "unit_cost": 540
         }
@@ -756,6 +904,10 @@
       "featured": false,
       "sort_order": 14,
       "translations": {
+        "ur": {
+          "name": "روٹی",
+          "description": "تندور سے گندم کے آٹے کی روٹی"
+        },
         "en": {
           "name": "Roti",
           "description": "Whole-wheat flatbread from the tandoor"
@@ -786,6 +938,10 @@
       "featured": false,
       "sort_order": 15,
       "translations": {
+        "ur": {
+          "name": "نان",
+          "description": "تندور سے خمیری نان"
+        },
         "en": {
           "name": "Naan",
           "description": "Leavened flatbread from the tandoor"
@@ -817,6 +973,10 @@
       "featured": false,
       "sort_order": 16,
       "translations": {
+        "ur": {
+          "name": "گارلک نان",
+          "description": "لہسن والے مکھن سے چپڑا نان"
+        },
         "en": {
           "name": "Garlic Naan",
           "description": "Naan brushed with garlic butter"
@@ -847,6 +1007,10 @@
       "featured": false,
       "sort_order": 17,
       "translations": {
+        "ur": {
+          "name": "چیز نان",
+          "description": "پگھلے ہوئے چیز سے بھرا نان"
+        },
         "en": {
           "name": "Cheese Naan",
           "description": "Naan stuffed with melted cheese"
@@ -876,6 +1040,10 @@
       "featured": false,
       "sort_order": 18,
       "translations": {
+        "ur": {
+          "name": "رائتہ",
+          "description": "زیرے کے ساتھ پھینٹا ہوا دہی"
+        },
         "en": {
           "name": "Raita",
           "description": "Whipped yogurt with cumin"
@@ -904,6 +1072,10 @@
       "featured": false,
       "sort_order": 19,
       "translations": {
+        "ur": {
+          "name": "فریش سلاد",
+          "description": "کھیرا، ٹماٹر، پیاز اور لیموں"
+        },
         "en": {
           "name": "Fresh Salad",
           "description": "Cucumber, tomato, onion and lemon"
@@ -936,6 +1108,10 @@
       "featured": false,
       "sort_order": 20,
       "translations": {
+        "ur": {
+          "name": "کھیر",
+          "description": "الائچی اور بادام والی چاول کی کھیر"
+        },
         "en": {
           "name": "Kheer",
           "description": "Rice pudding with cardamom and almonds"
@@ -967,6 +1143,10 @@
       "featured": false,
       "sort_order": 21,
       "translations": {
+        "ur": {
+          "name": "گلاب جامن",
+          "description": "گلاب کے شیرے میں کھوئے کے دو گلاب جامن"
+        },
         "en": {
           "name": "Gulab Jamun",
           "description": "Two milk-solid dumplings in rose syrup"
@@ -996,6 +1176,10 @@
       "featured": false,
       "sort_order": 22,
       "translations": {
+        "ur": {
+          "name": "میٹھی لسی",
+          "description": "ٹھنڈا، میٹھا دہی کا مشروب"
+        },
         "en": {
           "name": "Sweet Lassi",
           "description": "Chilled sweetened yogurt drink"
@@ -1023,6 +1207,10 @@
       "featured": false,
       "sort_order": 23,
       "translations": {
+        "ur": {
+          "name": "فریش لائم",
+          "description": "چینی اور سوڈے کے ساتھ تازہ لیموں"
+        },
         "en": {
           "name": "Fresh Lime",
           "description": "Fresh lime with sugar and soda"
@@ -1048,6 +1236,10 @@
       "featured": false,
       "sort_order": 24,
       "translations": {
+        "ur": {
+          "name": "سافٹ ڈرنک",
+          "description": "بوتل میں سافٹ ڈرنک"
+        },
         "en": {
           "name": "Soft Drink",
           "description": "Bottled soft drink"
@@ -1056,11 +1248,17 @@
       "options": [
         {
           "label": "Regular",
+          "translations": {
+            "ur": "ریگولر"
+          },
           "price": 150,
           "unit_cost": 70
         },
         {
           "label": "1.5 L",
+          "translations": {
+            "ur": "ڈیڑھ لیٹر"
+          },
           "price": 380,
           "unit_cost": 200
         }
@@ -1089,6 +1287,10 @@
       "featured": false,
       "sort_order": 25,
       "translations": {
+        "ur": {
+          "name": "منرل واٹر",
+          "description": "بوتل میں منرل واٹر"
+        },
         "en": {
           "name": "Mineral Water",
           "description": "Bottled mineral water"
@@ -1097,11 +1299,17 @@
       "options": [
         {
           "label": "Small",
+          "translations": {
+            "ur": "سمال"
+          },
           "price": 100,
           "unit_cost": 45
         },
         {
           "label": "Large",
+          "translations": {
+            "ur": "لارج"
+          },
           "price": 180,
           "unit_cost": 85
         }
@@ -1134,6 +1342,10 @@
       "featured": false,
       "sort_order": 26,
       "translations": {
+        "ur": {
+          "name": "دودھ پتی چائے",
+          "description": "دودھ میں پکی ہوئی چائے"
+        },
         "en": {
           "name": "Doodh Patti Chai",
           "description": "Tea simmered in milk"
@@ -1143,12 +1355,18 @@
       "choice_groups": [
         {
           "label": "Sugar",
+          "translations": {
+            "ur": "چینی"
+          },
           "kind": "pick",
           "min_select": 1,
           "max_select": 1,
           "choices": [
             {
               "label": "Normal",
+              "translations": {
+                "ur": "نارمل"
+              },
               "allergen_verified": true,
               "is_vegetarian": true,
               "is_vegan": true,
@@ -1156,12 +1374,18 @@
             },
             {
               "label": "Less",
+              "translations": {
+                "ur": "کم"
+              },
               "allergen_verified": true,
               "is_vegetarian": true,
               "is_vegan": true
             },
             {
               "label": "No sugar",
+              "translations": {
+                "ur": "بغیر چینی"
+              },
               "allergen_verified": true,
               "is_vegetarian": true,
               "is_vegan": true
@@ -1170,12 +1394,18 @@
         },
         {
           "label": "Extras",
+          "translations": {
+            "ur": "اضافی"
+          },
           "kind": "add",
           "min_select": 0,
           "max_select": 1,
           "choices": [
             {
               "label": "Extra milk",
+              "translations": {
+                "ur": "اضافی دودھ"
+              },
               "price_delta": 50,
               "cost_delta": 15,
               "allergens": [
@@ -1211,6 +1441,10 @@
       "featured": false,
       "sort_order": 27,
       "translations": {
+        "ur": {
+          "name": "کسی اور کے نام چائے",
+          "description": "ضرورت مند کے لیے ایک چائے — ہم یہ مفت دیتے ہیں، کوئی سوال نہیں پوچھا جاتا۔"
+        },
         "en": {
           "name": "Pay-it-forward chai",
           "description": "A chai for someone who needs it — we hand it out free, no questions asked."
