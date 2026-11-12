@@ -115,8 +115,9 @@ export default function MenuIngestPage() {
                 onChange={(e) => setLanguage(e.target.value)}
                 className="w-full min-h-[44px] px-3.5 py-2.5 rounded-xl bg-paper border border-line text-sm text-ink focus:outline-none focus:border-terracotta"
               >
-                <option value="it">Italian (Italiano)</option>
                 <option value="en">English</option>
+                <option value="ur">Urdu (اردو)</option>
+                <option value="ar">Arabic (العربية)</option>
               </select>
             </div>
           </div>
