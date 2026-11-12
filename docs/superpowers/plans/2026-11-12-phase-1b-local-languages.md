@@ -847,7 +847,7 @@ export const ur: TranslationDict = {
     cartTitle: "آپ کا آرڈر",
     placeOrder: "آرڈر کی تصدیق کریں",
     allergenWarningTitle: "الرجی کی تنبیہ",
-    allergenAckCheckbox: "میں نے عملے سے بات کر لی ہے اور الرجی کے خطرات سمجھتا/سمجھتی ہوں",
+    allergenAckCheckbox: "میں نے عملے سے بات کر لی ہے اور اس آرڈر کے الرجی کے خطرات سمجھتا/سمجھتی ہوں",
     backToMenu: "مینو پر واپس",
     // …every remaining ui key, translated
   },
@@ -1296,7 +1296,7 @@ const VIEW_MENU: Record<string, string> = { en: "View Menu", ur: "مینو دی�
 const CONFIRM: Record<string, string> = { en: "Confirm Order", ur: "آرڈر کی تصدیق کریں" };
 const ACK: Record<string, string> = {
   en: "I have spoken with staff and understand the allergen risks",
-  ur: "میں نے عملے سے بات کر لی ہے اور الرجی کے خطرات سمجھتا/سمجھتی ہوں",
+  ur: "میں نے عملے سے بات کر لی ہے اور اس آرڈر کے الرجی کے خطرات سمجھتا/سمجھتی ہوں",
 };
 
 export async function openTableMenu(page: Page, qrToken: string, lang: "en" | "ur" = "en") {
