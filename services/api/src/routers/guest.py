@@ -18,7 +18,7 @@ from src.inference.client import InferenceClient, get_inference_client
 from src.models.audit import AuditLog
 from src.models.bill import Bill
 from src.models.dining_table import DiningTable
-from src.models.menu import MenuChoice, MenuChoiceGroup, MenuItem
+from src.models.menu import MenuChoice, MenuChoiceGroup, MenuItem, MenuItemOption
 from src.models.order import Order
 from src.models.pay_forward import PayForward
 from src.models.restaurant import Restaurant
@@ -277,7 +277,11 @@ async def patch_guest_session(
     return GuestSessionResponse.model_validate({**_session_fields(session), "venue": venue})
 
 
-def _guest_choice(c: MenuChoice, avoid: list[str]) -> GuestMenuChoice:
+def _label(obj: MenuItemOption | MenuChoiceGroup | MenuChoice, language: str) -> str:
+    return (obj.translations or {}).get(language) or obj.label
+
+
+def _guest_choice(c: MenuChoice, avoid: list[str], language: str) -> GuestMenuChoice:
     status_val = compute_allergen_status(
         item_allergens=c.allergens,
         allergen_verified=c.allergen_verified,
@@ -285,7 +289,7 @@ def _guest_choice(c: MenuChoice, avoid: list[str]) -> GuestMenuChoice:
     )
     return GuestMenuChoice(
         id=c.id,
-        label=c.label,
+        label=_label(c, language),
         price_delta=c.price_delta,
         allergens=c.allergens,
         is_vegetarian=c.is_vegetarian,
@@ -385,16 +389,20 @@ async def get_guest_menu(
                 allergen_status=status_val,
                 matched_allergens=matched_allergens,
                 options=[
-                    GuestMenuOption(id=o.id, label=o.label, price=o.price) for o in item.options
+                    GuestMenuOption(id=o.id, label=_label(o, session.language), price=o.price)
+                    for o in item.options
                 ],
                 choice_groups=[
                     GuestMenuChoiceGroup(
                         id=g.id,
-                        label=g.label,
+                        label=_label(g, session.language),
                         kind=g.kind,
                         min_select=g.min_select,
                         max_select=g.max_select,
-                        choices=[_guest_choice(c, session.allergens_to_avoid) for c in g.choices],
+                        choices=[
+                            _guest_choice(c, session.allergens_to_avoid, session.language)
+                            for c in g.choices
+                        ],
                     )
                     for g in item.choice_groups
                 ],

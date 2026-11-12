@@ -17,7 +17,7 @@ from sqlalchemy import (
     func,
     text,
 )
-from sqlalchemy.dialects.postgresql import ARRAY, UUID
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.database import Base
@@ -178,6 +178,10 @@ class MenuItemOption(Base):
         nullable=False,
     )
     label: Mapped[str] = mapped_column(Text, nullable=False)
+    # {"ur": "…"}: what the guest sees in that language; kitchen, tickets and bills keep `label`.
+    translations: Mapped[dict[str, str]] = mapped_column(
+        JSONB, nullable=False, server_default=text("'{}'::jsonb"), default=dict
+    )
     price: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     unit_cost: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
@@ -259,6 +263,10 @@ class MenuChoiceGroup(Base):
         UUID(as_uuid=True), ForeignKey("menu_item.id", ondelete="CASCADE"), nullable=False
     )
     label: Mapped[str] = mapped_column(Text, nullable=False)
+    # {"ur": "…"}: what the guest sees in that language; kitchen, tickets and bills keep `label`.
+    translations: Mapped[dict[str, str]] = mapped_column(
+        JSONB, nullable=False, server_default=text("'{}'::jsonb"), default=dict
+    )
     kind: Mapped[str] = mapped_column(Text, nullable=False)
     min_select: Mapped[int] = mapped_column(Integer, nullable=False)
     max_select: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -303,6 +311,10 @@ class MenuChoice(Base):
         UUID(as_uuid=True), ForeignKey("menu_choice_group.id", ondelete="CASCADE"), nullable=False
     )
     label: Mapped[str] = mapped_column(Text, nullable=False)
+    # {"ur": "…"}: what the guest sees in that language; kitchen, tickets and bills keep `label`.
+    translations: Mapped[dict[str, str]] = mapped_column(
+        JSONB, nullable=False, server_default=text("'{}'::jsonb"), default=dict
+    )
     price_delta: Mapped[Decimal] = mapped_column(
         Numeric(10, 2), nullable=False, server_default=text("0")
     )

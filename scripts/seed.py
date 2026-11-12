@@ -139,6 +139,7 @@ async def seed_choices(
                 id=group_id,
                 menu_item_id=item_id,
                 label=g["label"],
+                translations=g.get("translations", {}),
                 kind=g["kind"],
                 min_select=g["min_select"],
                 max_select=g["max_select"],
@@ -151,6 +152,7 @@ async def seed_choices(
                     id=uuid.uuid5(SEED_ITEM_NAMESPACE, f"{group_id}:{c['label']}"),
                     group_id=group_id,
                     label=c["label"],
+                    translations=c.get("translations", {}),
                     price_delta=c.get("price_delta", 0),
                     cost_delta=c.get("cost_delta", 0),
                     allergens=c.get("allergens", []),
@@ -398,6 +400,7 @@ async def seed_data(
                 opt.label = opt_data["label"]
                 opt.price = opt_data["price"]
                 opt.unit_cost = opt_data["unit_cost"]
+                opt.translations = opt_data.get("translations", {})
                 opt.sort_order = position
             else:
                 session.add(
@@ -407,6 +410,7 @@ async def seed_data(
                         label=opt_data["label"],
                         price=opt_data["price"],
                         unit_cost=opt_data["unit_cost"],
+                        translations=opt_data.get("translations", {}),
                         sort_order=position,
                     )
                 )
