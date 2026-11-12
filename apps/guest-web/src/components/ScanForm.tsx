@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import { getDictionary, withVenue } from "../i18n";
+import { LANGUAGE_NAMES, isGuestLanguage, isRtl, type GuestLanguage } from "../i18n/languages";
 import { useVenue } from "./BrandShell";
 
 const EU14_ALLERGENS = [
@@ -26,9 +27,10 @@ const DIETS = ["vegetarian", "vegan", "gluten_free"] as const;
 
 export function ScanForm({ token }: { token: string }) {
   const router = useRouter();
-  const { slug, name, branded } = useVenue();
+  const { slug, name, branded, languages = ["en"], defaultLanguage = "en" } = useVenue();
+  const offered = languages.filter(isGuestLanguage);
 
-  const [language, setLanguage] = useState<"en" | "it">("en");
+  const [language, setLanguage] = useState<GuestLanguage>(isGuestLanguage(defaultLanguage) ? defaultLanguage : "en");
   const [dietary, setDietary] = useState<string[]>([]);
   const [allergens, setAllergens] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
@@ -84,7 +86,7 @@ export function ScanForm({ token }: { token: string }) {
   };
 
   return (
-    <div className="min-h-screen bg-paper text-ink flex flex-col justify-center px-4 py-8 sm:px-6 lg:px-8">
+    <div lang={language} dir={isRtl(language) ? "rtl" : "ltr"} className="min-h-screen bg-paper text-ink flex flex-col justify-center px-4 py-8 sm:px-6 lg:px-8">
       <div className="max-w-md w-full mx-auto space-y-6">
         {/* Header */}
         <div className="text-center space-y-2">
@@ -109,36 +111,28 @@ export function ScanForm({ token }: { token: string }) {
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Language selector */}
-          <div className="bg-card p-4 rounded-2xl border border-line space-y-2.5">
-            <label className="block text-xs font-semibold uppercase tracking-wider text-ink-muted">
-              {dict.ui.selectLanguage}
-            </label>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => setLanguage("en")}
-                className={`py-2 px-3 rounded-xl text-sm font-medium transition-all ${
-                  language === "en"
-                    ? "bg-terracotta text-cream shadow-md shadow-ink/10"
-                    : "bg-paper-2 text-ink-muted hover:bg-line"
-                }`}
-              >
-                🇬🇧 English
-              </button>
-              <button
-                type="button"
-                onClick={() => setLanguage("it")}
-                className={`py-2 px-3 rounded-xl text-sm font-medium transition-all ${
-                  language === "it"
-                    ? "bg-terracotta text-cream shadow-md shadow-ink/10"
-                    : "bg-paper-2 text-ink-muted hover:bg-line"
-                }`}
-              >
-                🇮🇹 Italiano
-              </button>
+          {/* Language selector: only the venue's own languages */}
+          {offered.length > 1 && (
+            <div className="bg-card p-4 rounded-2xl border border-line space-y-2.5">
+              <p className="block text-xs font-semibold uppercase tracking-wider text-ink-muted">{dict.ui.selectLanguage}</p>
+              <div className="grid grid-cols-2 gap-2">
+                {offered.map((code) => (
+                  <button
+                    key={code}
+                    type="button"
+                    lang={code}
+                    aria-pressed={language === code}
+                    onClick={() => setLanguage(code)}
+                    className={`py-2 px-3 rounded-xl text-sm font-medium transition-all ${
+                      language === code ? "bg-terracotta text-cream shadow-md shadow-ink/10" : "bg-paper-2 text-ink-muted hover:bg-line"
+                    }`}
+                  >
+                    {LANGUAGE_NAMES[code]}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Diet and allergen choices fold away, so most guests reach the menu in one tap. */}
           <details className="group rounded-2xl border border-line bg-card">
@@ -188,14 +182,14 @@ export function ScanForm({ token }: { token: string }) {
                     key={allergen}
                     type="button"
                     onClick={() => toggleAllergen(allergen)}
-                    className={`px-2.5 py-1.5 rounded-xl text-xs font-medium border text-left flex items-center justify-between transition-all ${
+                    className={`px-2.5 py-1.5 rounded-xl text-xs font-medium border text-start flex items-center justify-between transition-all ${
                       selected
                         ? "bg-danger-bg text-danger-fg border-danger-fg/40"
                         : "bg-paper-2 text-ink-muted border-line hover:border-ink-muted"
                     }`}
                   >
                     <span className="truncate">{dict.allergens[allergen] || allergen}</span>
-                    <span className="text-[10px] ml-1 opacity-70">
+                    <span className="text-[10px] ms-1 opacity-70">
                       {selected ? "✕" : "+"}
                     </span>
                   </button>

@@ -369,7 +369,7 @@ export default function OrderStatusPage({
             href={`/${lang}/menu`}
             className="inline-block px-5 py-2.5 rounded-xl bg-paper-2 hover:bg-paper-2 text-xs font-medium text-ink transition-all"
           >
-            ← {dict.ui.backToMenu}
+            <span aria-hidden className="inline-block rtl:-scale-x-100">←</span> {dict.ui.backToMenu}
           </Link>
         </div>
         )}

@@ -168,7 +168,7 @@ export function PaySheet({ lang, bill, orderId, open, onClose, onUpdated, onConf
         >
           <span>{figureParts(serviceLine(bill.service_charge_rate, dict.pay.service, lang), { amount: money(bill.service_charge_amount) })}</span>
           <span aria-hidden className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${withService ? "bg-terracotta" : "bg-line"}`}>
-            <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-paper shadow transition-all ${withService ? "left-[22px]" : "left-0.5"}`} />
+            <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-paper shadow transition-all ${withService ? "start-[22px]" : "start-0.5"}`} />
           </span>
         </button>
       )}

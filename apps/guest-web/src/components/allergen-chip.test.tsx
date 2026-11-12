@@ -47,4 +47,12 @@ describe("AllergenChip component", () => {
     expect(html).toContain(ur.allergenStatus.contains);
     expect(html).toContain(ur.allergens.gluten);
   });
+
+  it("joins allergen names with the Urdu comma in right-to-left locales", () => {
+    const html = renderToStaticMarkup(
+      <AllergenChip status="contains" matchedAllergens={["gluten", "crustaceans"]} locale="ur" />
+    );
+    expect(html).toContain("،");
+    expect(html).not.toContain(", ");
+  });
 });

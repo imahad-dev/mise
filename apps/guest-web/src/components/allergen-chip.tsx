@@ -3,6 +3,7 @@
 import React from "react";
 import { StatusChip } from "ui";
 import { getDictionary } from "../i18n";
+import { isRtl } from "../i18n/languages";
 
 export interface AllergenChipProps {
   status: "contains" | "unverified" | "no_declared_match" | string;
@@ -22,7 +23,7 @@ export function AllergenChip({
   if (status === "contains") {
     const names = matchedAllergens.map((a) => (dict.allergens as Record<string, string>)[a] || a);
     const label = names.length
-      ? `${dict.allergenStatus.contains}: ${names.join(", ")}`
+      ? `${dict.allergenStatus.contains}: ${names.join(isRtl(locale) ? "، " : ", ")}`
       : dict.allergenStatus.contains;
     return (
       <StatusChip tone="contains" data-testid="allergen-chip-contains" className={className}>

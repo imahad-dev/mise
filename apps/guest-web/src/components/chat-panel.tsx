@@ -73,7 +73,7 @@ export function ChatPanel({ locale = "en", docked = false }: ChatPanelProps) {
   };
 
   return (
-    <div className={docked ? "relative" : "fixed right-4 bottom-20 sm:bottom-4 z-40"}>
+    <div className={docked ? "relative" : "fixed end-4 bottom-20 sm:bottom-4 z-40"}>
       {!isOpen ? (
         <button
           onClick={() => setIsOpen(true)}

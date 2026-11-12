@@ -228,7 +228,7 @@ export function DishSheet({ item, lang, dict, formatPrice, dietary, onClose, onA
                   />
                   <span className="flex-1">
                     {c.label}
-                    {!c.available && <span className="ml-2 text-xs italic">{dict.dish.soldOut}</span>}
+                    {!c.available && <span className="ms-2 text-xs italic">{dict.dish.soldOut}</span>}
                   </span>
                   {c.allergen_status !== "no_declared_match" && (
                     <AllergenChip status={c.allergen_status} matchedAllergens={c.matched_allergens} locale={lang} />

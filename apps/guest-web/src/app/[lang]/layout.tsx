@@ -33,7 +33,7 @@ export default async function GuestLayout({
   const rtl = isRtl(lang);
   return (
     // display: contents keeps the page layout; lang and dir are inherited, and sheets (<dialog>) sit inside.
-    <div lang={lang} dir={rtl ? "rtl" : "ltr"} className={`contents ${rtl ? naskh.variable : ""}`}>
+    <div lang={lang} dir={rtl ? "rtl" : "ltr"} className={rtl ? `contents ${naskh.variable}` : "contents"}>
       <BrandShell
         key={v.slug}
         venue={{ slug: v.slug, name: v.name, languages: v.languages, defaultLanguage: v.defaultLanguage }}
