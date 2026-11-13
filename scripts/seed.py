@@ -11,6 +11,7 @@ import json
 import logging
 import secrets
 import uuid
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
@@ -205,6 +206,7 @@ async def seed_data(
             languages=rest_data.get("languages", ["en"]),
             default_language=rest_data.get("default_language", "en"),
             onboarding=rest_data.get("onboarding", {}),
+            service_charge_rate=Decimal(str(rest_data.get("service_charge_rate", "0"))),
             active=rest_data.get("active", True),
         )
         session.add(restaurant)
@@ -246,6 +248,9 @@ async def seed_data(
         restaurant.default_language = rest_data.get("default_language", "en")
         if "onboarding" in rest_data:
             restaurant.onboarding = rest_data["onboarding"]
+        restaurant.service_charge_rate = Decimal(
+            str(rest_data.get("service_charge_rate", "0"))
+        )
         restaurant.active = rest_data.get("active", True)
         await session.flush()
         print(f"Updated restaurant: {restaurant.name} ({restaurant.slug})")

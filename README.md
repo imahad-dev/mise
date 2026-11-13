@@ -175,7 +175,7 @@ make migrate
 # Seed both demo venues (menus with sizes, tables); with DEMO_MODE=true also the demo users
 make seed
 
-# Optional: 56 days of simulated demo orders and settled bills for every demo venue
+# Optional: 90 days of simulated demo orders and settled bills for every demo venue
 make simulate
 ```
 
