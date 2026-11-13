@@ -539,7 +539,7 @@ export default function GuestMenuPage({
                           {isAvailable ? (
                             <button
                               type="button"
-                              className="text-left underline-offset-2 hover:underline"
+                              className="text-start underline-offset-2 hover:underline"
                               onClick={() => setDishOpen(item)}
                             >
                               {item.name}
