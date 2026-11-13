@@ -1,0 +1,1370 @@
+{
+  "_note": "Fictional venue. Prices and costs are illustrative (2025-26 Manchester ranges), not quotes.",
+  "restaurant": {
+    "name": "Tikka Town",
+    "slug": "tikka-town",
+    "city": "Manchester",
+    "tax_jurisdiction": "GB",
+    "service_charge_rate": "0.10",
+    "service_extra_label": "More naan / chips",
+    "payment_details": {},
+    "timezone": "Europe/London",
+    "currency": "GBP",
+    "languages": [
+      "en"
+    ],
+    "default_language": "en",
+    "active": true
+  },
+  "tables": [
+    {
+      "label": "T1"
+    },
+    {
+      "label": "T2"
+    },
+    {
+      "label": "T3"
+    },
+    {
+      "label": "T4"
+    },
+    {
+      "label": "T5"
+    },
+    {
+      "label": "T6"
+    },
+    {
+      "label": "T7"
+    },
+    {
+      "label": "T8"
+    },
+    {
+      "label": "T9"
+    },
+    {
+      "label": "T10"
+    },
+    {
+      "label": "B1"
+    },
+    {
+      "label": "B2"
+    }
+  ],
+  "simulation": {
+    "lunch_rate": [
+      6,
+      6,
+      7,
+      7,
+      10,
+      16,
+      14
+    ],
+    "dinner_rate": [
+      12,
+      13,
+      14,
+      16,
+      28,
+      32,
+      20
+    ],
+    "lunch_hours": [
+      12,
+      15
+    ],
+    "dinner_hours": [
+      17,
+      23
+    ],
+    "party_size_weights": [
+      0.08,
+      0.3,
+      0.15,
+      0.27,
+      0.1,
+      0.1
+    ],
+    "dishes_per_guest": 1.7,
+    "payment_mix": [
+      [
+        "card",
+        0.85
+      ],
+      [
+        "cash",
+        0.15
+      ]
+    ]
+  },
+  "items": [
+    {
+      "key": "lamb_chops",
+      "category": "Grill",
+      "price": 15.95,
+      "unit_cost": 6.4,
+      "ingredients": [
+        "lamb chops",
+        "yogurt",
+        "ginger",
+        "garlic",
+        "mustard oil"
+      ],
+      "allergens": [
+        "milk",
+        "mustard"
+      ],
+      "allergen_verified": false,
+      "is_vegetarian": false,
+      "is_vegan": false,
+      "is_gluten_free": true,
+      "dietary_verified": false,
+      "available": true,
+      "featured": true,
+      "sort_order": 1,
+      "translations": {
+        "en": {
+          "name": "Lamb Chops",
+          "description": "Four lamb chops marinated in yogurt, ginger, garlic and mustard oil, chargrilled"
+        }
+      },
+      "sim_weight": 7,
+      "choice_groups": [
+        {
+          "label": "Spice",
+          "kind": "pick",
+          "min_select": 1,
+          "max_select": 1,
+          "choices": [
+            {
+              "label": "Mild",
+              "allergen_verified": true,
+              "is_vegetarian": true,
+              "is_vegan": true
+            },
+            {
+              "label": "Medium",
+              "allergen_verified": true,
+              "is_vegetarian": true,
+              "is_vegan": true
+            },
+            {
+              "label": "Hot",
+              "allergen_verified": true,
+              "is_vegetarian": true,
+              "is_vegan": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "seekh_kebab",
+      "category": "Grill",
+      "price": 8.5,
+      "unit_cost": 3.1,
+      "ingredients": [
+        "minced lamb",
+        "onion",
+        "green chilli",
+        "coriander",
+        "egg"
+      ],
+      "allergens": [
+        "eggs"
+      ],
+      "allergen_verified": false,
+      "is_vegetarian": false,
+      "is_vegan": false,
+      "is_gluten_free": true,
+      "dietary_verified": false,
+      "available": true,
+      "featured": false,
+      "sort_order": 2,
+      "translations": {
+        "en": {
+          "name": "Seekh Kebab",
+          "description": "Two skewers of minced lamb with onion, green chilli and coriander, bound with egg"
+        }
+      },
+      "sim_weight": 6,
+      "choice_groups": [
+        {
+          "label": "Spice",
+          "kind": "pick",
+          "min_select": 1,
+          "max_select": 1,
+          "choices": [
+            {
+              "label": "Mild",
+              "allergen_verified": true,
+              "is_vegetarian": true,
+              "is_vegan": true
+            },
+            {
+              "label": "Medium",
+              "allergen_verified": true,
+              "is_vegetarian": true,
+              "is_vegan": true
+            },
+            {
+              "label": "Hot",
+              "allergen_verified": true,
+              "is_vegetarian": true,
+              "is_vegan": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "chicken_tikka",
+      "category": "Grill",
+      "price": 8.95,
+      "unit_cost": 3.2,
+      "ingredients": [
+        "chicken",
+        "yogurt",
+        "ginger",
+        "garlic",
+        "spices"
+      ],
+      "allergens": [
+        "milk"
+      ],
+      "allergen_verified": false,
+      "is_vegetarian": false,
+      "is_vegan": false,
+      "is_gluten_free": true,
+      "dietary_verified": false,
+      "available": true,
+      "featured": false,
+      "sort_order": 3,
+      "translations": {
+        "en": {
+          "name": "Chicken Tikka",
+          "description": "Chicken pieces marinated in yogurt, ginger and garlic, cooked in the tandoor"
+        }
+      },
+      "sim_weight": 8,
+      "choice_groups": [
+        {
+          "label": "Spice",
+          "kind": "pick",
+          "min_select": 1,
+          "max_select": 1,
+          "choices": [
+            {
+              "label": "Mild",
+              "allergen_verified": true,
+              "is_vegetarian": true,
+              "is_vegan": true
+            },
+            {
+              "label": "Medium",
+              "allergen_verified": true,
+              "is_vegetarian": true,
+              "is_vegan": true
+            },
+            {
+              "label": "Hot",
+              "allergen_verified": true,
+              "is_vegetarian": true,
+              "is_vegan": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "chicken_tikka_masala",
+      "category": "Curries",
+      "price": 14.5,
+      "unit_cost": 4.9,
+      "ingredients": [
+        "chicken tikka",
+        "tomato",
+        "cream",
+        "butter",
+        "ground almonds"
+      ],
+      "allergens": [
+        "milk",
+        "tree_nuts"
+      ],
+      "allergen_verified": false,
+      "is_vegetarian": false,
+      "is_vegan": false,
+      "is_gluten_free": true,
+      "dietary_verified": false,
+      "available": true,
+      "featured": true,
+      "sort_order": 4,
+      "translations": {
+        "en": {
+          "name": "Chicken Tikka Masala",
+          "description": "Tandoori chicken tikka in a tomato sauce with cream, butter and ground almonds"
+        }
+      },
+      "sim_weight": 12,
+      "choice_groups": [
+        {
+          "label": "Spice",
+          "kind": "pick",
+          "min_select": 1,
+          "max_select": 1,
+          "choices": [
+            {
+              "label": "Mild",
+              "allergen_verified": true,
+              "is_vegetarian": true,
+              "is_vegan": true
+            },
+            {
+              "label": "Medium",
+              "allergen_verified": true,
+              "is_vegetarian": true,
+              "is_vegan": true
+            },
+            {
+              "label": "Hot",
+              "allergen_verified": true,
+              "is_vegetarian": true,
+              "is_vegan": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "lamb_karahi",
+      "category": "Curries",
+      "price": 15.95,
+      "unit_cost": 5.9,
+      "ingredients": [
+        "lamb",
+        "tomato",
+        "ginger",
+        "green chilli",
+        "ghee"
+      ],
+      "allergens": [
+        "milk"
+      ],
+      "allergen_verified": false,
+      "is_vegetarian": false,
+      "is_vegan": false,
+      "is_gluten_free": true,
+      "dietary_verified": false,
+      "available": true,
+      "featured": false,
+      "sort_order": 5,
+      "translations": {
+        "en": {
+          "name": "Lamb Karahi",
+          "description": "Lamb cooked in ghee with tomato, ginger and green chilli, finished with onion and coriander"
+        }
+      },
+      "sim_weight": 7,
+      "choice_groups": [
+        {
+          "label": "Spice",
+          "kind": "pick",
+          "min_select": 1,
+          "max_select": 1,
+          "choices": [
+            {
+              "label": "Mild",
+              "allergen_verified": true,
+              "is_vegetarian": true,
+              "is_vegan": true
+            },
+            {
+              "label": "Medium",
+              "allergen_verified": true,
+              "is_vegetarian": true,
+              "is_vegan": true
+            },
+            {
+              "label": "Hot",
+              "allergen_verified": true,
+              "is_vegetarian": true,
+              "is_vegan": true
+            }
+          ]
+        },
+        {
+          "label": "Leave out",
+          "kind": "leave_out",
+          "min_select": 0,
+          "max_select": 3,
+          "choices": [
+            {
+              "label": "Onions",
+              "allergen_verified": true,
+              "is_vegetarian": true,
+              "is_vegan": true
+            },
+            {
+              "label": "Green chilli",
+              "allergen_verified": true,
+              "is_vegetarian": true,
+              "is_vegan": true
+            },
+            {
+              "label": "Coriander",
+              "allergen_verified": true,
+              "is_vegetarian": true,
+              "is_vegan": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "chicken_balti",
+      "category": "Curries",
+      "price": 13.5,
+      "unit_cost": 4.4,
+      "ingredients": [
+        "chicken",
+        "onion",
+        "peppers",
+        "tomato",
+        "mustard seeds"
+      ],
+      "allergens": [
+        "mustard"
+      ],
+      "allergen_verified": false,
+      "is_vegetarian": false,
+      "is_vegan": false,
+      "is_gluten_free": true,
+      "dietary_verified": false,
+      "available": true,
+      "featured": false,
+      "sort_order": 6,
+      "translations": {
+        "en": {
+          "name": "Chicken Balti",
+          "description": "Chicken with onion, peppers and tomato in a balti sauce with mustard seeds, topped with green chilli and coriander"
+        }
+      },
+      "sim_weight": 7,
+      "choice_groups": [
+        {
+          "label": "Spice",
+          "kind": "pick",
+          "min_select": 1,
+          "max_select": 1,
+          "choices": [
+            {
+              "label": "Mild",
+              "allergen_verified": true,
+              "is_vegetarian": true,
+              "is_vegan": true
+            },
+            {
+              "label": "Medium",
+              "allergen_verified": true,
+              "is_vegetarian": true,
+              "is_vegan": true
+            },
+            {
+              "label": "Hot",
+              "allergen_verified": true,
+              "is_vegetarian": true,
+              "is_vegan": true
+            }
+          ]
+        },
+        {
+          "label": "Leave out",
+          "kind": "leave_out",
+          "min_select": 0,
+          "max_select": 3,
+          "choices": [
+            {
+              "label": "Onions",
+              "allergen_verified": true,
+              "is_vegetarian": true,
+              "is_vegan": true
+            },
+            {
+              "label": "Green chilli",
+              "allergen_verified": true,
+              "is_vegetarian": true,
+              "is_vegan": true
+            },
+            {
+              "label": "Coriander",
+              "allergen_verified": true,
+              "is_vegetarian": true,
+              "is_vegan": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "beef_nihari",
+      "category": "Curries",
+      "price": 16.5,
+      "unit_cost": 6.1,
+      "ingredients": [
+        "beef shank",
+        "ghee",
+        "wheat flour",
+        "ginger",
+        "spices"
+      ],
+      "allergens": [
+        "milk",
+        "gluten"
+      ],
+      "allergen_verified": false,
+      "is_vegetarian": false,
+      "is_vegan": false,
+      "is_gluten_free": false,
+      "dietary_verified": false,
+      "available": true,
+      "featured": false,
+      "sort_order": 7,
+      "translations": {
+        "en": {
+          "name": "Beef Nihari",
+          "description": "Beef shank slow-cooked in a ghee and spice gravy thickened with wheat flour, served with green chilli, coriander and fried onion"
+        }
+      },
+      "sim_weight": 5,
+      "choice_groups": [
+        {
+          "label": "Spice",
+          "kind": "pick",
+          "min_select": 1,
+          "max_select": 1,
+          "choices": [
+            {
+              "label": "Mild",
+              "allergen_verified": true,
+              "is_vegetarian": true,
+              "is_vegan": true
+            },
+            {
+              "label": "Medium",
+              "allergen_verified": true,
+              "is_vegetarian": true,
+              "is_vegan": true
+            },
+            {
+              "label": "Hot",
+              "allergen_verified": true,
+              "is_vegetarian": true,
+              "is_vegan": true
+            }
+          ]
+        },
+        {
+          "label": "Leave out",
+          "kind": "leave_out",
+          "min_select": 0,
+          "max_select": 3,
+          "choices": [
+            {
+              "label": "Onions",
+              "allergen_verified": true,
+              "is_vegetarian": true,
+              "is_vegan": true
+            },
+            {
+              "label": "Green chilli",
+              "allergen_verified": true,
+              "is_vegetarian": true,
+              "is_vegan": true
+            },
+            {
+              "label": "Coriander",
+              "allergen_verified": true,
+              "is_vegetarian": true,
+              "is_vegan": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "tarka_dal",
+      "category": "Curries",
+      "price": 9.5,
+      "unit_cost": 2.2,
+      "ingredients": [
+        "yellow lentils",
+        "garlic",
+        "cumin",
+        "ghee"
+      ],
+      "allergens": [
+        "milk"
+      ],
+      "allergen_verified": false,
+      "is_vegetarian": true,
+      "is_vegan": false,
+      "is_gluten_free": true,
+      "dietary_verified": false,
+      "available": true,
+      "featured": false,
+      "sort_order": 8,
+      "translations": {
+        "en": {
+          "name": "Tarka Dal",
+          "description": "Yellow lentils finished with garlic and cumin fried in ghee"
+        }
+      },
+      "sim_weight": 4,
+      "choice_groups": [
+        {
+          "label": "Spice",
+          "kind": "pick",
+          "min_select": 1,
+          "max_select": 1,
+          "choices": [
+            {
+              "label": "Mild",
+              "allergen_verified": true,
+              "is_vegetarian": true,
+              "is_vegan": true
+            },
+            {
+              "label": "Medium",
+              "allergen_verified": true,
+              "is_vegetarian": true,
+              "is_vegan": true
+            },
+            {
+              "label": "Hot",
+              "allergen_verified": true,
+              "is_vegetarian": true,
+              "is_vegan": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "masala_fish_and_chips",
+      "category": "Mancunian Classics",
+      "price": 15.5,
+      "unit_cost": 5.6,
+      "ingredients": [
+        "haddock",
+        "wheat flour",
+        "potato",
+        "spices"
+      ],
+      "allergens": [
+        "fish",
+        "gluten"
+      ],
+      "allergen_verified": false,
+      "is_vegetarian": false,
+      "is_vegan": false,
+      "is_gluten_free": false,
+      "dietary_verified": false,
+      "available": true,
+      "featured": true,
+      "sort_order": 9,
+      "translations": {
+        "en": {
+          "name": "Masala Fish and Chips",
+          "description": "Haddock in a spiced wheat-flour batter with chips"
+        }
+      },
+      "sim_weight": 10
+    },
+    {
+      "key": "chicken_tikka_pie",
+      "category": "Mancunian Classics",
+      "price": 14.95,
+      "unit_cost": 5.1,
+      "ingredients": [
+        "chicken tikka",
+        "shortcrust pastry",
+        "cream",
+        "egg",
+        "peas"
+      ],
+      "allergens": [
+        "gluten",
+        "milk",
+        "eggs"
+      ],
+      "allergen_verified": false,
+      "is_vegetarian": false,
+      "is_vegan": false,
+      "is_gluten_free": false,
+      "dietary_verified": false,
+      "available": true,
+      "featured": true,
+      "sort_order": 10,
+      "translations": {
+        "en": {
+          "name": "Chicken Tikka Pie with Minted Peas",
+          "description": "Chicken tikka in a creamy masala sauce under shortcrust pastry, with minted peas"
+        }
+      },
+      "sim_weight": 8
+    },
+    {
+      "key": "spiced_lancashire_hotpot",
+      "category": "Mancunian Classics",
+      "price": 15.95,
+      "unit_cost": 5.4,
+      "ingredients": [
+        "lamb",
+        "potato",
+        "onion",
+        "carrot",
+        "celery"
+      ],
+      "allergens": [
+        "celery",
+        "gluten",
+        "milk"
+      ],
+      "allergen_verified": false,
+      "is_vegetarian": false,
+      "is_vegan": false,
+      "is_gluten_free": false,
+      "dietary_verified": false,
+      "available": true,
+      "featured": true,
+      "sort_order": 11,
+      "translations": {
+        "en": {
+          "name": "Spiced Lancashire Hotpot",
+          "description": "Lamb, onion and carrot in a garam masala stock with celery, thickened with wheat flour, under buttered sliced potato"
+        }
+      },
+      "sim_weight": 6
+    },
+    {
+      "key": "chips_and_curry_sauce",
+      "category": "Mancunian Classics",
+      "price": 4.95,
+      "unit_cost": 1.3,
+      "ingredients": [
+        "potato",
+        "onion",
+        "curry powder",
+        "wheat flour"
+      ],
+      "allergens": [
+        "gluten",
+        "mustard",
+        "celery"
+      ],
+      "allergen_verified": false,
+      "is_vegetarian": true,
+      "is_vegan": true,
+      "is_gluten_free": false,
+      "dietary_verified": false,
+      "available": true,
+      "featured": false,
+      "sort_order": 12,
+      "translations": {
+        "en": {
+          "name": "Chips and Curry Sauce",
+          "description": "Chips with a chip-shop curry sauce made with onion, wheat flour and a curry powder that contains mustard and celery"
+        }
+      },
+      "sim_weight": 9,
+      "choice_groups": [
+        {
+          "label": "Extras",
+          "kind": "add",
+          "min_select": 0,
+          "max_select": 1,
+          "choices": [
+            {
+              "label": "Add cheese",
+              "price_delta": 1.5,
+              "cost_delta": 0.45,
+              "allergens": [
+                "milk"
+              ],
+              "allergen_verified": true,
+              "is_vegetarian": true,
+              "is_vegan": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "cheesy_chips_masala",
+      "category": "Mancunian Classics",
+      "price": 6.5,
+      "unit_cost": 1.9,
+      "ingredients": [
+        "potato",
+        "cheddar",
+        "tomato",
+        "cream",
+        "spices"
+      ],
+      "allergens": [
+        "milk"
+      ],
+      "allergen_verified": false,
+      "is_vegetarian": true,
+      "is_vegan": false,
+      "is_gluten_free": true,
+      "dietary_verified": false,
+      "available": true,
+      "featured": false,
+      "sort_order": 13,
+      "translations": {
+        "en": {
+          "name": "Cheesy Chips Masala",
+          "description": "Chips in a tomato and cream masala sauce, topped with melted cheddar"
+        }
+      },
+      "sim_weight": 7
+    },
+    {
+      "key": "sunday_roast",
+      "category": "Mancunian Classics",
+      "price": 19.95,
+      "unit_cost": 7.4,
+      "ingredients": [
+        "roast beef",
+        "potato",
+        "Yorkshire pudding",
+        "beef stock",
+        "spices"
+      ],
+      "allergens": [
+        "gluten",
+        "eggs",
+        "milk",
+        "celery"
+      ],
+      "allergen_verified": false,
+      "is_vegetarian": false,
+      "is_vegan": false,
+      "is_gluten_free": false,
+      "dietary_verified": false,
+      "available": true,
+      "featured": true,
+      "sort_order": 14,
+      "translations": {
+        "en": {
+          "name": "Sunday Roast with Masala Gravy and Yorkshire Pudding",
+          "description": "Roast beef, roast potatoes and a Yorkshire pudding, with a masala gravy made on beef stock"
+        }
+      },
+      "sim_weight": 5
+    },
+    {
+      "key": "bombay_potatoes",
+      "category": "Sides",
+      "price": 5.5,
+      "unit_cost": 1.2,
+      "ingredients": [
+        "potato",
+        "mustard seeds",
+        "turmeric",
+        "cumin",
+        "tomato"
+      ],
+      "allergens": [
+        "mustard"
+      ],
+      "allergen_verified": false,
+      "is_vegetarian": true,
+      "is_vegan": true,
+      "is_gluten_free": true,
+      "dietary_verified": false,
+      "available": true,
+      "featured": false,
+      "sort_order": 15,
+      "translations": {
+        "en": {
+          "name": "Bombay Potatoes",
+          "description": "Potatoes with mustard seeds, turmeric, cumin and tomato"
+        }
+      },
+      "sim_weight": 6
+    },
+    {
+      "key": "samosa_chaat",
+      "category": "Sides",
+      "price": 7.5,
+      "unit_cost": 2.1,
+      "ingredients": [
+        "samosa pastry",
+        "chickpeas",
+        "yogurt",
+        "tamarind",
+        "onion"
+      ],
+      "allergens": [
+        "gluten",
+        "milk"
+      ],
+      "allergen_verified": false,
+      "is_vegetarian": true,
+      "is_vegan": false,
+      "is_gluten_free": false,
+      "dietary_verified": false,
+      "available": true,
+      "featured": false,
+      "sort_order": 16,
+      "translations": {
+        "en": {
+          "name": "Samosa Chaat",
+          "description": "Vegetable samosa in wheat pastry, topped with chickpeas, yogurt, tamarind chutney, onion, green chilli and coriander"
+        }
+      },
+      "sim_weight": 6,
+      "choice_groups": [
+        {
+          "label": "Leave out",
+          "kind": "leave_out",
+          "min_select": 0,
+          "max_select": 3,
+          "choices": [
+            {
+              "label": "Onions",
+              "allergen_verified": true,
+              "is_vegetarian": true,
+              "is_vegan": true
+            },
+            {
+              "label": "Green chilli",
+              "allergen_verified": true,
+              "is_vegetarian": true,
+              "is_vegan": true
+            },
+            {
+              "label": "Coriander",
+              "allergen_verified": true,
+              "is_vegetarian": true,
+              "is_vegan": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "pilau_rice",
+      "category": "Sides",
+      "price": 4.25,
+      "unit_cost": 0.9,
+      "ingredients": [
+        "basmati rice",
+        "onion",
+        "cumin",
+        "ghee"
+      ],
+      "allergens": [
+        "milk"
+      ],
+      "allergen_verified": false,
+      "is_vegetarian": true,
+      "is_vegan": false,
+      "is_gluten_free": true,
+      "dietary_verified": false,
+      "available": true,
+      "featured": false,
+      "sort_order": 17,
+      "translations": {
+        "en": {
+          "name": "Pilau Rice",
+          "description": "Basmati rice cooked with onion, cumin and ghee"
+        }
+      },
+      "sim_weight": 9
+    },
+    {
+      "key": "plain_naan",
+      "category": "Breads",
+      "price": 3.5,
+      "unit_cost": 0.6,
+      "ingredients": [
+        "wheat flour",
+        "yogurt",
+        "egg",
+        "butter"
+      ],
+      "allergens": [
+        "gluten",
+        "milk",
+        "eggs"
+      ],
+      "allergen_verified": false,
+      "is_vegetarian": true,
+      "is_vegan": false,
+      "is_gluten_free": false,
+      "dietary_verified": false,
+      "available": true,
+      "featured": false,
+      "sort_order": 18,
+      "translations": {
+        "en": {
+          "name": "Plain Naan",
+          "description": "Tandoor-baked bread made with wheat flour, yogurt and egg, brushed with butter"
+        }
+      },
+      "sim_weight": 10
+    },
+    {
+      "key": "garlic_naan",
+      "category": "Breads",
+      "price": 3.95,
+      "unit_cost": 0.7,
+      "ingredients": [
+        "wheat flour",
+        "garlic",
+        "yogurt",
+        "egg",
+        "butter"
+      ],
+      "allergens": [
+        "gluten",
+        "milk",
+        "eggs"
+      ],
+      "allergen_verified": false,
+      "is_vegetarian": true,
+      "is_vegan": false,
+      "is_gluten_free": false,
+      "dietary_verified": false,
+      "available": true,
+      "featured": false,
+      "sort_order": 19,
+      "translations": {
+        "en": {
+          "name": "Garlic Naan",
+          "description": "Tandoor-baked naan with garlic and butter"
+        }
+      },
+      "sim_weight": 9
+    },
+    {
+      "key": "keema_naan",
+      "category": "Breads",
+      "price": 5.5,
+      "unit_cost": 1.6,
+      "ingredients": [
+        "wheat flour",
+        "minced lamb",
+        "yogurt",
+        "egg",
+        "butter"
+      ],
+      "allergens": [
+        "gluten",
+        "milk",
+        "eggs"
+      ],
+      "allergen_verified": false,
+      "is_vegetarian": false,
+      "is_vegan": false,
+      "is_gluten_free": false,
+      "dietary_verified": false,
+      "available": true,
+      "featured": false,
+      "sort_order": 20,
+      "translations": {
+        "en": {
+          "name": "Keema Naan",
+          "description": "Naan stuffed with spiced minced lamb"
+        }
+      },
+      "sim_weight": 6
+    },
+    {
+      "key": "manchester_tart",
+      "category": "Desserts",
+      "price": 6.95,
+      "unit_cost": 1.8,
+      "ingredients": [
+        "shortcrust pastry",
+        "raspberry jam",
+        "custard",
+        "coconut"
+      ],
+      "allergens": [
+        "gluten",
+        "milk",
+        "eggs"
+      ],
+      "allergen_verified": false,
+      "is_vegetarian": true,
+      "is_vegan": false,
+      "is_gluten_free": false,
+      "dietary_verified": false,
+      "available": true,
+      "featured": true,
+      "sort_order": 21,
+      "translations": {
+        "en": {
+          "name": "Manchester Tart",
+          "description": "Shortcrust pastry with raspberry jam, custard and desiccated coconut"
+        }
+      },
+      "sim_weight": 5
+    },
+    {
+      "key": "eccles_cake",
+      "category": "Desserts",
+      "price": 6.5,
+      "unit_cost": 1.7,
+      "ingredients": [
+        "puff pastry",
+        "currants",
+        "egg",
+        "Lancashire cheese"
+      ],
+      "allergens": [
+        "gluten",
+        "milk",
+        "eggs"
+      ],
+      "allergen_verified": false,
+      "is_vegetarian": true,
+      "is_vegan": false,
+      "is_gluten_free": false,
+      "dietary_verified": false,
+      "available": true,
+      "featured": false,
+      "sort_order": 22,
+      "translations": {
+        "en": {
+          "name": "Eccles Cake with Lancashire Cheese",
+          "description": "Puff pastry filled with currants, glazed with egg, served with Lancashire cheese"
+        }
+      },
+      "sim_weight": 4
+    },
+    {
+      "key": "sticky_toffee_pudding",
+      "category": "Desserts",
+      "price": 7.5,
+      "unit_cost": 1.9,
+      "ingredients": [
+        "dates",
+        "wheat flour",
+        "eggs",
+        "butter",
+        "cream"
+      ],
+      "allergens": [
+        "gluten",
+        "eggs",
+        "milk"
+      ],
+      "allergen_verified": false,
+      "is_vegetarian": true,
+      "is_vegan": false,
+      "is_gluten_free": false,
+      "dietary_verified": false,
+      "available": true,
+      "featured": false,
+      "sort_order": 23,
+      "translations": {
+        "en": {
+          "name": "Sticky Toffee Pudding",
+          "description": "Date sponge made with wheat flour, eggs and butter, with a cream toffee sauce"
+        }
+      },
+      "sim_weight": 6,
+      "choice_groups": [
+        {
+          "label": "Extras",
+          "kind": "add",
+          "min_select": 0,
+          "max_select": 1,
+          "choices": [
+            {
+              "label": "Vanilla ice cream",
+              "price_delta": 1.95,
+              "cost_delta": 0.55,
+              "allergens": [
+                "milk",
+                "eggs"
+              ],
+              "allergen_verified": true,
+              "is_vegetarian": true,
+              "is_vegan": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "gulab_jamun",
+      "category": "Desserts",
+      "price": 5.5,
+      "unit_cost": 1.1,
+      "ingredients": [
+        "milk powder",
+        "wheat flour",
+        "ghee",
+        "sugar syrup",
+        "cardamom"
+      ],
+      "allergens": [
+        "milk",
+        "gluten"
+      ],
+      "allergen_verified": false,
+      "is_vegetarian": true,
+      "is_vegan": false,
+      "is_gluten_free": false,
+      "dietary_verified": false,
+      "available": true,
+      "featured": false,
+      "sort_order": 24,
+      "translations": {
+        "en": {
+          "name": "Gulab Jamun",
+          "description": "Dumplings of milk powder and wheat flour, fried in ghee and soaked in cardamom syrup"
+        }
+      },
+      "sim_weight": 5
+    },
+    {
+      "key": "mango_lassi",
+      "category": "Drinks",
+      "price": 4.5,
+      "unit_cost": 1.1,
+      "ingredients": [
+        "yogurt",
+        "mango",
+        "milk",
+        "cardamom"
+      ],
+      "allergens": [
+        "milk"
+      ],
+      "allergen_verified": false,
+      "is_vegetarian": true,
+      "is_vegan": false,
+      "is_gluten_free": true,
+      "dietary_verified": false,
+      "available": true,
+      "featured": false,
+      "sort_order": 25,
+      "translations": {
+        "en": {
+          "name": "Mango Lassi",
+          "description": "Yogurt blended with mango, milk and cardamom"
+        }
+      },
+      "options": [
+        {
+          "label": "Regular",
+          "price": 4.5,
+          "unit_cost": 1.1
+        },
+        {
+          "label": "Large",
+          "price": 5.95,
+          "unit_cost": 1.5
+        }
+      ],
+      "sim_weight": 8,
+      "option_weights": [
+        0.65,
+        0.35
+      ]
+    },
+    {
+      "key": "masala_chai",
+      "category": "Drinks",
+      "price": 3.5,
+      "unit_cost": 0.5,
+      "ingredients": [
+        "black tea",
+        "milk",
+        "ginger",
+        "cardamom"
+      ],
+      "allergens": [
+        "milk"
+      ],
+      "allergen_verified": false,
+      "is_vegetarian": true,
+      "is_vegan": false,
+      "is_gluten_free": true,
+      "dietary_verified": false,
+      "available": true,
+      "featured": false,
+      "sort_order": 26,
+      "translations": {
+        "en": {
+          "name": "Masala Chai",
+          "description": "Black tea brewed with milk, ginger and cardamom"
+        }
+      },
+      "sim_weight": 7
+    },
+    {
+      "key": "vimto",
+      "category": "Drinks",
+      "price": 2.95,
+      "unit_cost": 0.6,
+      "ingredients": [
+        "fruit cordial",
+        "water"
+      ],
+      "allergens": [],
+      "allergen_verified": false,
+      "is_vegetarian": true,
+      "is_vegan": true,
+      "is_gluten_free": true,
+      "dietary_verified": false,
+      "available": true,
+      "featured": false,
+      "sort_order": 27,
+      "translations": {
+        "en": {
+          "name": "Vimto",
+          "description": "Mixed fruit cordial first made in Manchester, served chilled with water"
+        }
+      },
+      "sim_weight": 6
+    },
+    {
+      "key": "cola",
+      "category": "Drinks",
+      "price": 2.75,
+      "unit_cost": 0.55,
+      "ingredients": [
+        "cola"
+      ],
+      "allergens": [],
+      "allergen_verified": false,
+      "is_vegetarian": true,
+      "is_vegan": true,
+      "is_gluten_free": true,
+      "dietary_verified": false,
+      "available": true,
+      "featured": false,
+      "sort_order": 28,
+      "translations": {
+        "en": {
+          "name": "Cola",
+          "description": "A chilled can of cola"
+        }
+      },
+      "sim_weight": 6
+    }
+  ]
+}

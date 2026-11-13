@@ -38,7 +38,11 @@ from src.services.tax import check_venue_tax
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_SEED_FILES = ["data/seed/angeethi_house.json", "data/seed/kehwa_and_crumb.json"]
+DEFAULT_SEED_FILES = [
+    "data/seed/angeethi_house.json",
+    "data/seed/kehwa_and_crumb.json",
+    "data/seed/tikka_town.json",
+]
 DEFAULT_DEMO_USERS_FILE = "data/seed/demo_users.json"
 # Settling a bill with this item records chai bought for someone else.
 PAY_FORWARD_KEY = "pay_forward_chai"

@@ -4,7 +4,8 @@
     "name": "Demo owner",
     "venues": [
       "angeethi-house",
-      "kehwa-and-crumb"
+      "kehwa-and-crumb",
+      "tikka-town"
     ]
   },
   "staff": [
@@ -17,6 +18,11 @@
       "email": "demo-staff+kehwa-and-crumb@mise.demo",
       "name": "Demo staff (Kehwa)",
       "venue": "kehwa-and-crumb"
+    },
+    {
+      "email": "demo-staff+tikka-town@mise.demo",
+      "name": "Demo staff (Tikka)",
+      "venue": "tikka-town"
     }
   ]
 }
