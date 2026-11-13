@@ -40,6 +40,18 @@ VENUES = {
         items=(26, 30),
         tz="Europe/London",
     ),
+    "noor-and-zaatar": dict(
+        file="data/seed/noor_and_zaatar.json",
+        name="Noor & Za'atar",
+        city="Dubai",
+        currency="AED",
+        jurisdiction="AE-DU",
+        service="0",
+        tables=10,
+        languages=["en", "ar"],
+        items=(22, 26),
+        tz="Asia/Dubai",
+    ),
 }
 
 
@@ -141,3 +153,35 @@ def test_tikka_town_spice_mixes_declare_mustard_and_celery():
     for item in _load("data/seed/tikka_town.json")["items"]:
         if {"curry powder", "masala spice mix"} & set(item["ingredients"]):
             assert {"mustard", "celery"} <= set(item["allergens"]), item["key"]
+
+
+def test_noor_has_the_spec_dishes():
+    names = {
+        i["translations"]["en"]["name"].lower()
+        for i in _load("data/seed/noor_and_zaatar.json")["items"]
+    }
+    for dish in [
+        "chicken machboos",
+        "lamb machboos",
+        "harees",
+        "thareed",
+        "balaleet",
+        "luqaimat",
+        "karak chai",
+        "hummus",
+        "moutabal",
+        "za'atar manakish",
+        "cheese manakish",
+        "mixed grill",
+        "shish tawook",
+        "mutton biryani",
+        "lime",
+    ]:
+        assert any(dish in n for n in names), dish
+
+
+def test_sesame_is_declared_wherever_zaatar_or_tahini_is():
+    for item in _load("data/seed/noor_and_zaatar.json")["items"]:
+        text = " ".join(item["ingredients"]).lower()
+        if any(w in text for w in ("za'atar", "zaatar", "tahini", "sesame")):
+            assert "sesame" in item["allergens"], item["key"]

@@ -1,4 +1,4 @@
-"""Tikka Town's real seed bills as the UK checks in test_global_bills.py say."""
+"""The new venues' real seed bills as the UK and Dubai checks in test_global_bills.py say."""
 
 import uuid
 from datetime import UTC, datetime, timedelta
@@ -19,6 +19,7 @@ from src.models.session import GuestSession
 from src.services.simulator import SEED_ITEM_NAMESPACE
 
 SLUG = "tikka-town"
+NOOR = "noor-and-zaatar"
 
 
 async def _guest_at(db, r, label):
@@ -38,19 +39,21 @@ async def _guest_at(db, r, label):
     return s
 
 
+async def _dish(db, slug, key):
+    item_id = uuid.uuid5(SEED_ITEM_NAMESPACE, f"{slug}:{key}")
+    return (await db.execute(select(MenuItem).where(MenuItem.id == item_id))).scalar_one()
+
+
 @pytest_asyncio.fixture
 async def tikka(db_session):
     """What test_global_bills' `uk` returns, from data/seed/tikka_town.json."""
     await seed_data(load_seed_data("data/seed/tikka_town.json"), db_session)
     r = (await db_session.execute(select(Restaurant).where(Restaurant.slug == SLUG))).scalar_one()
 
-    async def dish(key):
-        item_id = uuid.uuid5(SEED_ITEM_NAMESPACE, f"{SLUG}:{key}")
-        return (
-            await db_session.execute(select(MenuItem).where(MenuItem.id == item_id))
-        ).scalar_one()
-
-    pie, naan = await dish("chicken_tikka_pie"), await dish("plain_naan")
+    pie, naan = (
+        await _dish(db_session, SLUG, "chicken_tikka_pie"),
+        await _dish(db_session, SLUG, "plain_naan"),
+    )
     # The arithmetic below is for these seeded prices.
     assert (pie.price, naan.price) == (Decimal("14.95"), Decimal("3.50"))
     s = await _guest_at(db_session, r, "T1")
@@ -122,3 +125,65 @@ async def test_tikka_refuses_a_method_the_uk_does_not_list(client, db_session, t
     assert resp.json()["detail"] == "Payment method not accepted here"
     status = await db_session.scalar(select(Bill.status).where(Bill.id == bill_id))
     assert status == "open"
+
+
+@pytest_asyncio.fixture
+async def noor(db_session):
+    """What test_global_bills' `dubai` returns, from data/seed/noor_and_zaatar.json."""
+    await seed_data(load_seed_data("data/seed/noor_and_zaatar.json"), db_session)
+    r = (await db_session.execute(select(Restaurant).where(Restaurant.slug == NOOR))).scalar_one()
+    hummus, laban = await _dish(db_session, NOOR, "hummus"), await _dish(db_session, NOOR, "laban")
+    # The arithmetic below is for these seeded prices.
+    assert (hummus.price, laban.price) == (Decimal("28.00"), Decimal("9.00"))
+    s = await _guest_at(db_session, r, "T1")
+    t = (
+        await db_session.execute(select(DiningTable).where(DiningTable.id == s.table_id))
+    ).scalar_one()
+    return r, t, hummus, laban, s
+
+
+async def test_noor_bill_is_aed_with_vat_included_and_no_service(client, db_session, noor):
+    r, _, dish, side, s = noor
+    assert r.currency == "AED"
+    o = await _order(client, s, [(dish, 1), (side, 2)])  # 28.00 + 18.00 = 46.00
+    bill_id = await bill_id_of(db_session, o)
+    await as_member(client, db_session, r.id, "staff")
+    d = (await client.get(f"/api/restaurants/{r.slug}/bills/{bill_id}")).json()
+    assert [m["method"] for m in d["methods"]] == ["cash", "card"]
+    card = next(m for m in d["methods"] if m["method"] == "card")
+    # VAT inside the price: 46.00 * 5 / 105 = 2.19. No service charge in Dubai.
+    assert (card["total"], card["tax_amount"], card["tax_included"]) == ("46.00", "2.19", True)
+    assert (d["service_charge_rate"], d["service_charge_amount"]) == ("0.0000", "0.00")
+
+    resp = await client.post(
+        f"/api/restaurants/{r.slug}/bills/{bill_id}/settle",
+        json={
+            "payment_method": "raast",
+            "expected_method": "raast",
+            "expected_total": "46.00",
+            "payment_reference": "R1",
+        },
+    )
+    assert resp.status_code == 422
+    assert resp.json()["detail"] == "Payment method not accepted here"
+
+    resp = await settle(client, r.slug, bill_id, "card", service_included=True)
+    assert resp.status_code == 200, resp.text
+    d = resp.json()
+    assert (d["total"], d["tax_amount"], d["service_charge_amount"]) == ("46.00", "2.19", "0.00")
+
+
+async def test_noor_claim_asking_for_service_records_none(client, db_session, noor):
+    _, _, dish, _, s = noor
+    o = await _order(client, s, [(dish, 1)])
+    claim = {"method": "card", "service_included": True}
+    resp = await client.post("/api/guest/bill/payment", json=claim)
+    assert resp.status_code == 200, resp.text
+    assert (resp.json()["claim"]["total"], resp.json()["claim"]["service_included"]) == (
+        "28.00",
+        False,
+    )
+    b = await db_session.execute(select(Bill).where(Bill.id == await bill_id_of(db_session, o)))
+    b = b.scalar_one()
+    await db_session.refresh(b)
+    assert (b.claimed_service_included, b.service_charge_amount) == (False, Decimal("0.00"))

@@ -42,6 +42,7 @@ DEFAULT_SEED_FILES = [
     "data/seed/angeethi_house.json",
     "data/seed/kehwa_and_crumb.json",
     "data/seed/tikka_town.json",
+    "data/seed/noor_and_zaatar.json",
 ]
 DEFAULT_DEMO_USERS_FILE = "data/seed/demo_users.json"
 # Settling a bill with this item records chai bought for someone else.
