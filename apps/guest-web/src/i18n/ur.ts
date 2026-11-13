@@ -47,6 +47,7 @@ export const ur: TranslationDict = {
     cartTitle: "آپ کا آرڈر",
     addToCart: "شامل کریں",
     addDish: "{name} شامل کریں",
+    connectingOrder: "آرڈر کی تازہ معلومات سے جڑ رہے ہیں...",
     quantity: "تعداد",
     notes: "کچن کے لیے نوٹ",
     notesPlaceholder: "مثلاً، ساس الگ سے...",

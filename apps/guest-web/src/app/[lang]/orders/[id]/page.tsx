@@ -359,7 +359,7 @@ export default function OrderStatusPage({
           </div>
         ) : (
           <div className="py-12 flex flex-col items-center justify-center gap-3">
-            <Loader label="Connecting to order stream..." />
+            <Loader label={dict.ui.connectingOrder} />
           </div>
         )}
 

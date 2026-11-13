@@ -43,6 +43,7 @@ export const en: TranslationDict = {
     cartTitle: "Your Order",
     addToCart: "Add",
     addDish: "Add {name}",
+    connectingOrder: "Connecting to order stream...",
     quantity: "Qty",
     notes: "Kitchen Notes",
     notesPlaceholder: "e.g., sauce on the side...",
