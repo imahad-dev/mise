@@ -131,5 +131,13 @@ def test_tikka_town_has_the_spec_dishes():
         "karahi",
         "balti",
         "sunday roast",
+        "cheesy chips masala",
     ]:
         assert any(dish in n for n in names), dish
+
+
+def test_tikka_town_spice_mixes_declare_mustard_and_celery():
+    """One spice mix: any dish made with curry powder or masala spice mix declares both."""
+    for item in _load("data/seed/tikka_town.json")["items"]:
+        if {"curry powder", "masala spice mix"} & set(item["ingredients"]):
+            assert {"mustard", "celery"} <= set(item["allergens"]), item["key"]

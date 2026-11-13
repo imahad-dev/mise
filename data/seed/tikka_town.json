@@ -110,13 +110,14 @@
       "ingredients": [
         "lamb chops",
         "yogurt",
-        "ginger",
         "garlic",
-        "mustard oil"
+        "mustard oil",
+        "masala spice mix"
       ],
       "allergens": [
         "milk",
-        "mustard"
+        "mustard",
+        "celery"
       ],
       "allergen_verified": false,
       "is_vegetarian": false,
@@ -171,11 +172,13 @@
         "minced lamb",
         "onion",
         "green chilli",
-        "coriander",
-        "egg"
+        "egg",
+        "masala spice mix"
       ],
       "allergens": [
-        "eggs"
+        "eggs",
+        "mustard",
+        "celery"
       ],
       "allergen_verified": false,
       "is_vegetarian": false,
@@ -231,10 +234,12 @@
         "yogurt",
         "ginger",
         "garlic",
-        "spices"
+        "masala spice mix"
       ],
       "allergens": [
-        "milk"
+        "milk",
+        "mustard",
+        "celery"
       ],
       "allergen_verified": false,
       "is_vegetarian": false,
@@ -289,12 +294,14 @@
         "chicken tikka",
         "tomato",
         "cream",
-        "butter",
-        "ground almonds"
+        "ground almonds",
+        "masala spice mix"
       ],
       "allergens": [
         "milk",
-        "tree_nuts"
+        "tree_nuts",
+        "mustard",
+        "celery"
       ],
       "allergen_verified": false,
       "is_vegetarian": false,
@@ -348,12 +355,14 @@
       "ingredients": [
         "lamb",
         "tomato",
-        "ginger",
         "green chilli",
-        "ghee"
+        "ghee",
+        "masala spice mix"
       ],
       "allergens": [
-        "milk"
+        "milk",
+        "mustard",
+        "celery"
       ],
       "allergen_verified": false,
       "is_vegetarian": false,
@@ -432,13 +441,15 @@
       "unit_cost": 4.4,
       "ingredients": [
         "chicken",
-        "onion",
         "peppers",
-        "tomato",
-        "mustard seeds"
+        "mustard seeds",
+        "ghee",
+        "masala spice mix"
       ],
       "allergens": [
-        "mustard"
+        "mustard",
+        "celery",
+        "milk"
       ],
       "allergen_verified": false,
       "is_vegetarian": false,
@@ -451,7 +462,7 @@
       "translations": {
         "en": {
           "name": "Chicken Balti",
-          "description": "Chicken with onion, peppers and tomato in a balti sauce with mustard seeds, topped with green chilli and coriander"
+          "description": "Chicken with onion, peppers and tomato cooked in ghee with mustard seeds and balti spices, topped with green chilli and coriander"
         }
       },
       "sim_weight": 7,
@@ -520,11 +531,13 @@
         "ghee",
         "wheat flour",
         "ginger",
-        "spices"
+        "masala spice mix"
       ],
       "allergens": [
         "milk",
-        "gluten"
+        "gluten",
+        "mustard",
+        "celery"
       ],
       "allergen_verified": false,
       "is_vegetarian": false,
@@ -604,16 +617,20 @@
       "ingredients": [
         "yellow lentils",
         "garlic",
-        "cumin",
-        "ghee"
+        "ghee",
+        "asafoetida",
+        "masala spice mix"
       ],
       "allergens": [
-        "milk"
+        "milk",
+        "mustard",
+        "celery",
+        "gluten"
       ],
       "allergen_verified": false,
       "is_vegetarian": true,
       "is_vegan": false,
-      "is_gluten_free": true,
+      "is_gluten_free": false,
       "dietary_verified": false,
       "available": true,
       "featured": false,
@@ -621,7 +638,7 @@
       "translations": {
         "en": {
           "name": "Tarka Dal",
-          "description": "Yellow lentils finished with garlic and cumin fried in ghee"
+          "description": "Yellow lentils finished with garlic, cumin and asafoetida fried in ghee"
         }
       },
       "sim_weight": 4,
@@ -663,11 +680,13 @@
         "haddock",
         "wheat flour",
         "potato",
-        "spices"
+        "masala spice mix"
       ],
       "allergens": [
         "fish",
-        "gluten"
+        "gluten",
+        "mustard",
+        "celery"
       ],
       "allergen_verified": false,
       "is_vegetarian": false,
@@ -695,12 +714,14 @@
         "shortcrust pastry",
         "cream",
         "egg",
-        "peas"
+        "masala spice mix"
       ],
       "allergens": [
         "gluten",
         "milk",
-        "eggs"
+        "eggs",
+        "mustard",
+        "celery"
       ],
       "allergen_verified": false,
       "is_vegetarian": false,
@@ -726,14 +747,16 @@
       "ingredients": [
         "lamb",
         "potato",
-        "onion",
-        "carrot",
-        "celery"
+        "celery",
+        "Worcestershire sauce",
+        "masala spice mix"
       ],
       "allergens": [
         "celery",
         "gluten",
-        "milk"
+        "milk",
+        "mustard",
+        "fish"
       ],
       "allergen_verified": false,
       "is_vegetarian": false,
@@ -746,7 +769,7 @@
       "translations": {
         "en": {
           "name": "Spiced Lancashire Hotpot",
-          "description": "Lamb, onion and carrot in a garam masala stock with celery, thickened with wheat flour, under buttered sliced potato"
+          "description": "Lamb, onion and carrot in a garam masala stock with celery and Worcestershire sauce, thickened with wheat flour, under buttered sliced potato"
         }
       },
       "sim_weight": 6
@@ -778,7 +801,7 @@
       "translations": {
         "en": {
           "name": "Chips and Curry Sauce",
-          "description": "Chips with a chip-shop curry sauce made with onion, wheat flour and a curry powder that contains mustard and celery"
+          "description": "Chips fried in vegetable oil, with a chip-shop curry sauce made with onion, wheat flour and a curry powder that contains mustard and celery"
         }
       },
       "sim_weight": 9,
@@ -812,12 +835,15 @@
       "ingredients": [
         "potato",
         "cheddar",
-        "tomato",
         "cream",
-        "spices"
+        "ground almonds",
+        "masala spice mix"
       ],
       "allergens": [
-        "milk"
+        "milk",
+        "mustard",
+        "celery",
+        "tree_nuts"
       ],
       "allergen_verified": false,
       "is_vegetarian": true,
@@ -830,7 +856,7 @@
       "translations": {
         "en": {
           "name": "Cheesy Chips Masala",
-          "description": "Chips in a tomato and cream masala sauce, topped with melted cheddar"
+          "description": "Chips in our tikka masala sauce of tomato, cream and ground almonds, topped with melted cheddar"
         }
       },
       "sim_weight": 7
@@ -842,16 +868,17 @@
       "unit_cost": 7.4,
       "ingredients": [
         "roast beef",
-        "potato",
         "Yorkshire pudding",
         "beef stock",
-        "spices"
+        "potato",
+        "masala spice mix"
       ],
       "allergens": [
         "gluten",
         "eggs",
         "milk",
-        "celery"
+        "celery",
+        "mustard"
       ],
       "allergen_verified": false,
       "is_vegetarian": false,
@@ -878,11 +905,12 @@
         "potato",
         "mustard seeds",
         "turmeric",
-        "cumin",
-        "tomato"
+        "tomato",
+        "masala spice mix"
       ],
       "allergens": [
-        "mustard"
+        "mustard",
+        "celery"
       ],
       "allergen_verified": false,
       "is_vegetarian": true,
@@ -910,11 +938,13 @@
         "chickpeas",
         "yogurt",
         "tamarind",
-        "onion"
+        "masala spice mix"
       ],
       "allergens": [
         "gluten",
-        "milk"
+        "milk",
+        "mustard",
+        "celery"
       ],
       "allergen_verified": false,
       "is_vegetarian": true,
@@ -1065,12 +1095,14 @@
         "minced lamb",
         "yogurt",
         "egg",
-        "butter"
+        "masala spice mix"
       ],
       "allergens": [
         "gluten",
         "milk",
-        "eggs"
+        "eggs",
+        "mustard",
+        "celery"
       ],
       "allergen_verified": false,
       "is_vegetarian": false,
@@ -1102,7 +1134,8 @@
       "allergens": [
         "gluten",
         "milk",
-        "eggs"
+        "eggs",
+        "sulphites"
       ],
       "allergen_verified": false,
       "is_vegetarian": true,
