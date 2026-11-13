@@ -58,14 +58,14 @@ export function ChatPanel({ locale = "en", docked = false }: ChatPanelProps) {
       } else {
         setMessages((prev) => [
           ...prev,
-          { sender: "assistant", text: "Assistant currently unavailable." },
+          { sender: "assistant", text: dict.ui.chatUnavailable },
         ]);
       }
     } catch {
       // Network or unexpected failure
       setMessages((prev) => [
         ...prev,
-        { sender: "assistant", text: "Unable to connect to assistant." },
+        { sender: "assistant", text: dict.ui.chatOffline },
       ]);
     } finally {
       setIsLoading(false);
@@ -97,7 +97,7 @@ export function ChatPanel({ locale = "en", docked = false }: ChatPanelProps) {
             <button
               onClick={() => setIsOpen(false)}
               className="text-ink-muted hover:text-ink text-xs px-2 py-1 rounded"
-              aria-label="Close"
+              aria-label={dict.ui.chatClose}
             >
               ✕
             </button>
@@ -112,7 +112,7 @@ export function ChatPanel({ locale = "en", docked = false }: ChatPanelProps) {
           <div className="p-3 flex-1 overflow-y-auto space-y-2 min-h-24 max-h-[300px] text-xs">
             {messages.length === 0 ? (
               <p className="text-ink-muted text-center py-6 italic">
-                Ask about dish ingredients or dietary options.
+                {dict.ui.chatEmpty}
               </p>
             ) : (
               messages.map((m, idx) => (
@@ -135,7 +135,7 @@ export function ChatPanel({ locale = "en", docked = false }: ChatPanelProps) {
             {isLoading && (
               <div className="flex justify-start">
                 <div className="bg-paper-2 text-ink-muted rounded-xl px-3 py-2 text-xs">
-                  Thinking...
+                  {dict.ui.chatThinking}
                 </div>
               </div>
             )}

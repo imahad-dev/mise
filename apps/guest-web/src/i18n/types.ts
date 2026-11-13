@@ -66,6 +66,14 @@ export interface TranslationDict {
     chatPlaceholder: string;
     chatSend: string;
     chatNotice: string;
+    chatClose: string;
+    chatEmpty: string;
+    chatThinking: string;
+    chatUnavailable: string;
+    chatOffline: string;
+    loadingMenu: string;
+    menuError: string;
+    retry: string;
     table: string;
     placedAt: string;
     items: string;

@@ -38,24 +38,35 @@ export async function skipWelcome(page: Page) {
   await expect(welcome).toBeHidden();
 }
 
-export async function openTableMenu(page: Page, qrToken: string) {
+export type Lang = "en" | "ur";
+// Exact guest strings per language, from apps/guest-web/src/i18n/{en,ur}.ts.
+const VIEW_MENU: Record<Lang, string> = { en: "View Menu", ur: "مینو دیکھیں" };
+const CONFIRM: Record<Lang, string> = { en: "Confirm Order", ur: "آرڈر کی تصدیق کریں" };
+const ACK: Record<Lang, string> = {
+  en: "I have spoken with staff and understand the allergen risks",
+  ur: "میں نے عملے سے بات کر لی ہے اور اس آرڈر کے الرجی کے خطرات سمجھتا/سمجھتی ہوں",
+};
+const LANGUAGE_NAME: Record<Lang, string> = { en: "English", ur: "اردو" };
+
+export async function openTableMenu(page: Page, qrToken: string, lang: Lang = "en") {
   await page.goto(`${GUEST}/q/${qrToken}`);
-  await page.getByRole("button", { name: "View Menu" }).click();
-  await expect(page).toHaveURL(/\/en\/menu$/);
+  if (lang !== "en") await page.getByRole("button", { name: LANGUAGE_NAME[lang], exact: true }).click();
+  await page.getByRole("button", { name: VIEW_MENU[lang] }).click();
+  await expect(page).toHaveURL(new RegExp(`/${lang}/menu$`));
   await skipWelcome(page);
 }
 
 /** Tick the allergen acknowledgement when the open order sheet asks for it. */
-export async function acknowledgeAllergens(page: Page) {
-  const ack = page.getByText("I have spoken with staff and understand the allergen risks");
+export async function acknowledgeAllergens(page: Page, lang: Lang = "en") {
+  const ack = page.getByText(ACK[lang]);
   if (await ack.isVisible()) await ack.click();
 }
 
 /** Confirm the cart; returns the order id from the order page's URL. */
-export async function placeOrder(page: Page) {
-  await acknowledgeAllergens(page);
-  await page.getByRole("button", { name: "Confirm Order" }).click();
-  await expect(page).toHaveURL(/\/en\/orders\/[0-9a-f-]{36}$/);
+export async function placeOrder(page: Page, lang: Lang = "en") {
+  await acknowledgeAllergens(page, lang);
+  await page.getByRole("button", { name: CONFIRM[lang] }).click();
+  await expect(page).toHaveURL(new RegExp(`/${lang}/orders/[0-9a-f-]{36}$`));
   return page.url().split("/").pop() ?? "";
 }
 

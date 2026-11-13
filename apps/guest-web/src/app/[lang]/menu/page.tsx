@@ -420,7 +420,7 @@ export default function GuestMenuPage({
     return (
       <div className="min-h-screen bg-paper text-ink flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">
-          <Loader label="Loading menu..." />
+          <Loader label={dict.ui.loadingMenu} />
         </div>
       </div>
     );
@@ -430,12 +430,12 @@ export default function GuestMenuPage({
     return (
       <div className="min-h-screen bg-paper text-ink flex items-center justify-center p-4">
         <div className="max-w-md w-full bg-card border border-line rounded-2xl p-6 text-center space-y-4">
-          <p className="text-sm text-danger-fg">{error || "Unable to display menu."}</p>
+          <p className="text-sm text-danger-fg">{error || dict.ui.menuError}</p>
           <button
             onClick={() => window.location.reload()}
             className="px-4 py-2 bg-paper-2 text-xs font-medium rounded-xl hover:bg-line"
           >
-            Retry
+            {dict.ui.retry}
           </button>
         </div>
       </div>
