@@ -570,7 +570,7 @@ async def _bill_detail(
     db: AsyncSession, session: GuestSession, bill: Bill, restaurant: Restaurant
 ) -> GuestBillDetail:
     now = await db.scalar(select(func.clock_timestamp()))
-    lines, subtotal = bill_lines(await active_orders(db, bill.id))
+    lines, subtotal = bill_lines(await active_orders(db, bill.id), guest_language=True)
     voided_orders = list(
         (
             await db.execute(
@@ -583,7 +583,7 @@ async def _bill_detail(
         .scalars()
         .all()
     )
-    voided, _ = bill_lines(voided_orders)
+    voided, _ = bill_lines(voided_orders, guest_language=True)
     latest = (
         await db.execute(
             select(Order.status, Order.collected_at)
