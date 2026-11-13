@@ -86,7 +86,7 @@ test.describe.serial("Urdu at Angeethi House", () => {
     await kitchen.goto(`${OWNER}/bills`);
     await kitchen.getByRole("button").filter({ hasText: "Table T3" }).click();
     const bill = kitchen.getByRole("dialog", { name: /^Table T3 · Bill no\. \d{4}$/ });
-    await expect(bill.getByText("Naan", { exact: true }).first()).toBeVisible();
+    await expect(bill.getByText(/1 × Naan/)).toBeVisible();
     expect(await kitchen.locator("body").innerText()).not.toMatch(ARABIC_SCRIPT);
     await kitchen.context().close();
   });
