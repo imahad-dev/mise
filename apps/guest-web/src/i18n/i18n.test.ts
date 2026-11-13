@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { translate, getDictionary, withVenue } from "./index";
 import { en } from "./en";
 import { ur } from "./ur";
+import { ar } from "./ar";
 
 function leaves(obj: unknown, prefix = ""): [string, string][] {
   return Object.entries(obj as Record<string, unknown>).flatMap(([k, v]) =>
@@ -34,20 +35,19 @@ describe("i18n dictionary and fallback mechanism", () => {
 
   it("includes the mandatory 'please confirm with staff' notice", () => {
     expect(en.staffNotice).toContain("confirm all allergen risks with staff");
-    expect(ur.staffNotice).toContain("عملے سے");
   });
 });
 
-describe("Urdu dictionary", () => {
+describe.each([["ur", ur], ["ar", ar]] as const)("%s dictionary", (code, dict) => {
   const enLeaves = new Map(leaves(en));
-  const urLeaves = new Map(leaves(ur));
+  const dictLeaves = new Map(leaves(dict));
 
   it("has every English key and nothing extra", () => {
-    expect([...urLeaves.keys()].sort()).toEqual([...enLeaves.keys()].sort());
+    expect([...dictLeaves.keys()].sort()).toEqual([...enLeaves.keys()].sort());
   });
 
   it("has no empty value and never names the platform", () => {
-    for (const [key, value] of urLeaves) {
+    for (const [key, value] of dictLeaves) {
       expect(value.trim(), key).not.toBe("");
       expect(value, key).not.toMatch(/mise/i);
     }
@@ -56,21 +56,30 @@ describe("Urdu dictionary", () => {
   it("keeps every placeholder of the English text", () => {
     for (const [key, value] of enLeaves) {
       const holes = value.match(/\{\w+\}/g) ?? [];
-      for (const hole of holes) expect(urLeaves.get(key), `${key} ${hole}`).toContain(hole);
+      for (const hole of holes) expect(dictLeaves.get(key), `${key} ${hole}`).toContain(hole);
     }
   });
 
-  it("is written in Urdu script, apart from brand and method names", () => {
+  it("is written in its own script, apart from brand and method names", () => {
     const latinOnly = new Set(["pay.methods.wallet", "pay.methods.raast", "pay.labels.raast_id", "pay.labels.jazzcash", "pay.labels.easypaisa", "pay.labels.iban"]);
-    for (const [key, value] of urLeaves) {
+    for (const [key, value] of dictLeaves) {
       if (!latinOnly.has(key)) expect(value, key).toMatch(/[؀-ۿ]/);
     }
   });
 
-  it("serves Urdu for ur and English for an unknown locale", () => {
-    expect(getDictionary("ur").allergenStatus.contains).toBe(ur.allergenStatus.contains);
+  it("serves its dictionary for its code and English for an unknown locale", () => {
+    expect(getDictionary(code).allergenStatus.contains).toBe(dict.allergenStatus.contains);
     expect(getDictionary("it")).toBe(en);
     expect(translate("it", "allergenStatus.contains")).toBe("Contains");
+  });
+
+  it("uses only its own script's letters", () => {
+    const wrong = code === "ar" ? /[کیہھے]/ : /[كي]/;
+    for (const [key, value] of new Map(leaves(dict))) expect(value, key).not.toMatch(wrong);
+  });
+
+  it("names the staff in its mandatory notice", () => {
+    expect(dict.staffNotice).toMatch(code === "ar" ? /الموظفين/ : /عملے سے/);
   });
 });
 
