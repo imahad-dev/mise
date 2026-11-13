@@ -1,6 +1,6 @@
 # Mise System Architecture
 
-Mise is a revenue copilot and operational platform for independent restaurants. Guests scan table QR codes to order from an English/Italian web menu with deterministic allergen safety filters, pick a size where a dish has sizes, call a waiter and choose how to pay from their phone; a table takes orders only once staff open it, and the first order of each visit waits for one-tap staff approval before the kitchen sees it; counter QRs take pickup orders that reach the kitchen only once paid. Owners and staff sign in with their own accounts and see only the restaurants they belong to; staff watch every table on a live Floor view, confirm payments (guests never settle a bill) and print a sample bill with illustrative sales tax. Kitchen staff process orders in real time via a Server-Sent Events (SSE) kitchen display system (KDS). Owners get a revenue brief computed from order history (KPIs, menu engineering, a backtested 7-day demand forecast, ranked actions), a deterministic what-if calculator, and VLM menu digitization. Methods and limits: [analytics.md](analytics.md).
+Mise is a revenue copilot and operational platform for independent restaurants. Guests scan table QR codes to order from a web menu in English and the venue's local language (Urdu at the Pakistani venues) with deterministic allergen safety filters, pick a size where a dish has sizes, call a waiter and choose how to pay from their phone; a table takes orders only once staff open it, and the first order of each visit waits for one-tap staff approval before the kitchen sees it; counter QRs take pickup orders that reach the kitchen only once paid. Owners and staff sign in with their own accounts and see only the restaurants they belong to; staff watch every table on a live Floor view, confirm payments (guests never settle a bill) and print a sample bill with illustrative sales tax. Kitchen staff process orders in real time via a Server-Sent Events (SSE) kitchen display system (KDS). Owners get a revenue brief computed from order history (KPIs, menu engineering, a backtested 7-day demand forecast, ranked actions), a deterministic what-if calculator, and VLM menu digitization. Methods and limits: [analytics.md](analytics.md).
 
 ---
 
@@ -63,6 +63,9 @@ Mise is a revenue copilot and operational platform for independent restaurants. 
 - **Testing**: Vitest, React Testing Library, ESLint
 - **Animation**: GSAP with `@gsap/react` (venue welcome and loader only)
 
+### Guest Languages (guest app)
+The `[lang]` segment is `en`, `ur` or `ar`; any other segment is a 404 before a session lookup. The layout reads the visit's language on the server and redirects a segment that differs from it (or from the venue's offer) to `/<visit language>/menu`, so `/ar/menu` at a venue without Arabic sends the guest to `/en/menu`. A guest picks a language on the scan page; there is no in-menu switch. The layout sets `lang` and `dir` on the server, so Urdu pages are right-to-left from first paint, in Noto Naskh Arabic. Money and percentages use Latin digits (`numberingSystem: "latn"`) and stay left-to-right inside right-to-left text. The owner app, kitchen and bills stay in English, and the assistant answers in English from English menu names. The Urdu text is a draft translation; its allergen and safety wording awaits review by a native speaker.
+
 ### Venue Brands (guest app)
 A guest only ever sees the venue whose QR code they scanned. `[lang]/layout.tsx` and the scan page
 (`q/[token]`) ask the API on the server which venue the guest session or QR token belongs to, then
@@ -117,6 +120,8 @@ Represents an individual restaurant tenant.
 
 *Check Constraint*: `CHECK ((default_language = ANY(languages)) IS TRUE)`
 
+`languages` is what the venue offers: `{en,ur}` at Angeethi House and Kehwa & Crumb (Arabic comes with Dubai in phase 2). Creating or patching a guest session with a language the venue does not offer answers 422, and a session created without one gets `default_language`.
+
 #### `menu_item`
 Catalog of dishes and beverages offered by a restaurant.
 - `id` (UUID, PK)
@@ -152,6 +157,7 @@ Sizes or portions of a dish (e.g. "½ kg" / "1 kg", "Regular" / "Large"). A dish
 - `id` (UUID, PK)
 - `menu_item_id` (UUID, FK → menu_item.id ON DELETE CASCADE)
 - `label` (TEXT, NOT NULL), `price`, `unit_cost` (DECIMAL(10,2), NOT NULL, `>= 0`), `sort_order` (INTEGER)
+- `translations` (JSONB, NOT NULL DEFAULT '{}') — guest-facing labels by language, e.g. `{"ur": "…"}`; the guest menu shows the session's language and falls back to `label`. Snapshots, the kitchen, tickets and bills keep `label`
 - `created_at`, `updated_at` (TIMESTAMPTZ)
 *Constraint*: `UNIQUE (menu_item_id, label)`
 
@@ -159,11 +165,13 @@ Sizes or portions of a dish (e.g. "½ kg" / "1 kg", "Regular" / "Large"). A dish
 Choices on a dish, grouped. `kind` is `pick` (choose from a list), `add` (extras) or `leave_out` (remove an ingredient).
 - `id` (UUID, PK), `menu_item_id` (UUID, FK → menu_item.id ON DELETE CASCADE)
 - `label` (TEXT, NOT NULL), `kind` (TEXT, `CHECK` in the three kinds), `min_select`, `max_select` (INTEGER, NOT NULL), `sort_order` (INTEGER)
+- `translations` (JSONB, NOT NULL DEFAULT '{}') — guest-facing labels by language, e.g. `{"ur": "…"}`; the guest menu shows the session's language and falls back to `label`. Snapshots, the kitchen, tickets and bills keep `label`
 *Constraint*: `UNIQUE (menu_item_id, label)`
 
 #### `menu_choice`
 - `id` (UUID, PK), `group_id` (UUID, FK → menu_choice_group.id ON DELETE CASCADE)
 - `label` (TEXT, NOT NULL), `price_delta`, `cost_delta` (DECIMAL(10,2), NOT NULL, `>= 0`)
+- `translations` (JSONB, NOT NULL DEFAULT '{}') — guest-facing labels by language, e.g. `{"ur": "…"}`; the guest menu shows the session's language and falls back to `label`. Snapshots, the kitchen, tickets and bills keep `label`
 - `allergens` (TEXT[], EU-14 check), `allergen_verified`, `is_vegetarian`, `is_vegan`, `available`, `is_default` (BOOLEAN), `sort_order` (INTEGER)
 *Constraint*: `UNIQUE (group_id, label)`
 
