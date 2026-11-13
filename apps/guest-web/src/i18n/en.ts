@@ -42,6 +42,7 @@ export const en: TranslationDict = {
     menuTitle: "Menu",
     cartTitle: "Your Order",
     addToCart: "Add",
+    addDish: "Add {name}",
     quantity: "Qty",
     notes: "Kitchen Notes",
     notesPlaceholder: "e.g., sauce on the side...",

@@ -20,7 +20,7 @@ import {
 const EASTERN_DIGITS = /[٠-٩۰-۹]/;
 const ARABIC_SCRIPT = /[؀-ۿ]/;
 const ASK = "Angeethi House سے پوچھیں"; // ui.chatTitle
-const ADD_NAAN = "شامل کریں نان"; // `${ui.addToCart} ${name}`
+const ADD_NAAN = "نان شامل کریں"; // ui.addDish
 let tables: Record<string, VenueTable>;
 
 test.beforeEach(() => clearDemoLimits());

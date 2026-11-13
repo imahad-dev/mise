@@ -578,7 +578,7 @@ export default function GuestMenuPage({
                         {isAvailable ? (
                           <Button
                             size="icon"
-                            aria-label={`${dict.ui.addToCart} ${item.name}`}
+                            aria-label={dict.ui.addDish.replace("{name}", () => item.name)}
                             onClick={() => (needsPage(item) ? setDishOpen(item) : handleAddToCart(item))}
                           >
                             +

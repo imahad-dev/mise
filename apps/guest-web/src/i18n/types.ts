@@ -40,6 +40,8 @@ export interface TranslationDict {
     menuTitle: string;
     cartTitle: string;
     addToCart: string;
+    /** Accessible name of a dish's + button. */
+    addDish: string;
     quantity: string;
     notes: string;
     notesPlaceholder: string;
