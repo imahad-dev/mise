@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { formatPrice } from "ui";
 import { getDictionary } from "../i18n";
 import { ur } from "../i18n/ur";
+import { ar } from "../i18n/ar";
 import { billState, claimMessage, counterState, paidText, payForwardThanks, referenceFor, copyText, detailsFor, isValidReference, menuTaxNote, needsReference, payTotal, percent, serviceLine, type GuestBill } from "./pay";
 
 const en = getDictionary("en");
@@ -95,6 +96,15 @@ describe("paid text", () => {
       ur.pay.paidAmount.replace("{total}", formatPrice(130, "PKR", "ur")).replace("{rate}", "16.5").replace("{method}", ur.pay.methods.raast),
     );
     expect(paidText(uk, getDictionary("ur"), "ur")).not.toMatch(/[٠-٩۰-۹]/);
+  });
+  it("names the method as a label in Arabic, for a Dubai cash bill", () => {
+    const dubai = { ...settled, currency: "AED", payment_method: "cash", tax_rate: "0.0500", total: "48.00", tax_included: true } as GuestBill;
+    const text = paidText(dubai, getDictionary("ar"), "ar");
+    expect(text).toBe(
+      ar.pay.paidVatIncluded.replace("{total}", formatPrice(48, "AED", "ar")).replace("{rate}", "5").replace("{method}", ar.pay.methods.cash),
+    );
+    expect(text).toContain("طريقة الدفع: نقدًا");
+    expect(text).not.toContain("عبر");
   });
   it("is empty until the bill is settled", () => {
     expect(paidText({ ...settled, status: "open", total: null, tax_rate: null, payment_method: null }, en, "en")).toBeNull();
