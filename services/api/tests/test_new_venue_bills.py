@@ -187,3 +187,8 @@ async def test_noor_claim_asking_for_service_records_none(client, db_session, no
     b = b.scalar_one()
     await db_session.refresh(b)
     assert (b.claimed_service_included, b.service_charge_amount) == (False, Decimal("0.00"))
+    claimed_at = b.claimed_at
+    # The same request again is no change (the stored claim is not rewritten).
+    assert (await client.post("/api/guest/bill/payment", json=claim)).is_success
+    await db_session.refresh(b)
+    assert b.claimed_at == claimed_at

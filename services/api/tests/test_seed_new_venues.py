@@ -185,3 +185,13 @@ def test_sesame_is_declared_wherever_zaatar_or_tahini_is():
         text = " ".join(item["ingredients"]).lower()
         if any(w in text for w in ("za'atar", "zaatar", "tahini", "sesame")):
             assert "sesame" in item["allergens"], item["key"]
+
+
+@pytest.mark.parametrize("slug", VENUES)
+def test_diet_flags_agree_with_allergens(slug):
+    """Worst case: a gluten-free dish has no gluten; a vegan dish has no milk or eggs."""
+    for item in _load(VENUES[slug]["file"])["items"]:
+        if item["is_gluten_free"]:
+            assert "gluten" not in item["allergens"], item["key"]
+        if item["is_vegan"]:
+            assert not {"milk", "eggs"} & set(item["allergens"]), item["key"]
