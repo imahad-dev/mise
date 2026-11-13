@@ -64,7 +64,6 @@ async def handle_guest_chat(
     db: AsyncSession,
     restaurant_id: uuid.UUID,
     session_id: uuid.UUID,
-    guest_language: str,
     message: str,
 ) -> dict:
     """Process a guest chat message and return AI response.

@@ -469,7 +469,6 @@ async def guest_chat(
         db=db,
         restaurant_id=session.restaurant_id,
         session_id=session.id,
-        guest_language=session.language,
         message=payload.message,
     )
 
