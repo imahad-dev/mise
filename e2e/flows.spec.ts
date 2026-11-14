@@ -131,6 +131,7 @@ test.describe.serial("two venues: guest, kitchen, bills, owner", () => {
     const switcher = page.getByRole("combobox", { name: "Venue" });
     // One option per demo venue, however many there are.
     const { venues } = await demoInfo();
+    expect(venues.length).toBeGreaterThanOrEqual(4);
     await expect(switcher.getByRole("option")).toHaveCount(venues.length);
     for (const v of venues) await expect(switcher.getByRole("option").filter({ hasText: v.name })).toHaveCount(1);
     await switcher.selectOption(KEHWA);
