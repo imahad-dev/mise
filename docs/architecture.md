@@ -1,6 +1,6 @@
 # Mise System Architecture
 
-Mise is a revenue copilot and operational platform for independent restaurants. Guests scan table QR codes to order from a web menu in English and the venue's local language (Urdu at the Pakistani venues) with deterministic allergen safety filters, pick a size where a dish has sizes, call a waiter and choose how to pay from their phone; a table takes orders only once staff open it, and the first order of each visit waits for one-tap staff approval before the kitchen sees it; counter QRs take pickup orders that reach the kitchen only once paid. Owners and staff sign in with their own accounts and see only the restaurants they belong to; staff watch every table on a live Floor view, confirm payments (guests never settle a bill) and print a sample bill with illustrative sales tax. Kitchen staff process orders in real time via a Server-Sent Events (SSE) kitchen display system (KDS). Owners get a revenue brief computed from order history (KPIs, menu engineering, a backtested 7-day demand forecast, ranked actions), a deterministic what-if calculator, and VLM menu digitization. Methods and limits: [analytics.md](analytics.md).
+Mise is a revenue copilot and operational platform for independent restaurants. Guests scan table QR codes to order from a web menu in English and the venue's local language (Urdu at the Pakistani venues, Arabic at Dubai; Tikka Town is English only) with deterministic allergen safety filters, pick a size where a dish has sizes, call a waiter and choose how to pay from their phone; a table takes orders only once staff open it, and the first order of each visit waits for one-tap staff approval before the kitchen sees it; counter QRs take pickup orders that reach the kitchen only once paid. Owners and staff sign in with their own accounts and see only the restaurants they belong to; staff watch every table on a live Floor view, confirm payments (guests never settle a bill) and print a sample bill with illustrative sales tax. Kitchen staff process orders in real time via a Server-Sent Events (SSE) kitchen display system (KDS). Owners get a revenue brief computed from order history (KPIs, menu engineering, a backtested 7-day demand forecast, ranked actions), a deterministic what-if calculator, and VLM menu digitization. Methods and limits: [analytics.md](analytics.md).
 
 ---
 
@@ -78,7 +78,7 @@ conditions; ink, allergen colours and money (`.figure`) keep fixed styles. The w
 per visit, can be tapped away and closes within 3 s. A bad QR code, an expired visit or a missing
 page shows a neutral "scan again" screen with no venue or Mise name. The owner app stays
 Mise-branded; only the printed QR table cards and the sample bill use the venue's logo, colour
-and display face.
+and display face. There are four packages: `angeethi-house`, `kehwa-and-crumb`, `noor-and-zaatar` and `tikka-town`, each with `fonts`, `Motif`, `Welcome`, `Loader` and an `index`.
 
 ### Infrastructure & Services
 - **Database**: PostgreSQL 16 Alpine
@@ -105,10 +105,10 @@ Represents an individual restaurant tenant.
 - `name` (TEXT, NOT NULL)
 - `slug` (TEXT, UNIQUE NOT NULL)
 - `timezone` (TEXT, NOT NULL DEFAULT 'Europe/Rome')
-- `currency` (TEXT, NOT NULL DEFAULT 'EUR'; both demo venues use `PKR`)
+- `currency` (TEXT, NOT NULL DEFAULT 'EUR'; the demo venues use `PKR`, `AED` (Noor & Za'atar) and `GBP` (Tikka Town))
 - `city` (TEXT, Nullable)
 - `tax_jurisdiction` (TEXT, Nullable) — key into `data/tax_jurisdictions.json` (`PB` Punjab, `ICT` Islamabad, `GB` United Kingdom, `AE-DU` Dubai); the seed and admin scripts refuse a jurisdiction whose currency is not the venue's
-- `service_charge_rate` (NUMERIC(4,4), NOT NULL DEFAULT 0, `CHECK` 0–0.20) — the optional table service charge; above 0 only where the jurisdiction offers one (see Bills and Sales Tax)
+- `service_charge_rate` (NUMERIC(4,4), NOT NULL DEFAULT 0, `CHECK` 0–0.20) — the optional table service charge, read from `restaurant.service_charge_rate` in the seed file (Tikka Town seeds 0.10); above 0 only where the jurisdiction offers one (see Bills and Sales Tax)
 - `pickup_prefix` (TEXT, Nullable) — counter pickup labels print as `<prefix>-042` (1–3 capital letters; `P` Angeethi House, `K` Kehwa & Crumb)
 - `service_extra_label` (TEXT, Nullable) — the venue's third Call waiter reason ("More naan / roti")
 - `payment_details` (JSONB, NOT NULL DEFAULT '{}') — `raast_id`, `jazzcash`, `easypaisa`, `iban`, `account_title`, `sample`; validated on save (§4)
@@ -120,7 +120,7 @@ Represents an individual restaurant tenant.
 
 *Check Constraint*: `CHECK ((default_language = ANY(languages)) IS TRUE)`
 
-`languages` is what the venue offers: `{en,ur}` at Angeethi House and Kehwa & Crumb (Arabic comes with Dubai in phase 2). Creating or patching a guest session with a language the venue does not offer answers 422, and a session created without one gets `default_language`.
+`languages` is what the venue offers: `{en,ur}` at Angeethi House and Kehwa & Crumb, `{en,ar}` at Noor & Za'atar and `{en}` at Tikka Town (the Arabic and Urdu text are draft translations). Creating or patching a guest session with a language the venue does not offer answers 422, and a session created without one gets `default_language`.
 
 #### `menu_item`
 Catalog of dishes and beverages offered by a restaurant.
@@ -362,7 +362,7 @@ Both cookies are signed server-side using HMAC-SHA256 with `API_SECRET_KEY`, and
       --email boss@cafex.pk --name Boss --restaurant cafe-x --role owner
   ```
   `create-restaurant` rejects a jurisdiction with no tax rates; `add-user` prompts for the password (never taken from argv or printed) and only adds a membership for an existing user.
-- Demo users (seeded only when `DEMO_MODE=true`, `data/seed/demo_users.json`): a demo owner of both demo venues and one demo staff user per venue. `POST /api/auth/demo-login {role, venue?}` signs in as one of them and is disabled outside demo mode.
+- Demo users (seeded only when `DEMO_MODE=true`, `data/seed/demo_users.json`): a demo owner of all four demo venues and one demo staff user per venue. `POST /api/auth/demo-login {role, venue?}` signs in as one of them and is disabled outside demo mode.
 
 ### Bills and Sales Tax
 - Payment classes: `card`, `wallet` (JazzCash / Easypaisa) and `raast` (Raast QR) are `digital`; `cash` and `bank_transfer` are `standard`.
