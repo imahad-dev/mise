@@ -4,6 +4,8 @@ import type { BrandPackage } from "./types";
 const PACKAGES: Record<string, () => Promise<BrandPackage>> = {
   "angeethi-house": () => import("./angeethi-house").then((m) => m.brand),
   "kehwa-and-crumb": () => import("./kehwa-and-crumb").then((m) => m.brand),
+  "noor-and-zaatar": () => import("./noor-and-zaatar").then((m) => m.brand),
+  "tikka-town": () => import("./tikka-town").then((m) => m.brand),
 };
 
 export const BRAND_SLUGS = Object.keys(PACKAGES);

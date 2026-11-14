@@ -38,10 +38,12 @@ describe.each(all)("%s tokens", (_slug, t) => {
 });
 
 describe("heading weight", () => {
-  it("is a CSS weight or null, and only Kehwa & Crumb sets one", () => {
+  it("is a CSS weight or null; only Angeethi House keeps the headings' own", () => {
     for (const [slug, t] of all) expect(t.headingWeight === null || /^[1-9]00$/.test(t.headingWeight), slug).toBe(true);
     expect(VENUE_BRANDS["kehwa-and-crumb"].tokens.headingWeight).toBe("300");
+    expect(VENUE_BRANDS["noor-and-zaatar"].tokens.headingWeight).toBe("600");
     expect(VENUE_BRANDS["angeethi-house"].tokens.headingWeight).toBeNull();
+    expect(VENUE_BRANDS["tikka-town"].tokens.headingWeight).toBe("400");
     expect(NEUTRAL_TOKENS.headingWeight).toBeNull();
   });
 });
@@ -50,9 +52,14 @@ describe("venueBrand", () => {
   it("finds a known venue and refuses anything else", () => {
     expect(venueBrand("angeethi-house")?.name).toBe("Angeethi House");
     expect(venueBrand("kehwa-and-crumb")?.name).toBe("Kehwa & Crumb");
+    expect(venueBrand("noor-and-zaatar")?.name).toBe("Noor & Za'atar");
+    expect(venueBrand("tikka-town")?.name).toBe("Tikka Town");
     for (const bad of [undefined, null, "", "ANGEETHI-HOUSE", "__proto__", "constructor", "../x"]) {
       expect(venueBrand(bad)).toBeNull();
     }
+  });
+  it("has a brand for every demo venue", () => {
+    expect(Object.keys(VENUE_BRANDS).sort()).toEqual(["angeethi-house", "kehwa-and-crumb", "noor-and-zaatar", "tikka-town"]);
   });
   it("keys every brand by its own slug", () => {
     for (const [key, b] of Object.entries(VENUE_BRANDS)) expect(b.slug).toBe(key);

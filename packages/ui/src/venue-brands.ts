@@ -92,6 +92,50 @@ export const VENUE_BRANDS: Record<string, VenueBrand> = {
     displayFont: "var(--brand-display-face, 'Futura'), 'Futura', 'Century Gothic', sans-serif",
     textFont: "var(--brand-text-face, system-ui), system-ui, sans-serif",
   },
+  "noor-and-zaatar": {
+    slug: "noor-and-zaatar",
+    name: "Noor & Za'atar",
+    tokens: {
+      deep: "#014BAA",
+      onDeep: "#F8F3F0",
+      surface: "#F8F3F0",
+      surface2: "#ECE4DA",
+      card: "#FFFCF8",
+      line: "rgb(1 75 170 / 0.15)",
+      accent: "#014BAA",
+      accentStrong: "#013A85",
+      onAccent: "#F8F3F0",
+      spark: "#E9A93B",
+      // Arches from the logo: round top, nearly square base.
+      buttonRadius: "999px 999px 10px 10px",
+      cardRadius: "28px 28px 10px 10px",
+      headingWeight: "600",
+    },
+    displayFont: "var(--brand-display-face, Georgia), Georgia, serif",
+    textFont: "var(--brand-text-face, system-ui), system-ui, sans-serif",
+  },
+  "tikka-town": {
+    slug: "tikka-town",
+    name: "Tikka Town",
+    tokens: {
+      deep: "#9E2B12",
+      onDeep: "#FDFDF1",
+      surface: "#FDFDF1",
+      surface2: "#F6EBD7",
+      card: "#FFFFFA",
+      line: "rgb(158 43 18 / 0.18)",
+      accent: "#9E2B12",
+      accentStrong: "#7A200C",
+      onAccent: "#FDFDF1",
+      spark: "#E8B23A",
+      buttonRadius: "2px",
+      cardRadius: "2px",
+      // Bebas Neue has one weight; a bold heading would be faked and smeared.
+      headingWeight: "400",
+    },
+    displayFont: "var(--brand-display-face, Impact), Impact, 'Arial Narrow', sans-serif",
+    textFont: "var(--brand-text-face, system-ui), system-ui, sans-serif",
+  },
 };
 
 export function venueBrand(slug: string | null | undefined): VenueBrand | null {

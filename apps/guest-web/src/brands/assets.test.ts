@@ -4,7 +4,12 @@ import { describe, expect, it } from "vitest";
 import { VENUE_BRANDS } from "ui";
 
 const repo = path.resolve(process.cwd(), "../..");
-const SOURCE: Record<string, string> = { "angeethi-house": "angeethi", "kehwa-and-crumb": "kehwa" };
+const SOURCE: Record<string, string> = {
+  "angeethi-house": "angeethi",
+  "kehwa-and-crumb": "kehwa",
+  "noor-and-zaatar": "noor",
+  "tikka-town": "tikka",
+};
 
 describe.each(Object.keys(VENUE_BRANDS))("%s logo files", (slug) => {
   it.each(["mark", "lockup"])("%s.svg is the round-1 vector in both apps", (kind) => {
