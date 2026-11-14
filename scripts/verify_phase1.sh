@@ -101,7 +101,7 @@ step_seed_twice() {
   local second; second=$(sql "$q")
   local users; users=$(sql "SELECT (SELECT count(*) FROM users) || ' ' || (SELECT count(*) FROM memberships)")
   echo "after seed 1: $first / after seed 2: $second / users memberships: $users"
-  [ "$first" = "$second" ] && [ "${first%% *}" = "2" ] && [ "${users%% *}" -ge 3 ]
+  [ "$first" = "$second" ] && [ "${first%% *}" = "4" ] && [ "${users%% *}" -ge 3 ]
 }
 
 simulate() { # simulate <outfile> [slug]
