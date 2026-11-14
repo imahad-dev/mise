@@ -101,3 +101,9 @@ describe("venue-named strings", () => {
     expect(ur.ui.scanAgain).toBeTruthy();
   });
 });
+
+describe("ar demo-bill wording", () => {
+  it("never says invoice (فاتورة); a demo bill is the check (الحساب)", () => {
+    for (const [key, value] of new Map(leaves(ar))) expect(value, key).not.toMatch(/فاتور/);
+  });
+});

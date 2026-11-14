@@ -89,7 +89,7 @@ export const ar: TranslationDict = {
     backToMenu: "العودة إلى القائمة",
   },
   menu: {
-    taxNote: "الأسعار لا تشمل ضريبة المبيعات، وتُضاف إلى فاتورتك.",
+    taxNote: "الأسعار لا تشمل ضريبة المبيعات، وتُضاف إلى الحساب.",
     pricesIncludeVat: "الأسعار تشمل ضريبة القيمة المضافة.",
     from: "من",
     serviceNotice: "تُضاف رسوم خدمة اختيارية بنسبة {rate}% إلى فواتير الطاولات.",
@@ -113,11 +113,11 @@ export const ar: TranslationDict = {
     quantity: "الكمية",
   },
   bill: {
-    paid: "تم الدفع · رقم الفاتورة {billNo} · شكرًا لك",
+    paid: "تم الدفع · الحساب رقم {billNo} · شكرًا",
     payForward: "اشتريت {count} كوب شاي لمن يحتاجه. شكرًا.",
   },
   pay: {
-    button: "دفع الفاتورة",
+    button: "دفع الحساب",
     subtotal: "المجموع الفرعي",
     total: "المجموع",
     vatIncluded: "يشمل ضريبة القيمة المضافة {rate}%: {amount}",
@@ -152,11 +152,11 @@ export const ar: TranslationDict = {
     paid: "لقد دفعت",
     sending: "جارٍ الإرسال…",
     networkError: "تعذّر الوصول إلى المطعم — اضغط مرة أخرى",
-    noBill: "تظهر فاتورتك هنا بعد طلبك الأول.",
+    noBill: "يظهر الحساب هنا بعد طلبك الأول.",
     paidAmount: "تم دفع {total} (شامل ضريبة مبيعات {rate}%) · طريقة الدفع: {method}",
     paidVatIncluded: "تم دفع {total} (شامل ضريبة القيمة المضافة {rate}%) · طريقة الدفع: {method}",
     serviceChanged: "لقد غيّرت رسوم الخدمة — اضغط “{button}” مرة أخرى لتحديث دفعتك.",
-    cancelled: "ألغى الموظفون هذه الفاتورة — يُرجى سؤال النادل",
+    cancelled: "ألغى الموظفون حساب طاولتك — يُرجى سؤال النادل",
     visitEnded: "انتهت زيارتك — امسح رمز QR الخاص بالطاولة مرة أخرى",
   },
   counter: {

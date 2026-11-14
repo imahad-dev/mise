@@ -122,8 +122,8 @@ test.describe.serial("the two new venues", () => {
     const id = await placeOrder(page, "ar"); // "تأكيد الطلب"
     await approveOrder(id);
 
-    await page.getByRole("button", { name: "دفع الفاتورة" }).click(); // pay.button
-    const pay = page.getByRole("dialog", { name: "دفع الفاتورة" });
+    await page.getByRole("button", { name: "دفع الحساب" }).click(); // pay.button
+    const pay = page.getByRole("dialog", { name: "دفع الحساب" });
     await expect(pay.getByTestId("pay-total")).toBeVisible();
     await expect(pay.getByRole("switch")).toHaveCount(0); // no service at Noor
     await pay.getByRole("button", { name: /^نقدًا/ }).click(); // pay.methods.cash
