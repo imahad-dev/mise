@@ -1,13 +1,14 @@
 import { expect, test, type APIRequestContext, type Browser } from "@playwright/test";
-import { ANGEETHI, GUEST, demoInfo, openTableMenu, type Lang } from "./helpers";
+import { ANGEETHI, GUEST, KEHWA, NOOR, TIKKA, demoInfo, openTableMenu, type Lang } from "./helpers";
 
 // A guest sees only the venue they scanned: no other venue, no venue list, no Mise.
 type Venue = { slug: string; name: string; qr_token: string };
 
-// Exact guest strings per language, from apps/guest-web/src/i18n/{en,ur}.ts.
-const SAY = {
+// Exact guest strings per language, from apps/guest-web/src/i18n/{en,ur,ar}.ts.
+const SAY: Record<Lang, { ask: (v: string) => string; close: string; scanAgain: string }> = {
   en: { ask: (v: string) => `Ask ${v}`, close: "Close", scanAgain: "Scan the QR code on your table again." },
   ur: { ask: (v: string) => `${v} سے پوچھیں`, close: "بند کریں", scanAgain: "براہِ کرم اپنی ٹیبل کا QR کوڈ دوبارہ اسکین کریں۔" },
+  ar: { ask: (v: string) => `اسأل ${v}`, close: "إغلاق", scanAgain: "امسح رمز QR الموجود على طاولتك مرة أخرى." },
 };
 
 /** Walk every guest page of one venue in one language and check nothing names another venue or Mise. */
@@ -74,7 +75,8 @@ async function walk(browser: Browser, request: APIRequestContext, venues: Venue[
 test.describe("one venue per guest", () => {
   test("no other venue and no Mise anywhere a guest can go", async ({ browser, request }) => {
     const { venues } = await demoInfo();
-    expect(venues.length).toBeGreaterThanOrEqual(2);
+    // Every venue the demo API lists (all four), not a hard-coded list.
+    expect(venues.map((v) => v.slug)).toEqual(expect.arrayContaining([ANGEETHI, KEHWA, NOOR, TIKKA]));
     for (const venue of venues) await walk(browser, request, venues, venue, "en");
   });
 
@@ -83,6 +85,13 @@ test.describe("one venue per guest", () => {
     const angeethi = venues.find((v) => v.slug === ANGEETHI);
     expect(angeethi, "Angeethi House is a demo venue").toBeTruthy();
     await walk(browser, request, venues, angeethi!, "ur");
+  });
+
+  test("in Arabic too, no other venue and no Mise anywhere a guest can go", async ({ browser, request }) => {
+    const { venues } = await demoInfo();
+    const noor = venues.find((v) => v.slug === NOOR);
+    expect(noor, "Noor & Za'atar is a demo venue").toBeTruthy();
+    await walk(browser, request, venues, noor!, "ar");
   });
 
   test("the welcome plays once per visit, can be tapped away and never blocks for more than 3 s", async ({ browser }) => {

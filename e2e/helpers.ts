@@ -6,6 +6,8 @@ export const GUEST = process.env.GUEST_URL ?? "http://127.0.0.1:3000";
 export const OWNER = process.env.OWNER_URL ?? "http://127.0.0.1:3001";
 export const ANGEETHI = "angeethi-house";
 export const KEHWA = "kehwa-and-crumb";
+export const NOOR = "noor-and-zaatar";
+export const TIKKA = "tikka-town";
 
 type Role = "owner" | "staff";
 
@@ -38,15 +40,17 @@ export async function skipWelcome(page: Page) {
   await expect(welcome).toBeHidden();
 }
 
-export type Lang = "en" | "ur";
-// Exact guest strings per language, from apps/guest-web/src/i18n/{en,ur}.ts.
-const VIEW_MENU: Record<Lang, string> = { en: "View Menu", ur: "مینو دیکھیں" };
-const CONFIRM: Record<Lang, string> = { en: "Confirm Order", ur: "آرڈر کی تصدیق کریں" };
+export type Lang = "en" | "ur" | "ar";
+// Exact guest strings per language, from apps/guest-web/src/i18n/{en,ur,ar}.ts.
+const VIEW_MENU: Record<Lang, string> = { en: "View Menu", ur: "مینو دیکھیں", ar: "عرض القائمة" };
+const CONFIRM: Record<Lang, string> = { en: "Confirm Order", ur: "آرڈر کی تصدیق کریں", ar: "تأكيد الطلب" };
 const ACK: Record<Lang, string> = {
   en: "I have spoken with staff and understand the allergen risks",
   ur: "میں نے عملے سے بات کر لی ہے اور اس آرڈر کے الرجی کے خطرات سمجھتا/سمجھتی ہوں",
+  ar: "تحدثت مع الموظفين وأفهم مخاطر الحساسية لهذا الطلب.",
 };
-const LANGUAGE_NAME: Record<Lang, string> = { en: "English", ur: "اردو" };
+// Each language button is named in its own language (LANGUAGE_NAMES in apps/guest-web/src/i18n/languages.ts).
+const LANGUAGE_NAME = { ur: "اردو", ar: "العربية" } as const;
 
 export async function openTableMenu(page: Page, qrToken: string, lang: Lang = "en") {
   await page.goto(`${GUEST}/q/${qrToken}`);
