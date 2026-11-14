@@ -129,7 +129,10 @@ test.describe.serial("two venues: guest, kitchen, bills, owner", () => {
     await expect(page).not.toHaveURL(/\/login$/);
 
     const switcher = page.getByRole("combobox", { name: "Venue" });
-    await expect(switcher.getByRole("option")).toHaveText([/Angeethi House/, /Kehwa & Crumb/]);
+    // One option per demo venue, however many there are.
+    const { venues } = await demoInfo();
+    await expect(switcher.getByRole("option")).toHaveCount(venues.length);
+    for (const v of venues) await expect(switcher.getByRole("option").filter({ hasText: v.name })).toHaveCount(1);
     await switcher.selectOption(KEHWA);
     await expect(page.getByText("Real-time kitchen stream for restaurant: Kehwa & Crumb")).toBeVisible();
 
