@@ -130,7 +130,7 @@
       "translations": {
         "en": {
           "name": "Lamb Chops",
-          "description": "Four lamb chops marinated in yogurt, ginger, garlic and mustard oil, chargrilled"
+          "description": "Four lamb chops marinated in yogurt, garlic and mustard oil, chargrilled"
         }
       },
       "sim_weight": 7,
@@ -375,7 +375,7 @@
       "translations": {
         "en": {
           "name": "Lamb Karahi",
-          "description": "Lamb cooked in ghee with tomato, ginger and green chilli, finished with onion and coriander"
+          "description": "Lamb cooked in ghee with tomato, green chilli and masala spices"
         }
       },
       "sim_weight": 7,
@@ -462,7 +462,7 @@
       "translations": {
         "en": {
           "name": "Chicken Balti",
-          "description": "Chicken with onion, peppers and tomato cooked in ghee with mustard seeds and balti spices, topped with green chilli and coriander"
+          "description": "Chicken with peppers cooked in ghee with mustard seeds and balti spices"
         }
       },
       "sim_weight": 7,
@@ -550,7 +550,7 @@
       "translations": {
         "en": {
           "name": "Beef Nihari",
-          "description": "Beef shank slow-cooked in a ghee and spice gravy thickened with wheat flour, served with green chilli, coriander and fried onion"
+          "description": "Beef shank slow-cooked in a ghee and ginger spice gravy thickened with wheat flour"
         }
       },
       "sim_weight": 5,
@@ -769,7 +769,7 @@
       "translations": {
         "en": {
           "name": "Spiced Lancashire Hotpot",
-          "description": "Lamb, onion and carrot in a garam masala stock with celery and Worcestershire sauce, thickened with wheat flour, under buttered sliced potato"
+          "description": "Lamb in a masala stock with celery and Worcestershire sauce, thickened with wheat flour, under buttered sliced potato"
         }
       },
       "sim_weight": 6
@@ -957,7 +957,7 @@
       "translations": {
         "en": {
           "name": "Samosa Chaat",
-          "description": "Vegetable samosa in wheat pastry, topped with chickpeas, yogurt, tamarind chutney, onion, green chilli and coriander"
+          "description": "Samosa in wheat pastry, topped with chickpeas, yogurt and tamarind chutney"
         }
       },
       "sim_weight": 6,
@@ -1167,7 +1167,8 @@
       "allergens": [
         "gluten",
         "milk",
-        "eggs"
+        "eggs",
+        "sulphites"
       ],
       "allergen_verified": false,
       "is_vegetarian": true,
