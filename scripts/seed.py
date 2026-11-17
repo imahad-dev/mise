@@ -343,6 +343,7 @@ async def seed_data(
                 dietary_verified=item_data.get("dietary_verified", False),
                 available=item_data.get("available", True),
                 featured=item_data.get("featured", False),
+                image_url=item_data.get("image_url"),
                 sort_order=item_data.get("sort_order", 0),
                 is_pay_forward=item_data["key"] == PAY_FORWARD_KEY,
             )
@@ -372,6 +373,7 @@ async def seed_data(
             target_item.dietary_verified = item_data.get("dietary_verified", False)
             target_item.available = item_data.get("available", True)
             target_item.featured = item_data.get("featured", False)
+            target_item.image_url = item_data.get("image_url")
             target_item.sort_order = item_data.get("sort_order", 0)
             target_item.is_pay_forward = item_data["key"] == PAY_FORWARD_KEY
 
