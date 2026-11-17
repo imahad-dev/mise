@@ -95,6 +95,7 @@ describe("venue-named strings", () => {
   it("never names Mise in any guest string", () => {
     expect(JSON.stringify(en)).not.toMatch(/\bMise\b/);
     expect(JSON.stringify(ur)).not.toMatch(/\bMise\b/);
+    expect(JSON.stringify(ar)).not.toMatch(/\bMise\b/);
   });
   it("has the neutral scan-again text", () => {
     expect(en.ui.scanAgain).toBe("Scan the QR code on your table again.");
@@ -103,7 +104,7 @@ describe("venue-named strings", () => {
 });
 
 describe("ar demo-bill wording", () => {
-  it("never says invoice (فاتورة); a demo bill is the check (الحساب)", () => {
-    for (const [key, value] of new Map(leaves(ar))) expect(value, key).not.toMatch(/فاتور/);
+  it("never says invoice (فاتورة, plural فواتير); a demo bill is the check (الحساب)", () => {
+    for (const [key, value] of new Map(leaves(ar))) expect(value, key).not.toMatch(/فاتور|فواتير/);
   });
 });

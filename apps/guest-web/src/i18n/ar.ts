@@ -92,7 +92,7 @@ export const ar: TranslationDict = {
     taxNote: "الأسعار لا تشمل ضريبة المبيعات، وتُضاف إلى الحساب.",
     pricesIncludeVat: "الأسعار تشمل ضريبة القيمة المضافة.",
     from: "من",
-    serviceNotice: "تُضاف رسوم خدمة اختيارية بنسبة {rate}% إلى فواتير الطاولات.",
+    serviceNotice: "تُضاف رسوم خدمة اختيارية بنسبة {rate}% إلى حساب الطاولة.",
   },
   dish: {
     addToOrder: "إضافة إلى الطلب · {total}",
