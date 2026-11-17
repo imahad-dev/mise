@@ -285,8 +285,8 @@ Noor & Za'atar and Tikka Town packages follow phase 1, from their round-1 logos.
 
 ## Phase 3 · Featured dish photos
 
-- 6 to 8 signature dishes per venue (about 30 photos) are marked featured. A new boolean
-  `menu_items.featured` (Alembic migration, default false) is set from the seed files and returned
+- 6 to 8 signature dishes per venue (about 30 photos) are marked featured. `menu_items.featured`
+  (already in migration 0003, default false) is set from the seed files, the seed now writes `image_url`, and the flag is returned
   in the guest menu response.
 - Featured dishes appear in a "House favourites" strip at the top of the menu and with their photo
   in the dish sheet (which already renders `image_url`). Other dishes stay text-only.
