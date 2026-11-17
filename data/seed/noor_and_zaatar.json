@@ -119,6 +119,7 @@
       "dietary_verified": false,
       "available": true,
       "featured": true,
+      "image_url": "/venues/noor-and-zaatar/dishes/chicken_machboos.webp",
       "sort_order": 1,
       "translations": {
         "en": {
@@ -215,6 +216,7 @@
       "dietary_verified": false,
       "available": true,
       "featured": true,
+      "image_url": "/venues/noor-and-zaatar/dishes/lamb_machboos.webp",
       "sort_order": 2,
       "translations": {
         "en": {
@@ -309,7 +311,7 @@
       "is_gluten_free": false,
       "dietary_verified": false,
       "available": true,
-      "featured": true,
+      "featured": false,
       "sort_order": 3,
       "translations": {
         "en": {
@@ -424,7 +426,7 @@
       "is_gluten_free": false,
       "dietary_verified": false,
       "available": true,
-      "featured": true,
+      "featured": false,
       "sort_order": 6,
       "translations": {
         "en": {
@@ -460,6 +462,7 @@
       "dietary_verified": false,
       "available": true,
       "featured": true,
+      "image_url": "/venues/noor-and-zaatar/dishes/karak_chai.webp",
       "sort_order": 7,
       "translations": {
         "en": {
@@ -516,7 +519,8 @@
       "is_gluten_free": true,
       "dietary_verified": false,
       "available": true,
-      "featured": false,
+      "featured": true,
+      "image_url": "/venues/noor-and-zaatar/dishes/hummus.webp",
       "sort_order": 8,
       "translations": {
         "en": {
@@ -588,6 +592,7 @@
       "dietary_verified": false,
       "available": true,
       "featured": true,
+      "image_url": "/venues/noor-and-zaatar/dishes/zaatar_manakish.webp",
       "sort_order": 10,
       "translations": {
         "en": {
@@ -687,6 +692,7 @@
       "dietary_verified": false,
       "available": true,
       "featured": true,
+      "image_url": "/venues/noor-and-zaatar/dishes/mixed_grill.webp",
       "sort_order": 12,
       "translations": {
         "en": {
@@ -763,7 +769,8 @@
       "is_gluten_free": true,
       "dietary_verified": false,
       "available": true,
-      "featured": false,
+      "featured": true,
+      "image_url": "/venues/noor-and-zaatar/dishes/shish_tawook.webp",
       "sort_order": 13,
       "translations": {
         "en": {
@@ -863,6 +870,7 @@
       "dietary_verified": false,
       "available": true,
       "featured": true,
+      "image_url": "/venues/noor-and-zaatar/dishes/mutton_biryani.webp",
       "sort_order": 14,
       "translations": {
         "en": {
