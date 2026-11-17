@@ -29,7 +29,8 @@ export function FavouritesStrip<T extends Favourite>({
       <h2 id="favourites-title" className="border-b border-line pb-1 text-lg font-semibold italic text-terracotta">
         {title}
       </h2>
-      <ul className="-mx-4 mt-3 flex snap-x gap-3 overflow-x-auto px-4 pb-2 sm:-mx-6 sm:px-6">
+      {/* scroll-px keeps the snapped first card on the page margin, not the screen edge */}
+      <ul className="-mx-4 mt-3 flex snap-x scroll-px-4 gap-3 overflow-x-auto px-4 pb-2 sm:-mx-6 sm:scroll-px-6 sm:px-6">
         {shown.map((item) => (
           <li key={item.id} className="w-40 shrink-0 snap-start">
             <button type="button" className="block w-full text-start" onClick={() => onOpen(item)}>
