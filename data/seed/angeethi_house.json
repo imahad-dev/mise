@@ -141,7 +141,8 @@
       "is_gluten_free": true,
       "dietary_verified": false,
       "available": true,
-      "featured": false,
+      "featured": true,
+      "image_url": "/venues/angeethi-house/dishes/chicken_tikka.webp",
       "sort_order": 1,
       "translations": {
         "ur": {
@@ -173,7 +174,8 @@
       "is_gluten_free": true,
       "dietary_verified": false,
       "available": true,
-      "featured": false,
+      "featured": true,
+      "image_url": "/venues/angeethi-house/dishes/seekh_kebab.webp",
       "sort_order": 2,
       "translations": {
         "ur": {
@@ -207,7 +209,8 @@
       "is_gluten_free": true,
       "dietary_verified": false,
       "available": true,
-      "featured": false,
+      "featured": true,
+      "image_url": "/venues/angeethi-house/dishes/malai_boti.webp",
       "sort_order": 3,
       "translations": {
         "ur": {
@@ -262,6 +265,7 @@
       "dietary_verified": false,
       "available": true,
       "featured": true,
+      "image_url": "/venues/angeethi-house/dishes/chicken_karahi.webp",
       "sort_order": 4,
       "translations": {
         "ur": {
@@ -761,7 +765,8 @@
       "is_gluten_free": true,
       "dietary_verified": false,
       "available": true,
-      "featured": false,
+      "featured": true,
+      "image_url": "/venues/angeethi-house/dishes/palak_paneer.webp",
       "sort_order": 11,
       "translations": {
         "ur": {
@@ -795,7 +800,8 @@
       "is_gluten_free": true,
       "dietary_verified": false,
       "available": true,
-      "featured": false,
+      "featured": true,
+      "image_url": "/venues/angeethi-house/dishes/chicken_biryani.webp",
       "sort_order": 12,
       "translations": {
         "ur": {
@@ -970,7 +976,8 @@
       "is_gluten_free": false,
       "dietary_verified": false,
       "available": true,
-      "featured": false,
+      "featured": true,
+      "image_url": "/venues/angeethi-house/dishes/garlic_naan.webp",
       "sort_order": 16,
       "translations": {
         "ur": {
@@ -1140,7 +1147,8 @@
       "is_gluten_free": false,
       "dietary_verified": false,
       "available": true,
-      "featured": false,
+      "featured": true,
+      "image_url": "/venues/angeethi-house/dishes/gulab_jamun.webp",
       "sort_order": 21,
       "translations": {
         "ur": {

@@ -1,4 +1,52 @@
 {
+  "/venues/angeethi-house/dishes/chicken_biryani.webp": {
+    "dish": "Chicken Biryani",
+    "source_url": "https://www.pexels.com/photo/top-view-of-a-chicken-biryani-dish-12737817/",
+    "author": "dhiraj jain",
+    "licence": "Pexels License"
+  },
+  "/venues/angeethi-house/dishes/chicken_karahi.webp": {
+    "dish": "Chicken Karahi",
+    "source_url": "https://unsplash.com/photos/brown-and-green-food-on-gray-tray-hEMOwugpjJk",
+    "author": "Dr Muhammad Amer",
+    "licence": "Unsplash License"
+  },
+  "/venues/angeethi-house/dishes/chicken_tikka.webp": {
+    "dish": "Chicken Tikka",
+    "source_url": "https://www.pexels.com/photo/spicy-tandoori-chicken-with-lime-on-wooden-board-36895285/",
+    "author": "Nitai Mondal",
+    "licence": "Pexels License"
+  },
+  "/venues/angeethi-house/dishes/garlic_naan.webp": {
+    "dish": "Garlic Naan",
+    "source_url": "https://www.pexels.com/photo/a-plate-of-a-cheese-garlic-naan-10337726/",
+    "author": "Alberta Studios",
+    "licence": "Pexels License"
+  },
+  "/venues/angeethi-house/dishes/gulab_jamun.webp": {
+    "dish": "Gulab Jamun",
+    "source_url": "https://www.pexels.com/photo/delicious-indian-gulab-jamun-in-clay-pot-30577321/",
+    "author": "Monojit Dutta",
+    "licence": "Pexels License"
+  },
+  "/venues/angeethi-house/dishes/malai_boti.webp": {
+    "dish": "Malai Boti",
+    "source_url": "https://www.pexels.com/photo/a-food-in-a-wooden-tray-9609850/",
+    "author": "Prabal Pratap Singh",
+    "licence": "Pexels License"
+  },
+  "/venues/angeethi-house/dishes/palak_paneer.webp": {
+    "dish": "Palak Paneer",
+    "source_url": "https://unsplash.com/photos/sliced-cucumber-in-white-ceramic-bowl-jTv_cWxEtFs",
+    "author": "Kanwardeep Kaur",
+    "licence": "Unsplash License"
+  },
+  "/venues/angeethi-house/dishes/seekh_kebab.webp": {
+    "dish": "Seekh Kebab",
+    "source_url": "https://www.pexels.com/photo/delicious-seekh-kebabs-on-silver-platter-38579058/",
+    "author": "Prateek Lall",
+    "licence": "Pexels License"
+  },
   "/venues/noor-and-zaatar/dishes/chicken_machboos.webp": {
     "dish": "Chicken Machboos",
     "source_url": "https://www.pexels.com/photo/fried-chicken-on-rice-17650208/",
