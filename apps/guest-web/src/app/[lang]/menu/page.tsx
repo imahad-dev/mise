@@ -10,6 +10,7 @@ import { mainIngredients } from "../../../lib/ingredients";
 import { useVenue } from "../../../components/BrandShell";
 import { ScanAgain } from "../../../components/ScanAgain";
 import { DishSheet } from "../../../components/DishSheet";
+import { FavouritesStrip } from "../../../components/FavouritesStrip";
 import { ChatPanel } from "../../../components/chat-panel";
 import { useTableStatus } from "../../../hooks/use-table-status";
 import { getDictionary } from "../../../i18n";
@@ -69,6 +70,7 @@ interface MenuItem {
   is_vegan: boolean;
   is_gluten_free: boolean;
   available: boolean;
+  featured?: boolean;
   options?: MenuOption[];
   image_url?: string | null;
   choice_groups?: ChoiceGroup[];
@@ -458,6 +460,20 @@ export default function GuestMenuPage({
       .filter(Boolean)
       .join(" ");
 
+  const priceCell = (item: MenuItem) => {
+    const options = item.options ?? [];
+    return (
+      <>
+        {options.length > 0 && `${dict.menu.from} `}
+        <span className="figure">
+          {options.length > 0
+            ? formatPrice(Math.min(...options.map((o) => Number(o.price))))
+            : formatPrice(Number(item.price))}
+        </span>
+      </>
+    );
+  };
+
   // Bottom padding clears the fixed bottom stack (assistant, order bar, View order).
   return (
     <div className={`min-h-screen bg-paper text-ink ${barText ? "pb-80" : "pb-36"}`}>
@@ -502,6 +518,7 @@ export default function GuestMenuPage({
       </header>
 
       <main className="mx-auto max-w-3xl space-y-8 px-4 py-4 sm:px-6">
+        <FavouritesStrip items={menu.items} title={dict.menu.favourites} price={priceCell} onOpen={setDishOpen} />
         {categories.map((cat) => (
           <section key={cat} id={catId(cat)} className="scroll-mt-32">
             <h2 className="border-b border-line pb-1 text-lg font-semibold italic text-terracotta">
@@ -512,28 +529,11 @@ export default function GuestMenuPage({
                 .filter((i) => i.category === cat)
                 .map((item) => {
                   const isAvailable = item.available !== false;
-                  const options = item.options ?? [];
                   return (
                     <li
                       key={item.id}
                       className={`border-b border-dotted border-line py-4 ${isAvailable ? "" : "opacity-50"}`}
                     >
-                      {item.image_url && isAvailable && (
-                        <button
-                          type="button"
-                          aria-label={item.name}
-                          className="mb-2 block w-full"
-                          onClick={() => setDishOpen(item)}
-                        >
-                          {/* eslint-disable-next-line @next/next/no-img-element -- venue photos come from any host */}
-                          <img
-                            src={item.image_url}
-                            loading="lazy"
-                            alt=""
-                            className="aspect-[16/9] w-full rounded-xl object-cover"
-                          />
-                        </button>
-                      )}
                       <div className="flex items-baseline justify-between gap-3">
                         <h3 className="text-base font-semibold text-ink">
                           {isAvailable ? (
@@ -548,14 +548,7 @@ export default function GuestMenuPage({
                             item.name
                           )}
                         </h3>
-                        <span className="whitespace-nowrap font-semibold text-ink">
-                          {options.length > 0 && `${dict.menu.from} `}
-                          <span className="figure">
-                            {options.length > 0
-                              ? formatPrice(Math.min(...options.map((o) => Number(o.price))))
-                              : formatPrice(Number(item.price))}
-                          </span>
-                        </span>
+                        <span className="whitespace-nowrap font-semibold text-ink">{priceCell(item)}</span>
                       </div>
                       {item.description && (
                         <p className="mt-0.5 text-sm text-ink-muted">{item.description}</p>

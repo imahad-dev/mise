@@ -87,6 +87,8 @@ export interface TranslationDict {
     pricesIncludeVat: string;
     from: string;
     serviceNotice: string;
+    /** Heading of the featured-dish photo strip. */
+    favourites: string;
   };
   dish: {
     /** Contains {total}. */

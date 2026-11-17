@@ -90,6 +90,7 @@ export const en: TranslationDict = {
     pricesIncludeVat: "Prices include VAT.",
     from: "from",
     serviceNotice: "An optional {rate}% service charge is added to table bills.",
+    favourites: "House favourites",
   },
   dish: {
     addToOrder: "Add to order · {total}",

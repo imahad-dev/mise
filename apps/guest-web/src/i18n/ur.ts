@@ -93,6 +93,7 @@ export const ur: TranslationDict = {
     pricesIncludeVat: "قیمتوں میں VAT شامل ہے۔",
     from: "کم از کم",
     serviceNotice: "ٹیبل کے بلوں میں {rate}% کا اختیاری سروس چارج شامل کیا جاتا ہے۔",
+    favourites: "ہماری خاص ڈشیں",
   },
   dish: {
     addToOrder: "آرڈر میں شامل کریں · {total}",
