@@ -181,6 +181,7 @@
       "dietary_verified": false,
       "available": true,
       "featured": true,
+      "image_url": "/venues/kehwa-and-crumb/dishes/cappuccino.webp",
       "sort_order": 2,
       "translations": {
         "ur": {
@@ -587,7 +588,8 @@
       "is_gluten_free": true,
       "dietary_verified": false,
       "available": true,
-      "featured": false,
+      "featured": true,
+      "image_url": "/venues/kehwa-and-crumb/dishes/karak_chai.webp",
       "sort_order": 8,
       "translations": {
         "ur": {
@@ -770,7 +772,8 @@
       "is_gluten_free": false,
       "dietary_verified": false,
       "available": true,
-      "featured": false,
+      "featured": true,
+      "image_url": "/venues/kehwa-and-crumb/dishes/butter_croissant.webp",
       "sort_order": 11,
       "translations": {
         "ur": {
@@ -843,7 +846,8 @@
       "is_gluten_free": false,
       "dietary_verified": false,
       "available": true,
-      "featured": false,
+      "featured": true,
+      "image_url": "/venues/kehwa-and-crumb/dishes/fudge_brownie.webp",
       "sort_order": 13,
       "translations": {
         "ur": {
@@ -943,7 +947,8 @@
       "is_gluten_free": false,
       "dietary_verified": false,
       "available": true,
-      "featured": false,
+      "featured": true,
+      "image_url": "/venues/kehwa-and-crumb/dishes/buttermilk_pancakes.webp",
       "sort_order": 15,
       "translations": {
         "ur": {
@@ -979,7 +984,8 @@
       "is_gluten_free": false,
       "dietary_verified": false,
       "available": true,
-      "featured": false,
+      "featured": true,
+      "image_url": "/venues/kehwa-and-crumb/dishes/french_toast.webp",
       "sort_order": 16,
       "translations": {
         "ur": {
@@ -1088,7 +1094,8 @@
       "is_gluten_free": false,
       "dietary_verified": false,
       "available": true,
-      "featured": false,
+      "featured": true,
+      "image_url": "/venues/kehwa-and-crumb/dishes/new_york_cheesecake.webp",
       "sort_order": 19,
       "translations": {
         "ur": {
@@ -1124,7 +1131,8 @@
       "is_gluten_free": false,
       "dietary_verified": false,
       "available": true,
-      "featured": false,
+      "featured": true,
+      "image_url": "/venues/kehwa-and-crumb/dishes/molten_lava_cake.webp",
       "sort_order": 20,
       "translations": {
         "ur": {

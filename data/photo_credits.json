@@ -47,6 +47,54 @@
     "author": "Prateek Lall",
     "licence": "Pexels License"
   },
+  "/venues/kehwa-and-crumb/dishes/butter_croissant.webp": {
+    "dish": "Butter Croissant",
+    "source_url": "https://unsplash.com/photos/a-croissant-on-a-plate-on-a-wooden-table-PZEQz_37APs",
+    "author": "Sandie Clarke",
+    "licence": "Unsplash License"
+  },
+  "/venues/kehwa-and-crumb/dishes/buttermilk_pancakes.webp": {
+    "dish": "Buttermilk Pancakes",
+    "source_url": "https://www.pexels.com/photo/stack-of-pancakes-with-maple-syrup-and-butter-39832908/",
+    "author": "Jahra Tasfia Reza",
+    "licence": "Pexels License"
+  },
+  "/venues/kehwa-and-crumb/dishes/cappuccino.webp": {
+    "dish": "Cappuccino",
+    "source_url": "https://unsplash.com/photos/a-cappuccino-on-a-saucer-with-a-spoon-C_vE8ZIHJ3Y",
+    "author": "Koushik Pal",
+    "licence": "Unsplash License"
+  },
+  "/venues/kehwa-and-crumb/dishes/french_toast.webp": {
+    "dish": "French Toast",
+    "source_url": "https://www.pexels.com/photo/french-toasts-with-cinnamon-15820912/",
+    "author": "Manuel Mouzo",
+    "licence": "Pexels License"
+  },
+  "/venues/kehwa-and-crumb/dishes/fudge_brownie.webp": {
+    "dish": "Fudge Brownie",
+    "source_url": "https://www.pexels.com/photo/delicious-chocolate-brownies-on-white-plate-30353753/",
+    "author": "Giovanna Kamimura",
+    "licence": "Pexels License"
+  },
+  "/venues/kehwa-and-crumb/dishes/karak_chai.webp": {
+    "dish": "Karak Chai",
+    "source_url": "https://www.pexels.com/photo/tea-in-cup-17473023/",
+    "author": "Aditya Mara",
+    "licence": "Pexels License"
+  },
+  "/venues/kehwa-and-crumb/dishes/molten_lava_cake.webp": {
+    "dish": "Molten Lava Cake",
+    "source_url": "https://www.pexels.com/photo/decadent-chocolate-lava-cake-on-elegant-plate-33813614/",
+    "author": "Ashwin Kumar",
+    "licence": "Pexels License"
+  },
+  "/venues/kehwa-and-crumb/dishes/new_york_cheesecake.webp": {
+    "dish": "New York Cheesecake",
+    "source_url": "https://www.pexels.com/photo/gourmet-cheesecake-slice-on-wooden-table-31623306/",
+    "author": "Markus Winkler",
+    "licence": "Pexels License"
+  },
   "/venues/noor-and-zaatar/dishes/chicken_machboos.webp": {
     "dish": "Chicken Machboos",
     "source_url": "https://www.pexels.com/photo/fried-chicken-on-rice-17650208/",

@@ -10,6 +10,7 @@ SEEDS = {
     "tikka-town": "data/seed/tikka_town.json",
     "noor-and-zaatar": "data/seed/noor_and_zaatar.json",
     "angeethi-house": "data/seed/angeethi_house.json",
+    "kehwa-and-crumb": "data/seed/kehwa_and_crumb.json",
 }
 
 
