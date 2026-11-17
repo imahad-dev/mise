@@ -1,1 +1,38 @@
-{}
+{
+  "/venues/tikka-town/dishes/chicken_tikka.webp": {
+    "dish": "Chicken Tikka",
+    "source_url": "https://www.pexels.com/photo/delicious-chicken-tikka-platter-with-chutney-29173114/",
+    "author": "Kunal Lakhotia",
+    "licence": "Pexels License"
+  },
+  "/venues/tikka-town/dishes/chicken_tikka_masala.webp": {
+    "dish": "Chicken Tikka Masala",
+    "source_url": "https://unsplash.com/photos/a-bowl-of-creamy-chicken-tikka-masala-with-mint-leaves-GOw8q6bRTRM",
+    "author": "Mohammad Fahim",
+    "licence": "Unsplash License"
+  },
+  "/venues/tikka-town/dishes/lamb_chops.webp": {
+    "dish": "Lamb Chops",
+    "source_url": "https://www.pexels.com/photo/close-up-shot-of-delicious-grilled-meat-on-brown-ceramic-plate-13304044/",
+    "author": "Razane Adra",
+    "licence": "Pexels License"
+  },
+  "/venues/tikka-town/dishes/mango_lassi.webp": {
+    "dish": "Mango Lassi",
+    "source_url": "https://www.pexels.com/photo/glasses-of-delicious-mango-lassi-on-round-wooden-board-14509267/",
+    "author": "SimplyArt4794",
+    "licence": "Pexels License"
+  },
+  "/venues/tikka-town/dishes/sticky_toffee_pudding.webp": {
+    "dish": "Sticky Toffee Pudding",
+    "source_url": "https://unsplash.com/photos/a-table-with-two-plates-of-desserts-on-it-iwDDiUmsvhk",
+    "author": "Brett Wharton",
+    "licence": "Unsplash License"
+  },
+  "/venues/tikka-town/dishes/sunday_roast.webp": {
+    "dish": "Sunday Roast with Masala Gravy and Yorkshire Pudding",
+    "source_url": "https://www.pexels.com/photo/slices-of-beef-with-baked-potatoes-broccoli-and-cauliflower-19119749/",
+    "author": "The Castlebar",
+    "licence": "Pexels License"
+  }
+}

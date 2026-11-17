@@ -126,6 +126,7 @@
       "dietary_verified": false,
       "available": true,
       "featured": true,
+      "image_url": "/venues/tikka-town/dishes/lamb_chops.webp",
       "sort_order": 1,
       "translations": {
         "en": {
@@ -247,7 +248,8 @@
       "is_gluten_free": true,
       "dietary_verified": false,
       "available": true,
-      "featured": false,
+      "featured": true,
+      "image_url": "/venues/tikka-town/dishes/chicken_tikka.webp",
       "sort_order": 3,
       "translations": {
         "en": {
@@ -310,6 +312,7 @@
       "dietary_verified": false,
       "available": true,
       "featured": true,
+      "image_url": "/venues/tikka-town/dishes/chicken_tikka_masala.webp",
       "sort_order": 4,
       "translations": {
         "en": {
@@ -694,7 +697,7 @@
       "is_gluten_free": false,
       "dietary_verified": false,
       "available": true,
-      "featured": true,
+      "featured": false,
       "sort_order": 9,
       "translations": {
         "en": {
@@ -729,7 +732,7 @@
       "is_gluten_free": false,
       "dietary_verified": false,
       "available": true,
-      "featured": true,
+      "featured": false,
       "sort_order": 10,
       "translations": {
         "en": {
@@ -764,7 +767,7 @@
       "is_gluten_free": false,
       "dietary_verified": false,
       "available": true,
-      "featured": true,
+      "featured": false,
       "sort_order": 11,
       "translations": {
         "en": {
@@ -887,6 +890,7 @@
       "dietary_verified": false,
       "available": true,
       "featured": true,
+      "image_url": "/venues/tikka-town/dishes/sunday_roast.webp",
       "sort_order": 14,
       "translations": {
         "en": {
@@ -1143,7 +1147,7 @@
       "is_gluten_free": false,
       "dietary_verified": false,
       "available": true,
-      "featured": true,
+      "featured": false,
       "sort_order": 21,
       "translations": {
         "en": {
@@ -1209,7 +1213,8 @@
       "is_gluten_free": false,
       "dietary_verified": false,
       "available": true,
-      "featured": false,
+      "featured": true,
+      "image_url": "/venues/tikka-town/dishes/sticky_toffee_pudding.webp",
       "sort_order": 23,
       "translations": {
         "en": {
@@ -1293,7 +1298,8 @@
       "is_gluten_free": true,
       "dietary_verified": false,
       "available": true,
-      "featured": false,
+      "featured": true,
+      "image_url": "/venues/tikka-town/dishes/mango_lassi.webp",
       "sort_order": 25,
       "translations": {
         "en": {
