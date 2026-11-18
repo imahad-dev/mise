@@ -18,7 +18,8 @@
     "timezone": "Asia/Karachi",
     "currency": "PKR",
     "languages": [
-      "en"
+      "en",
+      "ur"
     ],
     "default_language": "en",
     "active": true
@@ -128,6 +129,10 @@
       "featured": false,
       "sort_order": 1,
       "translations": {
+        "ur": {
+          "name": "امریکانو",
+          "description": "گرم پانی کے ساتھ ایسپریسو"
+        },
         "en": {
           "name": "Americano",
           "description": "Espresso with hot water"
@@ -136,11 +141,17 @@
       "options": [
         {
           "label": "Regular",
+          "translations": {
+            "ur": "ریگولر"
+          },
           "price": 550,
           "unit_cost": 120
         },
         {
           "label": "Large",
+          "translations": {
+            "ur": "لارج"
+          },
           "price": 680,
           "unit_cost": 150
         }
@@ -170,8 +181,13 @@
       "dietary_verified": false,
       "available": true,
       "featured": true,
+      "image_url": "/venues/kehwa-and-crumb/dishes/cappuccino.webp",
       "sort_order": 2,
       "translations": {
+        "ur": {
+          "name": "کیپوچینو",
+          "description": "اسٹیمڈ دودھ اور جھاگ کے ساتھ ایسپریسو"
+        },
         "en": {
           "name": "Cappuccino",
           "description": "Espresso with steamed milk and foam"
@@ -180,11 +196,17 @@
       "options": [
         {
           "label": "Regular",
+          "translations": {
+            "ur": "ریگولر"
+          },
           "price": 650,
           "unit_cost": 190
         },
         {
           "label": "Large",
+          "translations": {
+            "ur": "لارج"
+          },
           "price": 790,
           "unit_cost": 240
         }
@@ -197,12 +219,18 @@
       "choice_groups": [
         {
           "label": "Extras",
+          "translations": {
+            "ur": "اضافی"
+          },
           "kind": "add",
           "min_select": 0,
           "max_select": 2,
           "choices": [
             {
               "label": "Extra shot",
+              "translations": {
+                "ur": "ایکسٹرا شاٹ"
+              },
               "price_delta": 150,
               "cost_delta": 40,
               "allergen_verified": true,
@@ -211,6 +239,9 @@
             },
             {
               "label": "Almond milk",
+              "translations": {
+                "ur": "بادام کا دودھ"
+              },
               "price_delta": 120,
               "cost_delta": 50,
               "allergens": [
@@ -245,6 +276,10 @@
       "featured": false,
       "sort_order": 3,
       "translations": {
+        "ur": {
+          "name": "کیفے لاتے",
+          "description": "اسٹیمڈ دودھ کے ساتھ ایسپریسو"
+        },
         "en": {
           "name": "Café Latte",
           "description": "Espresso with steamed milk"
@@ -253,11 +288,17 @@
       "options": [
         {
           "label": "Regular",
+          "translations": {
+            "ur": "ریگولر"
+          },
           "price": 690,
           "unit_cost": 200
         },
         {
           "label": "Large",
+          "translations": {
+            "ur": "لارج"
+          },
           "price": 820,
           "unit_cost": 250
         }
@@ -270,12 +311,18 @@
       "choice_groups": [
         {
           "label": "Extras",
+          "translations": {
+            "ur": "اضافی"
+          },
           "kind": "add",
           "min_select": 0,
           "max_select": 2,
           "choices": [
             {
               "label": "Extra shot",
+              "translations": {
+                "ur": "ایکسٹرا شاٹ"
+              },
               "price_delta": 150,
               "cost_delta": 40,
               "allergen_verified": true,
@@ -284,6 +331,9 @@
             },
             {
               "label": "Almond milk",
+              "translations": {
+                "ur": "بادام کا دودھ"
+              },
               "price_delta": 120,
               "cost_delta": 50,
               "allergens": [
@@ -319,6 +369,10 @@
       "featured": false,
       "sort_order": 4,
       "translations": {
+        "ur": {
+          "name": "اسپینش لاتے",
+          "description": "کنڈینسڈ ملک سے میٹھا کیا گیا لاتے"
+        },
         "en": {
           "name": "Spanish Latte",
           "description": "Latte sweetened with condensed milk"
@@ -327,11 +381,17 @@
       "options": [
         {
           "label": "Regular",
+          "translations": {
+            "ur": "ریگولر"
+          },
           "price": 790,
           "unit_cost": 250
         },
         {
           "label": "Large",
+          "translations": {
+            "ur": "لارج"
+          },
           "price": 950,
           "unit_cost": 300
         }
@@ -364,6 +424,10 @@
       "featured": false,
       "sort_order": 5,
       "translations": {
+        "ur": {
+          "name": "آئسڈ لاتے",
+          "description": "برف پر ایسپریسو اور ٹھنڈا دودھ"
+        },
         "en": {
           "name": "Iced Latte",
           "description": "Espresso and cold milk over ice"
@@ -372,11 +436,17 @@
       "options": [
         {
           "label": "Regular",
+          "translations": {
+            "ur": "ریگولر"
+          },
           "price": 750,
           "unit_cost": 220
         },
         {
           "label": "Large",
+          "translations": {
+            "ur": "لارج"
+          },
           "price": 900,
           "unit_cost": 270
         }
@@ -410,6 +480,10 @@
       "featured": false,
       "sort_order": 6,
       "translations": {
+        "ur": {
+          "name": "کیریمل فریپے",
+          "description": "کیریمل اور کریم کے ساتھ بلینڈ کی ہوئی کافی"
+        },
         "en": {
           "name": "Caramel Frappé",
           "description": "Blended coffee with caramel and cream"
@@ -418,11 +492,17 @@
       "options": [
         {
           "label": "Regular",
+          "translations": {
+            "ur": "ریگولر"
+          },
           "price": 950,
           "unit_cost": 300
         },
         {
           "label": "Large",
+          "translations": {
+            "ur": "لارج"
+          },
           "price": 1150,
           "unit_cost": 360
         }
@@ -456,6 +536,10 @@
       "featured": false,
       "sort_order": 7,
       "translations": {
+        "ur": {
+          "name": "آئسڈ اسپینش لاتے",
+          "description": "کنڈینسڈ ملک سے میٹھا کیا گیا آئسڈ لاتے"
+        },
         "en": {
           "name": "Iced Spanish Latte",
           "description": "Iced latte sweetened with condensed milk"
@@ -464,11 +548,17 @@
       "options": [
         {
           "label": "Regular",
+          "translations": {
+            "ur": "ریگولر"
+          },
           "price": 880,
           "unit_cost": 270
         },
         {
           "label": "Large",
+          "translations": {
+            "ur": "لارج"
+          },
           "price": 1050,
           "unit_cost": 320
         }
@@ -498,9 +588,14 @@
       "is_gluten_free": true,
       "dietary_verified": false,
       "available": true,
-      "featured": false,
+      "featured": true,
+      "image_url": "/venues/kehwa-and-crumb/dishes/karak_chai.webp",
       "sort_order": 8,
       "translations": {
+        "ur": {
+          "name": "کڑک چائے",
+          "description": "دودھ اور الائچی کے ساتھ اُبلی ہوئی تیز چائے"
+        },
         "en": {
           "name": "Karak Chai",
           "description": "Strong tea boiled with milk and cardamom"
@@ -510,12 +605,18 @@
       "choice_groups": [
         {
           "label": "Sugar",
+          "translations": {
+            "ur": "چینی"
+          },
           "kind": "pick",
           "min_select": 1,
           "max_select": 1,
           "choices": [
             {
               "label": "Normal",
+              "translations": {
+                "ur": "نارمل"
+              },
               "allergen_verified": true,
               "is_vegetarian": true,
               "is_vegan": true,
@@ -523,12 +624,18 @@
             },
             {
               "label": "Less",
+              "translations": {
+                "ur": "کم"
+              },
               "allergen_verified": true,
               "is_vegetarian": true,
               "is_vegan": true
             },
             {
               "label": "No sugar",
+              "translations": {
+                "ur": "بغیر چینی"
+              },
               "allergen_verified": true,
               "is_vegetarian": true,
               "is_vegan": true
@@ -561,6 +668,10 @@
       "featured": false,
       "sort_order": 9,
       "translations": {
+        "ur": {
+          "name": "کشمیری چائے",
+          "description": "دودھ، بادام اور پستے والی گلابی چائے"
+        },
         "en": {
           "name": "Kashmiri Chai",
           "description": "Pink tea with milk, almonds and pistachio"
@@ -588,6 +699,10 @@
       "featured": false,
       "sort_order": 10,
       "translations": {
+        "ur": {
+          "name": "گرین قہوہ",
+          "description": "زعفران اور الائچی والی سبز چائے"
+        },
         "en": {
           "name": "Green Kehwa",
           "description": "Green tea with saffron and cardamom"
@@ -597,12 +712,18 @@
       "choice_groups": [
         {
           "label": "Sugar",
+          "translations": {
+            "ur": "چینی"
+          },
           "kind": "pick",
           "min_select": 1,
           "max_select": 1,
           "choices": [
             {
               "label": "Normal",
+              "translations": {
+                "ur": "نارمل"
+              },
               "allergen_verified": true,
               "is_vegetarian": true,
               "is_vegan": true,
@@ -610,12 +731,18 @@
             },
             {
               "label": "Less",
+              "translations": {
+                "ur": "کم"
+              },
               "allergen_verified": true,
               "is_vegetarian": true,
               "is_vegan": true
             },
             {
               "label": "No sugar",
+              "translations": {
+                "ur": "بغیر چینی"
+              },
               "allergen_verified": true,
               "is_vegetarian": true,
               "is_vegan": true
@@ -645,9 +772,14 @@
       "is_gluten_free": false,
       "dietary_verified": false,
       "available": true,
-      "featured": false,
+      "featured": true,
+      "image_url": "/venues/kehwa-and-crumb/dishes/butter_croissant.webp",
       "sort_order": 11,
       "translations": {
+        "ur": {
+          "name": "بٹر کروسان",
+          "description": "خالص مکھن سے بنا خستہ کروسان"
+        },
         "en": {
           "name": "Butter Croissant",
           "description": "Flaky all-butter croissant"
@@ -681,6 +813,10 @@
       "featured": false,
       "sort_order": 12,
       "translations": {
+        "ur": {
+          "name": "آلمنڈ کروسان",
+          "description": "بادام کی کریم سے بھرا کروسان"
+        },
         "en": {
           "name": "Almond Croissant",
           "description": "Croissant filled with almond cream"
@@ -710,9 +846,14 @@
       "is_gluten_free": false,
       "dietary_verified": false,
       "available": true,
-      "featured": false,
+      "featured": true,
+      "image_url": "/venues/kehwa-and-crumb/dishes/fudge_brownie.webp",
       "sort_order": 13,
       "translations": {
+        "ur": {
+          "name": "فج براؤنی",
+          "description": "گاڑھی چاکلیٹ براؤنی"
+        },
         "en": {
           "name": "Fudge Brownie",
           "description": "Dense chocolate brownie"
@@ -722,12 +863,18 @@
       "choice_groups": [
         {
           "label": "Extras",
+          "translations": {
+            "ur": "اضافی"
+          },
           "kind": "add",
           "min_select": 0,
           "max_select": 1,
           "choices": [
             {
               "label": "Vanilla ice cream",
+              "translations": {
+                "ur": "ونیلا آئس کریم"
+              },
               "price_delta": 250,
               "cost_delta": 80,
               "allergens": [
@@ -767,6 +914,10 @@
       "featured": false,
       "sort_order": 14,
       "translations": {
+        "ur": {
+          "name": "بنانا بریڈ",
+          "description": "کیلے کی نرم بریڈ کا ایک سلائس"
+        },
         "en": {
           "name": "Banana Bread",
           "description": "Moist banana loaf slice"
@@ -796,9 +947,14 @@
       "is_gluten_free": false,
       "dietary_verified": false,
       "available": true,
-      "featured": false,
+      "featured": true,
+      "image_url": "/venues/kehwa-and-crumb/dishes/buttermilk_pancakes.webp",
       "sort_order": 15,
       "translations": {
+        "ur": {
+          "name": "بٹر ملک پین کیکس",
+          "description": "میپل سیرپ کے ساتھ تہہ در تہہ پین کیکس"
+        },
         "en": {
           "name": "Buttermilk Pancakes",
           "description": "Stack of pancakes with maple syrup"
@@ -828,9 +984,14 @@
       "is_gluten_free": false,
       "dietary_verified": false,
       "available": true,
-      "featured": false,
+      "featured": true,
+      "image_url": "/venues/kehwa-and-crumb/dishes/french_toast.webp",
       "sort_order": 16,
       "translations": {
+        "ur": {
+          "name": "فرنچ ٹوسٹ",
+          "description": "شہد کے ساتھ انڈے میں ڈبوئی ہوئی بریوش"
+        },
         "en": {
           "name": "French Toast",
           "description": "Egg-dipped brioche with honey"
@@ -864,6 +1025,10 @@
       "featured": false,
       "sort_order": 17,
       "translations": {
+        "ur": {
+          "name": "چکن کلب سینڈوچ",
+          "description": "فرائز کے ساتھ تین تہوں والا چکن سینڈوچ"
+        },
         "en": {
           "name": "Chicken Club Sandwich",
           "description": "Triple-decker chicken sandwich with fries"
@@ -896,6 +1061,10 @@
       "featured": false,
       "sort_order": 18,
       "translations": {
+        "ur": {
+          "name": "چکن پیسٹو میلٹ",
+          "description": "چیاباٹا پر گرلڈ چکن، پیسٹو اور پگھلا ہوا چیز"
+        },
         "en": {
           "name": "Chicken Pesto Melt",
           "description": "Grilled chicken, pesto and melted cheese on ciabatta"
@@ -925,9 +1094,14 @@
       "is_gluten_free": false,
       "dietary_verified": false,
       "available": true,
-      "featured": false,
+      "featured": true,
+      "image_url": "/venues/kehwa-and-crumb/dishes/new_york_cheesecake.webp",
       "sort_order": 19,
       "translations": {
+        "ur": {
+          "name": "نیو یارک چیز کیک",
+          "description": "بسکٹ کی تہہ پر بیک کیا ہوا چیز کیک"
+        },
         "en": {
           "name": "New York Cheesecake",
           "description": "Baked cheesecake on a biscuit base"
@@ -957,9 +1131,14 @@
       "is_gluten_free": false,
       "dietary_verified": false,
       "available": true,
-      "featured": false,
+      "featured": true,
+      "image_url": "/venues/kehwa-and-crumb/dishes/molten_lava_cake.webp",
       "sort_order": 20,
       "translations": {
+        "ur": {
+          "name": "مولٹن لاوا کیک",
+          "description": "گرم چاکلیٹ کیک، اندر سے بہتا ہوا"
+        },
         "en": {
           "name": "Molten Lava Cake",
           "description": "Warm chocolate cake with a liquid centre"
@@ -985,6 +1164,10 @@
       "featured": false,
       "sort_order": 21,
       "translations": {
+        "ur": {
+          "name": "فریش اورنج جوس",
+          "description": "تازہ نچوڑا ہوا اورنج جوس"
+        },
         "en": {
           "name": "Fresh Orange Juice",
           "description": "Freshly squeezed orange juice"
@@ -1010,6 +1193,10 @@
       "featured": false,
       "sort_order": 22,
       "translations": {
+        "ur": {
+          "name": "منرل واٹر",
+          "description": "بوتل میں منرل واٹر"
+        },
         "en": {
           "name": "Mineral Water",
           "description": "Bottled mineral water"
@@ -1018,6 +1205,9 @@
       "options": [
         {
           "label": "Small",
+          "translations": {
+            "ur": "سمال"
+          },
           "price": 100,
           "unit_cost": 45
         }
@@ -1049,6 +1239,10 @@
       "featured": false,
       "sort_order": 23,
       "translations": {
+        "ur": {
+          "name": "کسی اور کے نام چائے",
+          "description": "ضرورت مند کے لیے ایک چائے — ہم یہ مفت دیتے ہیں، کوئی سوال نہیں پوچھا جاتا۔"
+        },
         "en": {
           "name": "Pay-it-forward chai",
           "description": "A chai for someone who needs it — we hand it out free, no questions asked."

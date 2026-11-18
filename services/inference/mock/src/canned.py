@@ -12,14 +12,14 @@ MENU_ANALYSIS = {
 }
 
 TRANSLATION = {
-    "language": "it",
-    "name": "Pizza Margherita",
-    "description": "Pizza classica con pomodoro, mozzarella e basilico fresco",
+    "language": "ur",
+    "name": "پیزا مارگریٹا",
+    "description": "ٹماٹر، موزاریلا اور تازہ تلسی کے ساتھ کلاسک پیزا",
 }
 
 DAILY_BRIEF = {
     "date": "2026-10-11",
-    "summary": "Expected busy Saturday. Consider featuring pasta specials.",
+    "summary": "Steady trade expected. Keep prep in line with the forecast and watch the slowest dishes.",
     "actions": [
         {"type": "prep", "item": "Tiramisu", "reason": "High demand predicted"},
         {"type": "promote", "item": "House Wine", "reason": "Low margin, needs push"},

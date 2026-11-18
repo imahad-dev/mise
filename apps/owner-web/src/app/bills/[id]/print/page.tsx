@@ -2,8 +2,9 @@
 
 import React, { use, useEffect, useState } from "react";
 import Image from "next/image";
-import { Button } from "ui";
+import { Button, venueBrand } from "ui";
 import { VenueProvider, useVenue } from "../../../../lib/venue";
+import { VENUE_DISPLAY_CLASS } from "../../../../lib/venue-fonts";
 import { apiError, sampleBillPieces, type BillDetail, type BillRow } from "../../../../lib/bill";
 
 function Row({ row, strong }: { row: BillRow; strong?: boolean }) {
@@ -51,12 +52,17 @@ function PrintBill({ id, venueParam }: { id: string; venueParam: string | undefi
   if (bill.status !== "settled") return <p className="p-6 text-center text-sm text-ink">Not settled yet</p>;
 
   const p = sampleBillPieces(bill);
+  const brand = slug ? venueBrand(slug) : null;
   return (
     <main className="mx-auto w-full max-w-[80mm] space-y-3 p-2 font-mono text-sm text-ink">
       <div className="space-y-0.5 text-center">
-        <Image src="/brand/logo-mark.svg" alt="" width={24} height={24} className="mx-auto" />
+        {brand && <Image src={`/venues/${slug}/mark.svg`} alt={brand.name} width={48} height={48} className="mx-auto" />}
         {p.header.map((line, i) => (
-          <p key={i} className={i === 0 ? "font-bold" : ""}>
+          <p
+            key={i}
+            className={i === 0 ? `font-bold [print-color-adjust:exact] ${(slug && VENUE_DISPLAY_CLASS[slug]) || ""}` : ""}
+            style={i === 0 && brand ? { color: brand.tokens.accent } : undefined}
+          >
             {line}
           </p>
         ))}

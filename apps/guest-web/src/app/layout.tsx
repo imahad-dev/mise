@@ -4,32 +4,10 @@ import "./globals.css";
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  themeColor: "#F6F0E6",
+  themeColor: "#ffffff",
 };
 
-export const metadata: Metadata = {
-  title: "Mise: Restaurant Revenue Copilot",
-  description: "Restaurant revenue copilot and real-time operations platform",
-  manifest: "/manifest.json",
-  icons: {
-    icon: "/brand/logo-mark.svg",
-    apple: "/brand/logo-mark.svg",
-  },
-  openGraph: {
-    title: "Mise: Restaurant Revenue Copilot",
-    description: "Restaurant revenue copilot and real-time operations platform",
-  },
-  twitter: {
-    card: "summary",
-    title: "Mise: Restaurant Revenue Copilot",
-    description: "Restaurant revenue copilot and real-time operations platform",
-  },
-  appleWebApp: {
-    capable: true,
-    statusBarStyle: "black-translucent",
-    title: "Mise",
-  },
-};
+export const metadata: Metadata = { title: "Menu" };
 
 export default function RootLayout({
   children,

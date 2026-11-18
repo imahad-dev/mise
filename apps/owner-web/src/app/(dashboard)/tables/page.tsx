@@ -1,10 +1,11 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { Badge, Button, Card } from "ui";
+import { Badge, Button, Card, venueBrand } from "ui";
 import { useVenue } from "../../../lib/venue";
 import { ratePercent, serviceRateFraction, settingsBody, settingsErrors, taxRuleText, type TaxRule } from "../../../lib/bill";
 import QRCode from "qrcode";
+import { VENUE_DISPLAY_CLASS } from "../../../lib/venue-fonts";
 
 interface TableItem {
   id: string;
@@ -207,6 +208,7 @@ function VenueSettings({ slug }: { slug: string }) {
 export default function TablesPage() {
   const { venue } = useVenue();
   const slug = venue?.slug;
+  const brand = slug ? venueBrand(slug) : null;
   const [tables, setTables] = useState<TableItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -309,12 +311,25 @@ export default function TablesPage() {
             key={table.id}
             className="mise-card flex flex-col items-center text-center space-y-4 print:bg-white print:text-black print:border-black print:shadow-none break-inside-avoid"
           >
+            {brand && (
+              <div
+                className="w-full rounded-xl px-4 py-4 [print-color-adjust:exact]"
+                style={{ background: brand.tokens.deep }}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={`/venues/${slug}/lockup.svg`} alt={brand.name} className="mx-auto h-12 w-auto" />
+              </div>
+            )}
+
             {/* Table Label */}
             <div>
               <span className="text-xs font-bold uppercase tracking-wider text-terracotta print:text-ink-muted">
                 {table.kind === "counter" ? "Counter QR · pay first, then collect" : "Dining Table"}
               </span>
-              <h2 className="text-2xl font-black text-ink print:text-black mt-0.5">
+              <h2
+                className={`text-2xl font-black text-ink print:text-black mt-0.5 [print-color-adjust:exact] ${(slug && VENUE_DISPLAY_CLASS[slug]) || ""}`}
+                style={brand ? { color: brand.tokens.accent } : undefined}
+              >
                 {table.label}
               </h2>
             </div>

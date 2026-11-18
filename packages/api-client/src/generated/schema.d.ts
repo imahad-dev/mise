@@ -218,6 +218,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/guest/venues/{qr_token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Venue For Qr
+         * @description The venue a table QR code belongs to, so the scan page can show its brand before a session.
+         *
+         *     No IP limit: the guest app's server calls it for every guest from one address. The token is
+         *     unguessable and the answer is only a public venue name.
+         */
+        get: operations["venue_for_qr_api_guest_venues__qr_token__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/guest/session": {
         parameters: {
             query?: never;
@@ -1527,12 +1550,8 @@ export interface components {
         CreateGuestSessionRequest: {
             /** Qr Token */
             qr_token: string;
-            /**
-             * Language
-             * @default en
-             * @enum {string}
-             */
-            language: "en" | "it";
+            /** Language */
+            language?: ("en" | "ur" | "ar") | null;
             /**
              * Dietary Preferences
              * @default []
@@ -2010,6 +2029,7 @@ export interface components {
              * Format: date-time
              */
             expires_at: string;
+            venue: components["schemas"]["GuestVenue"];
         };
         /** GuestSessionStatusResponse */
         GuestSessionStatusResponse: {
@@ -2036,6 +2056,7 @@ export interface components {
              * Format: date-time
              */
             expires_at: string;
+            venue: components["schemas"]["GuestVenue"];
             /**
              * Table State
              * @enum {string}
@@ -2043,6 +2064,20 @@ export interface components {
             table_state: "open" | "waiting" | "closed" | "ended";
             /** Code Required */
             code_required: boolean;
+        };
+        /**
+         * GuestVenue
+         * @description The scanned venue as a guest may see it: public slug, name and offered languages.
+         */
+        GuestVenue: {
+            /** Slug */
+            slug: string;
+            /** Name */
+            name: string;
+            /** Languages */
+            languages: string[];
+            /** Default Language */
+            default_language: string;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -2266,9 +2301,10 @@ export interface components {
             image_url: string;
             /**
              * Language
-             * @default it
+             * @default en
+             * @enum {string}
              */
-            language: string;
+            language: "en" | "ur" | "ar";
         };
         /**
          * MenuIngestResponse
@@ -2647,7 +2683,7 @@ export interface components {
         /** PatchGuestSessionRequest */
         PatchGuestSessionRequest: {
             /** Language */
-            language?: ("en" | "it") | null;
+            language?: ("en" | "ur" | "ar") | null;
             /** Dietary Preferences */
             dietary_preferences?: ("vegetarian" | "vegan" | "gluten_free")[] | null;
             /** Allergens To Avoid */
@@ -3409,6 +3445,49 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Invalid request, or language not offered by this venue */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Too many new sessions from this address */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    venue_for_qr_api_guest_venues__qr_token__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                qr_token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GuestVenue"];
+                };
+            };
+            /** @description Unknown QR token */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description Validation Error */
             422: {
                 headers: {
@@ -3417,13 +3496,6 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
-            };
-            /** @description Too many new sessions from this address */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
             };
         };
     };
@@ -3483,14 +3555,12 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Validation Error */
+            /** @description Invalid request, or language not offered by this venue */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
+                content?: never;
             };
         };
     };

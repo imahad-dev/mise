@@ -1,10 +1,11 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { Button, Sheet, choiceLine, formatPrice } from "ui";
+import { Button, Sheet, formatPrice } from "ui";
 import { getDictionary } from "../i18n";
+import { choicesParts, figureParts, figureSentence } from "../lib/figure";
 import {
-  claimMessage,
+  claimParts,
   copyText,
   detailsFor,
   isValidReference,
@@ -134,22 +135,26 @@ export function PaySheet({ lang, bill, orderId, open, onClose, onUpdated, onConf
               {l.option_label && <span className="text-ink-muted"> — {l.option_label}</span>}
               {(l.choices ?? []).length > 0 && (
                 <span className="block text-xs text-ink-muted">
-                  {l.choices!.map((c) => choiceLine(c, (n) => money(String(n)), dict.dish.leaveOut)).join(", ")}
+                  {figureSentence(choicesParts(l.choices!, (n) => money(String(n)), dict.dish.leaveOut))}
                 </span>
               )}
             </span>
-            <span className="text-ink-muted">{money(l.line_total)}</span>
+            <span className="figure text-ink-muted">{money(l.line_total)}</span>
           </li>
         ))}
       </ul>
       {bill.voided.map((v, i) => (
         <p key={i} className="text-sm text-danger-fg">
-          {dict.pay.removed.replace("{name}", [v.option_label ? `${v.name} — ${v.option_label}` : v.name, ...(v.choices ?? []).map((c) => choiceLine(c, (n) => money(String(n)), dict.dish.leaveOut))].join(", ")).replace("{qty}", String(v.quantity))}
+          {(() => {
+            const ch = choicesParts(v.choices ?? [], (n) => money(String(n)), dict.dish.leaveOut);
+            const name = [v.option_label ? `${v.name} — ${v.option_label}` : v.name, ...(ch.template ? [ch.template] : [])].join(", ");
+            return figureParts(dict.pay.removed.replace("{qty}", () => String(v.quantity)).replace("{name}", () => name), ch.values);
+          })()}
         </p>
       ))}
       <p className="flex justify-between text-sm font-semibold text-ink">
         <span>{dict.pay.subtotal}</span>
-        <span>{money(bill.subtotal)}</span>
+        <span className="figure">{money(bill.subtotal)}</span>
       </p>
 
       {isOpen && hasService && (
@@ -161,9 +166,9 @@ export function PaySheet({ lang, bill, orderId, open, onClose, onUpdated, onConf
           onClick={toggleService}
           className="flex min-h-12 w-full items-center justify-between gap-3 rounded-xl border border-line bg-card px-4 py-3 text-left text-sm text-ink"
         >
-          <span>{serviceLine(bill.service_charge_rate, dict.pay.service, lang).replace("{amount}", money(bill.service_charge_amount))}</span>
+          <span>{figureParts(serviceLine(bill.service_charge_rate, dict.pay.service, lang), { amount: money(bill.service_charge_amount) })}</span>
           <span aria-hidden className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${withService ? "bg-terracotta" : "bg-line"}`}>
-            <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-paper shadow transition-all ${withService ? "left-[22px]" : "left-0.5"}`} />
+            <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-paper shadow transition-all ${withService ? "start-[22px]" : "start-0.5"}`} />
           </span>
         </button>
       )}
@@ -172,10 +177,10 @@ export function PaySheet({ lang, bill, orderId, open, onClose, onUpdated, onConf
         <div className="space-y-1">
           <p className="flex justify-between text-base font-semibold text-ink">
             <span>{dict.pay.total}</span>
-            <span data-testid="pay-total">{toPay(bill.methods[0])}</span>
+            <span data-testid="pay-total" className="figure">{toPay(bill.methods[0])}</span>
           </p>
           <p className="text-xs text-ink-muted">
-            {dict.pay.vatIncluded.replace("{rate}", percent(bill.methods[0].tax_rate, lang)).replace("{amount}", money(bill.methods[0].tax_amount))}
+            {figureParts(dict.pay.vatIncluded.replace("{rate}", percent(bill.methods[0].tax_rate, lang)), { amount: money(bill.methods[0].tax_amount) })}
           </p>
         </div>
       )}
@@ -198,7 +203,7 @@ export function PaySheet({ lang, bill, orderId, open, onClose, onUpdated, onConf
                 <span className="block font-semibold text-ink">{dict.pay.methods[m.method] ?? m.label}</span>
                 {!included && <span className="block text-xs text-ink-muted">{dict.pay.taxRate.replace("{rate}", percent(m.tax_rate, lang))}</span>}
               </span>
-              {!included && <span className="font-semibold text-ink">{toPay(m)}</span>}
+              {!included && <span className="figure font-semibold text-ink">{toPay(m)}</span>}
             </button>
           ))}
         </fieldset>
@@ -212,7 +217,7 @@ export function PaySheet({ lang, bill, orderId, open, onClose, onUpdated, onConf
             }`}
           >
             {bill.payment_details.sample && <p className="font-semibold text-warn-fg">{dict.pay.sampleBanner}</p>}
-            <p className="text-ink">{dict.pay.payTo.replace("{total}", toPay(preview))}</p>
+            <p className="text-ink">{figureParts(dict.pay.payTo, { total: toPay(preview) })}</p>
             {details.map((d) => (
               <div key={d.key} className="flex flex-wrap items-center justify-between gap-2">
                 <span>
@@ -260,7 +265,7 @@ export function PaySheet({ lang, bill, orderId, open, onClose, onUpdated, onConf
           ? ""
           : staleClaim
             ? dict.pay.serviceChanged.replace("{button}", dict.pay.paid)
-            : claimMessage(bill.claim, dict, lang, bill.currency, Boolean(bill.pickup_label))}
+            : figureSentence(claimParts(bill.claim, dict, lang, bill.currency, Boolean(bill.pickup_label)))}
       </p>
     </Sheet>
   );

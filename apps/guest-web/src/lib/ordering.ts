@@ -146,3 +146,8 @@ export function orderStage(status: string, cancelReason?: string | null): OrderS
   }
   return "cooking";
 }
+
+/** Short reference a guest can read out: "#3F9A1C". The full id stays in the URL and API. */
+export function orderRef(id: string): string {
+  return `#${id.slice(0, 6).toUpperCase()}`;
+}

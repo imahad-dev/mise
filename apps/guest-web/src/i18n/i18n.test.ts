@@ -1,5 +1,14 @@
 import { describe, it, expect } from "vitest";
-import { translate, getDictionary, en, it as itDict } from "./index";
+import { translate, getDictionary, withVenue } from "./index";
+import { en } from "./en";
+import { ur } from "./ur";
+import { ar } from "./ar";
+
+function leaves(obj: unknown, prefix = ""): [string, string][] {
+  return Object.entries(obj as Record<string, unknown>).flatMap(([k, v]) =>
+    typeof v === "string" ? [[`${prefix}${k}`, v] as [string, string]] : leaves(v, `${prefix}${k}.`),
+  );
+}
 
 describe("i18n dictionary and fallback mechanism", () => {
   it("returns English strings for English locale", () => {
@@ -10,14 +19,6 @@ describe("i18n dictionary and fallback mechanism", () => {
     expect(dict.allergens.gluten).toBe("Gluten");
   });
 
-  it("returns Italian strings for Italian locale", () => {
-    const dict = getDictionary("it");
-    expect(dict.staffNotice).toBe(itDict.staffNotice);
-    expect(dict.ui.menuTitle).toBe("Menu");
-    expect(dict.allergenStatus.contains).toBe("Contiene");
-    expect(dict.allergens.gluten).toBe("Glutine");
-  });
-
   it("falls back to English when an unsupported or unknown locale is requested", () => {
     const dict = getDictionary("fr");
     expect(dict.staffNotice).toBe(en.staffNotice);
@@ -26,19 +27,84 @@ describe("i18n dictionary and fallback mechanism", () => {
   });
 
   it("falls back to English for missing nested keys using translate()", () => {
-    // Standard keys in it
-    expect(translate("it", "allergenStatus.contains")).toBe("Contiene");
-
-    // Existing key in en
+    expect(translate("ur", "allergenStatus.contains")).toBe(ur.allergenStatus.contains);
     expect(translate("en", "ui.orderStatus")).toBe("Order Status");
-
-    // Missing key in it falls back to English
-    expect(translate("it", "nonexistent.key")).toBe("nonexistent.key");
+    expect(translate("ur", "nonexistent.key")).toBe("nonexistent.key");
     expect(translate("unknown-locale", "ui.welcomeTitle")).toBe(en.ui.welcomeTitle);
   });
 
-  it("includes the mandatory 'please confirm with staff' notice in both dictionaries", () => {
+  it("includes the mandatory 'please confirm with staff' notice", () => {
     expect(en.staffNotice).toContain("confirm all allergen risks with staff");
-    expect(itDict.staffNotice).toContain("con il personale");
+  });
+});
+
+describe.each([["ur", ur], ["ar", ar]] as const)("%s dictionary", (code, dict) => {
+  const enLeaves = new Map(leaves(en));
+  const dictLeaves = new Map(leaves(dict));
+
+  it("has every English key and nothing extra", () => {
+    expect([...dictLeaves.keys()].sort()).toEqual([...enLeaves.keys()].sort());
+  });
+
+  it("has no empty value and never names the platform", () => {
+    for (const [key, value] of dictLeaves) {
+      expect(value.trim(), key).not.toBe("");
+      expect(value, key).not.toMatch(/mise/i);
+    }
+  });
+
+  it("keeps every placeholder of the English text", () => {
+    for (const [key, value] of enLeaves) {
+      const holes = value.match(/\{\w+\}/g) ?? [];
+      for (const hole of holes) expect(dictLeaves.get(key), `${key} ${hole}`).toContain(hole);
+    }
+  });
+
+  it("is written in its own script, apart from brand and method names", () => {
+    const latinOnly = new Set(["pay.methods.wallet", "pay.methods.raast", "pay.labels.raast_id", "pay.labels.jazzcash", "pay.labels.easypaisa", "pay.labels.iban"]);
+    for (const [key, value] of dictLeaves) {
+      if (!latinOnly.has(key)) expect(value, key).toMatch(/[؀-ۿ]/);
+    }
+  });
+
+  it("serves its dictionary for its code and English for an unknown locale", () => {
+    expect(getDictionary(code).allergenStatus.contains).toBe(dict.allergenStatus.contains);
+    expect(getDictionary("it")).toBe(en);
+    expect(translate("it", "allergenStatus.contains")).toBe("Contains");
+  });
+
+  it("uses only its own script's letters", () => {
+    const wrong = code === "ar" ? /[کیہھے]/ : /[كي]/;
+    for (const [key, value] of new Map(leaves(dict))) expect(value, key).not.toMatch(wrong);
+  });
+
+  it("names the staff in its mandatory notice", () => {
+    expect(dict.staffNotice).toMatch(code === "ar" ? /الموظفين/ : /عملے سے/);
+  });
+});
+
+describe("venue-named strings", () => {
+  it("puts the venue name into the titles in both languages", () => {
+    expect(withVenue(en.ui.welcomeTitle, "Angeethi House")).toBe("Welcome to Angeethi House");
+    expect(withVenue(en.ui.chatTitle, "Kehwa & Crumb")).toBe("Ask Kehwa & Crumb");
+    expect(withVenue(ur.ui.welcomeTitle, "Angeethi House")).toBe(ur.ui.welcomeTitle.replace("{venue}", "Angeethi House"));
+  });
+  it("treats special characters in a name as plain text", () => {
+    expect(withVenue("Ask {venue}", "A $& B $1")).toBe("Ask A $& B $1");
+  });
+  it("never names Mise in any guest string", () => {
+    expect(JSON.stringify(en)).not.toMatch(/\bMise\b/);
+    expect(JSON.stringify(ur)).not.toMatch(/\bMise\b/);
+    expect(JSON.stringify(ar)).not.toMatch(/\bMise\b/);
+  });
+  it("has the neutral scan-again text", () => {
+    expect(en.ui.scanAgain).toBe("Scan the QR code on your table again.");
+    expect(ur.ui.scanAgain).toBeTruthy();
+  });
+});
+
+describe("ar demo-bill wording", () => {
+  it("never says invoice (فاتورة, plural فواتير); a demo bill is the check (الحساب)", () => {
+    for (const [key, value] of new Map(leaves(ar))) expect(value, key).not.toMatch(/فاتور|فواتير/);
   });
 });

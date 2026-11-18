@@ -5,7 +5,12 @@ import { useRouter } from "next/navigation";
 import { AllergenChip } from "../../../components/allergen-chip";
 import { CallWaiter } from "../../../components/CallWaiter";
 import { CodeEntry } from "../../../components/CodeEntry";
+import { Masthead } from "../../../components/Masthead";
+import { mainIngredients } from "../../../lib/ingredients";
+import { useVenue } from "../../../components/BrandShell";
+import { ScanAgain } from "../../../components/ScanAgain";
 import { DishSheet } from "../../../components/DishSheet";
+import { FavouritesStrip } from "../../../components/FavouritesStrip";
 import { ChatPanel } from "../../../components/chat-panel";
 import { useTableStatus } from "../../../hooks/use-table-status";
 import { getDictionary } from "../../../i18n";
@@ -65,6 +70,7 @@ interface MenuItem {
   is_vegan: boolean;
   is_gluten_free: boolean;
   available: boolean;
+  featured?: boolean;
   options?: MenuOption[];
   image_url?: string | null;
   choice_groups?: ChoiceGroup[];
@@ -100,9 +106,11 @@ export default function GuestMenuPage({
   const { lang } = use(params);
   const router = useRouter();
   const dict = getDictionary(lang);
+  const { Motif, Loader } = useVenue();
 
   const [menu, setMenu] = useState<MenuResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [expired, setExpired] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cart, setCart] = useState<CartState>(getCart());
   const [cartOpen, setCartOpen] = useState(false);
@@ -136,7 +144,7 @@ export default function GuestMenuPage({
   const fetchMenu = useCallback(async (): Promise<MenuResponse | null> => {
     const res = await fetch("/api/guest/menu");
     if (res.status === 401) {
-      router.push("/");
+      setExpired(true);
       return null;
     }
     if (!res.ok) {
@@ -145,7 +153,7 @@ export default function GuestMenuPage({
     const data = (await res.json()) as MenuResponse;
     setMenu(data);
     return data;
-  }, [router]);
+  }, []);
 
   useEffect(() => {
     async function loadMenu() {
@@ -408,12 +416,13 @@ export default function GuestMenuPage({
   const formatPrice = (amount: number) =>
     formatAmount(amount, menu?.restaurant?.currency || "EUR", lang);
 
+  if (expired) return <ScanAgain lang={lang} />;
+
   if (loading) {
     return (
       <div className="min-h-screen bg-paper text-ink flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">
-          <div className="w-8 h-8 border-2 border-terracotta border-t-transparent rounded-full animate-spin" />
-          <p className="text-xs text-ink-muted">Loading menu...</p>
+          <Loader label={dict.ui.loadingMenu} />
         </div>
       </div>
     );
@@ -423,12 +432,12 @@ export default function GuestMenuPage({
     return (
       <div className="min-h-screen bg-paper text-ink flex items-center justify-center p-4">
         <div className="max-w-md w-full bg-card border border-line rounded-2xl p-6 text-center space-y-4">
-          <p className="text-sm text-danger-fg">{error || "Unable to display menu."}</p>
+          <p className="text-sm text-danger-fg">{error || dict.ui.menuError}</p>
           <button
             onClick={() => window.location.reload()}
             className="px-4 py-2 bg-paper-2 text-xs font-medium rounded-xl hover:bg-line"
           >
-            Retry
+            {dict.ui.retry}
           </button>
         </div>
       </div>
@@ -451,12 +460,28 @@ export default function GuestMenuPage({
       .filter(Boolean)
       .join(" ");
 
+  const priceCell = (item: MenuItem) => {
+    const options = item.options ?? [];
+    return (
+      <>
+        {options.length > 0 && `${dict.menu.from} `}
+        <span className="figure">
+          {options.length > 0
+            ? formatPrice(Math.min(...options.map((o) => Number(o.price))))
+            : formatPrice(Number(item.price))}
+        </span>
+      </>
+    );
+  };
+
+  // Bottom padding clears the fixed bottom stack (assistant, order bar, View order).
   return (
-    <div className={`min-h-screen bg-paper text-ink ${barText ? "pb-56" : "pb-28"}`}>
+    <div className={`min-h-screen bg-paper text-ink ${barText ? "pb-80" : "pb-36"}`}>
       {/* Always mounted, so a screen reader hears each new bar message. */}
       <p aria-live="polite" className="sr-only">
         {barText}
       </p>
+      <Masthead />
       <header className="sticky top-0 z-30 border-b border-line bg-paper/95 px-4 pt-4 backdrop-blur sm:px-6">
         <div className="mx-auto max-w-3xl">
           <div className="flex items-start justify-between gap-3">
@@ -493,6 +518,7 @@ export default function GuestMenuPage({
       </header>
 
       <main className="mx-auto max-w-3xl space-y-8 px-4 py-4 sm:px-6">
+        <FavouritesStrip items={menu.items} title={dict.menu.favourites} price={priceCell} onOpen={setDishOpen} />
         {categories.map((cat) => (
           <section key={cat} id={catId(cat)} className="scroll-mt-32">
             <h2 className="border-b border-line pb-1 text-lg font-semibold italic text-terracotta">
@@ -503,34 +529,17 @@ export default function GuestMenuPage({
                 .filter((i) => i.category === cat)
                 .map((item) => {
                   const isAvailable = item.available !== false;
-                  const options = item.options ?? [];
                   return (
                     <li
                       key={item.id}
                       className={`border-b border-dotted border-line py-4 ${isAvailable ? "" : "opacity-50"}`}
                     >
-                      {item.image_url && isAvailable && (
-                        <button
-                          type="button"
-                          aria-label={item.name}
-                          className="mb-2 block w-full"
-                          onClick={() => setDishOpen(item)}
-                        >
-                          {/* eslint-disable-next-line @next/next/no-img-element -- venue photos come from any host */}
-                          <img
-                            src={item.image_url}
-                            loading="lazy"
-                            alt=""
-                            className="aspect-[16/9] w-full rounded-xl object-cover"
-                          />
-                        </button>
-                      )}
                       <div className="flex items-baseline justify-between gap-3">
                         <h3 className="text-base font-semibold text-ink">
                           {isAvailable ? (
                             <button
                               type="button"
-                              className="text-left underline-offset-2 hover:underline"
+                              className="text-start underline-offset-2 hover:underline"
                               onClick={() => setDishOpen(item)}
                             >
                               {item.name}
@@ -539,30 +548,30 @@ export default function GuestMenuPage({
                             item.name
                           )}
                         </h3>
-                        <span className="whitespace-nowrap font-semibold tabular-nums text-ink">
-                          {options.length > 0
-                            ? `${dict.menu.from} ${formatPrice(Math.min(...options.map((o) => Number(o.price))))}`
-                            : formatPrice(Number(item.price))}
-                        </span>
+                        <span className="whitespace-nowrap font-semibold text-ink">{priceCell(item)}</span>
                       </div>
                       {item.description && (
                         <p className="mt-0.5 text-sm text-ink-muted">{item.description}</p>
                       )}
                       <div className="mt-2 flex items-center justify-between gap-3">
+                        {/* Main ingredients; allergen and diet details live in the dish sheet. The list
+                            warns only when the dish contains something this guest asked to avoid. */}
                         <div className="flex flex-wrap gap-1.5">
-                          <AllergenChip
-                            status={item.allergen_status}
-                            matchedAllergens={item.matched_allergens}
-                            locale={lang}
-                          />
-                          {item.is_vegetarian && <Badge>{dict.dietary.vegetarian}</Badge>}
-                          {item.is_vegan && <Badge>{dict.dietary.vegan}</Badge>}
-                          {item.is_gluten_free && <Badge>{dict.dietary.gluten_free}</Badge>}
+                          {item.allergen_status === "contains" && (
+                            <AllergenChip
+                              status={item.allergen_status}
+                              matchedAllergens={item.matched_allergens}
+                              locale={lang}
+                            />
+                          )}
+                          {mainIngredients(item.ingredients).map((name) => (
+                            <Badge key={name}>{name}</Badge>
+                          ))}
                         </div>
                         {isAvailable ? (
                           <Button
                             size="icon"
-                            aria-label={`${dict.ui.addToCart} ${item.name}`}
+                            aria-label={dict.ui.addDish.replace("{name}", () => item.name)}
                             onClick={() => (needsPage(item) ? setDishOpen(item) : handleAddToCart(item))}
                           >
                             +
@@ -579,28 +588,37 @@ export default function GuestMenuPage({
         ))}
       </main>
 
-      {(cartCount > 0 || barText) && (
-        <div className="fixed inset-x-4 bottom-4 z-20 mx-auto max-w-md space-y-2">
-          {barText && (
-            <div className="space-y-3 rounded-2xl border border-line bg-card p-4 shadow-lg">
-              <p className="text-base font-semibold text-ink">{barText}</p>
-              {mode === "waiting" && (
-                <div className="[&_button]:min-h-12 [&_button]:w-full [&_button]:text-base">
-                  <CallWaiter lang={lang} />
-                </div>
-              )}
-            </div>
-          )}
-          {cartCount > 0 && (
-            <Button className="min-h-12 w-full justify-between py-3.5 text-base" onClick={() => setCartOpen(true)}>
-              <span>
-                {dict.ui.checkout} · {cartCount}
-              </span>
-              <span className="tabular-nums">{formatPrice(cartTotal)}</span>
-            </Button>
-          )}
+      {/* One bottom stack: the assistant sits above the order bar, so neither covers a dish. The
+          stack lets taps through its empty width; only its cards and buttons catch them. */}
+      <div className="pointer-events-none fixed inset-x-4 bottom-4 z-40 mx-auto max-w-md space-y-2">
+        <div className="flex justify-end">
+          <div className="pointer-events-auto">
+            <ChatPanel locale={lang} docked />
+          </div>
         </div>
-      )}
+        {barText && (
+          <div className="pointer-events-auto space-y-3 rounded-2xl border border-line bg-card p-4 shadow-lg">
+            <Motif variant="bar" />
+            <p className="text-base font-semibold text-ink">{barText}</p>
+            {mode === "waiting" && (
+              <div className="[&_button]:min-h-12 [&_button]:w-full [&_button]:text-base">
+                <CallWaiter lang={lang} />
+              </div>
+            )}
+          </div>
+        )}
+        {cartCount > 0 && (
+          <Button
+            className="pointer-events-auto min-h-12 w-full justify-between py-3.5 text-base"
+            onClick={() => setCartOpen(true)}
+          >
+            <span>
+              {dict.ui.checkout} · {cartCount}
+            </span>
+            <span className="figure">{formatPrice(cartTotal)}</span>
+          </Button>
+        )}
+      </div>
 
       <Sheet
         open={cartOpen}
@@ -611,7 +629,7 @@ export default function GuestMenuPage({
             <>
               <div className="flex items-center justify-between text-sm">
                 <span className="font-medium text-ink-muted">{dict.ui.total}</span>
-                <span className="text-lg font-semibold tabular-nums text-ink">
+                <span className="figure text-lg font-semibold text-ink">
                   {formatPrice(cartTotal)}
                 </span>
               </div>
@@ -621,7 +639,17 @@ export default function GuestMenuPage({
                   onClick={() => void handleCheckout()}
                   disabled={submittingOrder || (requiresAck && !cart.acknowledged)}
                 >
-                  {submittingOrder ? dict.ui.placingOrder : dict.ui.placeOrder}
+                  {submittingOrder ? (
+                    <span className="inline-flex items-center gap-2">
+                      {/* Hidden from assistive tech so the name says "Placing order" once, from the visible text. */}
+                      <span aria-hidden="true">
+                        <Loader label={dict.ui.placingOrder} size="sm" />
+                      </span>
+                      {dict.ui.placingOrder}
+                    </span>
+                  ) : (
+                    dict.ui.placeOrder
+                  )}
                 </Button>
               ) : (
                 <p className="text-base font-semibold text-ink">{closedText}</p>
@@ -647,7 +675,7 @@ export default function GuestMenuPage({
                   <span className="font-medium text-ink">
                     {item.optionLabel ? `${item.name} — ${item.optionLabel}` : item.name}
                   </span>
-                  <span className="font-semibold tabular-nums text-ink">
+                  <span className="figure font-semibold text-ink">
                     {formatPrice(item.price * item.quantity)}
                   </span>
                 </div>
@@ -768,7 +796,6 @@ export default function GuestMenuPage({
         )}
       </Sheet>
 
-      <ChatPanel locale={lang} raised={Boolean(barText)} />
     </div>
   );
 }

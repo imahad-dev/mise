@@ -2,7 +2,7 @@
 
 Usage:
     docker compose exec -T api python scripts/simulate.py [--slug angeethi-house ...]
-        [--days 56] [--seed 42] [--no-promo]
+        [--days 90] [--seed 42] [--no-promo]
 
 Without --slug, every demo venue (settings.demo_restaurant_slugs) is simulated, each with its
 own profile from restaurant.onboarding["simulation"]. Replaces any previously simulated orders
@@ -49,7 +49,7 @@ def main() -> None:
     parser.add_argument(
         "--slug", action="append", help="repeatable; default: every demo venue"
     )
-    parser.add_argument("--days", type=int, default=56)
+    parser.add_argument("--days", type=int, default=90)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--no-promo", action="store_true", default=False)
     asyncio.run(async_main(parser.parse_args()))

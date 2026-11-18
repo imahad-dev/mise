@@ -1,0 +1,1345 @@
+{
+  "_note": "Fictional venue. Prices and costs are illustrative (2025-26 Dubai ranges), not quotes.",
+  "restaurant": {
+    "name": "Noor & Za'atar",
+    "slug": "noor-and-zaatar",
+    "city": "Dubai",
+    "tax_jurisdiction": "AE-DU",
+    "service_extra_label": "More bread",
+    "payment_details": {},
+    "timezone": "Asia/Dubai",
+    "currency": "AED",
+    "languages": [
+      "en",
+      "ar"
+    ],
+    "default_language": "en",
+    "active": true
+  },
+  "tables": [
+    {
+      "label": "T1"
+    },
+    {
+      "label": "T2"
+    },
+    {
+      "label": "T3"
+    },
+    {
+      "label": "T4"
+    },
+    {
+      "label": "T5"
+    },
+    {
+      "label": "T6"
+    },
+    {
+      "label": "T7"
+    },
+    {
+      "label": "T8"
+    },
+    {
+      "label": "M1"
+    },
+    {
+      "label": "M2"
+    }
+  ],
+  "simulation": {
+    "lunch_rate": [
+      8,
+      8,
+      9,
+      9,
+      14,
+      12,
+      9
+    ],
+    "dinner_rate": [
+      14,
+      15,
+      16,
+      18,
+      30,
+      28,
+      18
+    ],
+    "lunch_hours": [
+      12,
+      16
+    ],
+    "dinner_hours": [
+      19,
+      23
+    ],
+    "party_size_weights": [
+      0.05,
+      0.2,
+      0.15,
+      0.3,
+      0.15,
+      0.15
+    ],
+    "dishes_per_guest": 1.6,
+    "payment_mix": [
+      [
+        "card",
+        0.8
+      ],
+      [
+        "cash",
+        0.2
+      ]
+    ]
+  },
+  "items": [
+    {
+      "key": "chicken_machboos",
+      "category": "Emirati Kitchen",
+      "price": 48.0,
+      "unit_cost": 17.0,
+      "ingredients": [
+        "chicken",
+        "basmati rice",
+        "baharat",
+        "dried lime",
+        "onion",
+        "ghee"
+      ],
+      "allergens": [
+        "milk"
+      ],
+      "allergen_verified": false,
+      "is_vegetarian": false,
+      "is_vegan": false,
+      "is_gluten_free": true,
+      "dietary_verified": false,
+      "available": true,
+      "featured": true,
+      "image_url": "/venues/noor-and-zaatar/dishes/chicken_machboos.webp",
+      "sort_order": 1,
+      "translations": {
+        "en": {
+          "name": "Chicken Machboos",
+          "description": "Spiced rice cooked with chicken, dried lime, onion and baharat, finished with ghee"
+        },
+        "ar": {
+          "name": "مجبوس دجاج",
+          "description": "أرز متبل مطبوخ مع الدجاج والليمون المجفف والبصل والبهارات، مع لمسة من السمن"
+        }
+      },
+      "sim_weight": 10,
+      "choice_groups": [
+        {
+          "label": "Spice",
+          "translations": {
+            "ar": "الحرارة"
+          },
+          "kind": "pick",
+          "min_select": 1,
+          "max_select": 1,
+          "choices": [
+            {
+              "label": "Mild",
+              "translations": {
+                "ar": "خفيف"
+              },
+              "allergen_verified": true,
+              "is_vegetarian": true,
+              "is_vegan": true
+            },
+            {
+              "label": "Medium",
+              "translations": {
+                "ar": "متوسط"
+              },
+              "allergen_verified": true,
+              "is_vegetarian": true,
+              "is_vegan": true
+            },
+            {
+              "label": "Hot",
+              "translations": {
+                "ar": "حار"
+              },
+              "allergen_verified": true,
+              "is_vegetarian": true,
+              "is_vegan": true
+            }
+          ]
+        },
+        {
+          "label": "Leave out",
+          "translations": {
+            "ar": "بدون"
+          },
+          "kind": "leave_out",
+          "min_select": 0,
+          "max_select": 1,
+          "choices": [
+            {
+              "label": "Onions",
+              "translations": {
+                "ar": "بصل"
+              },
+              "allergen_verified": true,
+              "is_vegetarian": true,
+              "is_vegan": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "lamb_machboos",
+      "category": "Emirati Kitchen",
+      "price": 62.0,
+      "unit_cost": 24.0,
+      "ingredients": [
+        "lamb",
+        "basmati rice",
+        "baharat",
+        "dried lime",
+        "onion",
+        "ghee"
+      ],
+      "allergens": [
+        "milk"
+      ],
+      "allergen_verified": false,
+      "is_vegetarian": false,
+      "is_vegan": false,
+      "is_gluten_free": true,
+      "dietary_verified": false,
+      "available": true,
+      "featured": true,
+      "image_url": "/venues/noor-and-zaatar/dishes/lamb_machboos.webp",
+      "sort_order": 2,
+      "translations": {
+        "en": {
+          "name": "Lamb Machboos",
+          "description": "Spiced rice cooked with lamb, dried lime, onion and baharat, finished with ghee"
+        },
+        "ar": {
+          "name": "مجبوس لحم",
+          "description": "أرز متبل مطبوخ مع لحم الضأن والليمون المجفف والبصل والبهارات، مع لمسة من السمن"
+        }
+      },
+      "sim_weight": 8,
+      "choice_groups": [
+        {
+          "label": "Spice",
+          "translations": {
+            "ar": "الحرارة"
+          },
+          "kind": "pick",
+          "min_select": 1,
+          "max_select": 1,
+          "choices": [
+            {
+              "label": "Mild",
+              "translations": {
+                "ar": "خفيف"
+              },
+              "allergen_verified": true,
+              "is_vegetarian": true,
+              "is_vegan": true
+            },
+            {
+              "label": "Medium",
+              "translations": {
+                "ar": "متوسط"
+              },
+              "allergen_verified": true,
+              "is_vegetarian": true,
+              "is_vegan": true
+            },
+            {
+              "label": "Hot",
+              "translations": {
+                "ar": "حار"
+              },
+              "allergen_verified": true,
+              "is_vegetarian": true,
+              "is_vegan": true
+            }
+          ]
+        },
+        {
+          "label": "Leave out",
+          "translations": {
+            "ar": "بدون"
+          },
+          "kind": "leave_out",
+          "min_select": 0,
+          "max_select": 1,
+          "choices": [
+            {
+              "label": "Onions",
+              "translations": {
+                "ar": "بصل"
+              },
+              "allergen_verified": true,
+              "is_vegetarian": true,
+              "is_vegan": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "harees",
+      "category": "Emirati Kitchen",
+      "price": 38.0,
+      "unit_cost": 12.0,
+      "ingredients": [
+        "whole wheat",
+        "lamb",
+        "ghee",
+        "cinnamon"
+      ],
+      "allergens": [
+        "gluten",
+        "milk"
+      ],
+      "allergen_verified": false,
+      "is_vegetarian": false,
+      "is_vegan": false,
+      "is_gluten_free": false,
+      "dietary_verified": false,
+      "available": true,
+      "featured": false,
+      "sort_order": 3,
+      "translations": {
+        "en": {
+          "name": "Harees",
+          "description": "Whole wheat and lamb slow-cooked to a smooth porridge, with cinnamon and ghee"
+        },
+        "ar": {
+          "name": "هريس",
+          "description": "قمح كامل ولحم ضأن مطهوان ببطء حتى يصبحا ناعمين، مع القرفة والسمن"
+        }
+      },
+      "sim_weight": 5
+    },
+    {
+      "key": "thareed",
+      "category": "Emirati Kitchen",
+      "price": 44.0,
+      "unit_cost": 15.0,
+      "ingredients": [
+        "lamb",
+        "regag bread",
+        "potato",
+        "courgette",
+        "tomato",
+        "baharat"
+      ],
+      "allergens": [
+        "gluten"
+      ],
+      "allergen_verified": false,
+      "is_vegetarian": false,
+      "is_vegan": false,
+      "is_gluten_free": false,
+      "dietary_verified": false,
+      "available": true,
+      "featured": false,
+      "sort_order": 4,
+      "translations": {
+        "en": {
+          "name": "Thareed",
+          "description": "Lamb stew with potato, courgette, tomato and baharat, poured over thin regag bread"
+        },
+        "ar": {
+          "name": "ثريد",
+          "description": "يخنة لحم ضأن مع البطاطس والكوسا والطماطم والبهارات، تسكب فوق خبز الرقاق"
+        }
+      },
+      "sim_weight": 5
+    },
+    {
+      "key": "balaleet",
+      "category": "Emirati Kitchen",
+      "price": 32.0,
+      "unit_cost": 9.0,
+      "ingredients": [
+        "vermicelli",
+        "eggs",
+        "ghee",
+        "saffron",
+        "cardamom",
+        "sugar"
+      ],
+      "allergens": [
+        "gluten",
+        "eggs",
+        "milk"
+      ],
+      "allergen_verified": false,
+      "is_vegetarian": true,
+      "is_vegan": false,
+      "is_gluten_free": false,
+      "dietary_verified": false,
+      "available": true,
+      "featured": false,
+      "sort_order": 5,
+      "translations": {
+        "en": {
+          "name": "Balaleet",
+          "description": "Sweet vermicelli with saffron and cardamom, cooked in ghee and topped with a thin omelette"
+        },
+        "ar": {
+          "name": "بلاليط",
+          "description": "شعيرية حلوة بالزعفران والهيل، مطبوخة بالسمن ومغطاة بعجة رقيقة"
+        }
+      },
+      "sim_weight": 4
+    },
+    {
+      "key": "luqaimat",
+      "category": "Desserts",
+      "price": 26.0,
+      "unit_cost": 6.0,
+      "ingredients": [
+        "flour",
+        "yeast",
+        "milk",
+        "egg",
+        "saffron",
+        "date syrup",
+        "sesame seeds"
+      ],
+      "allergens": [
+        "gluten",
+        "milk",
+        "eggs",
+        "sesame",
+        "sulphites"
+      ],
+      "allergen_verified": false,
+      "is_vegetarian": true,
+      "is_vegan": false,
+      "is_gluten_free": false,
+      "dietary_verified": false,
+      "available": true,
+      "featured": false,
+      "sort_order": 6,
+      "translations": {
+        "en": {
+          "name": "Luqaimat with Date Syrup",
+          "description": "Crisp fried dough balls with saffron, drizzled with date syrup and sesame seeds"
+        },
+        "ar": {
+          "name": "لقيمات بدبس التمر",
+          "description": "كرات عجين مقلية ومقرمشة بالزعفران، مع دبس التمر وبذور السمسم"
+        }
+      },
+      "sim_weight": 8
+    },
+    {
+      "key": "karak_chai",
+      "category": "Drinks",
+      "price": 9.0,
+      "unit_cost": 1.5,
+      "ingredients": [
+        "black tea",
+        "evaporated milk",
+        "cardamom",
+        "saffron",
+        "sugar"
+      ],
+      "allergens": [
+        "milk"
+      ],
+      "allergen_verified": false,
+      "is_vegetarian": true,
+      "is_vegan": false,
+      "is_gluten_free": true,
+      "dietary_verified": false,
+      "available": true,
+      "featured": true,
+      "image_url": "/venues/noor-and-zaatar/dishes/karak_chai.webp",
+      "sort_order": 7,
+      "translations": {
+        "en": {
+          "name": "Karak Chai",
+          "description": "Strong black tea brewed with milk, cardamom and saffron"
+        },
+        "ar": {
+          "name": "شاي كرك",
+          "description": "شاي أسود قوي مغلي مع الحليب والهيل والزعفران"
+        }
+      },
+      "sim_weight": 12,
+      "options": [
+        {
+          "label": "Regular",
+          "translations": {
+            "ar": "عادي"
+          },
+          "price": 9.0,
+          "unit_cost": 1.5
+        },
+        {
+          "label": "Large",
+          "translations": {
+            "ar": "كبير"
+          },
+          "price": 13.0,
+          "unit_cost": 2.2
+        }
+      ],
+      "option_weights": [
+        0.65,
+        0.35
+      ]
+    },
+    {
+      "key": "hummus",
+      "category": "Mezze",
+      "price": 28.0,
+      "unit_cost": 6.0,
+      "ingredients": [
+        "chickpeas",
+        "tahini",
+        "lemon",
+        "garlic",
+        "olive oil"
+      ],
+      "allergens": [
+        "sesame"
+      ],
+      "allergen_verified": false,
+      "is_vegetarian": true,
+      "is_vegan": true,
+      "is_gluten_free": true,
+      "dietary_verified": false,
+      "available": true,
+      "featured": true,
+      "image_url": "/venues/noor-and-zaatar/dishes/hummus.webp",
+      "sort_order": 8,
+      "translations": {
+        "en": {
+          "name": "Hummus",
+          "description": "Chickpeas blended with tahini, lemon and garlic, finished with olive oil"
+        },
+        "ar": {
+          "name": "حمص",
+          "description": "حمص مهروس مع الطحينة والليمون والثوم، مع زيت الزيتون"
+        }
+      },
+      "sim_weight": 9
+    },
+    {
+      "key": "moutabal",
+      "category": "Mezze",
+      "price": 28.0,
+      "unit_cost": 6.0,
+      "ingredients": [
+        "smoked aubergine",
+        "tahini",
+        "yogurt",
+        "lemon",
+        "garlic"
+      ],
+      "allergens": [
+        "sesame",
+        "milk"
+      ],
+      "allergen_verified": false,
+      "is_vegetarian": true,
+      "is_vegan": false,
+      "is_gluten_free": true,
+      "dietary_verified": false,
+      "available": true,
+      "featured": false,
+      "sort_order": 9,
+      "translations": {
+        "en": {
+          "name": "Moutabal",
+          "description": "Smoked aubergine with tahini, yogurt, lemon and garlic"
+        },
+        "ar": {
+          "name": "متبل",
+          "description": "باذنجان مدخن مع الطحينة والزبادي والليمون والثوم"
+        }
+      },
+      "sim_weight": 6
+    },
+    {
+      "key": "zaatar_manakish",
+      "category": "Bakery",
+      "price": 18.0,
+      "unit_cost": 4.0,
+      "ingredients": [
+        "flatbread dough",
+        "za'atar",
+        "sesame seeds",
+        "olive oil"
+      ],
+      "allergens": [
+        "gluten",
+        "sesame"
+      ],
+      "allergen_verified": false,
+      "is_vegetarian": true,
+      "is_vegan": true,
+      "is_gluten_free": false,
+      "dietary_verified": false,
+      "available": true,
+      "featured": true,
+      "image_url": "/venues/noor-and-zaatar/dishes/zaatar_manakish.webp",
+      "sort_order": 10,
+      "translations": {
+        "en": {
+          "name": "Za'atar Manakish",
+          "description": "Flatbread baked with za'atar, sesame seeds and olive oil"
+        },
+        "ar": {
+          "name": "مناقيش زعتر",
+          "description": "خبز مسطح مخبوز مع الزعتر وبذور السمسم وزيت الزيتون"
+        }
+      },
+      "sim_weight": 9,
+      "choice_groups": [
+        {
+          "label": "Extras",
+          "translations": {
+            "ar": "إضافات"
+          },
+          "kind": "add",
+          "min_select": 0,
+          "max_select": 1,
+          "choices": [
+            {
+              "label": "Add cheese",
+              "translations": {
+                "ar": "إضافة جبنة"
+              },
+              "price_delta": 5.0,
+              "cost_delta": 1.5,
+              "allergens": [
+                "milk"
+              ],
+              "allergen_verified": true,
+              "is_vegetarian": true,
+              "is_vegan": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "cheese_manakish",
+      "category": "Bakery",
+      "price": 22.0,
+      "unit_cost": 6.0,
+      "ingredients": [
+        "flatbread dough",
+        "akkawi cheese",
+        "mozzarella"
+      ],
+      "allergens": [
+        "gluten",
+        "milk"
+      ],
+      "allergen_verified": false,
+      "is_vegetarian": true,
+      "is_vegan": false,
+      "is_gluten_free": false,
+      "dietary_verified": false,
+      "available": true,
+      "featured": false,
+      "sort_order": 11,
+      "translations": {
+        "en": {
+          "name": "Cheese Manakish",
+          "description": "Flatbread baked with melted akkawi and mozzarella cheese"
+        },
+        "ar": {
+          "name": "مناقيش جبنة",
+          "description": "خبز مسطح مخبوز مع جبنة العكاوي والموزاريلا الذائبة"
+        }
+      },
+      "sim_weight": 7
+    },
+    {
+      "key": "mixed_grill",
+      "category": "Grill",
+      "price": 85.0,
+      "unit_cost": 32.0,
+      "ingredients": [
+        "lamb kofta",
+        "shish tawook",
+        "lamb cubes",
+        "yogurt",
+        "mustard",
+        "baharat",
+        "tomato"
+      ],
+      "allergens": [
+        "milk",
+        "mustard"
+      ],
+      "allergen_verified": false,
+      "is_vegetarian": false,
+      "is_vegan": false,
+      "is_gluten_free": true,
+      "dietary_verified": false,
+      "available": true,
+      "featured": true,
+      "image_url": "/venues/noor-and-zaatar/dishes/mixed_grill.webp",
+      "sort_order": 12,
+      "translations": {
+        "en": {
+          "name": "Mixed Grill",
+          "description": "Lamb kofta, shish tawook and lamb cubes, chargrilled with tomato"
+        },
+        "ar": {
+          "name": "مشاوي مشكلة",
+          "description": "كفتة لحم وشيش طاووق ومكعبات لحم ضأن، مشوية على الفحم مع الطماطم"
+        }
+      },
+      "sim_weight": 7,
+      "choice_groups": [
+        {
+          "label": "Spice",
+          "translations": {
+            "ar": "الحرارة"
+          },
+          "kind": "pick",
+          "min_select": 1,
+          "max_select": 1,
+          "choices": [
+            {
+              "label": "Mild",
+              "translations": {
+                "ar": "خفيف"
+              },
+              "allergen_verified": true,
+              "is_vegetarian": true,
+              "is_vegan": true
+            },
+            {
+              "label": "Medium",
+              "translations": {
+                "ar": "متوسط"
+              },
+              "allergen_verified": true,
+              "is_vegetarian": true,
+              "is_vegan": true
+            },
+            {
+              "label": "Hot",
+              "translations": {
+                "ar": "حار"
+              },
+              "allergen_verified": true,
+              "is_vegetarian": true,
+              "is_vegan": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "shish_tawook",
+      "category": "Grill",
+      "price": 52.0,
+      "unit_cost": 17.0,
+      "ingredients": [
+        "chicken",
+        "yogurt",
+        "garlic",
+        "lemon",
+        "mustard",
+        "onion"
+      ],
+      "allergens": [
+        "milk",
+        "mustard"
+      ],
+      "allergen_verified": false,
+      "is_vegetarian": false,
+      "is_vegan": false,
+      "is_gluten_free": true,
+      "dietary_verified": false,
+      "available": true,
+      "featured": true,
+      "image_url": "/venues/noor-and-zaatar/dishes/shish_tawook.webp",
+      "sort_order": 13,
+      "translations": {
+        "en": {
+          "name": "Shish Tawook",
+          "description": "Chicken marinated in yogurt, garlic, lemon and mustard, chargrilled on skewers with onion"
+        },
+        "ar": {
+          "name": "شيش طاووق",
+          "description": "دجاج متبل بالزبادي والثوم والليمون والخردل، مشوي على الأسياخ مع البصل"
+        }
+      },
+      "sim_weight": 9,
+      "choice_groups": [
+        {
+          "label": "Spice",
+          "translations": {
+            "ar": "الحرارة"
+          },
+          "kind": "pick",
+          "min_select": 1,
+          "max_select": 1,
+          "choices": [
+            {
+              "label": "Mild",
+              "translations": {
+                "ar": "خفيف"
+              },
+              "allergen_verified": true,
+              "is_vegetarian": true,
+              "is_vegan": true
+            },
+            {
+              "label": "Medium",
+              "translations": {
+                "ar": "متوسط"
+              },
+              "allergen_verified": true,
+              "is_vegetarian": true,
+              "is_vegan": true
+            },
+            {
+              "label": "Hot",
+              "translations": {
+                "ar": "حار"
+              },
+              "allergen_verified": true,
+              "is_vegetarian": true,
+              "is_vegan": true
+            }
+          ]
+        },
+        {
+          "label": "Leave out",
+          "translations": {
+            "ar": "بدون"
+          },
+          "kind": "leave_out",
+          "min_select": 0,
+          "max_select": 1,
+          "choices": [
+            {
+              "label": "Onions",
+              "translations": {
+                "ar": "بصل"
+              },
+              "allergen_verified": true,
+              "is_vegetarian": true,
+              "is_vegan": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "mutton_biryani",
+      "category": "Rice",
+      "price": 55.0,
+      "unit_cost": 20.0,
+      "ingredients": [
+        "mutton",
+        "basmati rice",
+        "yogurt",
+        "ghee",
+        "flour-dusted fried onion",
+        "biryani spice mix"
+      ],
+      "allergens": [
+        "milk",
+        "gluten",
+        "mustard",
+        "celery"
+      ],
+      "allergen_verified": false,
+      "is_vegetarian": false,
+      "is_vegan": false,
+      "is_gluten_free": false,
+      "dietary_verified": false,
+      "available": true,
+      "featured": true,
+      "image_url": "/venues/noor-and-zaatar/dishes/mutton_biryani.webp",
+      "sort_order": 14,
+      "translations": {
+        "en": {
+          "name": "Mutton Biryani",
+          "description": "Basmati rice layered with mutton marinated in yogurt and spices, with fried onion and ghee"
+        },
+        "ar": {
+          "name": "برياني لحم ضأن",
+          "description": "أرز بسمتي بطبقات من لحم الضأن المتبل بالزبادي والبهارات، مع البصل المقلي والسمن"
+        }
+      },
+      "sim_weight": 9,
+      "choice_groups": [
+        {
+          "label": "Spice",
+          "translations": {
+            "ar": "الحرارة"
+          },
+          "kind": "pick",
+          "min_select": 1,
+          "max_select": 1,
+          "choices": [
+            {
+              "label": "Mild",
+              "translations": {
+                "ar": "خفيف"
+              },
+              "allergen_verified": true,
+              "is_vegetarian": true,
+              "is_vegan": true
+            },
+            {
+              "label": "Medium",
+              "translations": {
+                "ar": "متوسط"
+              },
+              "allergen_verified": true,
+              "is_vegetarian": true,
+              "is_vegan": true
+            },
+            {
+              "label": "Hot",
+              "translations": {
+                "ar": "حار"
+              },
+              "allergen_verified": true,
+              "is_vegetarian": true,
+              "is_vegan": true
+            }
+          ]
+        },
+        {
+          "label": "Leave out",
+          "translations": {
+            "ar": "بدون"
+          },
+          "kind": "leave_out",
+          "min_select": 0,
+          "max_select": 1,
+          "choices": [
+            {
+              "label": "Onions",
+              "translations": {
+                "ar": "بصل"
+              },
+              "allergen_verified": true,
+              "is_vegetarian": true,
+              "is_vegan": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "lime_mint",
+      "category": "Drinks",
+      "price": 18.0,
+      "unit_cost": 3.0,
+      "ingredients": [
+        "lime",
+        "mint",
+        "sugar",
+        "ice"
+      ],
+      "allergens": [],
+      "allergen_verified": false,
+      "is_vegetarian": true,
+      "is_vegan": true,
+      "is_gluten_free": true,
+      "dietary_verified": false,
+      "available": true,
+      "featured": false,
+      "sort_order": 15,
+      "translations": {
+        "en": {
+          "name": "Fresh Lime-Mint",
+          "description": "Fresh lime juice blended with mint, sugar and ice"
+        },
+        "ar": {
+          "name": "ليمون بالنعناع",
+          "description": "عصير ليمون طازج مخفوق مع النعناع والسكر والثلج"
+        }
+      },
+      "sim_weight": 8,
+      "options": [
+        {
+          "label": "Regular",
+          "translations": {
+            "ar": "عادي"
+          },
+          "price": 18.0,
+          "unit_cost": 3.0
+        },
+        {
+          "label": "Large",
+          "translations": {
+            "ar": "كبير"
+          },
+          "price": 24.0,
+          "unit_cost": 4.2
+        }
+      ],
+      "option_weights": [
+        0.65,
+        0.35
+      ]
+    },
+    {
+      "key": "lamb_kofta",
+      "category": "Grill",
+      "price": 48.0,
+      "unit_cost": 16.0,
+      "ingredients": [
+        "minced lamb",
+        "onion",
+        "parsley",
+        "baharat"
+      ],
+      "allergens": [],
+      "allergen_verified": false,
+      "is_vegetarian": false,
+      "is_vegan": false,
+      "is_gluten_free": true,
+      "dietary_verified": false,
+      "available": true,
+      "featured": false,
+      "sort_order": 16,
+      "translations": {
+        "en": {
+          "name": "Lamb Kofta",
+          "description": "Skewers of minced lamb with onion, parsley and baharat, chargrilled"
+        },
+        "ar": {
+          "name": "كفتة لحم",
+          "description": "أسياخ من لحم الضأن المفروم مع البصل والبقدونس والبهارات، مشوية على الفحم"
+        }
+      },
+      "sim_weight": 6,
+      "choice_groups": [
+        {
+          "label": "Spice",
+          "translations": {
+            "ar": "الحرارة"
+          },
+          "kind": "pick",
+          "min_select": 1,
+          "max_select": 1,
+          "choices": [
+            {
+              "label": "Mild",
+              "translations": {
+                "ar": "خفيف"
+              },
+              "allergen_verified": true,
+              "is_vegetarian": true,
+              "is_vegan": true
+            },
+            {
+              "label": "Medium",
+              "translations": {
+                "ar": "متوسط"
+              },
+              "allergen_verified": true,
+              "is_vegetarian": true,
+              "is_vegan": true
+            },
+            {
+              "label": "Hot",
+              "translations": {
+                "ar": "حار"
+              },
+              "allergen_verified": true,
+              "is_vegetarian": true,
+              "is_vegan": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "tabbouleh",
+      "category": "Mezze",
+      "price": 26.0,
+      "unit_cost": 5.0,
+      "ingredients": [
+        "parsley",
+        "bulgur wheat",
+        "tomato",
+        "mint",
+        "lemon",
+        "olive oil"
+      ],
+      "allergens": [
+        "gluten"
+      ],
+      "allergen_verified": false,
+      "is_vegetarian": true,
+      "is_vegan": true,
+      "is_gluten_free": false,
+      "dietary_verified": false,
+      "available": true,
+      "featured": false,
+      "sort_order": 17,
+      "translations": {
+        "en": {
+          "name": "Tabbouleh",
+          "description": "Chopped parsley with bulgur wheat, tomato, mint, lemon and olive oil"
+        },
+        "ar": {
+          "name": "تبولة",
+          "description": "بقدونس مفروم مع البرغل والطماطم والنعناع والليمون وزيت الزيتون"
+        }
+      },
+      "sim_weight": 5
+    },
+    {
+      "key": "fattoush",
+      "category": "Mezze",
+      "price": 28.0,
+      "unit_cost": 5.0,
+      "ingredients": [
+        "lettuce",
+        "tomato",
+        "cucumber",
+        "radish",
+        "fried bread",
+        "sumac"
+      ],
+      "allergens": [
+        "gluten"
+      ],
+      "allergen_verified": false,
+      "is_vegetarian": true,
+      "is_vegan": true,
+      "is_gluten_free": false,
+      "dietary_verified": false,
+      "available": true,
+      "featured": false,
+      "sort_order": 18,
+      "translations": {
+        "en": {
+          "name": "Fattoush",
+          "description": "Lettuce, tomato, cucumber and radish with fried bread and sumac"
+        },
+        "ar": {
+          "name": "فتوش",
+          "description": "خس وطماطم وخيار وفجل مع الخبز المقلي والسماق"
+        }
+      },
+      "sim_weight": 6
+    },
+    {
+      "key": "muhammara",
+      "category": "Mezze",
+      "price": 30.0,
+      "unit_cost": 7.0,
+      "ingredients": [
+        "roasted red pepper",
+        "walnuts",
+        "breadcrumbs",
+        "pomegranate molasses",
+        "olive oil"
+      ],
+      "allergens": [
+        "tree_nuts",
+        "gluten",
+        "sulphites"
+      ],
+      "allergen_verified": false,
+      "is_vegetarian": true,
+      "is_vegan": true,
+      "is_gluten_free": false,
+      "dietary_verified": false,
+      "available": true,
+      "featured": false,
+      "sort_order": 19,
+      "translations": {
+        "en": {
+          "name": "Muhammara",
+          "description": "Roasted red pepper and walnut dip with breadcrumbs and pomegranate molasses"
+        },
+        "ar": {
+          "name": "محمرة",
+          "description": "غموس الفلفل الأحمر المشوي والجوز مع فتات الخبز ودبس الرمان"
+        }
+      },
+      "sim_weight": 4
+    },
+    {
+      "key": "falafel",
+      "category": "Mezze",
+      "price": 24.0,
+      "unit_cost": 5.0,
+      "ingredients": [
+        "chickpeas",
+        "wheat flour binder",
+        "parsley",
+        "coriander",
+        "garlic",
+        "tahini sauce"
+      ],
+      "allergens": [
+        "sesame",
+        "gluten"
+      ],
+      "allergen_verified": false,
+      "is_vegetarian": true,
+      "is_vegan": true,
+      "is_gluten_free": false,
+      "dietary_verified": false,
+      "available": true,
+      "featured": false,
+      "sort_order": 20,
+      "translations": {
+        "en": {
+          "name": "Falafel",
+          "description": "Fried chickpea patties with parsley, coriander and garlic, with tahini sauce"
+        },
+        "ar": {
+          "name": "فلافل",
+          "description": "أقراص حمص مقلية مع البقدونس والكزبرة والثوم، مع صلصة الطحينة"
+        }
+      },
+      "sim_weight": 6
+    },
+    {
+      "key": "khubz",
+      "category": "Bakery",
+      "price": 6.0,
+      "unit_cost": 1.0,
+      "ingredients": [
+        "wheat flour",
+        "yeast",
+        "water"
+      ],
+      "allergens": [
+        "gluten"
+      ],
+      "allergen_verified": false,
+      "is_vegetarian": true,
+      "is_vegan": true,
+      "is_gluten_free": false,
+      "dietary_verified": false,
+      "available": true,
+      "featured": false,
+      "sort_order": 21,
+      "translations": {
+        "en": {
+          "name": "Arabic Bread",
+          "description": "Warm khubz flatbread baked from wheat flour"
+        },
+        "ar": {
+          "name": "خبز عربي",
+          "description": "خبز مسطح دافئ من دقيق القمح"
+        }
+      },
+      "sim_weight": 7
+    },
+    {
+      "key": "arabic_coffee",
+      "category": "Drinks",
+      "price": 12.0,
+      "unit_cost": 2.0,
+      "ingredients": [
+        "lightly roasted coffee",
+        "cardamom",
+        "saffron"
+      ],
+      "allergens": [],
+      "allergen_verified": false,
+      "is_vegetarian": true,
+      "is_vegan": true,
+      "is_gluten_free": true,
+      "dietary_verified": false,
+      "available": true,
+      "featured": false,
+      "sort_order": 22,
+      "translations": {
+        "en": {
+          "name": "Arabic Coffee",
+          "description": "Lightly roasted coffee brewed with cardamom and saffron"
+        },
+        "ar": {
+          "name": "قهوة عربية",
+          "description": "قهوة محمصة تحميصا خفيفا ومغلية مع الهيل والزعفران"
+        }
+      },
+      "sim_weight": 6
+    },
+    {
+      "key": "laban",
+      "category": "Drinks",
+      "price": 9.0,
+      "unit_cost": 2.0,
+      "ingredients": [
+        "laban (cultured buttermilk)",
+        "salt"
+      ],
+      "allergens": [
+        "milk"
+      ],
+      "allergen_verified": false,
+      "is_vegetarian": true,
+      "is_vegan": false,
+      "is_gluten_free": true,
+      "dietary_verified": false,
+      "available": true,
+      "featured": false,
+      "sort_order": 23,
+      "translations": {
+        "en": {
+          "name": "Laban",
+          "description": "Chilled cultured buttermilk, lightly salted"
+        },
+        "ar": {
+          "name": "لبن",
+          "description": "لبن مخيض بارد، مملح قليلا"
+        }
+      },
+      "sim_weight": 6
+    },
+    {
+      "key": "soft_drink",
+      "category": "Drinks",
+      "price": 8.0,
+      "unit_cost": 2.0,
+      "ingredients": [
+        "carbonated soft drink"
+      ],
+      "allergens": [],
+      "allergen_verified": false,
+      "is_vegetarian": true,
+      "is_vegan": true,
+      "is_gluten_free": true,
+      "dietary_verified": false,
+      "available": true,
+      "featured": false,
+      "sort_order": 24,
+      "translations": {
+        "en": {
+          "name": "Soft Drink",
+          "description": "A chilled can of a carbonated soft drink"
+        },
+        "ar": {
+          "name": "مشروب غازي",
+          "description": "علبة مشروب غازي باردة"
+        }
+      },
+      "sim_weight": 7
+    }
+  ]
+}

@@ -74,7 +74,12 @@ class Settings(BaseSettings):
 
     # Demo
     demo_mode: bool = False
-    demo_restaurant_slugs: list[str] = ["angeethi-house", "kehwa-and-crumb"]
+    demo_restaurant_slugs: list[str] = [
+        "angeethi-house",
+        "kehwa-and-crumb",
+        "tikka-town",
+        "noor-and-zaatar",
+    ]
     demo_owner_email: str = "demo-owner@mise.demo"
 
     @property

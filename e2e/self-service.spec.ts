@@ -114,6 +114,9 @@ test.describe.serial("1. Angeethi family: order, water, Raast, confirm, print, c
     await dialog.getByRole("button", { name: "Confirm received" }).click();
 
     await expect(staff).toHaveURL(PRINT);
+    await expect(staff.getByRole("img", { name: "Angeethi House" })).toBeVisible();
+    await expect(staff.locator("body")).not.toContainText(/(?<!not a tax )invoice|FBR integrated|compliant/i);
+    await expect(staff.locator('img[src*="/brand/logo-mark"]')).toHaveCount(0);
     await expect(staff.getByText("Sales tax (illustrative) 8% — card, wallet or QR")).toBeVisible();
     await expect(staff.getByText("1 × Chicken Karahi — 1 kg")).toBeVisible();
     await expect(guest.getByText(PAID)).toBeVisible(POLL);
@@ -231,6 +234,7 @@ test.describe.serial("4. Kehwa counter: pay first, then collect", () => {
     await expect(guest.getByText("Paid — preparing your order")).toBeVisible(POLL);
 
     await expect(kitchen.getByRole("heading", { name: `PICKUP ${label}` })).toBeVisible();
+    await expect(kitchen.getByText("1 ORDER ACTIVE")).toBeVisible();
     await kitchen.getByRole("button", { name: "BUMP" }).click();
     await expect(guest.getByText(`Ready — collect ${label} at the counter`)).toBeVisible(POLL);
 
@@ -720,4 +724,61 @@ test.describe.serial("Sheets on a phone", () => {
     expect(Math.round(box!.y + box!.height)).toBe(812);
     await context.close();
   });
+
+  // The menu's fixed bottom stack (assistant, then the order bar and View order) must never cover a
+  // dish: the last dish row (price, chips and + button) clears it, with and without the order bar
+  // (shown for a table that is not open yet).
+  for (const [width, height, plain, withBar] of [
+    [375, 812, "T2", "T5"],
+    [320, 568, "T3", "T6"],
+  ] as const) {
+    test(`the assistant button never covers the last dish's price or add button at ${width} px`, async ({ browser }) => {
+      const context = await browser.newContext({ viewport: { width, height } });
+      const guest = await context.newPage();
+      const clears = async (when: string) => {
+        await guest.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+        const row = await guest.locator("main li").last().boundingBox(); // the whole row: price, chips and + button
+        const chat = await guest.getByRole("button", { name: "Ask Angeethi House" }).boundingBox();
+        expect(row && chat, `${when}: last dish row and assistant button are on screen`).toBeTruthy();
+        const apart = chat!.y >= row!.y + row!.height || chat!.y + chat!.height <= row!.y;
+        expect(apart, `${when}: assistant ${JSON.stringify(chat)} vs last dish row ${JSON.stringify(row)}`).toBe(true);
+      };
+
+      await openTable(ANGEETHI, plain);
+      await openTableMenu(guest, T[plain].qr_token);
+      await clears("menu");
+
+      await openTableMenu(guest, T[withBar].qr_token); // not opened: the bar says the table is not ready
+      const waiting = shown(guest, "Your table will be ready in a moment. A waiter is on the way.").first();
+      await guest.getByRole("button", { name: "Add Naan", exact: true }).click();
+      await expect(waiting).toBeVisible();
+      await clears("menu with the order bar");
+
+      // Worst case: with the order bar up, Add still takes a normal tap, and the assistant button
+      // sits in the bottom stack above the bar instead of floating over the dishes.
+      await guest.getByRole("button", { name: "Add Naan", exact: true }).click();
+      await expect(guest.getByRole("button", { name: /View order · 2/})).toBeVisible();
+      const chat = await guest.getByRole("button", { name: "Ask Angeethi House" }).boundingBox();
+      const bar = await waiting.boundingBox();
+      expect(chat!.y + chat!.height, "assistant button sits above the order bar").toBeLessThanOrEqual(bar!.y);
+
+      // A tap in the stack's empty width, level with the assistant, reaches the page underneath.
+      const hit = await guest.evaluate(
+        ({ x, y }) => Boolean(document.elementFromPoint(x, y)?.closest(".fixed")),
+        { x: 24, y: chat!.y + chat!.height / 2 },
+      );
+      expect(hit, "the empty part of the bottom stack lets taps through").toBe(false);
+
+      // The open chat fits the screen: its close button is reachable and nothing is cut off.
+      await guest.getByRole("button", { name: "Ask Angeethi House" }).click();
+      const close = await guest.getByRole("button", { name: "Close", exact: true }).boundingBox();
+      expect(close!.y, "chat close button is below the top of the screen").toBeGreaterThanOrEqual(0);
+      const panel = await guest.getByRole("heading", { name: "Ask Angeethi House" }).locator("xpath=../../..").boundingBox();
+      expect(panel!.x, "chat panel starts inside the screen").toBeGreaterThanOrEqual(0);
+      expect(panel!.x + panel!.width, "chat panel ends inside the screen").toBeLessThanOrEqual(width);
+      expect(panel!.y, "chat panel top is on screen").toBeGreaterThanOrEqual(0);
+      await guest.getByRole("button", { name: "Close", exact: true }).click();
+      await context.close();
+    });
+  }
 });

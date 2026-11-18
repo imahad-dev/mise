@@ -37,7 +37,10 @@ Alembic + Postgres 16 + Redis 7 (`services/api`), two Next.js 15 apps (`apps/gue
 - Demo bills never imitate a tax invoice: no fiscal number, QR code, authority logo, 'invoice',
   'FBR integrated' or 'compliant'.
 - Tax rules are data (`data/tax_rates.json`, `data/tax_jurisdictions.json`) with a source per rate; code never hard-codes a rate, and a venue only settles with its jurisdiction's methods.
-- Cookies: `mise_auth` (signed user id) and `mise_guest`. Languages: `en` and `it` only.
+- Cookies: `mise_auth` (signed user id) and `mise_guest`. Languages: English plus each venue's
+  local language — `ur` (Urdu) for Pakistan, `ar` (Arabic) for Dubai; a venue offers only its own
+  `restaurant.languages`. Urdu and Arabic pages are right-to-left; money stays in Latin digits.
+  The owner app, kitchen and bills screens stay English.
 - No event or vendor-specific branding (`scripts/check_branding.sh`). README and docs
   describe only what is implemented and tested.
 

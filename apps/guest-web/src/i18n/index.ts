@@ -1,13 +1,15 @@
 import { en } from "./en";
-import { it } from "./it";
+import { ur } from "./ur";
+import { ar } from "./ar";
 import type { TranslationDict } from "./types";
 
 export * from "./types";
-export { en, it };
+export { en, ur, ar };
 
 const dictionaries: Record<string, Partial<TranslationDict>> = {
   en,
-  it,
+  ur,
+  ar,
 };
 
 /**
@@ -103,4 +105,9 @@ export function getDictionary(locale: string | undefined | null): TranslationDic
       ...(raw.order || {}),
     },
   };
+}
+
+/** Puts the venue's name into a "{venue}" string; the name is inserted as plain text. */
+export function withVenue(text: string, venue: string): string {
+  return text.split("{venue}").join(venue);
 }

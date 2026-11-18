@@ -64,7 +64,6 @@ async def handle_guest_chat(
     db: AsyncSession,
     restaurant_id: uuid.UUID,
     session_id: uuid.UUID,
-    guest_language: str,
     message: str,
 ) -> dict:
     """Process a guest chat message and return AI response.
@@ -93,11 +92,12 @@ async def handle_guest_chat(
     res = await db.execute(stmt)
     items = list(res.scalars().all())
 
-    menu_context = _build_menu_context(items, guest_language)
+    # phase 1b: the assistant answers in English; only its labels are translated
+    menu_context = _build_menu_context(items, "en")
 
     system_prompt = (
         f"You are a friendly restaurant menu assistant. "
-        f"Respond in {guest_language}. "
+        "Respond in English. "
         "Never claim a dish is safe for an allergy; tell the guest to use the menu's "
         "allergen filter and to confirm with staff.\n\n"
         f"Current menu:\n{menu_context}\n\n"

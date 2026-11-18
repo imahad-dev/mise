@@ -4,13 +4,15 @@ import React, { use, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { CallWaiter } from "../../../../components/CallWaiter";
+import { useVenue } from "../../../../components/BrandShell";
 import { PaySheet } from "../../../../components/PaySheet";
 import { ChatPanel } from "../../../../components/chat-panel";
 import { useSse } from "../../../../hooks/use-sse";
 import { getDictionary } from "../../../../i18n";
-import { Button, choiceLine, formatPrice, type LineChoice } from "ui";
-import { orderStage } from "../../../../lib/ordering";
-import { VISIT_ENDED, billState, claimMessage, counterState, paidText, payForwardThanks, type GuestBill } from "../../../../lib/pay";
+import { Button, formatPrice, type LineChoice } from "ui";
+import { choicesParts, figureParts, figureSentence } from "../../../../lib/figure";
+import { orderRef, orderStage } from "../../../../lib/ordering";
+import { VISIT_ENDED, billState, claimParts, counterState, paidParts, payForwardThanks, type GuestBill, type PaymentClaim } from "../../../../lib/pay";
 
 interface OrderItem {
   id: string;
@@ -83,6 +85,7 @@ export default function OrderStatusPage({
 }) {
   const { lang, id } = use(params);
   const dict = getDictionary(lang);
+  const { Loader } = useVenue();
   const router = useRouter();
   // Set by the menu when the first order was over the venue's cap: the waiter will check it.
   const [big, setBig] = useState(false);
@@ -91,7 +94,11 @@ export default function OrderStatusPage({
   const [paying, setPaying] = useState(false);
   const state = billState(bill, ended);
   const counter = counterState(bill);
-  const paid = bill ? paidText(bill, dict, lang) : null;
+  const paidP = bill ? paidParts(bill, dict, lang) : null;
+  const sayClaim = (claim: PaymentClaim, currency: string, counter = false) => {
+    return figureSentence(claimParts(claim, dict, lang, currency, counter));
+  };
+  const paid = paidP && figureSentence(paidP);
   const thanks = bill ? payForwardThanks(bill, dict) : null;
   // Settled or cancelled while the sheet is open: nothing left to pay, so close it.
   useEffect(() => {
@@ -188,7 +195,7 @@ export default function OrderStatusPage({
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <h1 className="text-xl font-bold text-ink">{dict.ui.orderStatus}</h1>
-              <p className="text-xs text-ink-muted font-mono mt-0.5 break-all">ID: {id}</p>
+              <p className="text-xs text-ink-muted font-mono mt-0.5">{orderRef(id)}</p>
             </div>
             <CallWaiter lang={lang} />
           </div>
@@ -255,7 +262,7 @@ export default function OrderStatusPage({
                   }
                 >
                   {counter === "awaiting" &&
-                    (bill.claim ? claimMessage(bill.claim, dict, lang, bill.currency, true) : dict.counter.payPrompt)}
+                    (bill.claim ? sayClaim(bill.claim, bill.currency, true) : dict.counter.payPrompt)}
                   {counter === "preparing" && dict.counter.preparing}
                   {counter === "ready" && dict.counter.ready.replace("{label}", bill.pickup_label ?? "")}
                   {counter === "collected" && dict.counter.collected}
@@ -279,13 +286,15 @@ export default function OrderStatusPage({
                 {state === "paid" && thanks && <span className="block mt-1">{thanks}</span>}
                 {state === "cancelled" && dict.pay.cancelled}
                 {state === "ended" && dict.pay.visitEnded}
-                {state === "claimed" && bill?.claim && claimMessage(bill.claim, dict, lang, bill.currency)}
+                {state === "claimed" && bill?.claim && sayClaim(bill.claim, bill.currency)}
               </p>
               {bill?.voided.map((v, i) => (
                 <p key={i} className="text-danger-fg">
-                  {dict.pay.removed
-                    .replace("{name}", [v.option_label ? `${v.name} — ${v.option_label}` : v.name, ...(v.choices ?? []).map((c) => choiceLine(c, (n) => formatPrice(n, bill.currency, lang), dict.dish.leaveOut))].join(", "))
-                    .replace("{qty}", String(v.quantity))}
+                  {(() => {
+                    const ch = choicesParts(v.choices ?? [], (n) => formatPrice(n, bill.currency, lang), dict.dish.leaveOut);
+                    const name = [v.option_label ? `${v.name} — ${v.option_label}` : v.name, ...(ch.template ? [ch.template] : [])].join(", ");
+                    return figureParts(dict.pay.removed.replace("{qty}", () => String(v.quantity)).replace("{name}", () => name), ch.values);
+                  })()}
                 </p>
               ))}
               {(state === "open" || state === "claimed") && (
@@ -326,14 +335,14 @@ export default function OrderStatusPage({
                       </div>
                       {(item.choices ?? []).length > 0 && (
                         <span className="block text-xs text-ink-muted">
-                          {item.choices!.map((c) => choiceLine(c, (n) => formatPrice(n, order.currency, lang), dict.dish.leaveOut)).join(", ")}
+                          {figureSentence(choicesParts(item.choices!, (n) => formatPrice(n, order.currency, lang), dict.dish.leaveOut))}
                         </span>
                       )}
                       {item.notes && (
                         <p className="text-xs text-ink-muted italic mt-0.5">Note: {item.notes}</p>
                       )}
                     </div>
-                    <span className="font-semibold text-ink-muted">
+                    <span className="figure font-semibold text-ink-muted">
                       {formatPrice(Number(item.unit_price) * item.quantity, order.currency, lang)}
                     </span>
                   </div>
@@ -342,7 +351,7 @@ export default function OrderStatusPage({
 
               <div className="pt-3 border-t border-line flex items-center justify-between font-bold text-sm">
                 <span className="text-ink-muted">{paid ? dict.pay.subtotal : dict.ui.total}</span>
-                <span className="text-terracotta text-base">
+                <span className="figure text-ink text-base">
                   {formatPrice(Number(order.total), order.currency, lang)}
                 </span>
               </div>
@@ -350,8 +359,7 @@ export default function OrderStatusPage({
           </div>
         ) : (
           <div className="py-12 flex flex-col items-center justify-center gap-3">
-            <div className="w-6 h-6 border-2 border-terracotta border-t-transparent rounded-full animate-spin" />
-            <p className="text-xs text-ink-muted">Connecting to order stream...</p>
+            <Loader label={dict.ui.connectingOrder} />
           </div>
         )}
 
@@ -361,7 +369,7 @@ export default function OrderStatusPage({
             href={`/${lang}/menu`}
             className="inline-block px-5 py-2.5 rounded-xl bg-paper-2 hover:bg-paper-2 text-xs font-medium text-ink transition-all"
           >
-            ← {dict.ui.backToMenu}
+            <span aria-hidden className="inline-block rtl:-scale-x-100">←</span> {dict.ui.backToMenu}
           </Link>
         </div>
         )}

@@ -1,6 +1,6 @@
 # Mise — Restaurant Revenue Copilot & Kitchen Operations Platform
 
-Mise is an ordering, kitchen and revenue analytics platform for independent restaurants. Guests scan table QR codes to open a web menu with deterministic allergen filtering, English and Italian localization, and ordering. Dishes can have sizes (half / full, ½ kg / 1 kg, regular / large). Staff open a table before its guests can order and approve the first order of each visit with one tap; orders then flow in real time to a Server-Sent Events (SSE) kitchen display system (KDS), and each table's orders gather on one bill that staff settle and print as a sample bill with illustrative Pakistani sales tax. Owners and staff sign in with their own accounts and see only the restaurants they belong to. Owners get a daily revenue brief computed from order history (KPIs, menu engineering, a backtested 7-day demand forecast and ranked actions), a deterministic what-if calculator, and visual menu ingestion. The language model only writes plain-language summaries of numbers that were already computed.
+Mise is an ordering, kitchen and revenue analytics platform for independent restaurants. Guests scan table QR codes to open a web menu with deterministic allergen filtering, English and local-language (Urdu or Arabic) localization, and ordering. Dishes can have sizes (half / full, ½ kg / 1 kg, regular / large). Staff open a table before its guests can order and approve the first order of each visit with one tap; orders then flow in real time to a Server-Sent Events (SSE) kitchen display system (KDS), and each table's orders gather on one bill that staff settle and print as a sample bill with illustrative tax (Pakistani sales tax, UK VAT or UAE VAT, per the venue, from `data/tax_jurisdictions.json`). Owners and staff sign in with their own accounts and see only the restaurants they belong to. Owners get a daily revenue brief computed from order history (KPIs, menu engineering, a backtested 7-day demand forecast and ranked actions), a deterministic what-if calculator, and visual menu ingestion. The language model only writes plain-language summaries of numbers that were already computed.
 
 ---
 
@@ -8,10 +8,11 @@ Mise is an ordering, kitchen and revenue analytics platform for independent rest
 
 - **Guest Mobile Web Ordering (`guest-web`)**
   - QR-driven table session initialization.
-  - English and Italian (only these two languages are supported).
+  - Languages: English plus each venue's local language. Angeethi House and Kehwa & Crumb offer English and Urdu; Noor & Za'atar (Dubai) offers English and Arabic; Tikka Town (Manchester) is English only. A venue offers only its own `restaurant.languages`, and the API answers 422 for any other. Urdu and Arabic pages are right-to-left, set from the server, in Noto Naskh Arabic, and money stays in Latin digits. Dish names, sizes, choice groups and choices have Urdu or Arabic text on the guest's menu; the kitchen, tickets and bills keep the English label. The owner app, kitchen and bills stay in English, and the assistant answers in English. **The Urdu and Arabic text are draft translations**: their allergen and safety wording awaits review by a native speaker. On Arabic and Urdu pages, menu category names and ingredient tags are still shown in English. The allergen status itself is always server code.
   - Deterministic EU-14 allergen cross-referencing with explicit acknowledgment guards.
   - Size picker for dishes with sizes; prices in PKR (`Rs 2,100`) with the note "Prices exclude sales tax, which is added to your bill."
   - Dish choices: a dish page lets guests pick one option, add priced extras or leave an ingredient out; the server prices them, adds any choice allergens to the dish's (never removes one), and the kitchen, bill and printed bill list them.
+  - **House favourites**: each venue features 6 to 8 signature dishes with a photo, in a strip at the top of the menu and in the dish sheet; every other dish is text-only. Photos are freely licensed (Unsplash or Pexels, no AI images), stored as small WebP files in `apps/guest-web/public/venues/<slug>/dishes/`, and credited in `data/photo_credits.json`; a test fails for an uncredited or unused photo.
   - **Opening a table and the first order**: a phone that scans a table staff have not opened sees "Your table will be ready in a moment. A waiter is on the way." and no Confirm Order button; the menu checks again every 5 s and switches to ordering without a reload once staff tap Open table. The first order of each visit shows "Sent! Your waiter is confirming your order." and reaches the kitchen only when staff approve it ("Confirmed — it's being cooked"); a waiting order is on no bill. If staff answer Not now, the phone goes back to the menu with "Your waiter will come to your table to help." and the dishes back in the cart. Later orders of the visit go straight to the kitchen. The owner can turn on "Ask guests for a 4-digit table number before their first order" (Tables page, next to the payment settings); staff read the number out when they open the table, and a phone types it once per visit ("That number didn't match. Please ask your waiter.", and a one-minute wait after 5 wrong tries). After 20 wrong tries at one visit from all phones, no new phone can join it for 10 minutes ("Please ask your waiter to help you order."); staff closing and reopening the table gives a new number. One address may start 60 guest sessions per 10 minutes. An open table with no order, call or payment for 90 minutes closes by itself, never while its bill is unpaid. Limits: 3 orders per phone per 5 minutes and 30 items per order; a first order above four times the venue's average dish price says "That's a big order! Your waiter will confirm it with you." Once the bill is settled, the phone's menu says "Thanks for visiting!".
   - **Table self-service**: at an open table, guests order more rounds onto the table's one open bill from any phone, call a waiter and choose how to pay.
   - **Call waiter** (menu and order pages, tables only): "Need help", "Water, please" or the venue's own extra reason ("More naan / roti" at Angeethi House, "More napkins / cutlery" at Kehwa & Crumb). The button then reads "Waiter called · m:ss" until staff tap Done. One open call per table; a new call is refused for 60 s after the previous one.
@@ -35,7 +36,8 @@ Mise is an ordering, kitchen and revenue analytics platform for independent rest
   - Per-user email and password sign-in (scrypt hashes); each user has an `owner` or `staff` membership per restaurant. Any `/api/restaurants/{slug}/...` route answers 404 "Restaurant not found" to a non-member, exactly as for an unknown slug; staff get 403 on owner-only routes.
   - Owners with several venues switch between them in the sidebar; staff-only accounts open the kitchen display.
   - No public sign-up: clients are onboarded with `scripts/admin.py` (see Quick Start).
-  - Two demo venues: **Angeethi House** (Lahore, Punjab; BBQ, karahi, handi, tandoor) and **Kehwa & Crumb** (Islamabad; coffee, chai, bakery). Prices and costs are illustrative.
+  - Four demo venues, each with its own currency, tax jurisdiction and guest brand (colours, fonts, logo, welcome animation): **Angeethi House** (Lahore, Punjab, PKR; BBQ, karahi, handi, tandoor), **Kehwa & Crumb** (Islamabad, PKR; coffee, chai, bakery), **Noor & Za'atar** (Dubai, AED; Emirati and Levantine dishes; English and Arabic; 5% VAT included, no service charge) and **Tikka Town** (Manchester, GBP; tandoor, karahi and curry house; English only; 20% VAT included, with an optional 10% service charge outside tax). Prices and costs are illustrative. Every venue has 90 days of simulated history. The demo owner belongs to all four venues and there is one demo staff user per venue.
+  - Tikka Town's service charge is on by default in the seed (`service_charge_rate`) and shows as its own line on the bill, outside VAT. Simulated bills never take it.
 
 - **Floor view (`/floor`, staff and owner, first under "Service")**
   - One tile per table (counters excluded) with its state in text, icon and colour, time in state (ticking from the server clock, so a wrong device clock does not skew it), running total and open call reason. Red first, then amber, then table order; a list on phones. Tiles reload on kitchen-stream events and every 30 s; the sidebar badge "Floor (n)" counts red and amber tiles.
@@ -172,16 +174,16 @@ docker compose up -d --build --wait
 # Run database migrations
 make migrate
 
-# Seed both demo venues (menus with sizes, tables); with DEMO_MODE=true also the demo users
+# Seed all four demo venues (menus with sizes, tables); with DEMO_MODE=true also the demo users
 make seed
 
-# Optional: 56 days of simulated demo orders and settled bills for every demo venue
+# Optional: 90 days of simulated demo orders and settled bills for every demo venue
 make simulate
 ```
 
-With `DEMO_MODE=true` the owner login page has **Enter as demo owner** (both venues) and **Open
+With `DEMO_MODE=true` the owner login page has **Enter as demo owner** (all four venues) and **Open
 kitchen display (demo staff)** (Angeethi House); `POST /api/auth/demo-login {"role": "staff",
-"venue": "kehwa-and-crumb"}` signs in the café's demo staff.
+"venue": "kehwa-and-crumb"}` signs in the café's demo staff (the same call with `"tikka-town"` or `"noor-and-zaatar"` signs in that venue's staff).
 
 ### Onboarding a client restaurant
 
@@ -345,7 +347,7 @@ LLM_PROVIDER=mock DEMO_MODE=true make up && make e2e
 make ci
 
 # End-to-end Phase 1 check on a fresh stack (wipes dev volumes; mock LLM only):
-# migrations up/down/check, seed twice (two venues, demo users), demo data for both venues
+# migrations up/down/check, seed twice (four venues, demo users), demo data for every venue
 # (sequential + parallel), brief and what-if in PKR (with pay_forward) and Floor tiles for both
 # venues, a live order (table opened, first order approved) and its settled bill surviving regeneration, a café counter order (not in
 # the kitchen until a settle with the right expected total) and a pay-it-forward give, browser

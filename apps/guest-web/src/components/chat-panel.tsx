@@ -1,12 +1,13 @@
 "use client";
 
 import React, { useState } from "react";
-import { getDictionary } from "../i18n";
+import { getDictionary, withVenue } from "../i18n";
+import { useVenue } from "./BrandShell";
 
 export interface ChatPanelProps {
   locale?: string;
-  /** Sit above a tall bottom bar on phones. */
-  raised?: boolean;
+  /** Placed by the parent (e.g. in the menu's bottom stack) instead of floating over the page. */
+  docked?: boolean;
 }
 
 interface ChatMessage {
@@ -14,8 +15,10 @@ interface ChatMessage {
   text: string;
 }
 
-export function ChatPanel({ locale = "en", raised = false }: ChatPanelProps) {
+export function ChatPanel({ locale = "en", docked = false }: ChatPanelProps) {
   const dict = getDictionary(locale);
+  const { name } = useVenue();
+  const title = withVenue(dict.ui.chatTitle, name);
   const [isOpen, setIsOpen] = useState(false);
   const [hidden, setHidden] = useState(false);
   const [input, setInput] = useState("");
@@ -55,14 +58,14 @@ export function ChatPanel({ locale = "en", raised = false }: ChatPanelProps) {
       } else {
         setMessages((prev) => [
           ...prev,
-          { sender: "assistant", text: "Assistant currently unavailable." },
+          { sender: "assistant", text: dict.ui.chatUnavailable },
         ]);
       }
     } catch {
       // Network or unexpected failure
       setMessages((prev) => [
         ...prev,
-        { sender: "assistant", text: "Unable to connect to assistant." },
+        { sender: "assistant", text: dict.ui.chatOffline },
       ]);
     } finally {
       setIsLoading(false);
@@ -70,30 +73,31 @@ export function ChatPanel({ locale = "en", raised = false }: ChatPanelProps) {
   };
 
   return (
-    <div className={`fixed right-4 sm:bottom-4 z-40 ${raised ? "bottom-64" : "bottom-20"}`}>
+    <div className={docked ? "relative" : "fixed end-4 bottom-20 sm:bottom-4 z-40"}>
       {!isOpen ? (
         <button
           onClick={() => setIsOpen(true)}
           className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-terracotta hover:bg-terracotta-strong text-cream font-medium shadow-lg shadow-ink/10 transition-all text-sm active:scale-95"
-          aria-label={dict.ui.chatTitle}
+          aria-label={title}
         >
           <svg className="w-4 h-4 fill-current" viewBox="0 0 20 20">
             <path d="M2 5a2 2 0 012-2h12a2 2 0 012 2v8a2 2 0 01-2 2H6.414l-2.707 2.707A1 1 0 012 17V5z" />
           </svg>
-          {dict.ui.chatTitle}
+          {title}
         </button>
       ) : (
-        <div className="w-80 sm:w-96 rounded-2xl bg-card border border-line shadow-2xl flex flex-col max-h-[500px] overflow-hidden">
+        // Fits a 320 px phone: never wider than the screen minus its gutters, never taller than the space above the order bar.
+        <div className="w-[min(20rem,calc(100vw-2rem))] sm:w-96 rounded-2xl bg-card border border-line shadow-2xl flex flex-col max-h-[min(500px,calc(100dvh-18rem))] overflow-hidden">
           {/* Header */}
           <div className="px-4 py-3 bg-paper-2 border-b border-line flex items-center justify-between">
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-olive" />
-              <h3 className="text-sm font-semibold text-ink">{dict.ui.chatTitle}</h3>
+              <h3 className="text-sm font-semibold text-ink">{title}</h3>
             </div>
             <button
               onClick={() => setIsOpen(false)}
               className="text-ink-muted hover:text-ink text-xs px-2 py-1 rounded"
-              aria-label="Close"
+              aria-label={dict.ui.chatClose}
             >
               ✕
             </button>
@@ -105,10 +109,10 @@ export function ChatPanel({ locale = "en", raised = false }: ChatPanelProps) {
           </div>
 
           {/* Messages */}
-          <div className="p-3 flex-1 overflow-y-auto space-y-2 min-h-[160px] max-h-[300px] text-xs">
+          <div className="p-3 flex-1 overflow-y-auto space-y-2 min-h-24 max-h-[300px] text-xs">
             {messages.length === 0 ? (
               <p className="text-ink-muted text-center py-6 italic">
-                Ask about dish ingredients or dietary options.
+                {dict.ui.chatEmpty}
               </p>
             ) : (
               messages.map((m, idx) => (
@@ -131,7 +135,7 @@ export function ChatPanel({ locale = "en", raised = false }: ChatPanelProps) {
             {isLoading && (
               <div className="flex justify-start">
                 <div className="bg-paper-2 text-ink-muted rounded-xl px-3 py-2 text-xs">
-                  Thinking...
+                  {dict.ui.chatThinking}
                 </div>
               </div>
             )}

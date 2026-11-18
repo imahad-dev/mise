@@ -3,6 +3,7 @@
 import json
 import uuid
 from datetime import date, timedelta
+from decimal import Decimal
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -11,6 +12,7 @@ from fastapi import HTTPException
 from src.services.analytics import classify_menu, item_totals
 from src.services.brief import (
     build_actions,
+    fmt_money,
     item_baselines,
     row_names,
     template_summary,
@@ -477,7 +479,7 @@ def test_template_summary_only_uses_fact_numbers():
     }
     text = template_summary(facts)
     assert "simulated" in text
-    assert "PKR 12345.67" in text and "EUR" not in text
+    assert "Rs 12,346" in text and "PKR" not in text and "EUR" not in text
     assert numbers_grounded(text, facts)
 
 
@@ -504,7 +506,7 @@ def test_template_summary_states_digital_share_and_saving():
     }
     text = template_summary(facts)
     assert "Digital payments were 66.67% of billed revenue" in text
-    assert "saved guests PKR 240.00 in tax" in text
+    assert "saved guests Rs 240 in tax" in text
     assert numbers_grounded(text, facts)
 
 
@@ -555,3 +557,82 @@ def test_brief_reprice_matches_whatif_at_current_menu_price():
     assert reprice["evidence"]["price"] == 11.0
     # 22.5 x 0.96 x (11.55 - 8) - 22.5 x 3 = 9.18
     assert whatif["delta"]["margin"] == 9.18
+
+
+def test_fmt_money_matches_the_owner_app():
+    assert fmt_money("PKR", 12345.67) == "Rs 12,346"
+    assert fmt_money("EUR", 12345.6) == "€12,345.60"
+    assert fmt_money("GBP", 23.634) == "£23.63"
+    assert fmt_money("AED", 105) == "AED 105.00"
+    assert fmt_money("USD", 1.5) == "USD 1.50"
+    assert fmt_money("GBP", -4.5) == "-£4.50"
+
+
+def test_fmt_money_edge_cases():
+    assert fmt_money("PKR", 0) == "Rs 0"
+    assert fmt_money("PKR", -0.4) == "Rs 0"
+    assert fmt_money("EUR", -0.001) == "€0.00"
+    assert fmt_money("PKR", Decimal("2527.00")) == "Rs 2,527"
+    assert fmt_money("GBP", 1_234_567_890.5) == "£1,234,567,890.50"
+    assert fmt_money("XYZ", 1.5) == "XYZ 1.50"
+
+
+def test_template_summary_rounds_margin_and_groups_amounts():
+    facts = {
+        **FACTS,
+        "currency": "GBP",
+        "kpis": {
+            "orders": 812,
+            "revenue": 12345.678,
+            "aov": 15.2,
+            "contribution_margin": 9000.1,
+            "margin_pct": 72.9384,
+        },
+        "data_sources": {"live": 812, "simulated": 0},
+        "actions": [],
+    }
+    text = template_summary(facts)
+    assert "£12,345.68" in text and "£9,000.10" in text
+    assert "72.9%" in text and "72.93" not in text
+    assert "GBP" not in text
+    assert numbers_grounded(text, facts)
+
+
+def test_template_summary_negative_and_near_zero_amounts():
+    facts = {
+        **FACTS,
+        "currency": "PKR",
+        "kpis": {
+            "orders": 3,
+            "revenue": 12344.5,
+            "aov": 0.5,
+            "contribution_margin": -500.25,
+            "margin_pct": -12.35,
+        },
+        "data_sources": {"live": 3, "simulated": 0},
+        "actions": [],
+    }
+    text = template_summary(facts)
+    assert numbers_grounded(text, facts)
+    assert "Rs 12,344" in text  # 12344.5 rounds half-to-even
+    assert "average order Rs 0" in text
+    assert "-Rs 500" in text
+    assert "-12.3%" in text  # follows Python's float rounding of -12.35
+    assert "-Rs 0" not in text
+
+
+def test_template_summary_no_top_action_without_impact():
+    facts = {
+        **FACTS,
+        "currency": "PKR",
+        "kpis": {
+            "orders": 3,
+            "revenue": 100.0,
+            "aov": 33.0,
+            "contribution_margin": 50.0,
+            "margin_pct": 50.0,
+        },
+        "data_sources": {"live": 3, "simulated": 0},
+        "actions": [{"title": "Prep", "estimated_impact_per_week": None}],
+    }
+    assert "Top action" not in template_summary(facts)

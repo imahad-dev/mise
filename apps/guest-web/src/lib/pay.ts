@@ -80,12 +80,19 @@ export function billState(bill: GuestBill | null, ended: boolean): BillState {
 }
 
 /** The sentence a guest sees after choosing a method; at the counter cash and card are paid there. */
-export function claimMessage(claim: PaymentClaim, dict: TranslationDict, lang: string, currency: string, counter = false): string {
+export function claimParts(claim: PaymentClaim, dict: TranslationDict, lang: string, currency: string, counter = false): SentenceParts {
   const total = formatPrice(Number(claim.total), currency, lang);
-  if (claim.method === "cash") return (counter ? dict.counter.cash : dict.pay.cash).replace("{total}", total);
-  if (claim.method === "card") return counter ? dict.counter.card : dict.pay.card;
-  return dict.pay.sent;
+  if (claim.method === "cash") return { template: counter ? dict.counter.cash : dict.pay.cash, values: { total } };
+  if (claim.method === "card") return { template: counter ? dict.counter.card : dict.pay.card, values: { total } };
+  return { template: dict.pay.sent, values: { total } };
 }
+
+/** A sentence with `{total}` still unfilled, so the page can render the amount in the money face (`figureParts`). */
+export interface SentenceParts { template: string; values: Record<string, string> }
+
+const fill = (p: SentenceParts) => p.template.replace("{total}", () => p.values.total);
+
+export const claimMessage = (...a: Parameters<typeof claimParts>): string => fill(claimParts(...a));
 
 export type CounterState = "awaiting" | "preparing" | "ready" | "collected" | "cancelled";
 
@@ -124,12 +131,20 @@ export async function copyText(text: string): Promise<boolean> {
 }
 
 /** "Paid Rs 2,714 (incl. 16% sales tax) by Cash" for a settled bill, else null. */
-export function paidText(bill: GuestBill, dict: TranslationDict, lang: string): string | null {
+export function paidParts(bill: GuestBill, dict: TranslationDict, lang: string): SentenceParts | null {
   if (bill.status !== "settled" || bill.total === null || bill.tax_rate === null || !bill.payment_method) return null;
-  return (bill.tax_included ? dict.pay.paidVatIncluded : dict.pay.paidAmount)
-    .replace("{total}", formatPrice(Number(bill.total), bill.currency, lang))
-    .replace("{rate}", percent(bill.tax_rate, lang))
-    .replace("{method}", dict.pay.methods[bill.payment_method] ?? bill.payment_method);
+  const method = dict.pay.methods[bill.payment_method] ?? bill.payment_method;
+  return {
+    template: (bill.tax_included ? dict.pay.paidVatIncluded : dict.pay.paidAmount)
+      .replace("{rate}", () => percent(bill.tax_rate!, lang))
+      .replace("{method}", () => method),
+    values: { total: formatPrice(Number(bill.total), bill.currency, lang) },
+  };
+}
+
+export function paidText(bill: GuestBill, dict: TranslationDict, lang: string): string | null {
+  const p = paidParts(bill, dict, lang);
+  return p && fill(p);
 }
 
 /** The thank-you for pay-it-forward chai on a settled bill, else null. */
@@ -138,9 +153,9 @@ export function payForwardThanks(bill: GuestBill, dict: TranslationDict): string
   return bill.status === "settled" && n > 0 ? dict.bill.payForward.replace("{count}", String(n)) : null;
 }
 
-/** A rate as a fraction ("0.125") to a percentage in the guest's language: "12.5" (en), "12,5" (it). */
+/** A rate as a fraction ("0.125") to a percentage in the guest's language, always in Latin digits: "12.5". */
 export const percent = (rate: string, lang: string) =>
-  new Intl.NumberFormat(lang, { maximumFractionDigits: 2 }).format(Number(rate) * 100);
+  new Intl.NumberFormat(lang, { maximumFractionDigits: 2, numberingSystem: "latn" }).format(Number(rate) * 100);
 
 /** What the guest pays for a method: the method total plus the optional service when chosen. */
 export const payTotal = (m: MethodPreview, serviceAmount: string, withService: boolean) =>

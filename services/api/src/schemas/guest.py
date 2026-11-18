@@ -25,12 +25,12 @@ EU14Allergen = Literal[
 ]
 
 DietaryPreference = Literal["vegetarian", "vegan", "gluten_free"]
-SupportedLanguage = Literal["en", "it"]
+SupportedLanguage = Literal["en", "ur", "ar"]
 
 
 class CreateGuestSessionRequest(BaseModel):
     qr_token: str
-    language: SupportedLanguage = "en"
+    language: SupportedLanguage | None = None  # None: the venue's default
     dietary_preferences: list[DietaryPreference] = []
     allergens_to_avoid: list[EU14Allergen] = []
 
@@ -41,6 +41,15 @@ class PatchGuestSessionRequest(BaseModel):
     allergens_to_avoid: list[EU14Allergen] | None = None
 
 
+class GuestVenue(BaseModel):
+    """The scanned venue as a guest may see it: public slug, name and offered languages."""
+
+    slug: str
+    name: str
+    languages: list[str]
+    default_language: str
+
+
 class GuestSessionResponse(BaseModel):
     id: uuid.UUID
     restaurant_id: uuid.UUID
@@ -49,6 +58,7 @@ class GuestSessionResponse(BaseModel):
     dietary_preferences: list[str]
     allergens_to_avoid: list[str]
     expires_at: datetime
+    venue: GuestVenue
 
     model_config = ConfigDict(from_attributes=True)
 

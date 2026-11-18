@@ -28,6 +28,10 @@ export interface TranslationDict {
   };
   ui: {
     welcomeTitle: string;
+    scanAgain: string;
+    /** One-line allergen notice for the scan page; the full notice stays in the order sheet. */
+    noticeShort: string;
+    allergyToggle: string;
     welcomeSubtitle: string;
     selectLanguage: string;
     selectDietary: string;
@@ -36,6 +40,9 @@ export interface TranslationDict {
     menuTitle: string;
     cartTitle: string;
     addToCart: string;
+    /** Accessible name of a dish's + button. */
+    addDish: string;
+    connectingOrder: string;
     quantity: string;
     notes: string;
     notesPlaceholder: string;
@@ -62,6 +69,14 @@ export interface TranslationDict {
     chatPlaceholder: string;
     chatSend: string;
     chatNotice: string;
+    chatClose: string;
+    chatEmpty: string;
+    chatThinking: string;
+    chatUnavailable: string;
+    chatOffline: string;
+    loadingMenu: string;
+    menuError: string;
+    retry: string;
     table: string;
     placedAt: string;
     items: string;
@@ -72,6 +87,8 @@ export interface TranslationDict {
     pricesIncludeVat: string;
     from: string;
     serviceNotice: string;
+    /** Heading of the featured-dish photo strip. */
+    favourites: string;
   };
   dish: {
     /** Contains {total}. */
@@ -87,6 +104,7 @@ export interface TranslationDict {
     soldOut: string;
     size: string;
     notVegan: string;
+    ingredients: string;
     notVegetarian: string;
     leaveOutNotice: string;
     /** A left-out choice on a cart line. Contains {label}. */

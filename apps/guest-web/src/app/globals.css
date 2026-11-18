@@ -1,2 +1,41 @@
 @import "tailwindcss";
 @import "ui/theme.css";
+
+/* A brand root re-points the theme at its --brand-* variables. Ink, ink-muted and the allergen,
+   warning and safe colours are never re-pointed: prices, allergen chips, totals, payment details
+   and order status keep their fixed styles. */
+[data-brand] {
+  --color-paper: var(--brand-surface);
+  --color-paper-2: var(--brand-surface-2);
+  --color-card: var(--brand-card);
+  --color-line: var(--brand-line);
+  --color-terracotta: var(--brand-accent);
+  --color-terracotta-strong: var(--brand-accent-strong);
+  --color-cream: var(--brand-on-accent);
+  --font-serif: var(--brand-display);
+  --font-sans: var(--brand-text);
+  font-family: var(--font-sans);
+  background-color: var(--color-paper);
+}
+/* Urdu and Arabic pages: Naskh for Arabic-script text, the venue's own fonts for Latin text
+   (Naskh is limited to Arabic code points), and the taller line Naskh needs. */
+[dir="rtl"] [data-brand],
+[data-brand] [dir="rtl"] {
+  --font-sans: var(--font-naskh,), var(--brand-text);
+  --font-serif: var(--font-naskh,), var(--brand-display);
+  /* the brand root computed its font before an inner rtl element re-pointed the variable */
+  font-family: var(--font-sans);
+  line-height: 1.7;
+}
+[data-brand] :is(.btn-primary, .btn-ghost, .btn-dark, .btn-danger) {
+  border-radius: var(--brand-button-radius);
+}
+[data-brand] .mise-card {
+  border-radius: var(--brand-card-radius);
+}
+
+/* A brand that sets a heading weight overrides the headings' own; without one, `revert-layer` leaves
+   them as the utilities and the reset set them. (The old 0.01em tracking was imperceptible and is dropped.) */
+[data-brand] :is(h1, h2, h3) {
+  font-weight: var(--brand-heading-weight, revert-layer);
+}

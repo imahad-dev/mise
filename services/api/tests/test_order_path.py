@@ -167,10 +167,10 @@ async def test_guest_session_flow_and_no_unit_cost(
     # 3. PATCH /api/guest/session
     resp_patch_sess = await client.patch(
         "/api/guest/session",
-        json={"language": "it", "dietary_preferences": ["vegan"]},
+        json={"language": "ur", "dietary_preferences": ["vegan"]},
     )
     assert resp_patch_sess.status_code == 200
-    assert resp_patch_sess.json()["language"] == "it"
+    assert resp_patch_sess.json()["language"] == "ur"
     assert_no_unit_cost(resp_patch_sess.json())
 
     seeded_restaurant.service_extra_label = "More napkins / cutlery"
@@ -209,7 +209,7 @@ async def test_guest_menu_with_allergens_to_avoid(
     session = GuestSession(
         restaurant_id=seeded_restaurant.id,
         table_id=None,
-        language="it",
+        language="ur",
         allergens_to_avoid=["gluten", "milk"],
         expires_at=datetime.now(UTC) + timedelta(hours=2),
     )
@@ -240,7 +240,7 @@ async def test_session_expiry_returns_401(
     expired_sess = GuestSession(
         restaurant_id=seeded_restaurant.id,
         table_id=None,
-        language="it",
+        language="ur",
         expires_at=datetime.now(UTC) - timedelta(seconds=10),
     )
     db_session.add(expired_sess)
@@ -348,7 +348,7 @@ async def concurrent_order_env():
             id=restaurant_id,
             name="Concurrent Trattoria",
             slug=slug,
-            languages=["en", "it"],
+            languages=["en", "ur"],
             default_language="en",
             currency="EUR",
         )
@@ -593,10 +593,10 @@ async def test_guest_isolation_404(
     # Create Session A and Session B
     now = datetime.now(UTC)
     sess_a = GuestSession(
-        restaurant_id=seeded_restaurant.id, language="it", expires_at=now + timedelta(hours=1)
+        restaurant_id=seeded_restaurant.id, language="ur", expires_at=now + timedelta(hours=1)
     )
     sess_b = GuestSession(
-        restaurant_id=seeded_restaurant.id, language="it", expires_at=now + timedelta(hours=1)
+        restaurant_id=seeded_restaurant.id, language="ur", expires_at=now + timedelta(hours=1)
     )
     db_session.add_all([sess_a, sess_b])
     await db_session.flush()
@@ -628,7 +628,7 @@ async def test_snapshots_unchanged_after_later_menu_edit(
     """Order item snapshot columns remain unchanged even after menu item price changes."""
     session = GuestSession(
         restaurant_id=seeded_restaurant.id,
-        language="it",
+        language="ur",
         expires_at=datetime.now(UTC) + timedelta(hours=2),
     )
     db_session.add(session)
@@ -712,7 +712,7 @@ async def test_kitchen_bump_idempotent_and_recall_timing(
     # Create order
     session = GuestSession(
         restaurant_id=seeded_restaurant.id,
-        language="it",
+        language="ur",
         expires_at=datetime.now(UTC) + timedelta(hours=1),
     )
     db_session.add(session)
@@ -840,7 +840,7 @@ async def test_failing_redis_publish_does_not_fail_order(
     """A failing Redis publish after order commit is logged and never fails the order."""
     session = GuestSession(
         restaurant_id=seeded_restaurant.id,
-        language="it",
+        language="ur",
         expires_at=datetime.now(UTC) + timedelta(hours=1),
     )
     db_session.add(session)

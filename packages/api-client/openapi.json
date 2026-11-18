@@ -302,8 +302,47 @@
           "404": {
             "description": "Unknown QR token"
           },
+          "422": {
+            "description": "Invalid request, or language not offered by this venue"
+          },
           "429": {
             "description": "Too many new sessions from this address"
+          }
+        }
+      }
+    },
+    "/api/guest/venues/{qr_token}": {
+      "get": {
+        "tags": [
+          "guest"
+        ],
+        "summary": "Venue For Qr",
+        "description": "The venue a table QR code belongs to, so the scan page can show its brand before a session.\n\nNo IP limit: the guest app's server calls it for every guest from one address. The token is\nunguessable and the answer is only a public venue name.",
+        "operationId": "venue_for_qr_api_guest_venues__qr_token__get",
+        "parameters": [
+          {
+            "name": "qr_token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Qr Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GuestVenue"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown QR token"
           },
           "422": {
             "description": "Validation Error",
@@ -374,14 +413,7 @@
             "description": "Unauthenticated or expired session"
           },
           "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
+            "description": "Invalid request, or language not offered by this venue"
           }
         }
       }
@@ -4370,13 +4402,20 @@
             "title": "Qr Token"
           },
           "language": {
-            "type": "string",
-            "enum": [
-              "en",
-              "it"
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "en",
+                  "ur",
+                  "ar"
+                ]
+              },
+              {
+                "type": "null"
+              }
             ],
-            "title": "Language",
-            "default": "en"
+            "title": "Language"
           },
           "dietary_preferences": {
             "items": {
@@ -5775,6 +5814,9 @@
             "type": "string",
             "format": "date-time",
             "title": "Expires At"
+          },
+          "venue": {
+            "$ref": "#/components/schemas/GuestVenue"
           }
         },
         "type": "object",
@@ -5785,7 +5827,8 @@
           "language",
           "dietary_preferences",
           "allergens_to_avoid",
-          "expires_at"
+          "expires_at",
+          "venue"
         ],
         "title": "GuestSessionResponse"
       },
@@ -5836,6 +5879,9 @@
             "format": "date-time",
             "title": "Expires At"
           },
+          "venue": {
+            "$ref": "#/components/schemas/GuestVenue"
+          },
           "table_state": {
             "type": "string",
             "enum": [
@@ -5860,10 +5906,43 @@
           "dietary_preferences",
           "allergens_to_avoid",
           "expires_at",
+          "venue",
           "table_state",
           "code_required"
         ],
         "title": "GuestSessionStatusResponse"
+      },
+      "GuestVenue": {
+        "properties": {
+          "slug": {
+            "type": "string",
+            "title": "Slug"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "languages": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Languages"
+          },
+          "default_language": {
+            "type": "string",
+            "title": "Default Language"
+          }
+        },
+        "type": "object",
+        "required": [
+          "slug",
+          "name",
+          "languages",
+          "default_language"
+        ],
+        "title": "GuestVenue",
+        "description": "The scanned venue as a guest may see it: public slug, name and offered languages."
       },
       "HTTPValidationError": {
         "properties": {
@@ -6430,8 +6509,13 @@
           },
           "language": {
             "type": "string",
+            "enum": [
+              "en",
+              "ur",
+              "ar"
+            ],
             "title": "Language",
-            "default": "it"
+            "default": "en"
           }
         },
         "type": "object",
@@ -7482,7 +7566,8 @@
                 "type": "string",
                 "enum": [
                   "en",
-                  "it"
+                  "ur",
+                  "ar"
                 ]
               },
               {

@@ -3,6 +3,7 @@
 import uuid
 import warnings
 from datetime import UTC, date, datetime
+from decimal import Decimal
 
 import pytest
 import scripts.seed as seed_module
@@ -14,7 +15,7 @@ from scripts.seed import (
     seed_demo_users,
 )
 from sqlalchemy import func, select, update
-from sqlalchemy.exc import SAWarning
+from sqlalchemy.exc import IntegrityError, SAWarning
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -77,14 +78,14 @@ async def test_seed_data_idempotent_and_stable_tokens(db_session: AsyncSession):
     )
     assert res_items.scalar() == 27
 
-    # 4. Assert exactly 27 menu translations (EN for each item) for this restaurant
+    # 4. Assert exactly 54 menu translations (EN and UR for each item) for this restaurant
     res_trans = await db_session.execute(
         select(func.count())
         .select_from(MenuTranslation)
         .join(MenuItem, MenuTranslation.menu_item_id == MenuItem.id)
         .where(MenuItem.restaurant_id == restaurant.id)
     )
-    assert res_trans.scalar() == 27
+    assert res_trans.scalar() == 54
 
     # 5. Assert every item is unverified (allergen_verified is False) for this restaurant
     res_unverified = await db_session.execute(
@@ -375,3 +376,51 @@ def test_seed_never_puts_choices_on_pay_it_forward():
     for path in (ANGEETHI, KEHWA):
         chai = next(i for i in load_seed_data(path)["items"] if i["key"] == "pay_forward_chai")
         assert "choice_groups" not in chai
+
+
+async def test_seed_reads_the_service_charge_rate(db_session):
+    data = load_seed_data("data/seed/angeethi_house.json")
+    data["restaurant"] = {
+        **data["restaurant"],
+        "slug": "svc-test",
+        "name": "Svc Test",
+        "tax_jurisdiction": "GB",
+        "currency": "GBP",
+        "service_charge_rate": "0.10",
+        "payment_details": {},
+    }
+    data.pop("simulation", None)
+    await seed_data(data, db_session)
+    r = (
+        await db_session.execute(select(Restaurant).where(Restaurant.slug == "svc-test"))
+    ).scalar_one()
+    assert r.service_charge_rate == Decimal("0.10")
+    data["restaurant"]["service_charge_rate"] = "0.125"
+    await seed_data(data, db_session)  # re-seed updates it
+    await db_session.refresh(r, ["service_charge_rate"])
+    assert r.service_charge_rate == Decimal("0.125")
+
+
+async def test_seed_without_a_service_rate_keeps_zero(db_session):
+    await seed_data(load_seed_data(ANGEETHI), db_session)
+    r = (
+        await db_session.execute(select(Restaurant).where(Restaurant.slug == "angeethi-house"))
+    ).scalar_one()
+    assert r.service_charge_rate == Decimal("0")
+
+
+async def test_seed_refuses_a_service_rate_above_the_cap(db_session):
+    data = load_seed_data(ANGEETHI)
+    data["restaurant"] = {
+        **data["restaurant"],
+        "slug": "svc-cap",
+        "name": "Svc Cap",
+        "tax_jurisdiction": "GB",
+        "currency": "GBP",
+        "service_charge_rate": "0.25",
+        "payment_details": {},
+    }
+    data.pop("simulation", None)
+    with pytest.raises(IntegrityError):
+        async with db_session.begin_nested():
+            await seed_data(data, db_session)

@@ -11,6 +11,7 @@ import json
 import logging
 import secrets
 import uuid
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
@@ -37,7 +38,12 @@ from src.services.tax import check_venue_tax
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_SEED_FILES = ["data/seed/angeethi_house.json", "data/seed/kehwa_and_crumb.json"]
+DEFAULT_SEED_FILES = [
+    "data/seed/angeethi_house.json",
+    "data/seed/kehwa_and_crumb.json",
+    "data/seed/tikka_town.json",
+    "data/seed/noor_and_zaatar.json",
+]
 DEFAULT_DEMO_USERS_FILE = "data/seed/demo_users.json"
 # Settling a bill with this item records chai bought for someone else.
 PAY_FORWARD_KEY = "pay_forward_chai"
@@ -139,6 +145,7 @@ async def seed_choices(
                 id=group_id,
                 menu_item_id=item_id,
                 label=g["label"],
+                translations=g.get("translations", {}),
                 kind=g["kind"],
                 min_select=g["min_select"],
                 max_select=g["max_select"],
@@ -151,6 +158,7 @@ async def seed_choices(
                     id=uuid.uuid5(SEED_ITEM_NAMESPACE, f"{group_id}:{c['label']}"),
                     group_id=group_id,
                     label=c["label"],
+                    translations=c.get("translations", {}),
                     price_delta=c.get("price_delta", 0),
                     cost_delta=c.get("cost_delta", 0),
                     allergens=c.get("allergens", []),
@@ -203,6 +211,7 @@ async def seed_data(
             languages=rest_data.get("languages", ["en"]),
             default_language=rest_data.get("default_language", "en"),
             onboarding=rest_data.get("onboarding", {}),
+            service_charge_rate=Decimal(str(rest_data.get("service_charge_rate", "0"))),
             active=rest_data.get("active", True),
         )
         session.add(restaurant)
@@ -244,6 +253,9 @@ async def seed_data(
         restaurant.default_language = rest_data.get("default_language", "en")
         if "onboarding" in rest_data:
             restaurant.onboarding = rest_data["onboarding"]
+        restaurant.service_charge_rate = Decimal(
+            str(rest_data.get("service_charge_rate", "0"))
+        )
         restaurant.active = rest_data.get("active", True)
         await session.flush()
         print(f"Updated restaurant: {restaurant.name} ({restaurant.slug})")
@@ -331,6 +343,7 @@ async def seed_data(
                 dietary_verified=item_data.get("dietary_verified", False),
                 available=item_data.get("available", True),
                 featured=item_data.get("featured", False),
+                image_url=item_data.get("image_url"),
                 sort_order=item_data.get("sort_order", 0),
                 is_pay_forward=item_data["key"] == PAY_FORWARD_KEY,
             )
@@ -360,6 +373,7 @@ async def seed_data(
             target_item.dietary_verified = item_data.get("dietary_verified", False)
             target_item.available = item_data.get("available", True)
             target_item.featured = item_data.get("featured", False)
+            target_item.image_url = item_data.get("image_url")
             target_item.sort_order = item_data.get("sort_order", 0)
             target_item.is_pay_forward = item_data["key"] == PAY_FORWARD_KEY
 
@@ -398,6 +412,7 @@ async def seed_data(
                 opt.label = opt_data["label"]
                 opt.price = opt_data["price"]
                 opt.unit_cost = opt_data["unit_cost"]
+                opt.translations = opt_data.get("translations", {})
                 opt.sort_order = position
             else:
                 session.add(
@@ -407,6 +422,7 @@ async def seed_data(
                         label=opt_data["label"],
                         price=opt_data["price"],
                         unit_cost=opt_data["unit_cost"],
+                        translations=opt_data.get("translations", {}),
                         sort_order=position,
                     )
                 )

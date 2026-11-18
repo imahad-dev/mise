@@ -18,7 +18,7 @@ from src.inference.client import InferenceClient, get_inference_client
 from src.models.audit import AuditLog
 from src.models.bill import Bill
 from src.models.dining_table import DiningTable
-from src.models.menu import MenuChoice, MenuChoiceGroup, MenuItem
+from src.models.menu import MenuChoice, MenuChoiceGroup, MenuItem, MenuItemOption
 from src.models.order import Order
 from src.models.pay_forward import PayForward
 from src.models.restaurant import Restaurant
@@ -46,6 +46,7 @@ from src.schemas.guest import (
     GuestMenuRestaurant,
     GuestSessionResponse,
     GuestSessionStatusResponse,
+    GuestVenue,
     PatchGuestSessionRequest,
 )
 from src.schemas.payments import (
@@ -79,12 +80,61 @@ from src.services.tax import jurisdiction_of, methods_for, service_charge_for
 router = APIRouter(prefix="/api/guest", tags=["guest"])
 
 
+def _refuse_nul(qr_token: str) -> None:
+    """Postgres rejects NUL in text, and a NUL can never be a real token."""
+    if "\x00" in qr_token:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Unknown QR token")
+
+
+def _session_fields(s: GuestSession) -> dict:
+    return {
+        "id": s.id,
+        "restaurant_id": s.restaurant_id,
+        "table_id": s.table_id,
+        "language": s.language,
+        "dietary_preferences": s.dietary_preferences,
+        "allergens_to_avoid": s.allergens_to_avoid,
+        "expires_at": s.expires_at,
+    }
+
+
+VENUE_COLUMNS = (
+    Restaurant.slug,
+    Restaurant.name,
+    Restaurant.languages,
+    Restaurant.default_language,
+)
+
+
+def _venue(row) -> GuestVenue:
+    return GuestVenue(
+        slug=row.slug,
+        name=row.name,
+        languages=list(row.languages),
+        default_language=row.default_language,
+    )
+
+
+def _offered(venue: GuestVenue, language: str) -> str:
+    if language not in venue.languages:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT, detail="This venue does not offer that language"
+        )
+    return language
+
+
+async def venue_of(db: AsyncSession, restaurant_id: uuid.UUID) -> GuestVenue:
+    row = (await db.execute(select(*VENUE_COLUMNS).where(Restaurant.id == restaurant_id))).one()
+    return _venue(row)
+
+
 @router.post(
     "/sessions",
     response_model=GuestSessionResponse,
     status_code=status.HTTP_201_CREATED,
     responses={
         404: {"description": "Unknown QR token"},
+        422: {"description": "Invalid request, or language not offered by this venue"},
         429: {"description": "Too many new sessions from this address"},
     },
 )
@@ -103,6 +153,7 @@ async def create_guest_session(
     await enforce_ip_limit(
         request, "guest_session", 60, 600, "Please ask your waiter to help you order."
     )
+    _refuse_nul(payload.qr_token)
     stmt_table = select(DiningTable).where(DiningTable.qr_token == payload.qr_token)
     res_table = await db.execute(stmt_table)
     table = res_table.scalar_one_or_none()
@@ -113,11 +164,13 @@ async def create_guest_session(
             detail="Unknown QR token",
         )
 
+    venue = await venue_of(db, table.restaurant_id)
+    language = _offered(venue, payload.language or venue.default_language)
     expires_at = datetime.now(UTC) + timedelta(hours=4)
     guest_session = GuestSession(
         restaurant_id=table.restaurant_id,
         table_id=table.id,
-        language=payload.language,
+        language=language,
         dietary_preferences=list(payload.dietary_preferences),
         allergens_to_avoid=list(payload.allergens_to_avoid),
         expires_at=expires_at,
@@ -128,7 +181,31 @@ async def create_guest_session(
     await db.refresh(guest_session)
 
     set_guest_cookie(response, guest_session.id)
-    return GuestSessionResponse.model_validate(guest_session)
+    return GuestSessionResponse.model_validate({**_session_fields(guest_session), "venue": venue})
+
+
+@router.get(
+    "/venues/{qr_token}",
+    response_model=GuestVenue,
+    responses={404: {"description": "Unknown QR token"}},
+)
+async def venue_for_qr(qr_token: str, db: AsyncSession = Depends(get_db)) -> GuestVenue:
+    """The venue a table QR code belongs to, so the scan page can show its brand before a session.
+
+    No IP limit: the guest app's server calls it for every guest from one address. The token is
+    unguessable and the answer is only a public venue name.
+    """
+    _refuse_nul(qr_token)
+    row = (
+        await db.execute(
+            select(*VENUE_COLUMNS)
+            .join(DiningTable, DiningTable.restaurant_id == Restaurant.id)
+            .where(DiningTable.qr_token == qr_token)
+        )
+    ).one_or_none()
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Unknown QR token")
+    return _venue(row)
 
 
 @router.get(
@@ -165,7 +242,8 @@ async def get_guest_session(
         else:
             code_required = sitting.code_required and session.sitting_id is None
     return GuestSessionStatusResponse(
-        **GuestSessionResponse.model_validate(session).model_dump(),
+        **_session_fields(session),
+        venue=await venue_of(db, session.restaurant_id),
         table_state=table_state,
         code_required=code_required,
     )
@@ -175,7 +253,10 @@ async def get_guest_session(
     "/session",
     response_model=GuestSessionResponse,
     status_code=status.HTTP_200_OK,
-    responses={401: {"description": "Unauthenticated or expired session"}},
+    responses={
+        401: {"description": "Unauthenticated or expired session"},
+        422: {"description": "Invalid request, or language not offered by this venue"},
+    },
 )
 async def patch_guest_session(
     payload: PatchGuestSessionRequest,
@@ -183,8 +264,9 @@ async def patch_guest_session(
     db: AsyncSession = Depends(get_db),
 ) -> GuestSessionResponse:
     """Update language, dietary preferences, or allergens to avoid for the session."""
+    venue = await venue_of(db, session.restaurant_id)
     if payload.language is not None:
-        session.language = payload.language
+        session.language = _offered(venue, payload.language)
     if payload.dietary_preferences is not None:
         session.dietary_preferences = list(payload.dietary_preferences)
     if payload.allergens_to_avoid is not None:
@@ -192,10 +274,14 @@ async def patch_guest_session(
 
     await db.commit()
     await db.refresh(session)
-    return GuestSessionResponse.model_validate(session)
+    return GuestSessionResponse.model_validate({**_session_fields(session), "venue": venue})
 
 
-def _guest_choice(c: MenuChoice, avoid: list[str]) -> GuestMenuChoice:
+def _label(obj: MenuItemOption | MenuChoiceGroup | MenuChoice, language: str) -> str:
+    return (obj.translations or {}).get(language) or obj.label
+
+
+def _guest_choice(c: MenuChoice, avoid: list[str], language: str) -> GuestMenuChoice:
     status_val = compute_allergen_status(
         item_allergens=c.allergens,
         allergen_verified=c.allergen_verified,
@@ -203,7 +289,7 @@ def _guest_choice(c: MenuChoice, avoid: list[str]) -> GuestMenuChoice:
     )
     return GuestMenuChoice(
         id=c.id,
-        label=c.label,
+        label=_label(c, language),
         price_delta=c.price_delta,
         allergens=c.allergens,
         is_vegetarian=c.is_vegetarian,
@@ -303,16 +389,20 @@ async def get_guest_menu(
                 allergen_status=status_val,
                 matched_allergens=matched_allergens,
                 options=[
-                    GuestMenuOption(id=o.id, label=o.label, price=o.price) for o in item.options
+                    GuestMenuOption(id=o.id, label=_label(o, session.language), price=o.price)
+                    for o in item.options
                 ],
                 choice_groups=[
                     GuestMenuChoiceGroup(
                         id=g.id,
-                        label=g.label,
+                        label=_label(g, session.language),
                         kind=g.kind,
                         min_select=g.min_select,
                         max_select=g.max_select,
-                        choices=[_guest_choice(c, session.allergens_to_avoid) for c in g.choices],
+                        choices=[
+                            _guest_choice(c, session.allergens_to_avoid, session.language)
+                            for c in g.choices
+                        ],
                     )
                     for g in item.choice_groups
                 ],
@@ -379,7 +469,6 @@ async def guest_chat(
         db=db,
         restaurant_id=session.restaurant_id,
         session_id=session.id,
-        guest_language=session.language,
         message=payload.message,
     )
 
@@ -481,7 +570,7 @@ async def _bill_detail(
     db: AsyncSession, session: GuestSession, bill: Bill, restaurant: Restaurant
 ) -> GuestBillDetail:
     now = await db.scalar(select(func.clock_timestamp()))
-    lines, subtotal = bill_lines(await active_orders(db, bill.id))
+    lines, subtotal = bill_lines(await active_orders(db, bill.id), guest_language=True)
     voided_orders = list(
         (
             await db.execute(
@@ -494,7 +583,7 @@ async def _bill_detail(
         .scalars()
         .all()
     )
-    voided, _ = bill_lines(voided_orders)
+    voided, _ = bill_lines(voided_orders, guest_language=True)
     latest = (
         await db.execute(
             select(Order.status, Order.collected_at)

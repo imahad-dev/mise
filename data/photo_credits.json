@@ -1,0 +1,182 @@
+{
+  "/venues/angeethi-house/dishes/chicken_biryani.webp": {
+    "dish": "Chicken Biryani",
+    "source_url": "https://www.pexels.com/photo/top-view-of-a-chicken-biryani-dish-12737817/",
+    "author": "dhiraj jain",
+    "licence": "Pexels License"
+  },
+  "/venues/angeethi-house/dishes/chicken_karahi.webp": {
+    "dish": "Chicken Karahi",
+    "source_url": "https://unsplash.com/photos/brown-and-green-food-on-gray-tray-hEMOwugpjJk",
+    "author": "Dr Muhammad Amer",
+    "licence": "Unsplash License"
+  },
+  "/venues/angeethi-house/dishes/chicken_tikka.webp": {
+    "dish": "Chicken Tikka",
+    "source_url": "https://www.pexels.com/photo/spicy-tandoori-chicken-with-lime-on-wooden-board-36895285/",
+    "author": "Nitai Mondal",
+    "licence": "Pexels License"
+  },
+  "/venues/angeethi-house/dishes/garlic_naan.webp": {
+    "dish": "Garlic Naan",
+    "source_url": "https://www.pexels.com/photo/a-plate-of-a-cheese-garlic-naan-10337726/",
+    "author": "Alberta Studios",
+    "licence": "Pexels License"
+  },
+  "/venues/angeethi-house/dishes/gulab_jamun.webp": {
+    "dish": "Gulab Jamun",
+    "source_url": "https://www.pexels.com/photo/delicious-indian-gulab-jamun-in-clay-pot-30577321/",
+    "author": "Monojit Dutta",
+    "licence": "Pexels License"
+  },
+  "/venues/angeethi-house/dishes/malai_boti.webp": {
+    "dish": "Malai Boti",
+    "source_url": "https://www.pexels.com/photo/a-food-in-a-wooden-tray-9609850/",
+    "author": "Prabal Pratap Singh",
+    "licence": "Pexels License"
+  },
+  "/venues/angeethi-house/dishes/palak_paneer.webp": {
+    "dish": "Palak Paneer",
+    "source_url": "https://unsplash.com/photos/sliced-cucumber-in-white-ceramic-bowl-jTv_cWxEtFs",
+    "author": "Kanwardeep Kaur",
+    "licence": "Unsplash License"
+  },
+  "/venues/angeethi-house/dishes/seekh_kebab.webp": {
+    "dish": "Seekh Kebab",
+    "source_url": "https://www.pexels.com/photo/delicious-seekh-kebabs-on-silver-platter-38579058/",
+    "author": "Prateek Lall",
+    "licence": "Pexels License"
+  },
+  "/venues/kehwa-and-crumb/dishes/butter_croissant.webp": {
+    "dish": "Butter Croissant",
+    "source_url": "https://unsplash.com/photos/a-croissant-on-a-plate-on-a-wooden-table-PZEQz_37APs",
+    "author": "Sandie Clarke",
+    "licence": "Unsplash License"
+  },
+  "/venues/kehwa-and-crumb/dishes/buttermilk_pancakes.webp": {
+    "dish": "Buttermilk Pancakes",
+    "source_url": "https://www.pexels.com/photo/stack-of-pancakes-with-maple-syrup-and-butter-39832908/",
+    "author": "Jahra Tasfia Reza",
+    "licence": "Pexels License"
+  },
+  "/venues/kehwa-and-crumb/dishes/cappuccino.webp": {
+    "dish": "Cappuccino",
+    "source_url": "https://unsplash.com/photos/a-cappuccino-on-a-saucer-with-a-spoon-C_vE8ZIHJ3Y",
+    "author": "Koushik Pal",
+    "licence": "Unsplash License"
+  },
+  "/venues/kehwa-and-crumb/dishes/french_toast.webp": {
+    "dish": "French Toast",
+    "source_url": "https://www.pexels.com/photo/french-toasts-with-cinnamon-15820912/",
+    "author": "Manuel Mouzo",
+    "licence": "Pexels License"
+  },
+  "/venues/kehwa-and-crumb/dishes/fudge_brownie.webp": {
+    "dish": "Fudge Brownie",
+    "source_url": "https://www.pexels.com/photo/delicious-chocolate-brownies-on-white-plate-30353753/",
+    "author": "Giovanna Kamimura",
+    "licence": "Pexels License"
+  },
+  "/venues/kehwa-and-crumb/dishes/karak_chai.webp": {
+    "dish": "Karak Chai",
+    "source_url": "https://www.pexels.com/photo/tea-in-cup-17473023/",
+    "author": "Aditya Mara",
+    "licence": "Pexels License"
+  },
+  "/venues/kehwa-and-crumb/dishes/molten_lava_cake.webp": {
+    "dish": "Molten Lava Cake",
+    "source_url": "https://www.pexels.com/photo/decadent-chocolate-lava-cake-on-elegant-plate-33813614/",
+    "author": "Ashwin Kumar",
+    "licence": "Pexels License"
+  },
+  "/venues/kehwa-and-crumb/dishes/new_york_cheesecake.webp": {
+    "dish": "New York Cheesecake",
+    "source_url": "https://www.pexels.com/photo/gourmet-cheesecake-slice-on-wooden-table-31623306/",
+    "author": "Markus Winkler",
+    "licence": "Pexels License"
+  },
+  "/venues/noor-and-zaatar/dishes/chicken_machboos.webp": {
+    "dish": "Chicken Machboos",
+    "source_url": "https://www.pexels.com/photo/fried-chicken-on-rice-17650208/",
+    "author": "Ali Dashti",
+    "licence": "Pexels License"
+  },
+  "/venues/noor-and-zaatar/dishes/hummus.webp": {
+    "dish": "Hummus",
+    "source_url": "https://www.pexels.com/photo/humus-with-pita-11842140/",
+    "author": "eat kubba",
+    "licence": "Pexels License"
+  },
+  "/venues/noor-and-zaatar/dishes/karak_chai.webp": {
+    "dish": "Karak Chai",
+    "source_url": "https://www.pexels.com/photo/cozy-tea-break-with-cookies-and-spices-34967000/",
+    "author": "Tanha Tamanna Syed",
+    "licence": "Pexels License"
+  },
+  "/venues/noor-and-zaatar/dishes/lamb_machboos.webp": {
+    "dish": "Lamb Machboos",
+    "source_url": "https://www.pexels.com/photo/delicious-lamb-shank-with-flavored-rice-36984980/",
+    "author": "Mohamed Olwy",
+    "licence": "Pexels License"
+  },
+  "/venues/noor-and-zaatar/dishes/mixed_grill.webp": {
+    "dish": "Mixed Grill",
+    "source_url": "https://www.pexels.com/photo/mixed-grill-platter-with-vegetables-and-fries-32986489/",
+    "author": "J KREATOR",
+    "licence": "Pexels License"
+  },
+  "/venues/noor-and-zaatar/dishes/mutton_biryani.webp": {
+    "dish": "Mutton Biryani",
+    "source_url": "https://www.pexels.com/photo/mouthwatering-biryani-meal-on-ceramic-plate-14731625/",
+    "author": "Shameel mukkath",
+    "licence": "Pexels License"
+  },
+  "/venues/noor-and-zaatar/dishes/shish_tawook.webp": {
+    "dish": "Shish Tawook",
+    "source_url": "https://www.pexels.com/photo/roasted-chicken-with-fries-and-salad-16423838/",
+    "author": "ash iraq",
+    "licence": "Pexels License"
+  },
+  "/venues/noor-and-zaatar/dishes/zaatar_manakish.webp": {
+    "dish": "Za'atar Manakish",
+    "source_url": "https://www.pexels.com/photo/manakish-bread-7935287/",
+    "author": "eat kubba",
+    "licence": "Pexels License"
+  },
+  "/venues/tikka-town/dishes/chicken_tikka.webp": {
+    "dish": "Chicken Tikka",
+    "source_url": "https://www.pexels.com/photo/delicious-chicken-tikka-platter-with-chutney-29173114/",
+    "author": "Kunal Lakhotia",
+    "licence": "Pexels License"
+  },
+  "/venues/tikka-town/dishes/chicken_tikka_masala.webp": {
+    "dish": "Chicken Tikka Masala",
+    "source_url": "https://unsplash.com/photos/a-bowl-of-creamy-chicken-tikka-masala-with-mint-leaves-GOw8q6bRTRM",
+    "author": "Mohammad Fahim",
+    "licence": "Unsplash License"
+  },
+  "/venues/tikka-town/dishes/lamb_chops.webp": {
+    "dish": "Lamb Chops",
+    "source_url": "https://www.pexels.com/photo/close-up-shot-of-delicious-grilled-meat-on-brown-ceramic-plate-13304044/",
+    "author": "Razane Adra",
+    "licence": "Pexels License"
+  },
+  "/venues/tikka-town/dishes/mango_lassi.webp": {
+    "dish": "Mango Lassi",
+    "source_url": "https://www.pexels.com/photo/glasses-of-delicious-mango-lassi-on-round-wooden-board-14509267/",
+    "author": "SimplyArt4794",
+    "licence": "Pexels License"
+  },
+  "/venues/tikka-town/dishes/sticky_toffee_pudding.webp": {
+    "dish": "Sticky Toffee Pudding",
+    "source_url": "https://unsplash.com/photos/a-table-with-two-plates-of-desserts-on-it-iwDDiUmsvhk",
+    "author": "Brett Wharton",
+    "licence": "Unsplash License"
+  },
+  "/venues/tikka-town/dishes/sunday_roast.webp": {
+    "dish": "Sunday Roast with Masala Gravy and Yorkshire Pudding",
+    "source_url": "https://www.pexels.com/photo/slices-of-beef-with-baked-potatoes-broccoli-and-cauliflower-19119749/",
+    "author": "The Castlebar",
+    "licence": "Pexels License"
+  }
+}

@@ -2,8 +2,10 @@
 import React from "react";
 import { cleanup, render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { formatPrice } from "ui";
 import { PaySheet } from "./PaySheet";
 import type { GuestBill, PaymentClaim } from "../lib/pay";
+import { ur } from "../i18n/ur";
 
 const ukBill: GuestBill = {
   bill_no: 1, status: "open", bill_requested_at: null,
@@ -25,6 +27,9 @@ HTMLDialogElement.prototype.showModal = function (this: HTMLDialogElement) {
 HTMLDialogElement.prototype.close = function (this: HTMLDialogElement) {
   this.removeAttribute("open");
 };
+
+// The amount sits in its own span (fixed money face), so match the whole paragraph's text.
+const sentence = (t: string) => screen.getByText((_, el) => el?.tagName === "P" && el.textContent === t);
 
 const sheet = (bill: GuestBill) =>
   render(<PaySheet lang="en" bill={bill} open onClose={() => {}} onUpdated={() => {}} onConflict={() => {}} />);
@@ -48,7 +53,7 @@ afterEach(() => {
 describe("PaySheet in a VAT-inclusive venue", () => {
   it("shows one total with VAT included and the optional service switch", () => {
     sheet(ukBill);
-    expect(screen.getByText("Includes VAT 20%: £3.50")).toBeTruthy();
+    expect(sentence("Includes VAT 20%: £3.50")).toBeTruthy();
     const sw = screen.getByRole("switch", { name: "Add optional service (12.5%): £2.63" });
     expect(sw.getAttribute("aria-checked")).toBe("true");
     expect(screen.getByTestId("pay-total").textContent).toBe("£23.63");
@@ -98,9 +103,9 @@ describe("PaySheet in a VAT-inclusive venue", () => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ...ukBill, claim: claimOf("cash", "21.00", false) }) });
     vi.stubGlobal("fetch", fetchMock);
     render(<Harness initial={claimed} />);
-    expect(screen.getByText("A waiter is coming to collect £23.63.")).toBeTruthy();
+    expect(sentence("A waiter is coming to collect £23.63.")).toBeTruthy();
     fireEvent.click(screen.getByRole("switch"));
-    await waitFor(() => expect(screen.getByText("A waiter is coming to collect £21.00.")).toBeTruthy());
+    await waitFor(() => expect(sentence("A waiter is coming to collect £21.00.")).toBeTruthy());
     expect(bodies(fetchMock)).toEqual([{ method: "cash", reference: null, service_included: false }]);
   });
 
@@ -111,7 +116,7 @@ describe("PaySheet in a VAT-inclusive venue", () => {
     await waitFor(() => expect(screen.getByRole("alert").textContent).toBe("Couldn't reach the restaurant — tap again"));
     expect(screen.getByRole("switch").getAttribute("aria-checked")).toBe("true");
     expect(screen.getByTestId("pay-total").textContent).toBe("£23.63");
-    expect(screen.getByText("A waiter is coming to collect £23.63.")).toBeTruthy();
+    expect(sentence("A waiter is coming to collect £23.63.")).toBeTruthy();
   });
 
   it("asks to send a transfer again after the service changes", () => {
@@ -128,13 +133,14 @@ describe("PaySheet in a VAT-inclusive venue", () => {
     expect(fetchMock).not.toHaveBeenCalled();
     expect(screen.queryByText("Payment sent — waiting for staff to confirm.")).toBeNull();
     expect(screen.getByText("You changed the service — tap “I've paid” again to update your payment.")).toBeTruthy();
-    expect(screen.getByText("Send £21.00 to:")).toBeTruthy();
+    expect(sentence("Send £21.00 to:")).toBeTruthy();
   });
 
-  it("names the rate the Italian way", () => {
-    render(<PaySheet lang="it" bill={ukBill} open onClose={() => {}} onUpdated={() => {}} onConflict={() => {}} />);
-    expect(screen.getByRole("switch", { name: /\(12,5%\)/ })).toBeTruthy();
-    expect(screen.getByText(/^IVA 20% inclusa:/)).toBeTruthy();
+  it("names the rate in Urdu with Latin digits", () => {
+    render(<PaySheet lang="ur" bill={ukBill} open onClose={() => {}} onUpdated={() => {}} onConflict={() => {}} />);
+    expect(screen.getByRole("switch", { name: /\(12\.5%\)/ })).toBeTruthy();
+    expect(sentence(ur.pay.vatIncluded.replace("{rate}", "20").replace("{amount}", formatPrice(3.5, "GBP", "ur")))).toBeTruthy();
+    expect(screen.getByRole("dialog").textContent).not.toMatch(/[٠-٩۰-۹]/);
   });
 
   it("asks for the total with service on a transfer method", () => {
@@ -145,7 +151,7 @@ describe("PaySheet in a VAT-inclusive venue", () => {
     };
     sheet(bill);
     fireEvent.click(screen.getByRole("button", { name: /Bank transfer/ }));
-    expect(screen.getByText("Send £23.63 to:")).toBeTruthy();
+    expect(sentence("Send £23.63 to:")).toBeTruthy();
   });
 });
 
@@ -183,7 +189,9 @@ describe("PaySheet choices", () => {
       lines: [{ ...ukBill.lines[0], choices: [milk, onions] }],
       voided: [{ name: "Tea", option_label: null, quantity: 1, choices: [onions] }],
     });
-    expect(screen.getByText("Extra milk +£0.50, No onions")).toBeTruthy();
-    expect(screen.getByText(/Tea, No onions/)).toBeTruthy();
+    // each +amount is its own .figure span, so match the whole span's text
+    expect(screen.getByText((_, el) => el?.tagName === "SPAN" && el.textContent === "Extra milk +£0.50, No onions")).toBeTruthy();
+    expect(document.querySelectorAll("span.figure").length).toBeGreaterThan(0);
+    expect(sentence("Removed by staff: Tea, No onions ×1")).toBeTruthy();
   });
 });

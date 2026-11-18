@@ -219,8 +219,13 @@ async def revive_expired(
     return revived
 
 
-def bill_lines(orders: list[Order]) -> tuple[list[BillLine], Decimal]:
-    """Lines grouped by (dish, option, unit price, choices), sorted by dish then price; subtotal."""
+def bill_lines(
+    orders: list[Order], *, guest_language: bool = False
+) -> tuple[list[BillLine], Decimal]:
+    """Lines grouped by (dish, option, unit price, choices), sorted by dish then price; subtotal.
+
+    Staff bills name dishes in the venue's default language (kitchen_name); the guest's own
+    bill passes guest_language=True to show the name the guest ordered in."""
     qty: dict[tuple, int] = {}
     chosen: dict[tuple, list[dict]] = {}
     for order in orders:
@@ -230,7 +235,8 @@ def bill_lines(orders: list[Order]) -> tuple[list[BillLine], Decimal]:
             names = tuple(
                 sorted((c["group"], c["label"], Decimal(c["price_delta"])) for c in oi.choices)
             )
-            key = (oi.item_name, oi.option_label, oi.unit_price, names)
+            name = oi.item_name if guest_language else (oi.kitchen_name or oi.item_name)
+            key = (name, oi.option_label, oi.unit_price, names)
             qty[key] = qty.get(key, 0) + oi.quantity
             chosen[key] = oi.choices
     # Sorted, not first-seen: orders of one transaction share placed_at, so arrival order

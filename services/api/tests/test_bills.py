@@ -370,6 +370,46 @@ async def test_guest_request_bill_and_status(client, db_session, venue):
     assert (await client.get("/api/guest/bill")).json()["status"] == "settled"
 
 
+async def _urdu_naan_at_t1(db: AsyncSession, venue: Venue) -> GuestSession:
+    venue.naan.translations.append(MenuTranslation(language="ur", name="نان"))
+    ur = GuestSession(
+        restaurant_id=venue.r.id,
+        table_id=venue.t1.id,
+        language="ur",
+        expires_at=datetime.now(UTC) + timedelta(hours=2),
+    )
+    db.add(ur)
+    await db.flush()
+    return ur
+
+
+async def test_staff_bill_names_dishes_in_english_for_an_urdu_guest(client, db_session, venue):
+    ur = await _urdu_naan_at_t1(db_session, venue)
+    await place(client, ur, [(venue.naan, 1)])
+    await as_member(client, db_session, venue.r.id, "staff")
+    bill = (await client.get(bills_url(venue, "?status=open"))).json()["bills"][0]
+    d = (await client.get(bills_url(venue, f"/{bill['id']}"))).json()
+    assert [(ln["name"], ln["quantity"]) for ln in d["lines"]] == [("Naan", 1)]
+
+
+async def test_english_and_urdu_guest_share_one_english_line(client, db_session, venue):
+    ur = await _urdu_naan_at_t1(db_session, venue)
+    await place(client, venue.session_t1, [(venue.naan, 1)])
+    await place(client, ur, [(venue.naan, 1)])
+    await as_member(client, db_session, venue.r.id, "staff")
+    bill = (await client.get(bills_url(venue, "?status=open"))).json()["bills"][0]
+    d = (await client.get(bills_url(venue, f"/{bill['id']}"))).json()
+    assert [(ln["name"], ln["quantity"]) for ln in d["lines"]] == [("Naan", 2)]
+
+
+async def test_guest_bill_keeps_the_guests_own_language(client, db_session, venue):
+    ur = await _urdu_naan_at_t1(db_session, venue)
+    await place(client, ur, [(venue.naan, 1)])
+    guest(client, ur)
+    lines = (await client.get("/api/guest/bill")).json()["lines"]
+    assert [ln["name"] for ln in lines] == ["نان"]
+
+
 # --- Concurrency: committed data, independent sessions and clients ---
 
 ROUNDS = 10

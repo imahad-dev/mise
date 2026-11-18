@@ -6,6 +6,8 @@ export const GUEST = process.env.GUEST_URL ?? "http://127.0.0.1:3000";
 export const OWNER = process.env.OWNER_URL ?? "http://127.0.0.1:3001";
 export const ANGEETHI = "angeethi-house";
 export const KEHWA = "kehwa-and-crumb";
+export const NOOR = "noor-and-zaatar";
+export const TIKKA = "tikka-town";
 
 type Role = "owner" | "staff";
 
@@ -29,23 +31,46 @@ export async function staffPage(page: Page, venue: string) {
   expect(res.ok()).toBeTruthy();
 }
 
-export async function openTableMenu(page: Page, qrToken: string) {
+/** Wait until the venue's welcome has decided, then tap it away so tests can use the menu. */
+export async function skipWelcome(page: Page) {
+  const root = page.locator("[data-welcome]").first();
+  await expect(root).not.toHaveAttribute("data-welcome", "pending", { timeout: 10_000 });
+  const welcome = page.getByTestId("welcome");
+  if (await welcome.isVisible()) await welcome.click();
+  await expect(welcome).toBeHidden();
+}
+
+export type Lang = "en" | "ur" | "ar";
+// Exact guest strings per language, from apps/guest-web/src/i18n/{en,ur,ar}.ts.
+const VIEW_MENU: Record<Lang, string> = { en: "View Menu", ur: "مینو دیکھیں", ar: "عرض القائمة" };
+const CONFIRM: Record<Lang, string> = { en: "Confirm Order", ur: "آرڈر کی تصدیق کریں", ar: "تأكيد الطلب" };
+const ACK: Record<Lang, string> = {
+  en: "I have spoken with staff and understand the allergen risks",
+  ur: "میں نے عملے سے بات کر لی ہے اور اس آرڈر کے الرجی کے خطرات سمجھتا/سمجھتی ہوں",
+  ar: "تحدثت مع الموظفين وأفهم مخاطر الحساسية لهذا الطلب.",
+};
+// Each language button is named in its own language (LANGUAGE_NAMES in apps/guest-web/src/i18n/languages.ts).
+const LANGUAGE_NAME = { ur: "اردو", ar: "العربية" } as const;
+
+export async function openTableMenu(page: Page, qrToken: string, lang: Lang = "en") {
   await page.goto(`${GUEST}/q/${qrToken}`);
-  await page.getByRole("button", { name: "View Menu" }).click();
-  await expect(page).toHaveURL(/\/en\/menu$/);
+  if (lang !== "en") await page.getByRole("button", { name: LANGUAGE_NAME[lang], exact: true }).click();
+  await page.getByRole("button", { name: VIEW_MENU[lang] }).click();
+  await expect(page).toHaveURL(new RegExp(`/${lang}/menu$`));
+  await skipWelcome(page);
 }
 
 /** Tick the allergen acknowledgement when the open order sheet asks for it. */
-export async function acknowledgeAllergens(page: Page) {
-  const ack = page.getByText("I have spoken with staff and understand the allergen risks");
+export async function acknowledgeAllergens(page: Page, lang: Lang = "en") {
+  const ack = page.getByText(ACK[lang]);
   if (await ack.isVisible()) await ack.click();
 }
 
 /** Confirm the cart; returns the order id from the order page's URL. */
-export async function placeOrder(page: Page) {
-  await acknowledgeAllergens(page);
-  await page.getByRole("button", { name: "Confirm Order" }).click();
-  await expect(page).toHaveURL(/\/en\/orders\/[0-9a-f-]{36}$/);
+export async function placeOrder(page: Page, lang: Lang = "en") {
+  await acknowledgeAllergens(page, lang);
+  await page.getByRole("button", { name: CONFIRM[lang] }).click();
+  await expect(page).toHaveURL(new RegExp(`/${lang}/orders/[0-9a-f-]{36}$`));
   return page.url().split("/").pop() ?? "";
 }
 

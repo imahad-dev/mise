@@ -4,7 +4,9 @@
     "name": "Demo owner",
     "venues": [
       "angeethi-house",
-      "kehwa-and-crumb"
+      "kehwa-and-crumb",
+      "tikka-town",
+      "noor-and-zaatar"
     ]
   },
   "staff": [
@@ -17,6 +19,16 @@
       "email": "demo-staff+kehwa-and-crumb@mise.demo",
       "name": "Demo staff (Kehwa)",
       "venue": "kehwa-and-crumb"
+    },
+    {
+      "email": "demo-staff+tikka-town@mise.demo",
+      "name": "Demo staff (Tikka)",
+      "venue": "tikka-town"
+    },
+    {
+      "email": "demo-staff+noor-and-zaatar@mise.demo",
+      "name": "Demo staff (Noor)",
+      "venue": "noor-and-zaatar"
     }
   ]
 }

@@ -101,7 +101,7 @@ step_seed_twice() {
   local second; second=$(sql "$q")
   local users; users=$(sql "SELECT (SELECT count(*) FROM users) || ' ' || (SELECT count(*) FROM memberships)")
   echo "after seed 1: $first / after seed 2: $second / users memberships: $users"
-  [ "$first" = "$second" ] && [ "${first%% *}" = "2" ] && [ "${users%% *}" -ge 3 ]
+  [ "$first" = "$second" ] && [ "${first%% *}" = "4" ] && [ "${users%% *}" -ge 3 ]
 }
 
 simulate() { # simulate <outfile> [slug]
@@ -129,11 +129,18 @@ step_simulate() {
   clear_demo_limits
   simulate "$TMP/sim_cafe.json" "$CAFE" || return 1
   json_check "$TMP/sim_cafe.json" "d['bills_created'] > 0" "cafe simulation settles bills" || return 1
+  # The phase 2 venues need settled history too: the browser step screenshots each venue's latest bill.
+  local v
+  for v in noor-and-zaatar tikka-town; do
+    clear_demo_limits
+    simulate "$TMP/sim_$v.json" "$v" || return 1
+    json_check "$TMP/sim_$v.json" "d['bills_created'] > 0" "$v simulation settles bills" || return 1
+  done
   local venues
   venues=$(sql "SELECT count(DISTINCT restaurant_id) FROM orders WHERE source = 'simulated'")
   echo "orders/items: run1=$one run2=$two parallel=$par non-simulated=$live venues simulated=$venues"
   [ "$one" = "$two" ] && [ "$one" = "$par" ] && [ "$live" = "0" ] && [ "${one%% *}" -gt 500 ] &&
-    [ "$venues" = "2" ]
+    [ "$venues" = "4" ]
 }
 
 step_brief_whatif() {
