@@ -46,3 +46,5 @@ playwright-report/
 
 # Brainstorm mockups
 .superpowers/
+# Playwright CLI output (may contain credentials)
+.playwright-cli/
